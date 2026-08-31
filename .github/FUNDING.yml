@@ -1,0 +1,5 @@
+# Puts GitHub's own Sponsor button on the repository page. It appears once the Sponsors
+# profile for the account below is approved and public; until then this file does nothing.
+#
+# The same URLs the app offers are in src/PaulTechGuy.MQ.Domain/ProjectLinks.cs.
+github: [paultechguy]

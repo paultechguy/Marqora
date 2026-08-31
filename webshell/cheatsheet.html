@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    The cheatsheet window's page.
+
+    It is deliberately a second page rather than another view inside shell.html: the
+    cheatsheet lives in its own top-level window, and giving it its own document means no
+    Monaco, no editor, no tab machinery and no AMD loader are ever created for it. The only
+    thing shared with the preview is app.css, which is what makes the two look identical.
+
+    'unsafe-eval' is absent from this policy. The shell needs it for Monaco; nothing on this
+    page does, so it is not granted here.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self' blob:;
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 img-src 'self' data: blob:;
+                 worker-src 'self' blob:;
+                 frame-src 'self';
+                 child-src 'self';
+                 connect-src 'self' blob: data:;" />
+  <title>Markdown Cheatsheet</title>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+  <!-- One highlight.js theme is active at a time; cheatsheet.js enables the matching pair. -->
+  <link id="hljs-light" rel="stylesheet" href="vendor/highlight/github.min.css" />
+  <link id="hljs-dark" rel="stylesheet" href="vendor/highlight/github-dark.min.css" disabled />
+  <link rel="stylesheet" href="app.css" />
+  <link rel="stylesheet" href="cheatsheet.css" />
+</head>
+<body class="mq-cheatsheet-body">
+  <main id="scroller" class="mq-cheatsheet-scroller" tabindex="0">
+    <article id="cheatsheet" class="mq-preview mq-cheatsheet"></article>
+  </main>
+
+  <div id="boot" class="mq-boot">
+    <div class="mq-boot__pulse" aria-hidden="true"></div>
+    <p class="mq-boot__label">Loading cheatsheet</p>
+  </div>
+
+  <script src="cheatsheet.js"></script>
+</body>
+</html>

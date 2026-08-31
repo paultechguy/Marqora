@@ -1,0 +1,228 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The WinUI 3 shell. This project owns windows, view models and the WebView bridge,
+    and nothing else: all behaviour it needs comes in through Abstractions via DI.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>PaulTechGuy.MQ.App</RootNamespace>
+    <AssemblyName>Marqora</AssemblyName>
+    <UseWinUI>true</UseWinUI>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Deployment">
+    <!--
+      Unpackaged: the build produces a plain folder that can be copied anywhere. No MSIX,
+      no developer certificate.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!-- Carrying the Windows App SDK in the output removes the runtime prerequisite. -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <!--
+      The .NET runtime is only bundled for Release. Debug stays framework-dependent so
+      the inner loop does not pay to copy the runtime on every build.
+    -->
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">false</PublishSingleFile>
+
+    <!--
+      Precompiling IL to native code takes the time to first window from about 600ms to
+      about 390ms, measured on this publish, and costs roughly 45 MB of output. Release
+      only: it adds a crossgen2 pass the inner loop has no use for.
+
+      Single file stays off above. The Windows App SDK bundles its native DLLs into the
+      executable, and WinRT needs them on disk to build an activation factory, so the
+      first Windows App SDK call fails with 0x8007007E and the process dies before a
+      window appears.
+    -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+
+    <!-- The WinUI XAML compiler emits its own entry point; Program.cs replaces it. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Analysis\PaulTechGuy.MQ.Analysis.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Finding\PaulTechGuy.MQ.Finding.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Formatting\PaulTechGuy.MQ.Formatting.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Services\PaulTechGuy.MQ.Services.csproj" />
+  </ItemGroup>
+
+  <!--
+    Individual Windows App SDK components rather than the metapackage, which would also
+    bring in the AI, ML and Widgets payloads. See Directory.Packages.props.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK.Base" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.Async" />
+    <PackageReference Include="Serilog.Sinks.Debug" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!--
+      Sets the icon on the executable itself, which is what Explorer and the taskbar read.
+      Rebuilt from MarqoraLogo.png by build\New-AppIcon.ps1; it is not drawn by hand.
+    -->
+    <ApplicationIcon>Assets\MarqoraLogo.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!--
+    MarqoraLogo.svg is the artwork master and deliberately does not ship: it is a CorelDRAW
+    export, and Direct2D reads only a subset of SVG, so what the app draws comes from the
+    PNG instead. See AppImages.
+  -->
+  <!--
+    Welcome to Marqora.md is the stock document opened on the first run of each new release.
+    It ships beside the executable and is copied into the user's data folder before it is
+    opened, so this master is never the file being edited. See WelcomeDocumentService.
+  -->
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\MarqoraLogo.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\MarqoraLogo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Welcome to Marqora.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    The preview shell and its vendor bundle live in webshell\ at the repository root and are
+    deployed to Assets\web next to the executable, where WebAssetProvider maps them onto the
+    marqora.assets virtual host. vendor\ is restored by build\Get-WebAssets.ps1 and is not in
+    source control.
+
+    They sit outside the project directory deliberately. The WinUI resource indexer walks the
+    project folder and reads Monaco's content-hashed file names (worker-BIZPAL9O.js) as
+    resource qualifiers, warning about every one. Keeping the tree out of the project, and
+    copying it with an explicit target rather than as Content, avoids that entirely and skips
+    evaluating several thousand items that need nothing more than a copy.
+  -->
+  <PropertyGroup>
+    <MarqoraWebShellDir>$(MSBuildThisFileDirectory)..\..\webshell\</MarqoraWebShellDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <MarqoraWebAsset Include="$(MarqoraWebShellDir)**\*" />
+  </ItemGroup>
+
+  <!--
+    Visual Studio decides whether to build a project at all before MSBuild is asked to run a
+    single target, and that check only looks at the item types it recognises. MarqoraWebAsset
+    is not one of them, so an edit in webshell\ left the project looking up to date: the build
+    was skipped whole, CopyWebAssetsToOutput never ran, and the output kept the previous shell
+    while the source said otherwise.
+
+    Only the hand-written files are listed. vendor\ changes when Get-WebAssets.ps1 runs and at
+    no other time, and putting its several hundred files through a check that runs on every
+    build costs more than the rebuilds it would catch.
+  -->
+  <ItemGroup>
+    <UpToDateCheckInput Include="$(MarqoraWebShellDir)*.*" />
+  </ItemGroup>
+
+  <!--
+    WinUI ships the strings for its built-in controls, right-click menus and screen-reader
+    announcements as .mui resource files, one folder per language: 86 folders and 172 files
+    for an app whose own text is English only.
+
+    English is itself a .mui rather than being baked into Microsoft.ui.xaml.dll, so en-us
+    and en-GB must survive; dropping every folder would leave the stock controls with no
+    strings at all. On any other system language the controls fall back to English, which
+    matches the rest of the app.
+
+    The files are filtered out of the copy list rather than deleted afterwards, so an
+    incremental build does not copy them only to remove them again.
+  -->
+  <!--
+    The SDK builds its self-contained payload list inside
+    AddMicrosoftWindowsAppSDKPayloadFilesFromComponents and subtracts
+    MicrosoftWindowsAppSDKFilesExcluded from it. That item exists purely for consumers to
+    populate, which makes it the supported way to drop files rather than deleting them from
+    the output afterwards.
+
+    NativePlatform comes from GetWindowsAppSDKNativePlatform, so this target takes the same
+    dependency in order to glob the right architecture folder.
+  -->
+  <Target Name="TrimWinUILanguageResources"
+          BeforeTargets="AddMicrosoftWindowsAppSDKPayloadFilesFromComponents"
+          DependsOnTargets="GetWindowsAppSDKNativePlatform">
+    <ItemGroup>
+      <_MarqoraMuiFile
+          Include="%(WindowsAppSdkComponentPackages.Identity)runtimes-framework\win-$(NativePlatform)\native\**\*.mui" />
+
+      <MicrosoftWindowsAppSDKFilesExcluded
+          Include="@(_MarqoraMuiFile)"
+          Condition="!$([System.String]::Copy('%(Identity)').Contains('\en-us\'))
+                     and !$([System.String]::Copy('%(Identity)').Contains('\en-GB\'))" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    A folder publish drops two build outputs that WinUI needs at run time: the project's own
+    resource index, which is what resolves every ms-appx:/// URI, and App.xbf, the compiled
+    App.xaml. Without them the first InitializeComponent throws
+    "Cannot locate resource from 'ms-appx:///Views/MainWindow.xaml'" and the process dies
+    before a window appears - with no clue in the publish folder as to why.
+
+    They are carried into the publish folder by the MSIX packaging targets, which an
+    unpackaged app does not import, so they are added to the publish list by hand. Naming
+    the files rather than globing a directory means a publish fails loudly if either one
+    ever stops being produced, instead of shipping a folder that cannot start.
+  -->
+  <Target Name="PublishWinUIResources" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <_MarqoraRuntimeResource Include="$(TargetDir)$(TargetName).pri" />
+      <_MarqoraRuntimeResource Include="$(TargetDir)App.xbf" />
+
+      <ResolvedFileToPublish Include="@(_MarqoraRuntimeResource)"
+                             RelativePath="%(Filename)%(Extension)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="VerifyWebAssets" BeforeTargets="Build">
+    <Error Condition="!Exists('$(MarqoraWebShellDir)vendor\monaco\vs\loader.js')"
+           Text="Web assets are missing. Run 'pwsh .\build\Get-WebAssets.ps1' from the repository root, then build again." />
+  </Target>
+
+  <Target Name="CopyWebAssetsToOutput"
+          AfterTargets="Build"
+          Inputs="@(MarqoraWebAsset)"
+          Outputs="@(MarqoraWebAsset->'$(OutDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')">
+    <Copy SourceFiles="@(MarqoraWebAsset)"
+          DestinationFiles="@(MarqoraWebAsset->'$(OutDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          UseHardlinksIfPossible="true" />
+  </Target>
+
+  <Target Name="CopyWebAssetsToPublish" AfterTargets="Publish">
+    <Copy SourceFiles="@(MarqoraWebAsset)"
+          DestinationFiles="@(MarqoraWebAsset->'$(PublishDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

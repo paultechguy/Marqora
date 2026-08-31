@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: CorelDRAW (Not for commercial use) -->
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="2.91505in" height="2.91505in" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+viewBox="0 0 6594.7 6594.7"
+ xmlns:xlink="http://www.w3.org/1999/xlink"
+ xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
+ <defs>
+  <font id="FontID0" horiz-adv-x="776" font-variant="normal" class="str1" style="fill-rule:nonzero" font-weight="700">
+	<font-face 
+		font-family="Verdana">
+		<font-face-src>
+			<font-face-name name="Verdana Bold"/>
+		</font-face-src>
+	</font-face>
+   <missing-glyph><path d="M0 0z"/></missing-glyph>
+   <glyph unicode="M" horiz-adv-x="947" d="M855 0l-187.999 0 0 486.833 -134.167 -315.833 -128.667 0 -134.167 315.833 0 -486.833 -177.001 0 0 727 217.834 0 162.834 -364.667 162.165 364.667 219.167 0 0 -727z"/>
+  </font>
+  <style type="text/css">
+   <![CDATA[
+    @font-face { font-family:"Verdana";font-variant:normal;font-weight:bold;src:url("#FontID0") format(svg)}
+    .str1 {stroke-width:1.1;stroke-miterlimit:2.61313}
+    .str0 {stroke:#EC5D37;stroke-width:15.71;stroke-miterlimit:2.61313}
+    .str2 {stroke:black;stroke-width:6.79;stroke-miterlimit:2.61313}
+    .fil2 {fill:black}
+    .fil1 {fill:#EC5D37}
+    .fil0 {fill:#88C0C7}
+    .fnt0 {font-weight:bold;font-size:6179.93px;font-family:'Verdana'}
+   ]]>
+  </style>
+ </defs>
+ <g id="Layer_x0020_1">
+  <metadata id="CorelCorpID_0Corel-Layer"/>
+  <g id="_2151829061104">
+   <circle class="fil0" cx="3297.28" cy="3297.4" r="3297.35"/>
+   <g>
+    <rect class="fil1 str0" transform="matrix(4.49709 -4.49709 3.21865 3.21865 1691.71 4782.48)" width="124.68" height="488.8"/>
+    <rect class="fil1 str0" transform="matrix(-4.51365 -4.51365 -3.21865 3.21865 4838.25 4782.5)" width="124.68" height="488.8"/>
+   </g>
+   <g transform="matrix(0.844997 0 0 1 2053.64 -6632.63)">
+    <text x="-1457.52" y="12176.46"  class="fil2 str2 fnt0">M</text>
+   </g>
+  </g>
+ </g>
+</svg>

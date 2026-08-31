@@ -1,0 +1,42 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Solution Items/build/">
+    <File Path="build/Get-WebAssets.ps1" />
+  </Folder>
+  <Folder Name="/Solution Items/docs/">
+    <File Path="docs/Architecture.md" />
+    <File Path="docs/DiskWatch.md" />
+  </Folder>
+  <Folder Name="/webshell/">
+    <File Path="webshell/shell.html" />
+    <File Path="webshell/app.js" />
+    <File Path="webshell/app.css" />
+    <File Path="webshell/mermaid-frame.html" />
+    <File Path="webshell/mermaid-frame.js" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PaulTechGuy.MQ.Domain/PaulTechGuy.MQ.Domain.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Abstractions/PaulTechGuy.MQ.Abstractions.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Repositories/PaulTechGuy.MQ.Repositories.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Rendering/PaulTechGuy.MQ.Rendering.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Formatting/PaulTechGuy.MQ.Formatting.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Editing/PaulTechGuy.MQ.Editing.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Analysis/PaulTechGuy.MQ.Analysis.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Finding/PaulTechGuy.MQ.Finding.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Services/PaulTechGuy.MQ.Services.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.App/PaulTechGuy.MQ.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Finding.Tests/PaulTechGuy.MQ.Finding.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Repositories.Tests/PaulTechGuy.MQ.Repositories.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Services.Tests/PaulTechGuy.MQ.Services.Tests.csproj" />
+  </Folder>
+</Solution>

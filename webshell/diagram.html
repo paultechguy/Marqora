@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    One diagram, in its own window.
+
+    The window is handed the SVG the preview already rendered rather than the mermaid source,
+    so this page never loads mermaid: it is a viewport and a zoom control and nothing else.
+    That keeps a pop-out instant and guarantees it shows exactly what was double-clicked.
+
+    Zooming resizes the SVG itself rather than applying a CSS transform. An SVG asked for a
+    larger width redraws its geometry at that size, so text and strokes stay sharp at 500%; a
+    transform would scale the rasterised result and go soft.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self';
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 img-src 'self' data: blob:;" />
+  <title>Diagram</title>
+  <link rel="stylesheet" href="diagram.css" />
+</head>
+<body>
+  <div class="mq-toolbar" role="toolbar" aria-label="Zoom">
+    <button type="button" id="zoom-out" title="Zoom out (Ctrl+-)" aria-label="Zoom out">&#8722;</button>
+    <span id="zoom-level" aria-live="polite">100%</span>
+    <button type="button" id="zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in">+</button>
+    <span class="mq-divider"></span>
+    <button type="button" id="zoom-fit" title="Fit the diagram to the window">Fit</button>
+    <button type="button" id="zoom-reset" title="Actual size (Ctrl+0)">100%</button>
+    <span class="mq-divider"></span>
+    <!-- Position rather than zoom, so it sits apart from the two buttons that change scale. -->
+    <button type="button" id="zoom-center" title="Bring the diagram back to the middle of the window">Center</button>
+    <span class="mq-gone" id="gone" hidden
+          title="The fenced block was deleted, or its document was closed. This is the last render.">Source removed</span>
+    <span class="mq-invalid" id="invalid" hidden>Source has an error</span>
+    <span class="mq-hint" id="hint">Ctrl + scroll to zoom &middot; middle-drag to pan</span>
+  </div>
+
+  <div class="mq-surface" id="surface">
+    <div class="mq-canvas" id="canvas"></div>
+  </div>
+
+  <script src="diagram.js"></script>
+</body>
+</html>

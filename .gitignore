@@ -1,0 +1,39 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Rider / VS Code
+.idea/
+.vscode/
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+# Downloaded third-party web assets (restored by build/Get-WebAssets.ps1)
+webshell/vendor/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Local debug profiles (per-developer; e.g. WebView2 remote debugging port)
+**/Properties/launchSettings.json
+
+# Local AI assistant instructions (kept on disk, not published)
+CLAUDE.md
+.claude/

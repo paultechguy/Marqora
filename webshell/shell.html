@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!-- data-theme is set by the script at the foot of the head, before the body is parsed. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    The shell is served from the https://marqora.assets virtual host, not file://,
+    so Monaco's workers and dynamic imports resolve against a real origin.
+
+    Only local sources are permitted. blob: is required for Monaco's web workers and
+    for the SVG data mermaid produces; there is no network origin in this policy, so
+    the preview cannot phone home even if a document asks it to.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 img-src 'self' https://marqora.document data: blob:;
+                 media-src 'self' https://marqora.document;
+                 worker-src 'self' blob:;
+                 frame-src 'self';
+                 child-src 'self';
+                 connect-src 'self' blob: data:;" />
+  <title>Marqora</title>
+  <link rel="stylesheet" href="vendor/monaco/vs/editor/editor.main.css" />
+  <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+  <!-- One highlight.js theme is active at a time; the script below picks the pair. -->
+  <link id="hljs-light" rel="stylesheet" href="vendor/highlight/github.min.css" />
+  <link id="hljs-dark" rel="stylesheet" href="vendor/highlight/github-dark.min.css" disabled />
+  <link rel="stylesheet" href="app.css" />
+
+  <!--
+    The theme, before the first paint.
+
+    data-theme used to be written into the <html> tag as "dark". That was a guess made
+    before anything here knew the answer, and app.css defines light on bare :root and only
+    re-points it under [data-theme="dark"] - so the attribute forced the page dark whatever
+    the setting said, and it stayed dark until the host's setTheme message arrived. That
+    message is the far side of a Monaco load, with the restored session flushed out of the
+    host's queue just in front of it, so under a light theme the boot screen, both panes and
+    every reopened document painted dark and then repainted. What it looked like was the app
+    loading the previous session in the wrong colour and correcting itself.
+
+    So the host writes the answer into the address instead - see ShellUriForTheme in
+    WebViewPreviewHost - and this reads it out. Inline, in the head, and after the two
+    highlight.js links so both are there to be switched: it runs while the head is being
+    parsed, which is before the body exists and long before anything is drawn.
+
+    Light when there is no fragment to read, matching app.css's own default. That is only
+    reached by opening shell.html outside the app.
+
+    The setTheme message still arrives and is still needed - it carries the match colours,
+    and the theme can change while the app is running. It just no longer has anything to
+    correct on the way in.
+  -->
+  <script>
+    (function () {
+      var found = /[#&]theme=(dark|light)/i.exec(window.location.hash);
+      var theme = found ? found[1].toLowerCase() : 'light';
+
+      document.documentElement.setAttribute('data-theme', theme);
+
+      var light = document.getElementById('hljs-light');
+      var dark = document.getElementById('hljs-dark');
+
+      if (light) { light.disabled = theme === 'dark'; }
+      if (dark) { dark.disabled = theme !== 'dark'; }
+    }());
+  </script>
+</head>
+<body>
+  <div id="root" class="mq-root" data-view="SideBySide">
+
+    <section id="source-pane" class="mq-pane mq-pane--source" aria-label="Markdown source">
+      <div id="monaco-host" class="mq-monaco-host"></div>
+    </section>
+
+    <div id="splitter"
+         class="mq-splitter"
+         role="separator"
+         aria-orientation="vertical"
+         aria-label="Resize panes"
+         tabindex="0">
+      <span class="mq-splitter__grip" aria-hidden="true"></span>
+    </div>
+
+    <section id="preview-pane" class="mq-pane mq-pane--preview" aria-label="Preview">
+      <article id="preview" class="mq-preview" tabindex="0"></article>
+    </section>
+
+  </div>
+
+  <!-- Transient readout shown while zooming, then faded out. -->
+  <div id="zoom-badge" class="mq-zoom-badge" aria-live="polite"></div>
+
+  <!-- Shown until Monaco has finished loading, so the window is never blank. -->
+  <div id="boot" class="mq-boot">
+    <div class="mq-boot__pulse" aria-hidden="true"></div>
+    <p class="mq-boot__label">Preparing editor</p>
+  </div>
+
+  <script src="vendor/monaco/vs/loader.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+/*
+  Styling for the diagram pop-out. Deliberately plain: the diagram is the content, and the
+  only chrome is the zoom strip along the top.
+
+  Colours follow the theme the host sends, applied as a data-theme attribute on the root, so
+  the window matches the app rather than the browser default.
+*/
+
+:root {
+  --mq-bg: #ffffff;
+  --mq-surface: #f3f3f3;
+  --mq-border: #e0e0e0;
+  --mq-text: #1b1b1b;
+  --mq-muted: #6a6a6a;
+  --mq-hover: #e8e8e8;
+}
+
+:root[data-theme="dark"] {
+  --mq-bg: #1f1f1f;
+  --mq-surface: #272727;
+  --mq-border: #383838;
+  --mq-text: #e6e6e6;
+  --mq-muted: #9a9a9a;
+  --mq-hover: #333333;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mq-bg);
+  color: var(--mq-text);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.mq-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  background: var(--mq-surface);
+  border-bottom: 1px solid var(--mq-border);
+  user-select: none;
+}
+
+.mq-toolbar button {
+  min-width: 30px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mq-toolbar button:hover { background: var(--mq-hover); border-color: var(--mq-border); }
+.mq-toolbar button:active { opacity: 0.7; }
+.mq-toolbar button:disabled { opacity: 0.4; cursor: default; background: transparent; border-color: transparent; }
+
+#zoom-level {
+  min-width: 46px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--mq-muted);
+}
+
+.mq-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--mq-border);
+}
+
+.mq-hint {
+  margin-left: auto;
+  color: var(--mq-muted);
+  font-size: 12px;
+}
+
+/*
+  Shown when the diagram is no longer in its document. It takes the hint's place rather than
+  sitting beside it: the hint describes what you can still do here, and once the source has
+  gone the more useful thing to read is that this render is the last one.
+
+  Amber rather than red. Nothing has failed and nothing is lost - the window is simply no
+  longer following anything.
+*/
+.mq-gone {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid #b8860b;
+  background: #fdf3d7;
+  color: #6b4e00;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+:root[data-theme="dark"] .mq-gone {
+  border-color: #8a6d1f;
+  background: #3a2f12;
+  color: #e8c96a;
+}
+
+/*
+  Shown while the definition does not parse. Red rather than the amber used for a removed
+  source: this one is a mistake with a fix, and the two states need telling apart at a
+  glance since they occupy the same corner.
+
+  Mermaid's own message goes on the title attribute, so the detail is a hover away without
+  the toolbar growing to fit it.
+*/
+.mq-invalid {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid #c0392b;
+  background: #fdecea;
+  color: #8b2419;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+:root[data-theme="dark"] .mq-invalid {
+  border-color: #a3382a;
+  background: #3b1b17;
+  color: #f0a79c;
+}
+
+[hidden] { display: none !important; }
+
+/* Scrolls in both directions once the diagram outgrows the window. */
+.mq-surface {
+  flex: 1 1 auto;
+  overflow: auto;
+  display: flex;
+}
+
+/*
+  margin:auto centres the diagram while it is smaller than the viewport and stops centring
+  once it is larger, which is what keeps the top-left corner reachable when zoomed in.
+*/
+.mq-canvas { margin: auto; padding: 16px; }
+
+.mq-canvas svg { display: block; max-width: none; height: auto; }
+
+/*
+  While the middle button is held for a pan. The cursor is set from script, which knows which
+  axes the diagram can actually travel in.
+
+  It has to win over every other cursor on the page - the toolbar buttons set their own, and
+  the pointer crosses them mid-drag - and a drag that selected text on its way would leave a
+  blue smear across the diagram.
+*/
+body.mq-panning,
+body.mq-panning * {
+  cursor: var(--mq-pan-cursor, all-scroll) !important;
+  user-select: none;
+}
+
+/*
+  Printing a diagram window. The zoom strip is a control, not content, so it goes; the
+  surface stops being a scroller so the whole diagram reaches the paper rather than only the
+  part that happened to be in view.
+
+  The diagram prints at whatever size it fits, not at the zoom on screen: a page zoomed to
+  500% would otherwise print one corner across several sheets.
+*/
+@media print {
+  html, body {
+    height: auto;
+    overflow: visible;
+    background: #ffffff;
+    color: #1b1b1b;
+    display: block;
+  }
+
+  .mq-toolbar { display: none; }
+
+  .mq-surface {
+    display: block;
+    overflow: visible;
+    height: auto;
+  }
+
+  .mq-canvas { margin: 0; padding: 0; }
+
+  .mq-canvas svg {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+  }
+}
+
+.mq-error { padding: 24px; color: var(--mq-muted); }

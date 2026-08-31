@@ -1,0 +1,1806 @@
+<Window
+    x:Class="PaulTechGuy.MQ.App.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:PaulTechGuy.MQ.App.ViewModels"
+    xmlns:controls="using:PaulTechGuy.MQ.App.Controls"
+    mc:Ignorable="d">
+
+    <!--
+        The window supplies the native Windows 11 chrome: Mica, tabs in the title bar and
+        Fluent controls. Each document is a tab, but they all share a single WebView2 that
+        hosts the editor and preview; the shell keeps one editor model per tab and swaps
+        between them, so scroll synchronization never crosses the process boundary and
+        switching tabs preserves undo history and scroll position.
+    -->
+
+    <Grid x:Name="RootGrid"
+          AllowDrop="True"
+          DragOver="OnDragOver"
+          DragLeave="OnDragLeave"
+          Drop="OnDrop">
+
+        <!--
+            Tabs, menu bar, format bar, change banner, content, status bar. The banner sits
+            directly above the content and below every piece of chrome, so it reads as
+            belonging to the document rather than to the app.
+        -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ====================================================== tabs / title bar -->
+
+        <!--
+            The TabView doubles as the title bar. Its height is fixed so the control's own
+            content region collapses to nothing: tab content is the shared WebView below,
+            not per-tab panels.
+        -->
+        <!--
+            AllowDropTabs is what lets a dragged tab be dropped back into this strip, and
+            reordering is a drop like any other: TabView passes it to the ListView underneath
+            as AllowDrop, which ListView requires alongside CanReorderItems before it will
+            reorder anything. With it off, a tab could be picked up and never put down.
+
+            Nothing else can drag tabs in, because Marqora has one TabView and no tab tear-out,
+            so turning it on costs nothing.
+        -->
+        <TabView x:Name="DocumentTabs"
+                 Grid.Row="0"
+                 Height="{StaticResource MqTabStripHeight}"
+                 VerticalAlignment="Top"
+                 TabWidthMode="SizeToContent"
+                 CanReorderTabs="True"
+                 CanDragTabs="True"
+                 IsAddTabButtonVisible="True"
+                 AllowDropTabs="True"
+                 TabItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}"
+                 SelectionChanged="OnTabSelectionChanged"
+                 AddTabButtonClick="OnAddTabButtonClick"
+                 TabDragStarting="OnTabDragStarting"
+                 TabDragCompleted="OnTabDragCompleted"
+                 TabCloseRequested="OnTabCloseRequested">
+
+            <TabView.TabStripHeader>
+                <!--
+                    Given the strip's height outright rather than centring in whatever the
+                    slot happens to be. With no tabs open the slot is only as tall as the add
+                    button, so a centred header rode high and then dropped as soon as the
+                    first tab appeared and made the row taller.
+                -->
+                <StackPanel x:Name="TabStripLeading"
+                            Orientation="Horizontal"
+                            Spacing="10"
+                            Padding="14,0,10,0"
+                            Height="{StaticResource MqTabStripHeight}"
+                            VerticalAlignment="Top">
+                    <Image x:Name="HeaderLogo"
+                           Width="18"
+                           Height="18"
+                           VerticalAlignment="Center" />
+                    <TextBlock Text="Marqora"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </TabView.TabStripHeader>
+
+            <!--
+                Room for the system caption buttons at the far right, and about fifty pixels
+                of strip in front of them that drags the window.
+
+                The drag is run by hand rather than declared. SetTitleBar makes the tab strip
+                caption, but a TabView leaves its footer out of that - it is where interactive
+                content is meant to go - so this stays client area however it is configured.
+                The transparent background is what makes it hit-testable at all; without one
+                the strip is invisible to the pointer and clicks land on nothing. See
+                OnTitleBarDragPointerPressed for why the two declarative fixes that look right
+                are worse than doing it here.
+            -->
+            <TabView.TabStripFooter>
+                <Grid x:Name="TabStripTrailing"
+                      MinWidth="228"
+                      Background="Transparent"
+                      PointerPressed="OnTitleBarDragPointerPressed"
+                      PointerMoved="OnTitleBarDragPointerMoved"
+                      PointerReleased="OnTitleBarDragPointerReleased"
+                      PointerCaptureLost="OnTitleBarDragPointerCaptureLost"
+                      DoubleTapped="OnTitleBarDragDoubleTapped">
+
+                    <!--
+                        Every open document, however many tabs happen to be on screen. It is
+                        pinned at the far right of the strip, just before the caption
+                        buttons, so it never moves as tabs come and go; the right margin
+                        that keeps it clear of those buttons is set in code, because the
+                        caption inset is only known at runtime and changes with display
+                        scale. It is filled as it opens rather than kept in step with the
+                        tab list. Its bounds are added to the title bar's passthrough
+                        regions, or the caption would swallow the click as a window drag.
+                    -->
+                    <!--
+                        A plain Button rather than a DropDownButton: a button opens its
+                        flyout on click just the same, and this one's glyph is already an
+                        ellipsis, so the chevron a DropDownButton appends said nothing and
+                        cost the width of another character.
+                    -->
+                    <Button x:Name="TabListButton"
+                            Style="{StaticResource MqToolButtonStyle}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            ToolTipService.ToolTip="All open documents"
+                            AutomationProperties.Name="All open documents">
+                        <FontIcon Glyph="&#xE712;" Style="{StaticResource MqIconStyle}" />
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="TabListMenu" Placement="BottomEdgeAlignedRight" />
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
+            </TabView.TabStripFooter>
+
+            <TabView.TabItemTemplate>
+                <DataTemplate x:DataType="vm:DocumentTabViewModel">
+                    <!--
+                        The right margin is the gap between neighbouring tabs. With a
+                        proportional font and two elided names side by side, tabs that touch
+                        read as one run of text. The width the fit pass books per tab
+                        includes this gap - see TabSpacing in the code-behind.
+                    -->
+                    <TabViewItem IsClosable="{x:Bind IsActive, Mode=OneWay}"
+                                 Margin="0,0,6,0"
+                                 ToolTipService.ToolTip="{x:Bind Tooltip, Mode=OneWay}">
+                        <!--
+                            The title is carried on Tag and written to Text by the window,
+                            shortened from the middle to fit the tab. Binding Text directly
+                            would put the full name back the moment anything re-evaluated
+                            the binding; Tag keeps the original where the fitter can find it,
+                            and still changes when the document is renamed or goes dirty.
+                        -->
+                        <!--
+                            No icon. Every document here is markdown, so the same glyph on
+                            every tab says nothing and costs about twenty pixels of name on
+                            each one.
+                        -->
+                        <TabViewItem.Header>
+                            <TextBlock x:Name="TabTitle"
+                                       Tag="{x:Bind DisplayTitle, Mode=OneWay}"
+                                       TextWrapping="NoWrap" />
+                        </TabViewItem.Header>
+                    </TabViewItem>
+                </DataTemplate>
+            </TabView.TabItemTemplate>
+        </TabView>
+
+        <!-- ============================================================ menu bar -->
+
+        <!--
+            Unpainted, like the tab strip and the status bar. The chrome is left to WinUI and
+            to Mica so the window reads as a stock Windows 11 one; the accent is for the app's
+            own surfaces, not for its frame.
+        -->
+        <!--
+            Bottom edge only. The TabView already draws its own divider along the foot of the
+            tab strip, so a top border here put a second full-width rule a few pixels below
+            the first - most obvious with no tabs open, where nothing interrupts either line.
+        -->
+        <Border Grid.Row="1"
+                Height="{StaticResource MqToolbarHeight}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{ThemeResource MqChromeRuleBrush}">
+
+            <Grid Padding="4,0,10,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!--
+                    Accelerator text is shown with KeyboardAcceleratorTextOverride rather than
+                    a KeyboardAccelerator, because the window already registers the real
+                    accelerators on the root. Declaring them twice would fire them twice.
+                -->
+                <!--
+                    Font comes from Themes/Menus.xaml along with every other menu in the
+                    app, but it is named here rather than set by an implicit style: WinUI
+                    publishes no default style for MenuBar or MenuBarItem to build one on,
+                    and a style without that base takes the control template with it. The
+                    titles inherit both values from the bar.
+                -->
+                <!--
+                    Each menu opens with Alt and a letter, so the menus can be reached
+                    without a pointer at all. The keys are registered in RegisterAccelerators
+                    along with every other shortcut rather than declared here as AccessKey:
+                    WinUI's MenuBarItem does not act on an access key, so setting one looks
+                    right in markup and does nothing at runtime.
+
+                    Format takes O rather than F, the way Windows menus have always split
+                    those two.
+                -->
+                <MenuBar Grid.Column="0"
+                         VerticalAlignment="Center"
+                         FontFamily="{ThemeResource MqMenuFontFamily}"
+                         FontSize="{ThemeResource MqMenuFontSize}">
+
+                    <MenuBarItem x:Name="FileMenu" Title="File">
+                        <MenuFlyoutItem Text="New Tab"
+                                        Command="{x:Bind ViewModel.NewTabCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+N">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE710;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="New from Clipboard"
+                                        Command="{x:Bind ViewModel.NewFromClipboardCommand}"
+                                        ToolTipService.ToolTip="Open the text on the clipboard as a new document">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE77F;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Open..."
+                                        Command="{x:Bind ViewModel.OpenCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+O">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8E5;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Open Folder..."
+                                        Command="{x:Bind ViewModel.OpenFolderCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+O"
+                                        ToolTipService.ToolTip="Open every markdown file in a folder, each in its own tab">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8B7;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Save"
+                                        Command="{x:Bind ViewModel.SaveCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+S">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE74E;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Save All"
+                                        Command="{x:Bind ViewModel.SaveAllCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+S"
+                                        ToolTipService.ToolTip="Write every open document that has unsaved changes">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xEA35;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Save As..."
+                                        Command="{x:Bind ViewModel.SaveAsCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Alt+S" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Reload from Disk"
+                                        Command="{x:Bind ViewModel.ReloadFromDiskCommand}"
+                                        ToolTipService.ToolTip="Discard the buffer and reopen the file as it is on disk" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Close Tab"
+                                        Command="{x:Bind ViewModel.CloseTabCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+W" />
+                        <MenuFlyoutItem Text="Close Other Tabs"
+                                        Command="{x:Bind ViewModel.CloseOtherTabsCommand}" />
+                        <MenuFlyoutItem Text="Close All Tabs"
+                                        Command="{x:Bind ViewModel.CloseAllTabsCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+W" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Open in File Explorer"
+                                        Command="{x:Bind ViewModel.RevealInFolderCommand}" />
+                        <MenuFlyoutItem Text="Copy Full Path"
+                                        Command="{x:Bind ViewModel.CopyPathCommand}" />
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            Paper, as opposed to the two exports under Tools, which produce
+                            files. It goes through the same print stylesheet an exported PDF
+                            does, so the editor pane stays out of it either way.
+                        -->
+                        <MenuFlyoutItem Text="Print..."
+                                        Command="{x:Bind ViewModel.PrintCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+P"
+                                        ToolTipService.ToolTip="Print the preview">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE749;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Exit"
+                                        Command="{x:Bind ViewModel.ExitCommand}"
+                                        KeyboardAcceleratorTextOverride="Alt+F4" />
+                    </MenuBarItem>
+
+                    <MenuBarItem x:Name="EditMenu" Title="Edit">
+                        <!--
+                            Iconned because the format bar carries the same two, and one
+                            command wearing a glyph on the bar and nothing in the menu
+                            reads as two different commands.
+
+                            IsEnabled rather than the command's CanExecute, because
+                            EditActionCommand is one command behind a dozen parameters and
+                            cannot answer for any one of them. That does put two writers on
+                            IsEnabled, which is the race the Format menu's note below
+                            describes - but taken the other way round. There the binding
+                            wrongly re-enabled what CanExecute had ruled out; here the
+                            binding is the real answer and CanExecute's "no" is only the
+                            moment an AsyncRelayCommand's task is in flight. The shell's
+                            verdict lands after the edit does, so it writes last. Cut, Copy
+                            and Select All below already pair the two this way.
+                        -->
+                        <MenuFlyoutItem Text="Undo"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="undo"
+                                        IsEnabled="{x:Bind ViewModel.CanUndo, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Z">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A7;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Redo"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="redo"
+                                        IsEnabled="{x:Bind ViewModel.CanRedo, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Y">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A6;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Cut"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="cut"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+X" />
+                        <MenuFlyoutItem Text="Copy"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="copy"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+C" />
+                        <MenuFlyoutItem Text="Paste"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="paste"
+                                        KeyboardAcceleratorTextOverride="Ctrl+V" />
+
+                        <!--
+                            With the other clipboard commands rather than with the exports:
+                            it copies, it does not produce a file. The rendered document
+                            rather than the source, which is what the wording has to carry.
+                        -->
+                        <MenuFlyoutItem Text="Copy as Rich Text"
+                                        Command="{x:Bind ViewModel.CopyAsRichTextCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+C"
+                                        ToolTipService.ToolTip="Copy the preview for pasting into Word, Outlook or similar">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Select All"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="selectAll"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+A" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Find..."
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="find"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+F" />
+                        <MenuFlyoutItem Text="Find Next"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="findNext"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="F3" />
+                        <MenuFlyoutItem Text="Find Previous"
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="findPrevious"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Shift+F3" />
+                        <!--
+                            Routed through EditActionCommand like the rest of the Find family
+                            even though it opens a window of the app's own rather than one of
+                            the editor's actions. The Edit menu speaks one vocabulary, and the
+                            view model is where "findAll" stops being an editor command.
+                        -->
+                        <MenuFlyoutItem Text="Find All..."
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="findAll"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+F" />
+                        <MenuFlyoutItem Text="Replace..."
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="replace"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+H" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Go to Line..."
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="gotoLine"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+G" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Format Document"
+                                        Command="{x:Bind ViewModel.FormatDocumentCommand}"
+                                        KeyboardAcceleratorTextOverride="Shift+Alt+F"
+                                        ToolTipService.ToolTip="Tidy this document, or just the selected lines">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8A1;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Format All Open Documents"
+                                        Command="{x:Bind ViewModel.FormatAllDocumentsCommand}"
+                                        ToolTipService.ToolTip="Tidy every open tab" />
+
+                        <MenuFlyoutItem Text="Format Markdown..."
+                                        Command="{x:Bind ViewModel.ShowFormatOptionsCommand}"
+                                        ToolTipService.ToolTip="Choose which tidy-up rules to apply" />
+                    </MenuBarItem>
+
+                    <!--
+                        Every item here is enabled by HasDocument rather than HasContent:
+                        an empty new tab has no content, and pressing Ctrl+B in one is
+                        precisely how a document stops being empty.
+
+                        The accelerator text is display-only, as everywhere else in this
+                        menu. Real keys are registered once, in RegisterAccelerators, and
+                        again with Monaco, which owns them while the editor has focus.
+                    -->
+                    <!--
+                        Gated once, here, rather than on every item. Two writers to a
+                        MenuFlyoutItem's IsEnabled - a binding and the command's own
+                        CanExecute - race, and the binding wins whenever HasDocument next
+                        raises a notification, re-enabling an item whose command says no.
+                        CanExecute owns the items; this owns the menu.
+                    -->
+                    <MenuBarItem x:Name="FormatMenu"
+                                 Title="Format"
+                                 IsEnabled="{x:Bind ViewModel.CanFormat, Mode=OneWay}">
+                        <MenuFlyoutItem Text="Bold"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Bold"
+                                        KeyboardAcceleratorTextOverride="Ctrl+B">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DD;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Italic"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Italic"
+                                        KeyboardAcceleratorTextOverride="Ctrl+I">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DB;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Strikethrough"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Strikethrough"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+X" />
+
+                        <MenuFlyoutItem Text="Inline Code"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="InlineCode"
+                                        KeyboardAcceleratorTextOverride="Ctrl+`" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Link..."
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Link"
+                                        KeyboardAcceleratorTextOverride="Ctrl+K"
+                                        ToolTipService.ToolTip="Wrap the selection in a link, or drop an empty one in">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE71B;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutSubItem Text="Heading">
+                            <MenuFlyoutItem Text="Heading 1"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading1"
+                                            />
+                            <MenuFlyoutItem Text="Heading 2"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading2"
+                                            />
+                            <MenuFlyoutItem Text="Heading 3"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading3"
+                                            />
+                            <MenuFlyoutItem Text="Heading 4"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading4"
+                                            />
+                            <MenuFlyoutItem Text="Heading 5"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading5"
+                                            />
+                            <MenuFlyoutItem Text="Heading 6"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading6"
+                                            />
+
+                            <MenuFlyoutSeparator />
+
+                            <MenuFlyoutItem Text="Increase Level"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="HeadingIncrease"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+]" />
+                            <MenuFlyoutItem Text="Decrease Level"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="HeadingDecrease"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+[" />
+                        </MenuFlyoutSubItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Bullet List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="BulletList"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+8">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8FD;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Numbered List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="NumberedList"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+7" />
+
+                        <MenuFlyoutItem Text="Task List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="TaskList"
+                                        />
+
+                        <MenuFlyoutItem Text="Blockquote"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Blockquote"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+." />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Code Block"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="CodeBlock"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+K"
+                                        ToolTipService.ToolTip="Fence the selection, or start an empty block" />
+
+                        <MenuFlyoutItem Text="Table"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Table"
+                                        />
+
+                        <MenuFlyoutItem Text="Horizontal Rule"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="HorizontalRule"
+                                        />
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            Filled from the catalogue each time one opens, so a file dropped
+                            into the snippets folder appears without restarting anything.
+                        -->
+                        <MenuFlyoutSubItem x:Name="FormatDiagramMenu" Text="Diagram" />
+                        <MenuFlyoutSubItem x:Name="FormatSnippetMenu" Text="Snippet" />
+                    </MenuBarItem>
+
+                    <MenuBarItem x:Name="ViewMenu" Title="View">
+                        <ToggleMenuFlyoutItem Text="Source"
+                                              IsChecked="{x:Bind ViewModel.IsSourceView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="Source"
+                                              KeyboardAcceleratorTextOverride="Alt+1" />
+                        <ToggleMenuFlyoutItem Text="Split"
+                                              IsChecked="{x:Bind ViewModel.IsSplitView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="SideBySide"
+                                              KeyboardAcceleratorTextOverride="Alt+2" />
+                        <ToggleMenuFlyoutItem Text="Preview"
+                                              IsChecked="{x:Bind ViewModel.IsPreviewView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="Preview"
+                                              KeyboardAcceleratorTextOverride="Alt+3" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Next Tab"
+                                        Command="{x:Bind ViewModel.NextTabCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Tab" />
+                        <MenuFlyoutItem Text="Previous Tab"
+                                        Command="{x:Bind ViewModel.PreviousTabCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Tab" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Zoom In"
+                                        Command="{x:Bind ViewModel.ZoomInCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Plus" />
+                        <MenuFlyoutItem Text="Zoom Out"
+                                        Command="{x:Bind ViewModel.ZoomOutCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Minus" />
+                        <MenuFlyoutItem Text="Reset Zoom"
+                                        Command="{x:Bind ViewModel.ZoomResetCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+0" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Zoom In Both Panes"
+                                        Command="{x:Bind ViewModel.ZoomBothInCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Plus" />
+                        <MenuFlyoutItem Text="Zoom Out Both Panes"
+                                        Command="{x:Bind ViewModel.ZoomBothOutCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Minus" />
+                        <MenuFlyoutItem Text="Reset Zoom Both Panes"
+                                        Command="{x:Bind ViewModel.ZoomBothResetCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+0" />
+
+                        <MenuFlyoutSeparator />
+
+                        <ToggleMenuFlyoutItem Text="Word Wrap"
+                                              IsChecked="{x:Bind ViewModel.WordWrapEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleWordWrapCommand}"
+                                              KeyboardAcceleratorTextOverride="Alt+Z" />
+                        <ToggleMenuFlyoutItem Text="Line Numbers"
+                                              IsChecked="{x:Bind ViewModel.LineNumbersEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleLineNumbersCommand}" />
+                        <ToggleMenuFlyoutItem Text="Show Whitespace"
+                                              IsChecked="{x:Bind ViewModel.ShowWhitespaceEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleShowWhitespaceCommand}" />
+
+                        <ToggleMenuFlyoutItem Text="Show Problems"
+                                              IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
+                                              ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax" />
+                        <ToggleMenuFlyoutItem Text="Wrapped Line Markers"
+                                              IsChecked="{x:Bind ViewModel.ShowWrapGlyphEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleWrapGlyphCommand}" />
+
+                        <MenuFlyoutSeparator />
+
+                        <ToggleMenuFlyoutItem Text="Synchronize Scrolling"
+                                              IsChecked="{x:Bind ViewModel.ScrollSyncEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleScrollSyncCommand}" />
+
+                        <ToggleMenuFlyoutItem Text="Reload Files Changed on Disk"
+                                              IsChecked="{x:Bind ViewModel.ReloadOnExternalChangeEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleReloadOnExternalChangeCommand}"
+                                              ToolTipService.ToolTip="Take an outside change straight away when the tab has no unsaved edits" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Close All Diagram Windows"
+                                        Command="{x:Bind ViewModel.CloseAllDiagramWindowsCommand}"
+                                        ToolTipService.ToolTip="Close every diagram opened from the preview" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutSubItem Text="Theme">
+                            <ToggleMenuFlyoutItem Text="Use System Setting"
+                                                  IsChecked="{x:Bind ViewModel.IsSystemTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="System" />
+                            <ToggleMenuFlyoutItem Text="Light"
+                                                  IsChecked="{x:Bind ViewModel.IsLightTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="Light" />
+                            <ToggleMenuFlyoutItem Text="Dark"
+                                                  IsChecked="{x:Bind ViewModel.IsDarkTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="Dark" />
+                        </MenuFlyoutSubItem>
+                    </MenuBarItem>
+
+                    <!--
+                        Everything here turns the document into a file outside the app.
+                        Printing is the other half of that thought, but paper is a File
+                        menu idea, so it sits there instead; copying lives on the Edit menu
+                        with the other clipboard commands.
+                    -->
+                    <MenuBarItem x:Name="ToolsMenu" Title="Tools">
+                        <MenuFlyoutItem Text="Export to PDF..."
+                                        Command="{x:Bind ViewModel.ExportPdfCommand}"
+                                        ToolTipService.ToolTip="Export the preview as a PDF, exactly as it appears">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE749;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Export to HTML..."
+                                        Command="{x:Bind ViewModel.ExportHtmlCommand}"
+                                        ToolTipService.ToolTip="Export as a single self-contained HTML file">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE943;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuBarItem>
+
+                    <!--
+                        Reference first, then the two ways out to somewhere else. The
+                        cheatsheet lives here rather than under Tools because it teaches
+                        markdown; Tools is for the things that act on the document.
+                    -->
+                    <MenuBarItem x:Name="HelpMenu" Title="Help">
+                        <!--
+                            A toggle item so the tick shows whether the cheatsheet is up. It
+                            is bound to the window's actual visibility, not to this command,
+                            so closing the cheatsheet with its own X unticks it here too.
+                        -->
+                        <ToggleMenuFlyoutItem x:Name="CheatsheetMenuItem"
+                                              Text="Markdown Cheatsheet"
+                                              IsChecked="{x:Bind ViewModel.IsCheatsheetVisible, Mode=OneWay}"
+                                              Click="OnCheatsheetItemClick"
+                                              KeyboardAcceleratorTextOverride="Ctrl+F1"
+                                              ToolTipService.ToolTip="Show or hide the floating markdown reference" />
+
+                        <MenuFlyoutItem Text="Keyboard Shortcuts..." Click="OnShowShortcuts" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Open Log Folder" Click="OnOpenLogFolder" />
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            An outline heart rather than the filled one: this is a marker,
+                            not a call to action, and nothing about it should look urgent.
+                        -->
+                        <MenuFlyoutItem Text="Support the Project..."
+                                        Command="{x:Bind ViewModel.SupportCommand}"
+                                        ToolTipService.ToolTip="Ways to support Marqora's development">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xEB51;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="About Marqora"
+                                        Command="{x:Bind ViewModel.AboutCommand}" />
+                    </MenuBarItem>
+                </MenuBar>
+
+                <!-- View mode: a segmented control built from three toggles -->
+                <Border x:Name="ViewSwitcher"
+                        Grid.Column="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        CornerRadius="7"
+                        Padding="2"
+                        Background="{ThemeResource ControlFillColorDefaultBrush}"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <ToggleButton x:Name="SourceSegment"
+                                      Style="{StaticResource MqSegmentStyle}"
+                                      Content="Source"
+                                      IsChecked="{x:Bind ViewModel.IsSourceView, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                      CommandParameter="Source"
+                                      ToolTipService.ToolTip="Markdown source only (Alt+1)" />
+                        <ToggleButton x:Name="SplitSegment"
+                                      Style="{StaticResource MqSegmentStyle}"
+                                      Content="Split"
+                                      DoubleTapped="OnSplitSegmentDoubleTapped"
+                                      IsChecked="{x:Bind ViewModel.IsSplitView, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                      CommandParameter="SideBySide"
+                                      ToolTipService.ToolTip="Source and preview together (Alt+2). Double-click to even up the split." />
+                        <ToggleButton x:Name="PreviewSegment"
+                                      Style="{StaticResource MqSegmentStyle}"
+                                      Content="Preview"
+                                      IsChecked="{x:Bind ViewModel.IsPreviewView, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                      CommandParameter="Preview"
+                                      ToolTipService.ToolTip="Rendered preview only (Alt+3)" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Zoom, kept out of the menus because it is adjusted constantly -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ZoomOutCommand}"
+                            ToolTipService.ToolTip="Zoom out (Ctrl+-). Hold Shift with the wheel to zoom both panes.">
+                        <FontIcon Glyph="&#xE738;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button x:Name="ZoomLabelButton"
+                            Style="{StaticResource MqToolButtonStyle}"
+                            MinWidth="52"
+                            Command="{x:Bind ViewModel.ZoomResetCommand}"
+                            DoubleTapped="OnZoomLabelDoubleTapped"
+                            ToolTipService.ToolTip="Reset zoom to 100% (Ctrl+0). Double-click to reset both panes (Ctrl+Shift+0).">
+                        <TextBlock Text="{x:Bind ViewModel.ZoomLabel, Mode=OneWay}"
+                                   FontSize="12.5"
+                                   HorizontalAlignment="Center" />
+                    </Button>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ZoomInCommand}"
+                            ToolTipService.ToolTip="Zoom in (Ctrl++). Hold Shift with the wheel to zoom both panes.">
+                        <FontIcon Glyph="&#xE710;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <!--
+                        Jump to either end of the document. Long specifications are what this
+                        app is for, and reaching the end of one by scrolling is tedious. These
+                        act on the pane you were last in, and on both when scroll sync is
+                        holding them together.
+                    -->
+                    <Button x:Name="ScrollTopButton"
+                            Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ScrollToTopCommand}"
+                            ToolTipService.ToolTip="Scroll to the top">
+                        <FontIcon Glyph="&#xE74A;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button x:Name="ScrollBottomButton"
+                            Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ScrollToBottomCommand}"
+                            ToolTipService.ToolTip="Scroll to the bottom">
+                        <FontIcon Glyph="&#xE74B;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Rectangle x:Name="ScrollSyncDivider"
+                               Width="1" Height="20" Margin="6,0"
+                               Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                    <ToggleButton x:Name="ScrollSyncToggle"
+                                  Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.ScrollSyncEnabled, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ToggleScrollSyncCommand}"
+                                  IsEnabled="{x:Bind ViewModel.IsSplitView, Mode=OneWay}"
+                                  ToolTipService.ToolTip="Synchronize scrolling between panes">
+                        <FontIcon Glyph="&#xE895;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ======================================================== format toolbar -->
+
+        <!--
+            Two halves. The file commands come first and answer to nothing but their own
+            CanExecute; everything after the rule is formatting, enabled once on its
+            container rather than on each of the fifteen buttons. Disablement inherits down
+            the tree, so this cannot race with the CanExecute the same commands carry for
+            the Format menu.
+
+            CanFormat is false only in Preview-only view, where there is no source pane to
+            edit. It deliberately ignores which pane has focus: clicking into the preview
+            to scroll must not grey the bar out, or it would flicker every time the user
+            moved between panes.
+
+            The toggles carry glyphs rather than text on purpose. A stock ToggleButton
+            composites into a layer when checked, which drops text from ClearType to
+            grayscale antialiasing - see MqSegmentStyle's note above - and these flip as
+            often as the caret moves. The dropdowns never toggle, so they can carry words.
+        -->
+        <Border x:Name="FormatBar"
+                Grid.Row="2"
+                Height="{StaticResource MqFormatBarHeight}"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{ThemeResource MqChromeRuleBrush}">
+
+            <StackPanel Orientation="Horizontal"
+                        Padding="6,0,10,0"
+                        VerticalAlignment="Center">
+
+                <!--
+                    The four file commands, first on the bar and ruled off from the rest.
+
+                    Outside the CanFormat gate below, deliberately and necessarily. That gate
+                    greys the whole bar in Preview-only view, where there is no source pane to
+                    format; but opening and saving are exactly as reasonable while reading the
+                    preview as while editing, so these four sit in front of it rather than
+                    inside it. It does mean four live buttons on an otherwise grey bar in
+                    Preview view - which is the honest picture of what still works there.
+
+                    Bound to the same commands as their File-menu twins, so Save cannot be
+                    greyed in one place and lit in the other. Nothing here sets IsEnabled:
+                    CanExecute owns all four, and it is what dims Save and Save All when
+                    there is nothing to write.
+
+                    Sheds below 760 effective pixels - see ApplyFormatBarDensity. Unlike every
+                    other group here it has no overflow mirror: Open and Save have no business
+                    under a menu labelled "More formatting", so they simply go, and stay
+                    reachable on the File menu and on Ctrl+O and Ctrl+S.
+                -->
+                <StackPanel x:Name="FileActionsGroup" Orientation="Horizontal" Spacing="2">
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.OpenCommand}"
+                            ToolTipService.ToolTip="Open a file (Ctrl+O)"
+                            AutomationProperties.Name="Open file">
+                        <FontIcon Glyph="&#xE8E5;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.OpenFolderCommand}"
+                            ToolTipService.ToolTip="Open every markdown file in a folder (Ctrl+Shift+O)"
+                            AutomationProperties.Name="Open folder">
+                        <FontIcon Glyph="&#xE8B7;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveCommand}"
+                            ToolTipService.ToolTip="Save this document (Ctrl+S)"
+                            AutomationProperties.Name="Save">
+                        <FontIcon Glyph="&#xE74E;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <!-- Two stacked disks, against Save's one. -->
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveAllCommand}"
+                            ToolTipService.ToolTip="Save every document with unsaved changes (Ctrl+Shift+S)"
+                            AutomationProperties.Name="Save all">
+                        <FontIcon Glyph="&#xEA35;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+                </StackPanel>
+
+                <Rectangle x:Name="FileActionsSeparator" Width="1" Height="20" Margin="6,0"
+                           Fill="{ThemeResource MqChromeDividerBrush}" />
+
+            <!--
+                A ContentControl only because IsEnabled lives on Control, and neither
+                Border nor StackPanel is one. It earns its place: disabling here reaches
+                every button by inheritance, so there is one binding rather than fifteen.
+            -->
+            <ContentControl IsEnabled="{x:Bind ViewModel.CanFormat, Mode=OneWay}"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Center">
+
+            <StackPanel Orientation="Horizontal"
+                        Spacing="2"
+                        VerticalAlignment="Center">
+
+                <!--
+                    Ahead of the formatting proper because it is not formatting: these two
+                    take back the last edit whatever made it, and every editor the user has
+                    ever opened puts them first.
+
+                    Pinned. Unlike every group below, this one never sheds into the overflow
+                    menu as the window narrows - a bar too cramped to format from is exactly
+                    where a misfired edit most needs taking back, and two buttons is the
+                    cheapest group here to keep.
+
+                    Bound to the same command and parameters as the Edit menu's entries, so
+                    the two cannot come to mean different things. These are also the only
+                    controls on the bar carrying their own IsEnabled: whether the undo stack
+                    is empty is a different question from whether there is a source pane to
+                    edit, and only the shell can answer it. The container's CanFormat gate
+                    still applies on top, since IsEnabled inherits down the tree.
+                -->
+                <StackPanel x:Name="FormatHistoryGroup" Orientation="Horizontal" Spacing="2">
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.EditActionCommand}"
+                            CommandParameter="undo"
+                            IsEnabled="{x:Bind ViewModel.CanUndo, Mode=OneWay}"
+                            ToolTipService.ToolTip="Undo (Ctrl+Z)"
+                            AutomationProperties.Name="Undo">
+                        <FontIcon Glyph="&#xE7A7;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.EditActionCommand}"
+                            CommandParameter="redo"
+                            IsEnabled="{x:Bind ViewModel.CanRedo, Mode=OneWay}"
+                            ToolTipService.ToolTip="Redo (Ctrl+Y)"
+                            AutomationProperties.Name="Redo">
+                        <FontIcon Glyph="&#xE7A6;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+                </StackPanel>
+
+                <Rectangle x:Name="HistorySeparator" Width="1" Height="20" Margin="6,0"
+                           Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                <StackPanel x:Name="FormatInlineGroup" Orientation="Horizontal" Spacing="2">
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsBoldActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="Bold"
+                                  ToolTipService.ToolTip="Bold (Ctrl+B)"
+                                  AutomationProperties.Name="Bold">
+                        <FontIcon Glyph="&#xE8DD;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsItalicActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="Italic"
+                                  ToolTipService.ToolTip="Italic (Ctrl+I)"
+                                  AutomationProperties.Name="Italic">
+                        <FontIcon Glyph="&#xE8DB;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsStrikethroughActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="Strikethrough"
+                                  ToolTipService.ToolTip="Strikethrough (Ctrl+Shift+X)"
+                                  AutomationProperties.Name="Strikethrough">
+                        <FontIcon Glyph="&#xEDE0;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsInlineCodeActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="InlineCode"
+                                  ToolTipService.ToolTip="Inline code (Ctrl+`)"
+                                  AutomationProperties.Name="Inline code">
+                        <FontIcon Glyph="&#xE943;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                            CommandParameter="Link"
+                            ToolTipService.ToolTip="Insert link (Ctrl+K)"
+                            AutomationProperties.Name="Insert link">
+                        <FontIcon Glyph="&#xE71B;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <!--
+                        A block element among inline ones, which is not where taxonomy would
+                        put it. It is here because it was the last of its own group once the
+                        code block and the table moved into Insert, and a lone button fenced
+                        off by two rules reads as something having gone missing. It keeps the
+                        pinned group's company instead, where a one-stroke command belongs.
+                    -->
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                            CommandParameter="HorizontalRule"
+                            ToolTipService.ToolTip="Horizontal rule"
+                            AutomationProperties.Name="Horizontal rule">
+                        <FontIcon Glyph="&#xE738;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+                </StackPanel>
+
+                <Rectangle x:Name="LineSeparator" Width="1" Height="20" Margin="6,0"
+                           Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                <StackPanel x:Name="FormatLineGroup" Orientation="Horizontal" Spacing="2">
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsBulletListActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="BulletList"
+                                  ToolTipService.ToolTip="Bullet list (Ctrl+Shift+8)"
+                                  AutomationProperties.Name="Bullet list">
+                        <FontIcon Glyph="&#xE8FD;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsNumberedListActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="NumberedList"
+                                  ToolTipService.ToolTip="Numbered list (Ctrl+Shift+7)"
+                                  AutomationProperties.Name="Numbered list">
+                        <FontIcon Glyph="&#xF168;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsTaskListActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="TaskList"
+                                  ToolTipService.ToolTip="Task list"
+                                  AutomationProperties.Name="Task list">
+                        <FontIcon Glyph="&#xE9D5;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+
+                    <!--
+                        With the lists rather than in the Insert dropdown, because it is the
+                        same kind of thing they are: a line-level mark that toggles, applied
+                        to every line the selection touches and cleared only when all of them
+                        already carry it. The view model bears this out - IsBlockquoteActive
+                        is one of exactly four such states, the other three being these lists.
+                        Nothing in Insert has an active state, because nothing in it toggles.
+
+                        A button rather than a menu entry for the same reason: the state is
+                        worth knowing without having to open anything, which is what the whole
+                        bar is for.
+                    -->
+                    <ToggleButton Style="{StaticResource MqToolToggleStyle}"
+                                  IsChecked="{x:Bind ViewModel.IsBlockquoteActive, Mode=OneWay}"
+                                  Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                  CommandParameter="Blockquote"
+                                  ToolTipService.ToolTip="Blockquote (Ctrl+Shift+.)"
+                                  AutomationProperties.Name="Blockquote">
+                        <FontIcon Glyph="&#xE134;" Style="{StaticResource MqIconStyle}" />
+                    </ToggleButton>
+                </StackPanel>
+
+                <Rectangle x:Name="HeadingSeparator" Width="1" Height="20" Margin="6,0"
+                           Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                <!--
+                    Moved down to sit beside Diagram and Insert. All three are dropdowns that
+                    open a list rather than buttons that act, and reading them as one run of
+                    three is worth more than keeping Heading next to the marks it used to
+                    follow. It keeps its own group and its own separator so it can still shed
+                    on its own schedule - later than the two beside it.
+                -->
+                <StackPanel x:Name="FormatHeadingGroup" Orientation="Horizontal">
+                    <DropDownButton Style="{StaticResource MqDropDownStyle}"
+                                    Content="{x:Bind ViewModel.HeadingLabel, Mode=OneWay}"
+                                    ToolTipService.ToolTip="Heading level"
+                                    AutomationProperties.Name="Heading level">
+                        <DropDownButton.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Heading 1"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading1" />
+                                <MenuFlyoutItem Text="Heading 2"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading2" />
+                                <MenuFlyoutItem Text="Heading 3"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading3" />
+                                <MenuFlyoutItem Text="Heading 4"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading4" />
+                                <MenuFlyoutItem Text="Heading 5"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading5" />
+                                <MenuFlyoutItem Text="Heading 6"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading6" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="Increase Level"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="HeadingIncrease"
+                                                KeyboardAcceleratorTextOverride="Ctrl+Shift+]" />
+                                <MenuFlyoutItem Text="Decrease Level"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="HeadingDecrease"
+                                                KeyboardAcceleratorTextOverride="Ctrl+Shift+[" />
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                </StackPanel>
+
+                <Rectangle x:Name="InsertSeparator" Width="1" Height="20" Margin="6,0"
+                           Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                <!-- Populated from the snippet catalogue when each flyout opens. -->
+                <StackPanel x:Name="FormatInsertGroup" Orientation="Horizontal" Spacing="2">
+                    <DropDownButton x:Name="DiagramButton"
+                                    Style="{StaticResource MqDropDownStyle}"
+                                    Content="Diagram"
+                                    ToolTipService.ToolTip="Insert a mermaid diagram"
+                                    AutomationProperties.Name="Insert diagram">
+                        <DropDownButton.Flyout>
+                            <MenuFlyout x:Name="DiagramMenu" />
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+
+                    <!--
+                        "Insert" rather than "Snippet" because it holds both the code block
+                        and the table and the snippet catalogue, in one run in name order
+                        rather than in bands. Every one of them is something you insert and
+                        none of them toggles, which is the line between what belongs here and
+                        what belongs on the bar as a button - and the group this sits in was
+                        already called Insert.
+
+                        The two fixed items are built in FillSnippetMenu with the rest,
+                        because the flyout is cleared and refilled on every open.
+                    -->
+                    <DropDownButton x:Name="SnippetButton"
+                                    Style="{StaticResource MqDropDownStyle}"
+                                    Content="Insert"
+                                    ToolTipService.ToolTip="Insert a block or a snippet"
+                                    AutomationProperties.Name="Insert">
+                        <DropDownButton.Flyout>
+                            <MenuFlyout x:Name="SnippetMenu" />
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                </StackPanel>
+
+                <!--
+                    Whatever the bar could not fit. Every entry below is a mirror of a button
+                    above, bound to the same command with the same parameter, so the two
+                    halves cannot come to mean different things; only one of each pair is
+                    ever visible. The button itself disappears when nothing is hidden, so at
+                    full width the bar looks deliberate rather than truncated.
+
+                    Code Block and Table are listed flat here, not nested inside Insert the way
+                    the bar nests them. This menu only exists in a narrow window, which is
+                    where a click costs most, and it is already a flat list; burying two
+                    commands a second level down to mirror the bar's shape would be paying for
+                    tidiness with the one thing this surface is short of. Insert remains as a
+                    submenu holding the snippet catalogue, which is all it held before those
+                    two joined it on the bar.
+                -->
+                <DropDownButton x:Name="FormatOverflowButton"
+                                Style="{StaticResource MqDropDownStyle}"
+                                Content="&#x00BB;"
+                                ToolTipService.ToolTip="More formatting"
+                                AutomationProperties.Name="More formatting">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="OverflowMenu">
+                            <MenuFlyoutItem x:Name="OverflowBulletList" Text="Bullet List"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="BulletList" />
+                            <MenuFlyoutItem x:Name="OverflowNumberedList" Text="Numbered List"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="NumberedList" />
+                            <MenuFlyoutItem x:Name="OverflowTaskList" Text="Task List"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="TaskList" />
+                            <MenuFlyoutItem x:Name="OverflowBlockquote" Text="Blockquote"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Blockquote" />
+
+                            <MenuFlyoutItem x:Name="OverflowCodeBlock" Text="Code Block"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="CodeBlock" />
+                            <MenuFlyoutItem x:Name="OverflowTable" Text="Table"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Table" />
+
+                            <!--
+                                Last, with Diagram and Insert, rather than first: on the bar
+                                those three sit in one run of dropdowns, and the menu keeps
+                                that run rather than promoting Heading above the commands it
+                                follows there.
+
+                                Its label is the bar button's own HeadingLabel, so the mirror
+                                says what the control it stands in for would have said - "H2"
+                                with the caret in a level-two heading, "Heading" outside one.
+                            -->
+                            <MenuFlyoutSubItem x:Name="OverflowHeading"
+                                               Text="{x:Bind ViewModel.HeadingLabel, Mode=OneWay}">
+                                <MenuFlyoutItem Text="Heading 1"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading1" />
+                                <MenuFlyoutItem Text="Heading 2"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading2" />
+                                <MenuFlyoutItem Text="Heading 3"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading3" />
+                                <MenuFlyoutItem Text="Heading 4"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading4" />
+                                <MenuFlyoutItem Text="Heading 5"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading5" />
+                                <MenuFlyoutItem Text="Heading 6"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="Heading6" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="Increase Level"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="HeadingIncrease" />
+                                <MenuFlyoutItem Text="Decrease Level"
+                                                Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                                CommandParameter="HeadingDecrease" />
+                            </MenuFlyoutSubItem>
+
+                            <MenuFlyoutSubItem x:Name="OverflowDiagram" Text="Diagram" />
+                            <MenuFlyoutSubItem x:Name="OverflowSnippet" Text="Insert" />
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+            </StackPanel>
+            </ContentControl>
+            </StackPanel>
+        </Border>
+
+        <!-- ======================================================= change banner -->
+
+        <!--
+            Shown when the file behind the active tab changed or vanished while it was open.
+
+            An InfoBar rather than a ContentDialog on purpose. A modal here interrupts typing
+            for something the user did not do, and a branch switch that touches four open
+            files would put up four of them in a row. This takes no focus, never stacks, and
+            announces itself to a screen reader on open - which a hand-rolled Border would not.
+
+            IsOpen is two-way because the control closes itself when the X is clicked; with a
+            one-way binding the view model would still believe the bar was open. The close
+            button also runs a command, because dismissing means something here: the tab keeps
+            its marker and the banner returns the next time that tab is opened. Nothing is
+            resolved by clicking it.
+
+            ExternalNotice is never null - it holds an empty notice while the bar is shut, and
+            HasExternalNotice is what opens it. x:Bind evaluates these paths whether the bar is
+            open or not, and a nullable link in the middle of one is a fault waiting for the
+            one frame where it matters.
+        -->
+        <InfoBar x:Name="ExternalChangeBar"
+                 Grid.Row="3"
+                 Margin="10,8,10,0"
+                 IsOpen="{x:Bind ViewModel.HasExternalNotice, Mode=TwoWay}"
+                 Severity="{x:Bind ViewModel.ExternalNotice.Severity, Mode=OneWay}"
+                 Title="{x:Bind ViewModel.ExternalNotice.Title, Mode=OneWay}"
+                 IsClosable="True"
+                 CloseButtonCommand="{x:Bind ViewModel.DismissExternalNoticeCommand}">
+
+            <InfoBar.Content>
+                <StackPanel Margin="0,4,0,10" Spacing="6">
+
+                    <!--
+                        The line that answers "which file". Trimmed rather than wrapped, so a
+                        deep path cannot push the buttons off the bottom of a short window,
+                        with the whole of it in the tooltip.
+                    -->
+                    <TextBlock Text="{x:Bind ViewModel.ExternalNotice.PathLine, Mode=OneWay}"
+                               Style="{StaticResource MqCaptionTextStyle}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
+                               ToolTipService.ToolTip="{x:Bind ViewModel.ExternalNotice.PathLine, Mode=OneWay}" />
+
+                    <TextBlock Text="{x:Bind ViewModel.ExternalNotice.Detail, Mode=OneWay}"
+                               TextWrapping="Wrap"
+                               Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.HasDetail), Mode=OneWay}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+
+                        <Button Content="Reload"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                Command="{x:Bind ViewModel.ReloadExternalCommand}"
+                                Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
+                                ToolTipService.ToolTip="Take what is on disk" />
+
+                        <Button Content="Keep Mine"
+                                Command="{x:Bind ViewModel.KeepMineCommand}"
+                                Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
+                                ToolTipService.ToolTip="Keep this text and clear the marker" />
+
+                        <!--
+                            Stands in for a diff view, which Marqora does not have. Writes the
+                            buffer beside the original and opens it, so both versions are on
+                            screen as ordinary tabs and can be compared in whatever the user
+                            already uses for that.
+                        -->
+                        <Button Content="Save Mine As..."
+                                Command="{x:Bind ViewModel.SaveMineAsCommand}"
+                                Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
+                                ToolTipService.ToolTip="Write this text to a copy beside the original and open it" />
+
+                        <Button Content="Save Now"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                Command="{x:Bind ViewModel.SaveCommand}"
+                                Visibility="{x:Bind CollapsedWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
+                                ToolTipService.ToolTip="Write this text back to the file" />
+
+                        <Button Content="Save As..."
+                                Command="{x:Bind ViewModel.SaveAsCommand}"
+                                Visibility="{x:Bind CollapsedWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}" />
+
+                        <!--
+                            Two items rather than one. A single "Reload all" would have to
+                            describe itself as reloading everything, which is a lie about the
+                            tabs that hold edits.
+                        -->
+                        <DropDownButton Content="Reload All"
+                                        Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReloadAll), Mode=OneWay}">
+                            <DropDownButton.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="{x:Bind ViewModel.ExternalNotice.ReloadAllLabel, Mode=OneWay}"
+                                                    Command="{x:Bind ViewModel.ReloadAllUnmodifiedCommand}"
+                                                    IsEnabled="{x:Bind ViewModel.ExternalNotice.HasUnmodifiedToSweep, Mode=OneWay}" />
+                                    <MenuFlyoutItem Text="{x:Bind ViewModel.ExternalNotice.ReloadAllDiscardingLabel, Mode=OneWay}"
+                                                    Command="{x:Bind ViewModel.ReloadAllDiscardingCommand}" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+
+                        <TextBlock Text="{x:Bind ViewModel.ExternalNotice.CountLabel, Mode=OneWay}"
+                                   Style="{StaticResource MqCaptionTextStyle}"
+                                   Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.HasCount), Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </InfoBar.Content>
+        </InfoBar>
+
+        <!-- ============================================================== content -->
+
+        <Grid Grid.Row="4">
+
+            <!--
+                Holds the WebView2, which is created in code rather than declared here.
+                A browser process that dies cannot be revived - the control goes with it -
+                so the only way back from a crash is to drop the control and put a fresh
+                one in this panel. WebViewPreviewHost owns that; MainWindow supplies the
+                controls, which is also where DefaultBackgroundColor follows the theme.
+            -->
+            <Grid x:Name="PreviewSurface"
+                  Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}" />
+
+            <!-- Empty state: the drop target and the way back into recent work. -->
+            <ScrollViewer Visibility="{x:Bind CollapsedWhen(ViewModel.HasDocument), Mode=OneWay}"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel MaxWidth="660"
+                            Margin="32,48"
+                            HorizontalAlignment="Center"
+                            Spacing="28">
+
+                    <!--
+                        A minimum height rather than a fixed one. The card has to stay
+                        generous when it is nearly empty - it is a drop target, and a small
+                        one is hard to aim at - but it also has to grow, because the action
+                        row folds onto a second line at narrow widths and a fixed height
+                        let that row overhang the bottom edge. The padding is what keeps
+                        the content off the rounded corners once the card is the size of
+                        its content rather than comfortably larger.
+                    -->
+                    <Border x:Name="DropTarget"
+                            MinHeight="260"
+                            Padding="24,28"
+                            CornerRadius="14"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="18">
+
+                            <Image x:Name="DropSurfaceLogo"
+                                   Width="96"
+                                   Height="96"
+                                   HorizontalAlignment="Center" />
+
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Drop a Markdown file here"
+                                           FontSize="19"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="or choose one from your disk"
+                                           Style="{StaticResource MqCaptionTextStyle}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+
+                            <!--
+                                A Grid rather than a StackPanel so the row can fold. At
+                                narrow widths the four buttons are wider than the card, and
+                                a StackPanel never shrinks its children: it pressed the end
+                                buttons flush into the card's sides and then clipped them.
+                                ApplyEmptyStateDensity moves the last two buttons onto a
+                                second row while the window is narrow, and back.
+
+                                The gap between buttons is a margin on each button rather
+                                than the Grid's ColumnSpacing. Spacing is charged between
+                                every pair of columns whether or not they hold anything, so
+                                once folded, the two columns left empty still pushed 20
+                                pixels of nothing onto the end of the row and threw the
+                                block off centre.
+
+                                Stretch is set explicitly so that both buttons in a shared
+                                column render at that column's width. That is what lines
+                                the two rows up with each other: the columns are Auto, so
+                                each is as wide as the wider of the two buttons in it, and
+                                a button that did not stretch would sit narrow inside it.
+                            -->
+                            <Grid x:Name="EmptyStateActions"
+                                  HorizontalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Button Grid.Row="0" Grid.Column="0"
+                                        Style="{ThemeResource AccentButtonStyle}"
+                                        Padding="20,8"
+                                        Margin="5,0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center"
+                                        Command="{x:Bind ViewModel.OpenCommand}"
+                                        Content="Browse files" />
+                                <Button Grid.Row="0" Grid.Column="1"
+                                        Padding="20,8"
+                                        Margin="5,0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center"
+                                        Command="{x:Bind ViewModel.OpenFolderCommand}"
+                                        Content="Open folder"
+                                        ToolTipService.ToolTip="Open every markdown file in a folder" />
+                                <Button x:Name="NewDocumentButton"
+                                        Grid.Row="0" Grid.Column="2"
+                                        Padding="20,8"
+                                        Margin="5,0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center"
+                                        Command="{x:Bind ViewModel.NewTabCommand}"
+                                        Content="New document" />
+                                <Button x:Name="NewFromClipboardButton"
+                                        Grid.Row="0" Grid.Column="3"
+                                        Padding="20,8"
+                                        Margin="5,0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Center"
+                                        Command="{x:Bind ViewModel.NewFromClipboardCommand}"
+                                        Content="New from clipboard"
+                                        ToolTipService.ToolTip="Open the text on the clipboard as a new document" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Spacing="10"
+                                Visibility="{x:Bind VisibleWhen(ViewModel.HasRecentFiles), Mode=OneWay}">
+                        <!-- Heading and its one action share a row, so Clear all reads as
+                             belonging to the history rather than to the page. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="Pick up where you left off"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Margin="4,0,0,0"
+                                       VerticalAlignment="Center" />
+
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource MqToolButtonStyle}"
+                                    Command="{x:Bind ViewModel.ClearRecentCommand}"
+                                    Content="Clear all"
+                                    ToolTipService.ToolTip="Remove every entry from this list" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.RecentFiles, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:RecentFileViewModel">
+                                    <Grid Margin="0,0,0,6" Opacity="{x:Bind RowOpacity}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                Padding="14,10"
+                                                CornerRadius="8"
+                                                Click="OnRecentCardClick"
+                                                Tag="{x:Bind Path}"
+                                                ToolTipService.ToolTip="{x:Bind Tooltip}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <FontIcon Grid.Column="0"
+                                                          Glyph="&#xE8A5;"
+                                                          FontSize="17"
+                                                          Margin="0,0,14,0"
+                                                          Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                                                          VerticalAlignment="Center" />
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind FileName}"
+                                                               FontSize="13.5"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <!--
+                                                        The folder is a control as well as a
+                                                        label: it is the only thing on the card
+                                                        that says which of several same-named
+                                                        files this is, so it opens itself.
+                                                        The inner button swallows the click, and
+                                                        the card behind it does not fire.
+                                                    -->
+                                                    <controls:HandCursorButton Style="{StaticResource MqPathLinkStyle}"
+                                                                               Click="OnRevealRecentClick"
+                                                                               Tag="{x:Bind Path}"
+                                                                               ToolTipService.ToolTip="Open in File Explorer">
+                                                        <TextBlock Text="{x:Bind Location}"
+                                                                   FontSize="11.5"
+                                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </controls:HandCursorButton>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{x:Bind LastOpenedLabel}"
+                                                           FontSize="11.5"
+                                                           Margin="12,0,0,0"
+                                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Button>
+
+                                        <ToggleButton Grid.Column="1"
+                                                      Width="38" Height="38"
+                                                      Margin="4,0,0,0"
+                                                      Padding="0"
+                                                      CornerRadius="8"
+                                                      IsChecked="{x:Bind IsPinned}"
+                                                      Click="OnTogglePinClick"
+                                                      Tag="{x:Bind Path}"
+                                                      ToolTipService.ToolTip="{x:Bind PinTooltip}">
+                                            <FontIcon Glyph="&#xE718;" FontSize="14" />
+                                        </ToggleButton>
+
+                                        <Button Grid.Column="2"
+                                                Width="38" Height="38"
+                                                Margin="4,0,0,0"
+                                                Padding="0"
+                                                CornerRadius="8"
+                                                Click="OnRemoveRecentClick"
+                                                Tag="{x:Bind Path}"
+                                                ToolTipService.ToolTip="Remove from list">
+                                            <FontIcon Glyph="&#xE711;" FontSize="14" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Drag feedback, drawn over whatever is showing. -->
+            <Border x:Name="DropOverlay"
+                    Margin="14"
+                    CornerRadius="14"
+                    Background="{ThemeResource AccentAcrylicBackgroundFillColorDefaultBrush}"
+                    BorderThickness="2"
+                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                    IsHitTestVisible="False"
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsDragOver), Mode=OneWay}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="30" />
+                    <TextBlock Text="Release to open"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- =========================================================== status bar -->
+
+        <Border Grid.Row="5"
+                Height="26"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource MqChromeRuleBrush}">
+            <Grid Padding="14,0">
+                <!--
+                    The status message, in two states drawn over each other rather than one
+                    that changes shape.
+
+                    Both carry the same padding, the same negative left margin cancelling it,
+                    and the same icon slot, so swapping between them moves nothing: the message
+                    that arrives wearing a highlight loses it eight seconds later without its
+                    own text sliding sideways under the reader. The icon outlives the highlight
+                    for that reason and goes only when the message is replaced, by which point
+                    the text has changed anyway and nothing appears to shift.
+
+                    Two elements rather than one with bound brushes, because a brush resolved
+                    in code answers to the OS theme rather than Marqora's - see the note in
+                    docs/Architecture.md. In markup, ThemeResource follows the app.
+                -->
+                <Grid HorizontalAlignment="Left"
+                      ToolTipService.ToolTip="{x:Bind ToolTipOrNone(ViewModel.StatusDetail), Mode=OneWay}"
+                      AutomationProperties.LiveSetting="Polite"
+                      AutomationProperties.Name="{x:Bind ViewModel.StatusText, Mode=OneWay}">
+
+                    <!-- Ordinary messages, and a highlighted one after its moment has passed. -->
+                    <Border Margin="-8,0,0,0"
+                            Padding="8,2"
+                            VerticalAlignment="Center"
+                            Visibility="{x:Bind CollapsedWhen(ViewModel.IsStatusHighlighted), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="{x:Bind ViewModel.StatusIconGlyph, Mode=OneWay}"
+                                      FontSize="12"
+                                      FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind VisibleWhen(ViewModel.HasStatusIcon), Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                                       Style="{StaticResource MqCaptionTextStyle}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--
+                        The pill. 26 high with a 1px rule above leaves 25: a 12px caption is a
+                        16px line box, and 2px above and below makes 20. The icon is given
+                        FontSize explicitly for the same reason - a FontIcon defaults to 20,
+                        which is a 26px box on its own, and MqIconStyle's 15 is close behind.
+                        Nothing here clips an oversized one: this Border has no corner radius
+                        to clip against and the Grid does not clip at all, so it would simply
+                        draw over the editor above.
+                    -->
+                    <Border Margin="-8,0,0,0"
+                            Padding="8,2"
+                            VerticalAlignment="Center"
+                            Background="{ThemeResource MqWarnBrush}"
+                            CornerRadius="{StaticResource MqPillRadius}"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.IsStatusHighlighted), Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="{x:Bind ViewModel.StatusIconGlyph, Mode=OneWay}"
+                                      FontSize="12"
+                                      FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                      Foreground="{ThemeResource MqOnWarnBrush}"
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind VisibleWhen(ViewModel.HasStatusIcon), Mode=OneWay}" />
+                            <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                                       Style="{StaticResource MqCaptionTextStyle}"
+                                       Foreground="{ThemeResource MqOnWarnBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!--
+                    Tabs whose files changed while the user was looking at a different one.
+                    A standing indicator rather than a status message: it is true until those
+                    tabs are visited, and it must not be overwritten by whatever the user did
+                    a moment ago.
+                -->
+                <TextBlock Text="{x:Bind ViewModel.ExternalPendingSummary, Mode=OneWay}"
+                           Style="{StaticResource MqCaptionTextStyle}"
+                           HorizontalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{x:Bind VisibleWhen(ViewModel.HasExternalPending), Mode=OneWay}" />
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="16"
+                            HorizontalAlignment="Right"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}">
+                    <TextBlock Style="{StaticResource MqCaptionTextStyle}">
+                        <Run Text="Ln" />
+                        <Run Text="{x:Bind ViewModel.CursorLine, Mode=OneWay}" />
+                        <Run Text=", Col" />
+                        <Run Text="{x:Bind ViewModel.CursorColumn, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource MqCaptionTextStyle}">
+                        <Run Text="{x:Bind ViewModel.WordCount, Mode=OneWay}" />
+                        <Run Text="words" />
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource MqCaptionTextStyle}">
+                        <Run Text="{x:Bind ViewModel.CharacterCount, Mode=OneWay}" />
+                        <Run Text="characters" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

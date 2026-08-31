@@ -1,0 +1,86 @@
+/*
+  Layout for the cheatsheet window.
+
+  app.css supplies all of the typography: the point of loading it here is that a heading,
+  a table or a code fence looks exactly the same in the cheatsheet as it does in the
+  preview. This file only re-shapes the page around it, because the preview is a pane
+  inside a split view and the cheatsheet is a narrow window on its own.
+*/
+
+.mq-cheatsheet-body {
+  overflow: hidden;
+}
+
+.mq-cheatsheet-scroller {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+  /* The window is narrow, so the scrollbar is worth keeping out of the text. */
+  scrollbar-gutter: stable;
+}
+
+.mq-cheatsheet {
+  /*
+    The preview reserves 60vh below the last line so scroll synchronization can bring any
+    source line to the top of the viewport. Nothing scrolls in step with this window, so
+    that tail is only empty space; a modest one still lets the final section clear the
+    bottom edge.
+  */
+  padding: 1.6em 1.5em 4em;
+  /* A floating window is narrower than a split pane, so the reading measure is not binding. */
+  max-width: none;
+  font-size: calc(14.5px * var(--mq-preview-scale));
+  line-height: 1.6;
+}
+
+/* The window is small: reclaim the vertical rhythm the full-width preview can afford. */
+.mq-cheatsheet h1 { font-size: 1.62em; margin: 0 0 0.5em; }
+.mq-cheatsheet h2 { font-size: 1.2em; margin: 1.9em 0 0.7em; scroll-margin-top: 0.6em; }
+.mq-cheatsheet h3 { font-size: 1.04em; margin: 1.4em 0 0.55em; }
+.mq-cheatsheet p { margin: 0 0 0.9em; }
+.mq-cheatsheet ul,
+.mq-cheatsheet ol { margin: 0 0 0.9em; }
+.mq-cheatsheet pre { margin: 0 0 1em; }
+
+/*
+  Syntax and result sit in a two-column table. The left column holds literal markup, which
+  must not wrap mid-token, and the right holds the rendered form.
+*/
+.mq-cheatsheet table { font-size: 0.95em; }
+.mq-cheatsheet td:first-child,
+.mq-cheatsheet th:first-child { width: 45%; }
+.mq-cheatsheet td:first-child code { white-space: nowrap; }
+
+/*
+  Blocks that demonstrate syntax are marked by the host as .mq-sample so the pair reads as
+  one unit: the markup, then what it produces, joined by a rule down the left.
+*/
+.mq-cheatsheet pre.mq-sample {
+  background: var(--mq-bg-inset);
+  border-color: var(--mq-border);
+  margin-bottom: 0.55em;
+}
+
+.mq-cheatsheet .mq-sample-result {
+  border-left: 2px solid var(--mq-accent-soft);
+  padding: 0.15em 0 0.15em 0.9em;
+  margin: 0 0 1.4em;
+}
+
+.mq-cheatsheet .mq-sample-result > *:last-child { margin-bottom: 0; }
+
+/* The jump list under the title: a run of links, not a paragraph of prose. */
+.mq-cheatsheet .mq-jumplist {
+  color: var(--mq-text-secondary);
+  font-size: 0.93em;
+  line-height: 2;
+  margin-bottom: 1.8em;
+  padding-bottom: 1.2em;
+  border-bottom: 1px solid var(--mq-border);
+}
+
+@media print {
+  .mq-cheatsheet-scroller { height: auto; overflow: visible; }
+  .mq-boot { display: none; }
+}

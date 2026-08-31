@@ -1,0 +1,823 @@
+/*
+  Marqora preview shell.
+
+  Palette tokens mirror the Windows 11 Fluent surfaces the native chrome uses, so the
+  WebView content reads as part of the window rather than an embedded web page. Every
+  colour is defined once on :root and re-pointed under [data-theme="dark"]; nothing
+  below this block hard-codes a colour.
+*/
+
+:root {
+  color-scheme: light;
+
+  --mq-bg: #ffffff;
+  --mq-bg-subtle: #f6f6f6;
+  --mq-bg-inset: #f0f0f0;
+  --mq-text: #1b1b1b;
+  --mq-text-secondary: #5d5d5d;
+  --mq-text-tertiary: #8a8a8a;
+  --mq-border: #e2e2e2;
+  --mq-border-strong: #d0d0d0;
+  --mq-accent: #3f8f98;
+  --mq-accent-soft: rgba(81, 168, 177, 0.14);
+  --mq-quote-bar: #c9c9c9;
+  --mq-danger: #b3261e;
+  --mq-danger-soft: rgba(179, 38, 30, 0.08);
+
+  /* Alert callouts. Note reuses the accent and caution the danger colour; the rest are
+     their own, following the same convention GitHub set. */
+  --mq-tip: #1a7f37;
+  --mq-tip-soft: rgba(26, 127, 55, 0.08);
+  --mq-important: #8250df;
+  --mq-important-soft: rgba(130, 80, 223, 0.08);
+  --mq-warning: #9a6700;
+  --mq-warning-soft: rgba(154, 103, 0, 0.10);
+  --mq-mark: #fff3a3;
+  /* Whitespace marks in the source pane: present enough to read, quiet enough to ignore. */
+  --mq-whitespace: #7fb0da;
+  /* The source pane's selection in light mode, focused and unfocused alike. Monaco's own
+     light selection colour, so only the dimming goes away and nothing looks different;
+     defineThemes in app.js says why both halves are set to it. Light only, and so not
+     re-pointed under [data-theme="dark"]: dark takes the same pair from --mq-selection. */
+  --mq-selection-light: #add6ff;
+  --mq-shadow: 0 2px 12px rgba(0, 0, 0, 0.10);
+
+  --mq-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mq-font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  /* Driven from the host via setZoom; 1 = 100%. */
+  --mq-preview-scale: 1;
+  --mq-preview-base: 15.5px;
+
+  /* Source-pane fraction in side-by-side view. */
+  --mq-split: 0.5;
+}
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --mq-bg: #1f1f1f;
+    --mq-bg-subtle: #272727;
+    --mq-bg-inset: #2d2d2d;
+    --mq-text: #e6e6e6;
+    --mq-text-secondary: #b0b0b0;
+    --mq-text-tertiary: #8a8a8a;
+    --mq-border: #383838;
+    --mq-border-strong: #4a4a4a;
+    --mq-accent: #7fcdd5;
+    --mq-accent-soft: rgba(99, 188, 197, 0.16);
+    --mq-quote-bar: #4a4a4a;
+    --mq-danger: #ff9d94;
+    --mq-danger-soft: rgba(255, 157, 148, 0.10);
+    --mq-tip: #6fce8a;
+    --mq-tip-soft: rgba(111, 206, 138, 0.12);
+    --mq-important: #c9a6ff;
+    --mq-important-soft: rgba(201, 166, 255, 0.12);
+    --mq-warning: #e0b341;
+    --mq-warning-soft: rgba(224, 179, 65, 0.12);
+    --mq-mark: #5c4a00;
+    --mq-whitespace: #4d7ea6;
+    /* --mq-selection and --mq-selection-text are the two exceptions to the rule above:
+       they are not named here, because the Find All window paints the same pair with WinUI
+       brushes and the colour is chosen once, in MatchColors in the app project. setTheme
+       puts what the host sends onto the document, and everything downstream - Monaco's
+       theme in app.js, and any rule here - reads them as ordinary custom properties. */
+    --mq-shadow: 0 2px 12px rgba(0, 0, 0, 0.40);
+  }
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mq-bg);
+  color: var(--mq-text);
+  font-family: var(--mq-font-ui);
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.mq-root {
+  display: grid;
+  height: 100%;
+  /* Overridden per view mode below. */
+  grid-template-columns: calc(var(--mq-split) * 100%) 6px 1fr;
+}
+
+/*
+  Each pane is pinned to its own column rather than placed automatically.
+
+  This is not tidiness. Hiding a pane below uses display:none, which removes that element
+  from the grid's flow entirely - so under automatic placement the remaining panes shuffle
+  left to fill the gap. In preview-only view the source pane and splitter both disappear,
+  the preview slid into column 1, and column 1 in that mode is zero wide: the preview
+  rendered its content into a pane of no width, and the view simply looked empty. Explicit
+  placement makes a pane's column independent of how many siblings are in flow.
+*/
+.mq-pane--source { grid-column: 1; }
+.mq-splitter { grid-column: 2; }
+.mq-pane--preview { grid-column: 3; }
+
+.mq-root[data-view="Source"] { grid-template-columns: 1fr 0 0; }
+.mq-root[data-view="Preview"] { grid-template-columns: 0 0 1fr; }
+
+.mq-root[data-view="Source"] .mq-pane--preview,
+.mq-root[data-view="Source"] .mq-splitter,
+.mq-root[data-view="Preview"] .mq-pane--source,
+.mq-root[data-view="Preview"] .mq-splitter {
+  display: none;
+}
+
+.mq-pane {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.mq-monaco-host {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+  Selected text, dark mode only. paintSelectionForeground in app.js puts this class on the
+  selected range; Monaco's own editor.selectionForeground only reaches high-contrast themes.
+
+  Three parts to the selector on purpose: it has to outweigh the single-class .mtkN rule
+  Monaco writes each token's colour into, and those are injected after this stylesheet.
+*/
+.monaco-editor .view-line span.mq-selected-text {
+  color: var(--mq-selection-text);
+}
+
+.mq-pane--preview {
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--mq-bg);
+  /* Keeps the scroll position stable while the preview re-renders as the user types. */
+  overflow-anchor: none;
+}
+
+/* ------------------------------------------------------------- splitter */
+
+.mq-splitter {
+  position: relative;
+  /* Plain horizontal resize cursor: reads as "drag me sideways". */
+  cursor: ew-resize;
+  touch-action: none;
+  background: var(--mq-border);
+  transition: background 120ms ease;
+}
+
+.mq-splitter:hover,
+.mq-splitter:focus-visible,
+.mq-splitter.is-dragging {
+  background: var(--mq-accent);
+  outline: none;
+}
+
+.mq-splitter__grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 28px;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  background: var(--mq-text-tertiary);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mq-splitter:hover .mq-splitter__grip,
+.mq-splitter.is-dragging .mq-splitter__grip { opacity: 0; }
+
+/* Widens the pointer target without widening the visible line. */
+.mq-splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+  cursor: ew-resize;
+}
+
+/* ----------------------------------------------------------- zoom badge */
+
+.mq-zoom-badge {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--mq-border-strong);
+  background: var(--mq-bg-subtle);
+  box-shadow: var(--mq-shadow);
+  color: var(--mq-text);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.mq-zoom-badge.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------------------------------------------------------- boot splash */
+
+.mq-boot {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  background: var(--mq-bg);
+  z-index: 60;
+  transition: opacity 220ms ease;
+}
+
+.mq-boot.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mq-boot__pulse {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--mq-accent);
+  animation: mq-pulse 1400ms ease-in-out infinite;
+}
+
+.mq-boot__label {
+  margin: 0;
+  color: var(--mq-text-secondary);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+@keyframes mq-pulse {
+  0%, 100% { transform: scale(0.82) rotate(0deg); opacity: 0.55; border-radius: 10px; }
+  50%      { transform: scale(1.00) rotate(45deg); opacity: 1.00; border-radius: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mq-boot__pulse { animation: none; }
+  .mq-zoom-badge { transition: none; }
+}
+
+/* -------------------------------------------------------------- preview */
+
+.mq-preview {
+  /* Zoom scales the root font size; everything below sizes in em so it follows. */
+  font-size: calc(var(--mq-preview-base) * var(--mq-preview-scale));
+  line-height: 1.68;
+  padding: 2.6em 3em 60vh 3em;
+  outline: none;
+  word-wrap: break-word;
+}
+
+/* The tall bottom padding lets the last line scroll to the top of the viewport,
+   which scroll sync needs in order to reach the end of the document. */
+
+/*
+  The preview fills its pane in every view, the way the source pane does.
+
+  It used to be capped at a 46em measure and centred, which was meant to keep the split
+  view from putting text hard against the splitter. What that actually did was leave a wide
+  band of empty background down both sides of the pane, so widening the preview bought
+  nothing. The padding is what keeps text off the frame, and it applies in both views; the
+  pane's own width is the measure.
+*/
+
+.mq-preview > *:first-child { margin-top: 0; }
+
+.mq-preview h1,
+.mq-preview h2,
+.mq-preview h3,
+.mq-preview h4,
+.mq-preview h5,
+.mq-preview h6 {
+  margin: 1.9em 0 0.6em;
+  line-height: 1.28;
+  font-weight: 640;
+  letter-spacing: -0.011em;
+  scroll-margin-top: 1em;
+}
+
+.mq-preview h1 { font-size: 2.05em; font-weight: 700; letter-spacing: -0.02em; }
+.mq-preview h2 { font-size: 1.55em; padding-bottom: 0.28em; border-bottom: 1px solid var(--mq-border); }
+.mq-preview h3 { font-size: 1.26em; }
+.mq-preview h4 { font-size: 1.08em; }
+.mq-preview h5 { font-size: 1em; color: var(--mq-text-secondary); }
+.mq-preview h6 { font-size: 0.92em; color: var(--mq-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.mq-preview p { margin: 0 0 1.15em; }
+
+.mq-preview a {
+  color: var(--mq-accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--mq-accent) 35%, transparent);
+  transition: border-color 120ms ease;
+}
+
+.mq-preview a:hover { border-bottom-color: var(--mq-accent); }
+
+.mq-preview strong { font-weight: 650; }
+
+.mq-preview ul,
+.mq-preview ol { margin: 0 0 1.15em; padding-left: 1.6em; }
+
+.mq-preview li { margin: 0.28em 0; }
+
+.mq-preview li::marker { color: var(--mq-text-tertiary); }
+
+.mq-preview ul.contains-task-list { list-style: none; padding-left: 0.2em; }
+
+.mq-preview .task-list-item { display: flex; align-items: baseline; gap: 0.6em; }
+
+.mq-preview .task-list-item input[type="checkbox"] {
+  accent-color: var(--mq-accent);
+  width: 1em;
+  height: 1em;
+  translate: 0 0.12em;
+}
+
+.mq-preview blockquote {
+  margin: 0 0 1.15em;
+  padding: 0.1em 0 0.1em 1.15em;
+  border-left: 3px solid var(--mq-quote-bar);
+  color: var(--mq-text-secondary);
+}
+
+.mq-preview blockquote > *:last-child { margin-bottom: 0; }
+
+/*
+  GitHub-style alert callouts: "> [!NOTE]" and its four siblings.
+
+  Markdig writes the icon as an inline SVG immediately followed by the label, with nothing
+  at all between them, so without the gap below the two run together. It also emits no
+  colour of its own -- the whole appearance is this block's job.
+
+  The accent is set once per type as a variable and then used for the bar, the title and
+  the tint, so adding a type later is one rule rather than four.
+*/
+.mq-preview .markdown-alert {
+  margin: 0 0 1.15em;
+  padding: 0.75em 1em;
+  border-left: 3px solid var(--mq-quote-bar);
+  border-radius: 0 5px 5px 0;
+  background: var(--mq-bg-subtle);
+  color: var(--mq-text);
+}
+
+.mq-preview .markdown-alert > *:last-child { margin-bottom: 0; }
+
+.mq-preview .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  margin: 0 0 0.5em;
+  font-weight: 600;
+  color: var(--mq-text);
+}
+
+/*
+  The gap is a margin on the icon rather than the row's gap property. Both look the same
+  here, but only the margin survives being pasted into Word: gap needs flex, and Word does
+  not implement it, so the icon and the label would run together again.
+*/
+.mq-preview .markdown-alert-title svg {
+  flex: none;
+  margin-right: 0.45em;
+  fill: currentColor;
+}
+
+/*
+  Written out per type rather than routed through one shared variable set on the class.
+  The rich-text clipboard resolves custom properties from :root only, so an indirection
+  the class supplies would collapse to a single colour the moment a document was pasted
+  into Word. Every var() below resolves from :root, so the colours survive the trip.
+*/
+.mq-preview .markdown-alert-note {
+  border-left-color: var(--mq-accent);
+  background: var(--mq-accent-soft);
+}
+
+.mq-preview .markdown-alert-note .markdown-alert-title { color: var(--mq-accent); }
+
+.mq-preview .markdown-alert-tip {
+  border-left-color: var(--mq-tip);
+  background: var(--mq-tip-soft);
+}
+
+.mq-preview .markdown-alert-tip .markdown-alert-title { color: var(--mq-tip); }
+
+.mq-preview .markdown-alert-important {
+  border-left-color: var(--mq-important);
+  background: var(--mq-important-soft);
+}
+
+.mq-preview .markdown-alert-important .markdown-alert-title { color: var(--mq-important); }
+
+.mq-preview .markdown-alert-warning {
+  border-left-color: var(--mq-warning);
+  background: var(--mq-warning-soft);
+}
+
+.mq-preview .markdown-alert-warning .markdown-alert-title { color: var(--mq-warning); }
+
+.mq-preview .markdown-alert-caution {
+  border-left-color: var(--mq-danger);
+  background: var(--mq-danger-soft);
+}
+
+.mq-preview .markdown-alert-caution .markdown-alert-title { color: var(--mq-danger); }
+
+.mq-preview hr {
+  height: 1px;
+  margin: 2.2em 0;
+  border: 0;
+  background: var(--mq-border);
+}
+
+.mq-preview img,
+.mq-preview video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Long tables scroll inside their own box rather than widening the page. */
+.mq-preview .mq-table-scroll {
+  overflow-x: auto;
+  margin: 0 0 1.3em;
+}
+
+.mq-preview table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.94em;
+}
+
+.mq-preview th,
+.mq-preview td {
+  padding: 0.5em 0.85em;
+  border: 1px solid var(--mq-border);
+  text-align: left;
+}
+
+.mq-preview thead th {
+  background: var(--mq-bg-subtle);
+  font-weight: 620;
+}
+
+.mq-preview tbody tr:nth-child(even) { background: color-mix(in srgb, var(--mq-bg-subtle) 55%, transparent); }
+
+/* ----------------------------------------------------------------- code */
+
+.mq-preview code {
+  font-family: var(--mq-font-mono);
+  font-size: 0.88em;
+}
+
+.mq-preview :not(pre) > code {
+  padding: 0.16em 0.42em;
+  border-radius: 4px;
+  background: var(--mq-bg-inset);
+  border: 1px solid var(--mq-border);
+  white-space: break-spaces;
+}
+
+.mq-preview pre {
+  margin: 0 0 1.3em;
+  padding: 1em 1.15em;
+  border-radius: 8px;
+  border: 1px solid var(--mq-border);
+  background: var(--mq-bg-inset);
+  overflow-x: auto;
+  line-height: 1.55;
+}
+
+.mq-preview pre code {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  white-space: pre;
+}
+
+/*
+  Monaco draws its own scrollbars as plain rectangles, while the preview simply uses the
+  platform's, which on Windows 11 are rounded. Side by side the two panes disagreed about
+  something the eye notices immediately, so the editor's slider is rounded to match.
+
+  Half the 12px slider set in the editor options, which makes it a capsule the way the
+  system one is. Scoped to the host element to outweigh Monaco's own rule, whose stylesheet
+  is injected at runtime and therefore lands after this file.
+*/
+.mq-monaco-host .monaco-scrollable-element > .scrollbar > .slider {
+  border-radius: 6px;
+}
+
+/* --------------------------------------------------------------- mermaid */
+
+.mq-preview pre.mermaid {
+  display: flex;
+  justify-content: center;
+  padding: 1.4em 1em;
+  background: var(--mq-bg-subtle);
+  overflow-x: auto;
+  /* Until mermaid replaces the content, the raw definition would flash. */
+  color: transparent;
+}
+
+.mq-preview pre.mermaid[data-processed] {
+  color: inherit;
+  font-family: var(--mq-font-ui);
+}
+
+/*
+  A rendered diagram can be opened in its own window, which is not something a diagram looks
+  like it can do. The affordance only appears on hover: a permanent badge over every diagram
+  would be noise in a document that is mostly prose.
+
+  Gated on data-mq-diagram rather than data-processed, so a diagram that failed to parse —
+  which is marked processed but has no SVG to show — offers nothing.
+*/
+.mq-preview pre.mermaid[data-mq-diagram] {
+  position: relative;
+  /* Inherited by the SVG below it, which brings no cursor of its own. */
+  cursor: pointer;
+  border-radius: 8px;
+  outline: 1px solid transparent;
+  transition: outline-color 120ms ease;
+}
+
+.mq-preview pre.mermaid[data-mq-diagram]:hover {
+  outline-color: var(--mq-accent);
+}
+
+.mq-preview pre.mermaid[data-mq-diagram]::after {
+  content: "Double-click to open";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mq-accent);
+  color: var(--mq-bg);
+  font-family: var(--mq-font-ui);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.mq-preview pre.mermaid[data-mq-diagram]:hover::after {
+  opacity: 1;
+}
+
+.mq-preview pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mq-preview .mq-mermaid-error {
+  display: block;
+  padding: 0.9em 1.1em;
+  border-radius: 8px;
+  border: 1px solid var(--mq-danger);
+  background: var(--mq-danger-soft);
+  color: var(--mq-danger);
+  font-family: var(--mq-font-mono);
+  font-size: 0.84em;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+/* ------------------------------------------------------------ footnotes */
+
+.mq-preview .footnotes {
+  margin-top: 2.4em;
+  padding-top: 1.2em;
+  border-top: 1px solid var(--mq-border);
+  font-size: 0.92em;
+  color: var(--mq-text-secondary);
+}
+
+.mq-preview mark { background: var(--mq-mark); color: inherit; border-radius: 3px; padding: 0 0.15em; }
+
+.mq-preview abbr { text-decoration-style: dotted; cursor: help; }
+
+.mq-preview kbd {
+  padding: 0.15em 0.45em;
+  border: 1px solid var(--mq-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--mq-bg-subtle);
+  font-family: var(--mq-font-mono);
+  font-size: 0.85em;
+}
+
+/* --------------------------------------------------------------- errors */
+
+.mq-render-error {
+  padding: 1em 1.2em;
+  border-radius: 8px;
+  border: 1px solid var(--mq-danger);
+  background: var(--mq-danger-soft);
+  color: var(--mq-danger);
+}
+
+.mq-render-error p { margin: 0.5em 0 0; font-family: var(--mq-font-mono); font-size: 0.86em; }
+
+/* The renderer's stand-in for a raw HTML block's source line. Takes no room at all,
+   so it is not allowed the paragraph spacing an empty element would otherwise get. */
+.mq-preview .mq-src-marker {
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Highlights the block the caret is in, so the eye can find it across panes. */
+.mq-preview .mq-active-block {
+  position: relative;
+}
+
+.mq-preview .mq-active-block::before {
+  content: "";
+  position: absolute;
+  left: -1.5em;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--mq-accent);
+  opacity: 0.55;
+}
+
+/* KaTeX inherits the preview colour rather than its own default. */
+.mq-preview .katex { color: inherit; font-size: 1.04em; }
+.mq-preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
+
+/*
+  highlight.js themes paint their own surface on the code element. The Marqora pre already
+  supplies the surface, so only the token colours from the theme are wanted here.
+*/
+.mq-preview pre code.hljs {
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+
+/*
+  The diagram sandbox. Positioned off-screen rather than hidden: mermaid measures text to
+  size its diagrams, and a display:none document has no layout to measure.
+*/
+.mq-diagram-frame {
+  position: absolute;
+  left: -20000px;
+  top: 0;
+  width: 1200px;
+  height: 800px;
+  border: 0;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------- wrap glyphs */
+
+/*
+  Markers showing where a wrapped source line continues. Drawn as an overlay because
+  Monaco has no option for them. The layer never takes pointer input, so selection and
+  caret placement in the editor underneath are unaffected.
+*/
+.mq-wrap-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.mq-wrap-glyph {
+  position: absolute;
+  width: 12px;
+  text-align: center;
+  /*
+    The same colour as the whitespace dots. Both mark invisible characters rather than
+    content, so they should read as one family of marks and not two.
+  */
+  color: var(--mq-whitespace);
+  font-family: var(--mq-font-ui);
+  font-size: 12px;
+  opacity: 0.9;
+  user-select: none;
+}
+
+.mq-wrap-glyph::after {
+  /* U+21B5, the downwards-then-leftwards arrow used for a line continuation. */
+  content: "\21B5";
+}
+
+/* ------------------------------------------------------------------ print */
+
+/*
+  PDF export prints this page rather than a separate document, so print styles do the work
+  of turning a two-pane app into a single flowing document.
+
+  Three things matter here. The editor, splitter and other chrome are hidden. The preview
+  pane's fixed height and scrolling are released so the content paginates instead of being
+  clipped to one viewport. And the palette is forced back to light, because a dark PDF is
+  never what anyone wants to print; the dark selector is re-stated so it loses to these
+  rules regardless of the theme on screen.
+*/
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    --mq-bg: #ffffff;
+    --mq-bg-subtle: #f6f6f6;
+    --mq-bg-inset: #f4f4f4;
+    --mq-text: #1b1b1b;
+    --mq-text-secondary: #4a4a4a;
+    --mq-text-tertiary: #6b6b6b;
+    --mq-border: #d8d8d8;
+    --mq-border-strong: #bcbcbc;
+    --mq-accent: #0f6cbd;
+    --mq-quote-bar: #c9c9c9;
+    --mq-mark: #fff3a3;
+
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    background: #ffffff;
+  }
+
+  .mq-root {
+    display: block;
+    height: auto;
+  }
+
+  .mq-pane--source,
+  .mq-splitter,
+  .mq-zoom-badge,
+  .mq-boot,
+  .mq-diagram-frame {
+    display: none !important;
+  }
+
+  .mq-pane--preview {
+    position: static;
+    height: auto;
+    overflow: visible;
+  }
+
+  .mq-preview {
+    /* Margins come from the page setup, and the tall scroll-sync padding must go. */
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    font-size: 11pt;
+    line-height: 1.55;
+  }
+
+  /* Keep blocks from being split across a page boundary where it would hurt. */
+  .mq-preview pre,
+  .mq-preview table,
+  .mq-preview blockquote,
+  .mq-preview img,
+  .mq-preview .mq-table-scroll {
+    break-inside: avoid;
+    overflow: visible;
+  }
+
+  .mq-preview h1,
+  .mq-preview h2,
+  .mq-preview h3,
+  .mq-preview h4 {
+    break-after: avoid;
+  }
+
+  /* A link's target is invisible on paper, so the colour is all that is left of it. */
+  .mq-preview a {
+    color: var(--mq-accent);
+    border-bottom: none;
+  }
+
+  .mq-active-block::before { display: none; }
+}

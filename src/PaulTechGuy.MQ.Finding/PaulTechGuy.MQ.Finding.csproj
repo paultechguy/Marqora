@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Find All's engine. A query and some document text in, a list of matches out. It knows
+    nothing of the workspace, the editor or the filesystem, so it can be tested a line at a
+    time - which matters, because a line or column reported wrongly here is a click that
+    selects the wrong text.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Finding</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

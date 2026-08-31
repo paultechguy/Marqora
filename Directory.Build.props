@@ -1,0 +1,61 @@
+<Project>
+
+  <!--
+    Shared MSBuild settings for every project in the Marqora solution.
+    Project-specific settings belong in the individual .csproj files.
+  -->
+
+  <PropertyGroup Label="Language">
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Localization">
+    <!--
+      Marqora's own text is English only, so localized resources shipped by packages are
+      dead weight. This drops NuGet satellite assemblies. The WinUI .mui resource folders
+      arrive as content rather than satellite assemblies and are removed by a target in
+      the app project.
+    -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Build">
+    <Deterministic>true</Deterministic>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Identity">
+    <Product>Marqora</Product>
+    <Company>PaulTechGuy</Company>
+    <Authors>Paul Carver</Authors>
+    <Copyright>Copyright (c) 2026 Paul Carver</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Version>0.2.1</Version>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <!--
+    Test projects opt in to the test SDK by living under tests\.
+    Adding a new xUnit project there needs no extra wiring: reference the
+    project under test and go.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)tests$([System.IO.Path]::DirectorySeparatorChar)'))">
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+
+    <!--
+      Test names read as sentences, which means underscores (CA1707), and a test's own
+      helpers are held by their interface on purpose (CA1859). Neither rule earns its
+      keep here, and both are left on everywhere else.
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1859</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    IsTestProject and IsPackable come from Directory.Build.props by virtue of living under
+    tests\; package versions come from Directory.Packages.props. xUnit v3 test projects are
+    executables rather than libraries, which is the one thing that has to be said here.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Editing.Tests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
+  </ItemGroup>
+
+</Project>

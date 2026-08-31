@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    Mermaid's rendering sandbox.
+
+    Mermaid's diagram chunks embed libraries (fastdom among them) whose UMD wrappers test
+    only `typeof define == "function"`. On the main shell page Monaco installs exactly such
+    a global, and it rejects the anonymous module registration that follows. Removing the
+    global there is not an option either: Monaco's markdown tokenizer lazily fetches a
+    grammar for every fenced code language in the document, at unpredictable moments.
+
+    Giving mermaid its own document ends the argument. This frame has no module loader, so
+    every bundle takes its ordinary browser path. The frame is same-origin, so the shell
+    calls straight into it and copies the finished SVG back.
+
+    The frame is positioned off-screen rather than hidden, because mermaid measures text to
+    lay diagrams out and a display:none document has no layout to measure.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self' blob:;
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 img-src 'self' data: blob:;
+                 connect-src 'self' blob: data:;" />
+  <title>Marqora diagram sandbox</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 1200px;
+      height: 800px;
+      overflow: hidden;
+      font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <!-- External rather than inline, so this document needs no 'unsafe-inline'. -->
+  <script src="mermaid-frame.js"></script>
+</body>
+</html>
