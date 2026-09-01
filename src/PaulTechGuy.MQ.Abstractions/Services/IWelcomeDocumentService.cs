@@ -23,6 +23,18 @@ public interface IWelcomeDocumentService
     bool WasRequested { get; }
 
     /// <summary>
+    /// Where the user's copy of the document lives, whether or not this launch is going to
+    /// offer it.
+    ///
+    /// For the startup preference that opens the welcome document every time. That cannot go
+    /// through <see cref="PrepareAsync"/>, which refreshes the copy from the shipped master
+    /// as it answers - right for a once-per-release introduction, and wrong for a document
+    /// somebody has chosen to open daily, because it would discard their edits on every
+    /// launch. The preference opens this path as an ordinary file instead.
+    /// </summary>
+    string DocumentPath { get; }
+
+    /// <summary>
     /// Puts a current copy of the welcome document in place if this build has not been run
     /// before, or if this launch asked for it, and returns the path to open. Returns null
     /// when there is nothing to show, or when the shipped master is missing.

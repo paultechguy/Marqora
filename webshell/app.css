@@ -283,6 +283,14 @@ body {
   padding: 2.6em 3em 60vh 3em;
   outline: none;
   word-wrap: break-word;
+
+  /*
+    No measure unless one was asked for. The fallback is 'none', so this changes nothing
+    until the preference below sets --mq-preview-measure; see the note further down about
+    why a measure is not the default.
+  */
+  max-width: var(--mq-preview-measure, none);
+  margin-inline: auto;
 }
 
 /* The tall bottom padding lets the last line scroll to the top of the viewport,
@@ -319,6 +327,26 @@ body {
 .mq-preview h4 { font-size: 1.08em; }
 .mq-preview h5 { font-size: 1em; color: var(--mq-text-secondary); }
 .mq-preview h6 { font-size: 0.92em; color: var(--mq-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/*
+  ------------------------------------------------------------ heading numbering
+
+  The number is a span that app.js puts inside the heading - see numberHeadings - rather than
+  a CSS counter. Counters cannot skip a level, and a document that puts a "###" straight
+  under a "#" is ordinary rather than unusual; they also gave a heading above the numbered
+  range no way to reset the levels beneath it, so numbering ran on across sections instead
+  of starting again.
+
+  Being real text, it needs nothing here to reach the HTML export, the PDF, the printed page
+  or the clipboard. All that is left is how it looks.
+*/
+.mq-preview .mq-heading-number {
+  /* Lining figures, so 1.10 and 1.11 line up under one another down a long document. */
+  font-variant-numeric: tabular-nums;
+
+  /* The label carries its own trailing spaces; without this they would collapse to one. */
+  white-space: pre;
+}
 
 .mq-preview p { margin: 0 0 1.15em; }
 
@@ -656,7 +684,20 @@ body {
   position: relative;
 }
 
-.mq-preview .mq-active-block::before {
+/*
+  The bar sits on ::before for most blocks, and on ::after for a heading.
+
+  A heading's ::before is already spoken for by the numbering counters, and an element has
+  only one of each pseudo. Sharing ::before did not fail loudly: the numbering rule is the
+  more specific of the two, so it kept its content and inherited this rule's
+  position/left/width - which squeezed the number into a 2px column at the far left of the
+  pane, but only while the caret was in that heading.
+
+  Headings are the one block that is never a mermaid pre, so moving them to ::after cannot
+  collide with the diagram badge, which owns ::after and is more specific than this.
+*/
+.mq-preview .mq-active-block:not(:is(h1, h2, h3, h4, h5, h6))::before,
+.mq-preview :is(h1, h2, h3, h4, h5, h6).mq-active-block::after {
   content: "";
   position: absolute;
   left: -1.5em;
@@ -819,5 +860,12 @@ body {
     border-bottom: none;
   }
 
-  .mq-active-block::before { display: none; }
+  /*
+    The caret bar is a screen affordance and has no business on paper. Scoped exactly as the
+    rule that draws it, so that hiding it cannot also hide a heading's number: that number is
+    a ::before too, and a blanket .mq-active-block::before here would blank it on whichever
+    heading the caret happened to be in when the document was printed.
+  */
+  .mq-active-block:not(:is(h1, h2, h3, h4, h5, h6))::before,
+  :is(h1, h2, h3, h4, h5, h6).mq-active-block::after { display: none; }
 }

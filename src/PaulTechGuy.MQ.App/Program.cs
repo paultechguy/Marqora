@@ -11,6 +11,7 @@ using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.App.ViewModels;
 using PaulTechGuy.MQ.App.Views;
 using PaulTechGuy.MQ.Analysis;
+using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
 using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Rendering;
@@ -143,6 +144,7 @@ public static class Program
         builder.Services.AddSingleton<IExportDialogService, ExportDialogService>();
         builder.Services.AddSingleton<IPrintDialogService, PrintDialogService>();
         builder.Services.AddSingleton<IFormatDialogService, FormatDialogService>();
+        builder.Services.AddSingleton<IPreferencesDialogService, PreferencesDialogService>();
         builder.Services.AddSingleton<ICheatsheetService, CheatsheetService>();
         builder.Services.AddSingleton<IDiagramWindowService, DiagramWindowService>();
         builder.Services.AddSingleton<IFindAllWindowService, FindAllWindowService>();
@@ -159,6 +161,18 @@ public static class Program
         HostApplicationBuilder builder,
         AppPaths paths)
     {
+        // Read straight off disk rather than through ISettingsService: logging is configured
+        // while the container is still being built, and everything in the container wants a
+        // logger. A retention change therefore lands at the next launch, which the
+        // preferences page says. Zero means keep everything, which is what Serilog reads a
+        // null limit as.
+        int retentionDays = SettingsFile.ReadOrDefault(paths.SettingsFilePath).LogRetentionDays;
+
+        // One file per day, so a count of files is a count of days.
+        int? retainedFiles = retentionDays > 0
+            ? Math.Min(retentionDays, AppSettings.MaximumLogRetentionDays)
+            : null;
+
         configuration
             .ReadFrom.Configuration(builder.Configuration)
             .Enrich.FromLogContext()
@@ -169,7 +183,7 @@ public static class Program
             .WriteTo.Async(sink => sink.File(
                 Path.Combine(paths.LogDirectory, "marqora-.log"),
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14,
+                retainedFileCountLimit: retainedFiles,
                 fileSizeLimitBytes: 16 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
                 formatProvider: CultureInfo.InvariantCulture,

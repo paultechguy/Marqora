@@ -240,6 +240,50 @@ public interface IPreviewHost
     /// <summary>Mark where a wrapped source line continues.</summary>
     Task SetWrapGlyphAsync(bool enabled);
 
+    /// <summary>
+    /// The font the source pane uses when no preference names one, as the stylesheet
+    /// declares it. Null until the shell has reported ready.
+    ///
+    /// A stack rather than a single name - "Cascadia Code, Cascadia Mono, Consolas, ..." -
+    /// because that is what the stylesheet actually says, and which of them a machine has is
+    /// not knowable from here. Reported by the shell rather than restated in C#, so the
+    /// stylesheet stays the one place a default font is written down.
+    /// </summary>
+    string? DefaultSourceFont { get; }
+
+    /// <summary>The preview's equivalent of <see cref="DefaultSourceFont"/>.</summary>
+    string? DefaultPreviewFont { get; }
+
+    /// <summary>
+    /// The single font the source pane is actually drawn in, as opposed to the stack it was
+    /// asked for. Null until the shell has reported it.
+    ///
+    /// A stack names fonts the machine may not have, and nothing in the DOM says which one
+    /// won - the shell works it out by measuring. This is what lets the preferences dialog
+    /// answer "did my font take?", which it otherwise could not: a name that is not installed
+    /// changes nothing on screen and looks identical to a name that is.
+    /// </summary>
+    string? ResolvedSourceFont { get; }
+
+    /// <summary>The preview's equivalent of <see cref="ResolvedSourceFont"/>.</summary>
+    string? ResolvedPreviewFont { get; }
+
+    /// <summary>
+    /// Raised when the shell has re-measured which fonts are in use, after a preference
+    /// changed one of them.
+    /// </summary>
+    event EventHandler? FontsResolved;
+
+    /// <summary>
+    /// Applies the preferences the web surface owns - typography, the editor's own options
+    /// and heading numbering - in one message.
+    ///
+    /// One method rather than one per value, unlike the toggles above. Those are each driven
+    /// by a menu item that changes exactly one thing; these only ever change together, from
+    /// the preferences dialog, and a dozen more one-line methods here would earn nothing.
+    /// </summary>
+    Task ApplyPreferencesAsync(PreviewPreferences preferences);
+
     Task SetSplitterPositionAsync(double position);
 
     /// <summary>Returns the split to an even one, and reports the new position back.</summary>

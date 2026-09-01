@@ -105,7 +105,17 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public bool IsReady { get; private set; }
 
+    public string? DefaultSourceFont { get; private set; }
+
+    public string? DefaultPreviewFont { get; private set; }
+
+    public string? ResolvedSourceFont { get; private set; }
+
+    public string? ResolvedPreviewFont { get; private set; }
+
     public event EventHandler? Ready;
+
+    public event EventHandler? FontsResolved;
 
     public event EventHandler<EditorTextChangedEventArgs>? EditorTextChanged;
 
@@ -457,6 +467,34 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     public Task SetLineNumbersAsync(bool enabled) => SendAsync("setLineNumbers", new { enabled });
 
     public Task SetShowWhitespaceAsync(bool enabled) => SendAsync("setShowWhitespace", new { enabled });
+
+    public Task ApplyPreferencesAsync(PreviewPreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+
+        return SendAsync(
+            "applyPreferences",
+            new
+            {
+                // Null font families are sent as null rather than omitted: the web side
+                // clears its own custom property on null, which is what restores the
+                // stylesheet's stack.
+                sourceFont = preferences.SourceFontFamily,
+                sourceFontSize = preferences.SourceFontSize,
+                previewFont = preferences.PreviewFontFamily,
+                previewFontSize = preferences.PreviewFontSize,
+                previewMaxWidth = preferences.PreviewMaxWidth,
+                tabSize = preferences.TabSize,
+                insertSpaces = preferences.InsertSpaces,
+                minimap = preferences.ShowMinimap,
+                highlightCurrentLine = preferences.HighlightCurrentLine,
+                continueLists = preferences.ContinueLists,
+                autoCloseBrackets = preferences.AutoCloseBrackets,
+                // The heading level that counts 1, 2, 3, or zero for off. The enum's values
+                // are those levels, so the cast is the mapping rather than a coincidence.
+                headingNumbers = (int)preferences.HeadingNumbering,
+            });
+    }
 
     public Task SetDiagnosticsAsync(Guid documentId, IReadOnlyList<Diagnostic> diagnostics)
     {
@@ -952,7 +990,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         switch (type)
         {
             case "ready":
-                OnShellReady();
+                OnShellReady(payload);
+                break;
+
+            case "fontsResolved":
+                ResolvedSourceFont = ReadString(payload, "sourceFont");
+                ResolvedPreviewFont = ReadString(payload, "previewFont");
+                FontsResolved?.Invoke(this, EventArgs.Empty);
                 break;
 
             case "editorTextChanged":
@@ -1132,9 +1176,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    private void OnShellReady()
+    private void OnShellReady(JsonElement payload)
     {
         IsReady = true;
+
+        // The stylesheet's own font stacks, so the preferences dialog can say what
+        // "(default)" resolves to without a second copy of them living in C#.
+        DefaultSourceFont = ReadString(payload, "sourceFont");
+        DefaultPreviewFont = ReadString(payload, "previewFont");
+
         _logger.LogInformation("Preview shell reported ready.");
 
         foreach (string message in _pending)

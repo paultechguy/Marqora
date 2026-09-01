@@ -32,14 +32,14 @@ public enum PageMargin
 /// </summary>
 public sealed record PdfPageSetup
 {
-    public PaperSize Paper { get; init; } = PaperSize.Letter;
+    public PaperSize Paper { get; set; } = PaperSize.Letter;
 
-    public PageOrientation Orientation { get; init; } = PageOrientation.Portrait;
+    public PageOrientation Orientation { get; set; } = PageOrientation.Portrait;
 
-    public PageMargin Margin { get; init; } = PageMargin.Normal;
+    public PageMargin Margin { get; set; } = PageMargin.Normal;
 
     /// <summary>Print the page background colours, which diagram and code surfaces rely on.</summary>
-    public bool IncludeBackgrounds { get; init; } = true;
+    public bool IncludeBackgrounds { get; set; } = true;
 
     public static PdfPageSetup Default => new();
 

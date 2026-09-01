@@ -481,6 +481,11 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.W, ctrl, () => ViewModel.CloseTabCommand.Execute(null));
         Add(VirtualKey.W, ctrlShift, () => ViewModel.CloseAllTabsCommand.Execute(null));
 
+        // Ctrl+, for preferences, as Visual Studio Code and most of the editors people also
+        // have open have it. VirtualKey has no name for the comma, so the code is given
+        // directly; 188 is VK_OEM_COMMA, which is the comma on a US layout.
+        Add((VirtualKey)188, ctrl, () => ViewModel.ShowPreferencesCommand.Execute(null));
+
         Add(VirtualKey.Tab, ctrl, () => ViewModel.NextTabCommand.Execute(null));
         Add(VirtualKey.Tab, ctrlShift, () => ViewModel.PreviousTabCommand.Execute(null));
 
@@ -660,6 +665,10 @@ public sealed partial class MainWindow : Window
                 await ViewModel.ShowWelcomeAsync(takeFocus: pending.Length == 0);
                 await ViewModel.OpenActivatedAsync(pending);
             }
+
+            // Last, so a preference for a blank tab or the welcome document cannot take the
+            // front tab from a file the user double-clicked to get here.
+            await ViewModel.ApplyStartupBehaviorAsync(pending.Length > 0);
 
             _startupDocumentsOpen = true;
             PlaceStartupFocus();

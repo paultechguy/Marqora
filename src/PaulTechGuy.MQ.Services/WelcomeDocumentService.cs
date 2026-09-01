@@ -28,6 +28,8 @@ public sealed class WelcomeDocumentService(
 {
     public bool WasRequested { get; } = wasRequested;
 
+    public string DocumentPath => paths.WelcomeDocumentPath;
+
     public async Task<string?> PrepareAsync(CancellationToken cancellationToken = default)
     {
         string? shown = settings.Current.LastWelcomeVersion;

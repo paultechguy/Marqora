@@ -19,6 +19,11 @@ public interface IHtmlExporter
     /// The markdown file's own path, used to resolve relative images. Null for a document
     /// that has never been saved, in which case images are left as they are.
     /// </param>
+    /// <remarks>
+    /// Heading numbers, when they are switched on, are already in <paramref name="renderedHtml"/>:
+    /// the shell writes them into the preview as ordinary text rather than drawing them with
+    /// CSS, so they arrive here like any other content and nothing has to be told about them.
+    /// </remarks>
     Task WriteAsync(
         string outputPath,
         string title,

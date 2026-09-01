@@ -15,11 +15,12 @@ namespace PaulTechGuy.MQ.Services;
 /// file through a relative path or with different casing updates the existing entry rather
 /// than creating a second one.
 /// </summary>
-public sealed class RecentFilesService(IRecentFilesRepository repository, ILogger<RecentFilesService> logger)
+public sealed class RecentFilesService(
+    IRecentFilesRepository repository,
+    ISettingsService settings,
+    ILogger<RecentFilesService> logger)
     : IRecentFilesService
 {
-    /// <summary>Unpinned entries beyond this count are dropped; pinned entries always survive.</summary>
-    private const int MaxUnpinnedEntries = 15;
 
     private readonly Lock _sync = new();
 
@@ -158,10 +159,24 @@ public sealed class RecentFilesService(IRecentFilesRepository repository, ILogge
             .OrderByDescending(item => item.IsPinned)
             .ThenByDescending(item => item.LastOpenedUtc)];
 
-    private static List<RecentFile> Trim(List<RecentFile> items)
+    /// <summary>
+    /// Drops unpinned entries past the user's chosen limit. A pinned entry always survives:
+    /// pinning it is a statement that it should not age out, and a limit that discarded it
+    /// would make pinning meaningless.
+    ///
+    /// The limit is read at each trim rather than captured once, so lowering it in
+    /// preferences takes effect on the next file opened rather than at the next launch. It
+    /// is clamped because the settings file is a text file a user can edit by hand.
+    /// </summary>
+    private List<RecentFile> Trim(List<RecentFile> items)
     {
+        int limit = Math.Clamp(
+            settings.Current.RecentFilesLimit,
+            AppSettings.MinimumRecentFilesLimit,
+            AppSettings.MaximumRecentFilesLimit);
+
         List<RecentFile> pinned = [.. items.Where(item => item.IsPinned)];
-        List<RecentFile> unpinned = [.. items.Where(item => !item.IsPinned).Take(MaxUnpinnedEntries)];
+        List<RecentFile> unpinned = [.. items.Where(item => !item.IsPinned).Take(limit)];
 
         return [.. pinned, .. unpinned];
     }

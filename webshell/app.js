@@ -58,8 +58,39 @@
     boot: document.getElementById('boot')
   };
 
+  /*
+    The size the source pane is at 100% zoom, before a preference has arrived.
+
+    Zoom multiplies this rather than replacing it, so the two stay independent: changing the
+    preferred size does not lose the zoom the user is on, and zooming does not overwrite the
+    preference. The live value is state.sourceFontBase; this is only what it starts at, and
+    it matches TypographyDefaults.SourceFontSize on the host side.
+  */
   var SOURCE_BASE_FONT_PX = 14;
   var ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500];
+
+  /* Marks the spans numberHeadings adds, so a re-number can find and remove its own work. */
+  var HEADING_NUMBER_CLASS = 'mq-heading-number';
+
+  /*
+    The font stacks app.css ships with, read once at startup.
+
+    Read here rather than restated on the host side, so that the stylesheet stays the one
+    place a default font is written down. Captured now because a preference will overwrite
+    these very custom properties later, and after that getComputedStyle would report the
+    user's choice rather than the default it replaced.
+
+    The host shows these next to the "(default)" entry in the font pickers, which otherwise
+    asks the user to choose something without saying what they already have.
+  */
+  var DEFAULT_FONTS = (function () {
+    var root = getComputedStyle(document.documentElement);
+
+    return {
+      mono: root.getPropertyValue('--mq-font-mono').trim(),
+      ui: root.getPropertyValue('--mq-font-ui').trim()
+    };
+  }());
 
   var state = {
     editor: null,
@@ -82,6 +113,11 @@
     lastHtml: null,
     wordWrap: true,
     showWrapGlyph: false,
+    sourceFontBase: SOURCE_BASE_FONT_PX,
+    continueLists: true,
+
+    /* 0 for off, otherwise the heading level that counts 1, 2, 3. See numberHeadings. */
+    headingNumberStart: 0,
 
     /*
       One entry per open tab, keyed by the host's document id:
@@ -193,7 +229,7 @@
   function applySourceZoom(percent, announce) {
     state.sourceZoom = percent;
     if (state.editor) {
-      state.editor.updateOptions({ fontSize: SOURCE_BASE_FONT_PX * (percent / 100) });
+      state.editor.updateOptions({ fontSize: state.sourceFontBase * (percent / 100) });
     }
     if (announce) { flashZoomBadge('Source', percent); }
   }
@@ -203,6 +239,156 @@
     document.documentElement.style.setProperty('--mq-preview-scale', String(percent / 100));
     state.lineMapDirty = true;
     if (announce) { flashZoomBadge('Preview', percent); }
+  }
+
+  /*
+    Which family a font stack will actually be drawn in.
+
+    A CSS stack is a list of wishes: the browser takes the first one the machine has. Nothing
+    in the DOM reports which that was - getComputedStyle hands back the stack it was given,
+    not the face that won - so the only way to know is to measure.
+
+    Rendering the same string in "Family, monospace" and in bare "monospace" gives the same
+    width when Family is missing, because both fall back to the same face. Three generics are
+    tried because a real font can happen to match one of them; matching all three would be a
+    coincidence too far.
+
+    This is what lets the preferences dialog say "Using Consolas" when someone typed a font
+    they do not have, rather than leaving them to wonder why nothing changed.
+  */
+  function fontAvailable(family) {
+    if (GENERIC_FAMILIES.indexOf(family.toLowerCase()) !== -1) { return true; }
+
+    var probe = 'mmmmmmmmmmlliWWWij0O';
+    var canvas = fontAvailable.canvas || (fontAvailable.canvas = document.createElement('canvas'));
+    var ctx = canvas.getContext('2d');
+
+    for (var i = 0; i < FONT_BASELINES.length; i++) {
+      var generic = FONT_BASELINES[i];
+
+      ctx.font = '72px ' + generic;
+      var fallbackWidth = ctx.measureText(probe).width;
+
+      ctx.font = '72px "' + family + '", ' + generic;
+
+      if (ctx.measureText(probe).width !== fallbackWidth) { return true; }
+    }
+
+    return false;
+  }
+
+  var GENERIC_FAMILIES = ['monospace', 'sans-serif', 'serif', 'system-ui', 'cursive', 'fantasy'];
+  var FONT_BASELINES = ['monospace', 'sans-serif', 'serif'];
+
+  /* The first family in a stack that this machine can actually draw. */
+  function resolveFont(stack) {
+    var families = String(stack || '').split(',');
+
+    for (var i = 0; i < families.length; i++) {
+      var family = families[i].trim().replace(/^["']|["']$/g, '');
+
+      if (family && fontAvailable(family)) { return family; }
+    }
+
+    return '';
+  }
+
+  /*
+    Tells the host which fonts the panes ended up in.
+
+    Sent on startup and again after any preference change, because a change is exactly when
+    the answer can move - and because the dialog that asks the question is open at the time.
+  */
+  function reportResolvedFonts() {
+    var root = getComputedStyle(document.documentElement);
+
+    post('fontsResolved', {
+      sourceFont: resolveFont(root.getPropertyValue('--mq-font-mono')),
+      previewFont: resolveFont(root.getPropertyValue('--mq-font-ui'))
+    });
+  }
+
+  /*
+    Writes a font-family custom property, or clears it when no font was chosen.
+
+    Clearing rather than writing '' matters: app.css declares a stack of four faces so that a
+    machine without Cascadia Code still gets something monospaced, and an empty declaration
+    would shadow that stack rather than fall back to it.
+  */
+  function setFontProperty(root, name, family) {
+    if (family) {
+      root.style.setProperty(name, family);
+    } else {
+      root.style.removeProperty(name);
+    }
+  }
+
+  /*
+    Numbers the preview's headings, or strips the numbers when the preference is off.
+
+    Written into the DOM rather than drawn with CSS counters, which is what this started as.
+    Counters cannot cope with a document that skips a level - and skipping is normal, not
+    exotic: a '###' sitting directly under a '#' with no '##' between them is everywhere in
+    real notes. A counter chain has to render the missing level as something, so those
+    headings came out as "9.0.1", and the level above the numbered range could not reset the
+    levels below it at all, so the deeper numbers ran on across sections instead of starting
+    again.
+
+    Doing it here fixes both, and pays for itself twice over: the numbers are real text, so
+    they travel into the HTML export, the PDF, the printed page and the rich-text clipboard
+    without any of them needing to know this feature exists. Word gets numbered headings too,
+    which the CSS version could never have managed.
+
+    The markdown source is still never touched. This runs on the rendered copy only.
+  */
+  function numberHeadings() {
+    var previous = els.preview.querySelectorAll('.' + HEADING_NUMBER_CLASS);
+    for (var p = 0; p < previous.length; p++) {
+      previous[p].remove();
+    }
+
+    var start = state.headingNumberStart;
+    if (!start) { return; }
+
+    // One counter per level, so a heading only ever has to look at its own and its parents'.
+    var counters = [0, 0, 0, 0, 0, 0];
+    var headings = els.preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+
+    for (var i = 0; i < headings.length; i++) {
+      var heading = headings[i];
+      var level = parseInt(heading.tagName.charAt(1), 10);
+
+      if (level < start) {
+        /*
+          Above the numbered range: left unnumbered, but it still begins a new section, so
+          everything below it starts again. This is the half CSS counters could not express,
+          and the reason numbering ran on across a document's chapters.
+        */
+        for (var r = start - 1; r < 6; r++) { counters[r] = 0; }
+        continue;
+      }
+
+      counters[level - 1]++;
+
+      for (var d = level; d < 6; d++) { counters[d] = 0; }
+
+      var parts = [];
+      for (var c = start - 1; c < level; c++) {
+        // A level the document skipped is still zero here. Dropping those leading zeros is
+        // what turns "0.1" into "1" for a heading whose parent level was never used.
+        if (counters[c] === 0 && parts.length === 0) { continue; }
+
+        parts.push(counters[c]);
+      }
+
+      if (parts.length === 0) { continue; }
+
+      var label = document.createElement('span');
+      label.className = HEADING_NUMBER_CLASS;
+      label.textContent = parts.join('.') + '  ';
+
+      heading.insertBefore(label, heading.firstChild);
+    }
   }
 
   function changeZoom(pane, direction) {
@@ -1066,6 +1252,7 @@
 
     wrapWideTables();
     rewriteRelativeUrls();
+    numberHeadings();
 
     if (resetScroll) {
       els.previewPane.scrollTop = 0;
@@ -1778,7 +1965,7 @@
       theme: monacoThemeName(),
       automaticLayout: true,
       fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mq-font-mono').trim(),
-      fontSize: SOURCE_BASE_FONT_PX * (state.sourceZoom / 100),
+      fontSize: state.sourceFontBase * (state.sourceZoom / 100),
       lineNumbers: 'on',
       wordWrap: 'on',
       wrappingIndent: 'same',
@@ -1928,7 +2115,9 @@
         els.boot.classList.add('is-hidden');
         setTimeout(function () { els.boot.style.display = 'none'; }, 260);
 
-        post('ready', {});
+        post('ready', { sourceFont: DEFAULT_FONTS.mono, previewFont: DEFAULT_FONTS.ui });
+
+        reportResolvedFonts();
       });
   }
 
@@ -2152,9 +2341,11 @@
     var line = model.getLineContent(selection.startLineNumber);
     var match = LIST_ITEM.exec(line);
 
-    // Not in a list, or the selection spans lines: whatever Enter normally does, including
-    // auto-indent, is what should happen.
-    if (!match || selection.startLineNumber !== selection.endLineNumber) {
+    // Not in a list, the selection spans lines, or the preference is off: whatever Enter
+    // normally does, including auto-indent, is what should happen. The command stays bound
+    // either way rather than being unbound and rebound, so there is one code path to reason
+    // about and no window in which Enter belongs to nobody.
+    if (!state.continueLists || !match || selection.startLineNumber !== selection.endLineNumber) {
       editor.trigger('keyboard', 'type', { text: '\n' });
       return;
     }
@@ -2803,6 +2994,69 @@
     setWrapGlyph: function (p) {
       state.showWrapGlyph = !!p.enabled;
       updateWrapGlyphs();
+    },
+
+    /*
+      Everything the preferences dialog owns, in one message.
+
+      The View-menu toggles above each arrive on their own because each is driven by its own
+      menu item. These arrive together because they are set together, and because several of
+      them are CSS custom properties rather than editor options - handling them one at a time
+      would mean a message per property for no gain.
+
+      A font family of null clears the custom property rather than writing an empty one,
+      which is what hands the stylesheet's own stack back. Writing '' would leave a declared
+      but empty family, and Monaco would then render in whatever it falls back to instead of
+      in --mq-font-mono.
+    */
+    applyPreferences: function (p) {
+      var root = document.documentElement;
+
+      setFontProperty(root, '--mq-font-mono', p.sourceFont);
+      setFontProperty(root, '--mq-font-ui', p.previewFont);
+
+      if (p.previewFontSize) {
+        root.style.setProperty('--mq-preview-base', String(p.previewFontSize) + 'px');
+      }
+
+      // Zero means no limit, which is the shipped behaviour: the preview fills its pane.
+      if (p.previewMaxWidth > 0) {
+        root.style.setProperty('--mq-preview-measure', String(p.previewMaxWidth) + 'px');
+      } else {
+        root.style.removeProperty('--mq-preview-measure');
+      }
+
+      state.continueLists = p.continueLists !== false;
+      state.sourceFontBase = p.sourceFontSize || SOURCE_BASE_FONT_PX;
+
+      // Re-numbered here rather than waiting for the next render, so switching the
+      // preference shows on the document already in front of the user.
+      state.headingNumberStart = p.headingNumbers || 0;
+      numberHeadings();
+
+      if (state.editor) {
+        state.editor.updateOptions({
+          // The zoom is folded back in here: this runs whenever a preference changes, and
+          // the user may well be zoomed at the time.
+          fontSize: state.sourceFontBase * (state.sourceZoom / 100),
+          fontFamily: getComputedStyle(root).getPropertyValue('--mq-font-mono').trim(),
+          tabSize: p.tabSize || 4,
+          insertSpaces: p.insertSpaces !== false,
+          minimap: { enabled: !!p.minimap },
+          renderLineHighlight: p.highlightCurrentLine === false ? 'none' : 'line',
+          autoClosingBrackets: p.autoCloseBrackets === false ? 'never' : 'languageDefined',
+          autoClosingQuotes: p.autoCloseBrackets === false ? 'never' : 'languageDefined',
+          autoSurround: p.autoCloseBrackets === false ? 'never' : 'languageDefined'
+        });
+      }
+
+      // A font or measure change moves every line, so the source-to-preview map is stale.
+      state.lineMapDirty = true;
+      updateWrapGlyphs();
+
+      // The chosen font may not be installed, in which case something else is on screen.
+      // The dialog is open right now and is the only thing that can say so.
+      reportResolvedFonts();
     },
 
     editorCommand: function (p) {

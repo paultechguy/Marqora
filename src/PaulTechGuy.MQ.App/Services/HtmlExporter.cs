@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Ui;
+using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Services;
 

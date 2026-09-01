@@ -15,6 +15,7 @@ public sealed class ExportDialogService(WindowContext window, ILogger<ExportDial
 {
     public async Task<PdfPageSetup?> RequestPdfSetupAsync(
         string documentName,
+        PdfPageSetup current,
         CancellationToken cancellationToken = default)
     {
         if (window.XamlRoot is null)
@@ -25,7 +26,7 @@ public sealed class ExportDialogService(WindowContext window, ILogger<ExportDial
 
         try
         {
-            var dialog = new PdfExportDialog(documentName).AnchorTo(window.Root);
+            var dialog = new PdfExportDialog(documentName, current).AnchorTo(window.Root);
 
             return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Setup : null;
         }

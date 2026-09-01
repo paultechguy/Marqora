@@ -47,6 +47,7 @@ internal static class KeyboardShortcuts
             new("Close tab", "Ctrl+W"),
             new("Close all tabs", "Ctrl+Shift+W"),
             new("Print...", "Ctrl+P"),
+            new("Preferences...", "Ctrl+,"),
         ]),
 
         new("Tabs",

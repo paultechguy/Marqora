@@ -13,7 +13,7 @@ internal sealed record RecentFilesDocument
 {
     public const int CurrentSchemaVersion = 1;
 
-    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
-    public List<RecentFile> Items { get; init; } = [];
+    public List<RecentFile> Items { get; set; } = [];
 }

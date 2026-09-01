@@ -14,6 +14,16 @@ namespace PaulTechGuy.MQ.Abstractions.Ui;
 /// </summary>
 public interface IExportDialogService
 {
-    /// <summary>Returns the chosen page setup, or null when the user cancels.</summary>
-    Task<PdfPageSetup?> RequestPdfSetupAsync(string documentName, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Returns the chosen page setup, or null when the user cancels.
+    /// </summary>
+    /// <param name="current">
+    /// What the dialog opens on - the setup saved in preferences. Passed in rather than
+    /// remembered by the dialog itself, so that the answer survives a restart and there is
+    /// one record of it rather than two that can disagree.
+    /// </param>
+    Task<PdfPageSetup?> RequestPdfSetupAsync(
+        string documentName,
+        PdfPageSetup current,
+        CancellationToken cancellationToken = default);
 }

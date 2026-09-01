@@ -8,15 +8,15 @@ namespace PaulTechGuy.MQ.Domain;
 /// <summary>Persisted window geometry, in physical pixels.</summary>
 public sealed record WindowPlacement
 {
-    public int X { get; init; }
+    public int X { get; set; }
 
-    public int Y { get; init; }
+    public int Y { get; set; }
 
-    public int Width { get; init; } = 1_400;
+    public int Width { get; set; } = 1_400;
 
-    public int Height { get; init; } = 900;
+    public int Height { get; set; } = 900;
 
-    public bool IsMaximized { get; init; }
+    public bool IsMaximized { get; set; }
 
     /// <summary>True once the window has been placed at least once and has usable bounds.</summary>
     [JsonIgnore]

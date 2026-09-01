@@ -426,15 +426,53 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         // recorded below is for.
         _suppressWatchUntil[id] = DateTimeOffset.UtcNow.AddSeconds(2);
 
-        Encoding encoding = _encodings.TryGetValue(id, out Encoding? known)
-            ? known
-            : new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        // A file that was read keeps the encoding it was read with, whatever the preference
+        // says. The preference describes a document being written for the first time; it is
+        // not a licence to re-encode somebody's existing file behind their back.
+        bool isNew = !_encodings.TryGetValue(id, out Encoding? known);
+
+        Encoding encoding = known
+            ?? new UTF8Encoding(encoderShouldEmitUTF8Identifier: _settings.Current.WriteUtf8Bom);
 
         _encodings[id] = encoding;
 
-        await File.WriteAllTextAsync(path, text, encoding, cancellationToken).ConfigureAwait(false);
+        await File
+            .WriteAllTextAsync(path, isNew ? ApplyNewFileLineEnding(text) : text, encoding, cancellationToken)
+            .ConfigureAwait(false);
 
         return StampOf(path);
+    }
+
+    /// <summary>
+    /// Normalises line endings in a document being saved for the first time, if the user has
+    /// asked for a particular kind.
+    ///
+    /// Only ever applied to a new file. An existing one is written back exactly as it was
+    /// edited, so saving a file cannot rewrite every line of it and turn a one-word change
+    /// into a diff covering the whole document - the same reasoning the formatter's reflow
+    /// rule is off by default for.
+    ///
+    /// Detect, the default, leaves the text alone: an untitled document was typed in an
+    /// editor that already uses the platform's ending.
+    /// </summary>
+    private string ApplyNewFileLineEnding(string text)
+    {
+        string? ending = _settings.Current.NewFileLineEnding switch
+        {
+            LineEndingStyle.Crlf => "\r\n",
+            LineEndingStyle.Lf => "\n",
+            _ => null,
+        };
+
+        if (ending is null)
+        {
+            return text;
+        }
+
+        // Via LF so a mixed document lands on one ending rather than gaining \r\r\n.
+        string normalized = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        return ending == "\n" ? normalized : normalized.Replace("\n", ending, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------ watching

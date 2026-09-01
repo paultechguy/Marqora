@@ -329,6 +329,22 @@
 
                         <MenuFlyoutSeparator />
 
+                        <!--
+                            Directly above Exit, in its own group, where Windows has put
+                            Options and Preferences since long before this app. Every setting
+                            the app has lives behind it, including the eight that are also on
+                            the View menu.
+                        -->
+                        <MenuFlyoutItem Text="Preferences..."
+                                        Command="{x:Bind ViewModel.ShowPreferencesCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+,">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE713;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
                         <MenuFlyoutItem Text="Exit"
                                         Command="{x:Bind ViewModel.ExitCommand}"
                                         KeyboardAcceleratorTextOverride="Alt+F4" />

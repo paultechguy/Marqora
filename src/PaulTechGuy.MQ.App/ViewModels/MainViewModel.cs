@@ -48,6 +48,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IMarkdownAnalyzer _analyzer;
     private readonly ISnippetCatalog _snippets;
     private readonly IFormatDialogService _formatDialogs;
+    private readonly IPreferencesDialogService _preferencesDialogs;
     private readonly ICheatsheetService _cheatsheet;
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
@@ -404,6 +405,7 @@ public sealed partial class MainViewModel : ObservableObject
         IMarkdownAnalyzer analyzer,
         ISnippetCatalog snippets,
         IFormatDialogService formatDialogs,
+        IPreferencesDialogService preferencesDialogs,
         ICheatsheetService cheatsheet,
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
@@ -427,6 +429,7 @@ public sealed partial class MainViewModel : ObservableObject
         _analyzer = analyzer;
         _snippets = snippets;
         _formatDialogs = formatDialogs;
+        _preferencesDialogs = preferencesDialogs;
         _cheatsheet = cheatsheet;
         _diagramWindows = diagramWindows;
         _findAll = findAll;
@@ -578,6 +581,7 @@ public sealed partial class MainViewModel : ObservableObject
         _host = host;
 
         host.Ready += OnHostReady;
+        host.FontsResolved += (_, _) => FontsResolved?.Invoke(this, EventArgs.Empty);
         host.EditorTextChanged += OnEditorTextChanged;
         host.ZoomChanged += OnHostZoomChanged;
         host.SplitterMoved += OnSplitterMoved;
@@ -614,6 +618,7 @@ public sealed partial class MainViewModel : ObservableObject
         await _host.SetLineNumbersAsync(LineNumbersEnabled).ConfigureAwait(true);
         await _host.SetShowWhitespaceAsync(ShowWhitespaceEnabled).ConfigureAwait(true);
         await _host.SetWrapGlyphAsync(ShowWrapGlyphEnabled).ConfigureAwait(true);
+        await _host.ApplyPreferencesAsync(PreviewPreferences.FromSettings(current)).ConfigureAwait(true);
         await _host.SetSplitterPositionAsync(current.SplitterPosition).ConfigureAwait(true);
         await _host.SetZoomAsync(EditorPane.Source, new ZoomLevel(current.SourceZoomPercent)).ConfigureAwait(true);
         await _host.SetZoomAsync(EditorPane.Preview, new ZoomLevel(current.PreviewZoomPercent)).ConfigureAwait(true);
@@ -632,10 +637,22 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Reopens the previous session. Called once, after the host is attached.</summary>
+    /// <summary>
+    /// Reopens the previous session. Called once, after the host is attached.
+    ///
+    /// Skipped entirely when the user has asked for something else at startup. The document
+    /// list is still written on the way out either way, so switching the preference back
+    /// picks the session up again rather than starting from an empty one.
+    /// </summary>
     public async Task RestoreSessionAsync()
     {
         AppSettings current = _settings.Current;
+
+        if (current.Startup != StartupBehavior.RestoreSession)
+        {
+            return;
+        }
+
         IReadOnlyList<string> paths = current.DocumentsToRestore;
 
         if (paths.Count == 0)
@@ -644,6 +661,68 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         await _workspace.RestoreAsync(paths, current.ActiveDocumentIndex).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Whatever the startup preference asks for beyond the restored session, once the files
+    /// named on the command line have been opened.
+    ///
+    /// Runs last so it cannot take the front tab from a file the user actually double-clicked,
+    /// and does nothing at all on the default setting.
+    /// </summary>
+    public async Task ApplyStartupBehaviorAsync(bool openedFromCommandLine)
+    {
+        switch (_settings.Current.Startup)
+        {
+            case StartupBehavior.EmptyTab when !HasDocument:
+                // Only when nothing else got there first. A command-line file is what the
+                // user asked for, and a blank tab beside it would be clutter.
+                _workspace.CreateUntitled();
+                break;
+
+            case StartupBehavior.WelcomeDocument when !openedFromCommandLine:
+                await OpenWelcomeAtStartupAsync().ConfigureAwait(true);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Opens the welcome document as an ordinary file, for the startup preference.
+    ///
+    /// Deliberately not ShowWelcomeAsync: that refreshes the copy from the shipped master as
+    /// it opens it, which is right once per release and wrong for a document somebody has
+    /// chosen to see every day - it would throw away their edits on each launch.
+    /// </summary>
+    private async Task OpenWelcomeAtStartupAsync()
+    {
+        string path = _welcome.DocumentPath;
+
+        // Already in front, because this release's introduction has just been shown or the
+        // restored session had it open. Opening it twice would only make a duplicate tab.
+        if (_workspace.Documents.Any(d =>
+            string.Equals(d.Path, path, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspace.OpenAsync(path).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A startup preference that cannot be honoured is not worth a dialog in front of
+            // an app that has otherwise started perfectly well.
+            _logger.LogWarning(ex, "Could not open the welcome document at startup.");
+        }
     }
 
     /// <summary>
@@ -1649,6 +1728,11 @@ public sealed partial class MainViewModel : ObservableObject
         {
             PauseStatusHighlight();
 
+            if (_settings.Current.AutoSave == AutoSaveMode.OnFocusLoss)
+            {
+                _ = AutoSaveAsync();
+            }
+
             return;
         }
 
@@ -2433,6 +2517,21 @@ public sealed partial class MainViewModel : ObservableObject
         RestoreDocumentFocusAfterChrome();
     }
 
+    /// <summary>
+    /// Opens the preferences dialog.
+    ///
+    /// Nothing is applied here afterwards: preferences take effect as they are changed, so
+    /// by the time the dialog closes every one of them is already in force. The focus
+    /// restore is the same one every menu command owes.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowPreferencesAsync()
+    {
+        await _preferencesDialogs.ShowPreferencesAsync().ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
     [RelayCommand]
     private void SetTheme(string? themeName)
     {
@@ -2442,6 +2541,17 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        ApplyTheme(theme);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Switches theme without touching focus, for the preferences dialog. See the note above
+    /// the View-menu toggles for why the focus restore has to stay out of it.
+    /// </summary>
+    public void ApplyTheme(AppTheme theme)
+    {
         Theme = theme;
 
         OnPropertyChanged(nameof(IsSystemTheme));
@@ -2450,8 +2560,87 @@ public sealed partial class MainViewModel : ObservableObject
 
         _settings.Update(s => s with { Theme = theme });
         _themeService.Apply(theme);
+    }
 
-        RestoreDocumentFocusAfterChrome();
+    /// <summary>
+    /// Shows both panes for as long as the preferences dialog is open.
+    ///
+    /// Most preferences show their effect in one pane only - a source font in the editor, a
+    /// heading number in the preview - so someone working in a single pane would change a
+    /// setting and watch nothing happen. Both panes up means every setting can be seen
+    /// landing, which is the whole argument for applying them live.
+    ///
+    /// Not persisted, and that is the important half. The view mode is also a preference -
+    /// the one the app starts in - so writing this to the settings record would mean pressing
+    /// OK saved a layout the user never chose. It stays a display state for the life of the
+    /// dialog and nothing more.
+    ///
+    /// Focus is left alone for the reason the View-menu toggles are: the WebView is behind a
+    /// modal dialog, and putting the keyboard into it would swallow the user's typing.
+    ///
+    /// Nothing to show without a document, so nothing is done.
+    /// </summary>
+    public Task ShowBothPanesAsync() =>
+        HasDocument
+            ? ApplyViewModeAsync(ViewMode.SideBySide, persist: false, takeFocus: false)
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// Puts the panes back to the mode the settings name. Called however the preferences
+    /// dialog closes.
+    ///
+    /// Read from the settings rather than from a mode captured on the way in, so that
+    /// Restore Defaults is honoured. That button resets the view mode along with everything
+    /// else, and putting back what the user had beforehand would quietly undo part of what
+    /// they had just asked for. When nothing touched the view mode the two are the same.
+    /// </summary>
+    public Task RestoreViewModeAsync() =>
+        ApplyViewModeAsync(_settings.Current.ViewMode, persist: false, takeFocus: false);
+
+    /// <summary>The source pane's font when no preference names one, as app.css declares it.</summary>
+    public string? DefaultSourceFont => _host?.DefaultSourceFont;
+
+    /// <summary>The preview's font when no preference names one, as app.css declares it.</summary>
+    public string? DefaultPreviewFont => _host?.DefaultPreviewFont;
+
+    /// <summary>The font the source pane is actually drawn in, whatever was asked for.</summary>
+    public string? ResolvedSourceFont => _host?.ResolvedSourceFont;
+
+    /// <summary>The font the preview is actually drawn in, whatever was asked for.</summary>
+    public string? ResolvedPreviewFont => _host?.ResolvedPreviewFont;
+
+    /// <summary>
+    /// Raised when the shell has re-measured which fonts are in use. Forwarded from the host
+    /// so the preferences dialog, which has no business knowing about the host, can listen.
+    /// </summary>
+    public event EventHandler? FontsResolved;
+
+    /// <summary>
+    /// Pushes the preferences the web surface owns down to it.
+    ///
+    /// Called by the preferences dialog after every change, and once at startup so a saved
+    /// font or tab size is in force before the first document is shown. Cheap enough to call
+    /// on each keystroke of a spin box: it is one posted message, and the shell applies it
+    /// in a single pass.
+    /// </summary>
+    public async Task ApplyPreviewPreferencesAsync()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _host.ApplyPreferencesAsync(PreviewPreferences.FromSettings(_settings.Current))
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // A preference that does not reach the shell is a cosmetic failure. It must not
+            // take the dialog down with it, and the value is saved either way.
+            _logger.LogWarning(ex, "Could not apply preferences to the preview.");
+        }
     }
 
     [RelayCommand]
@@ -2517,60 +2706,115 @@ public sealed partial class MainViewModel : ObservableObject
         };
     }
 
+    /*
+        Each of the View menu's toggles is split in two: a command, which flips the value and
+        then puts the keyboard back in the document, and a setter, which only does the work.
+
+        The preferences dialog drives the setters. It has to: the focus restore exists for a
+        menu item, which hands the keyboard back as it closes, and running it while a modal
+        dialog is open would post focus into the WebView behind that dialog - so the next key
+        the user pressed would be typed into the document rather than into the preferences
+        they were still editing.
+
+        The setters are also idempotent, which the commands are not. A checkbox reports its
+        state on every change, including the ones the dialog itself made when it was
+        populated, and a toggle would invert those back.
+    */
+
     [RelayCommand]
     private async Task ToggleScrollSyncAsync()
     {
-        ScrollSyncEnabled = !ScrollSyncEnabled;
-        _settings.Update(s => s with { ScrollSyncEnabled = ScrollSyncEnabled });
+        await SetScrollSyncAsync(!ScrollSyncEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    public async Task SetScrollSyncAsync(bool enabled)
+    {
+        if (ScrollSyncEnabled == enabled)
+        {
+            return;
+        }
+
+        ScrollSyncEnabled = enabled;
+        _settings.Update(s => s with { ScrollSyncEnabled = enabled });
 
         if (_host is not null)
         {
-            await _host.SetScrollSyncAsync(ScrollSyncEnabled).ConfigureAwait(true);
+            await _host.SetScrollSyncAsync(enabled).ConfigureAwait(true);
         }
-
-        RestoreDocumentFocusAfterChrome();
     }
 
     [RelayCommand]
     private async Task ToggleWordWrapAsync()
     {
-        WordWrapEnabled = !WordWrapEnabled;
-        _settings.Update(s => s with { WordWrapEnabled = WordWrapEnabled });
+        await SetWordWrapAsync(!WordWrapEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    public async Task SetWordWrapAsync(bool enabled)
+    {
+        if (WordWrapEnabled == enabled)
+        {
+            return;
+        }
+
+        WordWrapEnabled = enabled;
+        _settings.Update(s => s with { WordWrapEnabled = enabled });
 
         if (_host is not null)
         {
-            await _host.SetWordWrapAsync(WordWrapEnabled).ConfigureAwait(true);
+            await _host.SetWordWrapAsync(enabled).ConfigureAwait(true);
         }
-
-        RestoreDocumentFocusAfterChrome();
     }
 
     [RelayCommand]
     private async Task ToggleLineNumbersAsync()
     {
-        LineNumbersEnabled = !LineNumbersEnabled;
-        _settings.Update(s => s with { ShowLineNumbers = LineNumbersEnabled });
+        await SetLineNumbersAsync(!LineNumbersEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    public async Task SetLineNumbersAsync(bool enabled)
+    {
+        if (LineNumbersEnabled == enabled)
+        {
+            return;
+        }
+
+        LineNumbersEnabled = enabled;
+        _settings.Update(s => s with { ShowLineNumbers = enabled });
 
         if (_host is not null)
         {
-            await _host.SetLineNumbersAsync(LineNumbersEnabled).ConfigureAwait(true);
+            await _host.SetLineNumbersAsync(enabled).ConfigureAwait(true);
         }
-
-        RestoreDocumentFocusAfterChrome();
     }
 
     [RelayCommand]
     private async Task ToggleShowWhitespaceAsync()
     {
-        ShowWhitespaceEnabled = !ShowWhitespaceEnabled;
-        _settings.Update(s => s with { ShowWhitespace = ShowWhitespaceEnabled });
+        await SetShowWhitespaceAsync(!ShowWhitespaceEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    public async Task SetShowWhitespaceAsync(bool enabled)
+    {
+        if (ShowWhitespaceEnabled == enabled)
+        {
+            return;
+        }
+
+        ShowWhitespaceEnabled = enabled;
+        _settings.Update(s => s with { ShowWhitespace = enabled });
 
         if (_host is not null)
         {
-            await _host.SetShowWhitespaceAsync(ShowWhitespaceEnabled).ConfigureAwait(true);
+            await _host.SetShowWhitespaceAsync(enabled).ConfigureAwait(true);
         }
-
-        RestoreDocumentFocusAfterChrome();
     }
 
     /// <summary>
@@ -2583,10 +2827,20 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ToggleReloadOnExternalChange()
     {
-        ReloadOnExternalChangeEnabled = !ReloadOnExternalChangeEnabled;
-        _settings.Update(s => s with { ReloadOnExternalChange = ReloadOnExternalChangeEnabled });
+        SetReloadOnExternalChange(!ReloadOnExternalChangeEnabled);
 
         RestoreDocumentFocusAfterChrome();
+    }
+
+    public void SetReloadOnExternalChange(bool enabled)
+    {
+        if (ReloadOnExternalChangeEnabled == enabled)
+        {
+            return;
+        }
+
+        ReloadOnExternalChangeEnabled = enabled;
+        _settings.Update(s => s with { ReloadOnExternalChange = enabled });
     }
 
     /// <summary>
@@ -2601,10 +2855,17 @@ public sealed partial class MainViewModel : ObservableObject
         RestoreDocumentFocusAfterChrome();
     }
 
-    private async Task ApplyDiagnosticsToggleAsync()
+    private Task ApplyDiagnosticsToggleAsync() => SetDiagnosticsAsync(!DiagnosticsEnabled);
+
+    public async Task SetDiagnosticsAsync(bool enabled)
     {
-        DiagnosticsEnabled = !DiagnosticsEnabled;
-        _settings.Update(s => s with { ShowDiagnostics = DiagnosticsEnabled });
+        if (DiagnosticsEnabled == enabled)
+        {
+            return;
+        }
+
+        DiagnosticsEnabled = enabled;
+        _settings.Update(s => s with { ShowDiagnostics = enabled });
 
         if (_host is null)
         {
@@ -2667,15 +2928,25 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ToggleWrapGlyphAsync()
     {
-        ShowWrapGlyphEnabled = !ShowWrapGlyphEnabled;
-        _settings.Update(s => s with { ShowWrapGlyph = ShowWrapGlyphEnabled });
+        await SetWrapGlyphAsync(!ShowWrapGlyphEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    public async Task SetWrapGlyphAsync(bool enabled)
+    {
+        if (ShowWrapGlyphEnabled == enabled)
+        {
+            return;
+        }
+
+        ShowWrapGlyphEnabled = enabled;
+        _settings.Update(s => s with { ShowWrapGlyph = enabled });
 
         if (_host is not null)
         {
-            await _host.SetWrapGlyphAsync(ShowWrapGlyphEnabled).ConfigureAwait(true);
+            await _host.SetWrapGlyphAsync(enabled).ConfigureAwait(true);
         }
-
-        RestoreDocumentFocusAfterChrome();
     }
 
     // -------------------------------------------------------------------- edit
@@ -3215,13 +3486,17 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         PdfPageSetup? setup = await _exportDialogs
-            .RequestPdfSetupAsync(document.DisplayName)
+            .RequestPdfSetupAsync(document.DisplayName, _settings.Current.PdfDefaults)
             .ConfigureAwait(true);
 
         if (setup is null)
         {
             return;
         }
+
+        // Saved on accepting the dialog rather than on a successful write: the answer is
+        // what the user chose, and a failed export does not make it the wrong choice.
+        _settings.Update(s => s with { PdfSetup = setup });
 
         string? path = await _fileDialogs
             .PickExportFileAsync(SuggestedExportName(document, ".pdf"), "PDF document", [".pdf"])
@@ -3275,8 +3550,11 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         // Paper and orientation come from the dialog; margins and backgrounds have no field
-        // in it, so they come from the same defaults a PDF export starts on.
-        PrintJob? job = await _printDialogs.PickPrinterAsync(PdfPageSetup.Default).ConfigureAwait(true);
+        // in it, so they come from the same page setup a PDF export starts on - which is now
+        // the one held in preferences, so paper chosen once applies to both.
+        PrintJob? job = await _printDialogs
+            .PickPrinterAsync(_settings.Current.PdfDefaults)
+            .ConfigureAwait(true);
 
         if (job is null)
         {
@@ -3824,10 +4102,121 @@ public sealed partial class MainViewModel : ObservableObject
 
             await PublishDiagnosticsAsync(
                 e.DocumentId, e.Text, _workspace.Find(e.DocumentId)?.Path, rendered).ConfigureAwait(true);
+
+            RestartAutoSaveTimer();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to re-render after an edit.");
+        }
+    }
+
+    // -------------------------------------------------------------------- autosave
+
+    /// <summary>
+    /// Pending delayed autosave, cancelled and replaced on each edit so the countdown
+    /// measures a pause in typing rather than time since the first keystroke.
+    /// </summary>
+    private CancellationTokenSource? _autoSaveCountdown;
+
+    private void RestartAutoSaveTimer()
+    {
+        AppSettings current = _settings.Current;
+
+        _autoSaveCountdown?.Cancel();
+        _autoSaveCountdown?.Dispose();
+        _autoSaveCountdown = null;
+
+        if (current.AutoSave != AutoSaveMode.AfterDelay)
+        {
+            return;
+        }
+
+        _autoSaveCountdown = new CancellationTokenSource();
+
+        _ = AutoSaveAfterDelayAsync(
+            TimeSpan.FromSeconds(Math.Clamp(
+                current.AutoSaveDelaySeconds,
+                AppSettings.MinimumAutoSaveDelaySeconds,
+                AppSettings.MaximumAutoSaveDelaySeconds)),
+            _autoSaveCountdown.Token);
+    }
+
+    private async Task AutoSaveAfterDelayAsync(TimeSpan delay, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(delay, token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later keystroke, which started its own countdown.
+            return;
+        }
+
+        await AutoSaveAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Writes every modified document that already has a file, quietly.
+    ///
+    /// Deliberately not the Save command. Autosave must never put a dialog on screen: it
+    /// fires when the user has just clicked into another application, or has paused typing,
+    /// and neither is a moment to interrupt them. So an untitled document is skipped rather
+    /// than prompting for a location, and a write that fails is logged and shown in the
+    /// status bar rather than raised - the document keeps its unsaved changes and Ctrl+S
+    /// still reports the problem properly when the user asks for it.
+    ///
+    /// Format-on-save is honoured, because the user asked for their file to be formatted
+    /// when it is written and this is a write.
+    /// </summary>
+    private async Task AutoSaveAsync()
+    {
+        // Copied first: saving mutates the workspace, and format-on-save replaces a
+        // document's text partway through.
+        //
+        // A document with an external change waiting is left alone. Its file has been edited
+        // or deleted by something else, and writing over that without asking is precisely
+        // what the reload prompt exists to prevent - Ctrl+S is where the user says they
+        // meant it.
+        List<Guid> pending =
+        [
+            .. _workspace.Documents
+                .Where(d => d.IsDirty && !d.IsUntitled && !d.HasExternalChange)
+                .Select(d => d.Id)
+        ];
+
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        int saved = 0;
+
+        foreach (Guid id in pending)
+        {
+            try
+            {
+                await FormatBeforeSaveAsync(id).ConfigureAwait(true);
+
+                if (_workspace.Find(id) is null)
+                {
+                    continue;
+                }
+
+                await _workspace.SaveAsync(id).ConfigureAwait(true);
+                saved++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or DirectoryNotFoundException)
+            {
+                _logger.LogWarning(ex, "Autosave could not write document {DocumentId}.", id);
+            }
+        }
+
+        if (saved > 0)
+        {
+            StatusText = saved == 1 ? "Autosaved" : $"Autosaved {saved} documents";
         }
     }
 
