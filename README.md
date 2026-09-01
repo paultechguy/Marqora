@@ -160,6 +160,7 @@ would rather not reach for the mouse.
 | 🪟 | **One window, well behaved** | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it |
 | 👀 | **Files stay in sync** | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work |
 | ⌨️ | **Keyboard all the way down** | `Alt` drives the menu bar, every command has a shortcut, and `Help > Keyboard Shortcuts...` lists the lot with a button to copy them |
+| 🧳 | **Preferences that travel** | Every setting on six pages, applied as you change them and undone by Cancel — and exportable to a file you can import on another machine, whichever version of Marqora is on it |
 
 The rest of this section covers each of these in detail.
 
@@ -524,6 +525,36 @@ document is open.
 
 Every open document is watched independently. If one changes externally and you have no
 unsaved edits in it, that tab reloads silently; if you do, Marqora asks first.
+
+**Preferences**
+
+`File > Preferences...` gathers every setting in the app onto six pages — Appearance, Editor,
+Preview, Files, Export & Print and Advanced. Changes apply as you make them, so you can see a
+font or a theme before committing to it, and **Cancel** puts all of them back. Four settings
+wait for **OK** instead: the recent-files limit, autosave and its delay, and log retention.
+Those act on your disk rather than only describing how things look, so Cancel could not undo
+them after the fact.
+
+**Carrying preferences to another machine**
+
+On the Advanced page, **Export preferences...** writes every preference to a JSON file,
+stamped inside with the version of Marqora that wrote it and the machine it came from.
+**Import preferences...** reads one back.
+
+The name offered carries the date and time it was taken —
+`Marqora-preferences-2026-09-01-143022.json` — so exporting again leaves a second file
+rather than an overwrite prompt, and a folder of them sorts into the order you took them.
+
+Your open documents, window position, splitter, recent files and search history are not
+included. They describe the machine rather than your preferences, and an import never
+disturbs the ones on the machine you are importing to.
+
+The two machines do not have to be on the same version. Import applies everything the running
+build understands and then says what it could not use — a setting the file's Marqora had and
+this one does not, a setting this one has that the file predates, a value outside the range
+Marqora allows. A `settings.json` copied straight off the other machine is accepted too.
+
+Like every other change in the dialog, an import is undone by **Cancel**.
 
 ---
 

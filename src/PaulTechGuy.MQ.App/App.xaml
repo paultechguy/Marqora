@@ -9,33 +9,36 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
 
                 <!--
-                    Marqora's accent, replacing the one Windows supplies.
+                    Marqora's chrome, on top of the accent Windows supplies.
 
-                    Scope: the app's own surfaces - accent buttons, focus rings, text
-                    selection, the view switcher, the toolbar toggles - and the active tab.
-                    The menu bar and the status bar are still left entirely to WinUI and to
-                    Mica, which is what a stock Windows 11 app looks like. The tab strip is
-                    the one piece of chrome the accent reaches, for the reason given with the
-                    tab keys below.
+                    Marqora used to state an accent of its own here - a teal, #51A8B1 - and
+                    override every stock accent key with it. That is gone, deliberately. It
+                    never fully took: a ContentDialog is hosted in the popup root rather than
+                    under the window's content, and the accent-button and list-selection keys
+                    are reached there through aliases the framework resolves once, so dialog
+                    buttons and list selection kept the Windows accent whatever this dictionary
+                    said. The app was two-toned - teal in the window, the user's own colour in
+                    every dialog - and the seam showed wherever the two met.
 
-                    This dictionary is merged, and merged AFTER XamlControlsResources, and both
-                    of those matter. A ResourceDictionary is searched in the order: its own
-                    entries, then its merged dictionaries last-to-first, then its theme
-                    dictionaries. Putting these overrides in Application.Resources'
-                    ThemeDictionaries - a sibling of MergedDictionaries rather than a member of
-                    it - therefore placed them behind XamlControlsResources, so every key the
-                    framework also defines resolved to the framework's value, and only
-                    Marqora's own Mq* keys, which nothing else defines, ever came through. The
-                    accent reached the view switcher, which uses an Mq* key, and never reached
-                    anything drawn from a stock key: accent buttons and the scroll-sync toggle
-                    stayed the Windows accent colour however many times the keys were rewritten.
+                    So the accent is the user's now, throughout, the way the title bar and Mica
+                    already follow the desktop. What is left in here is the chrome that has
+                    nothing to do with accent: the amber for things the user did not ask for,
+                    the hairlines between the bars, and the tab strip, which is tinted FROM the
+                    accent rather than replacing it.
 
-                    Merged after XamlControlsResources, these win.
+                    What that buys, beyond consistency: the accent and the text on it are a
+                    pair, and only the framework can keep the pair right for an accent it has
+                    not seen. The teal needed a near-black on it, because white on #51A8B1
+                    measures 1.9:1 - a pairing that was correct for that one colour and could
+                    not have been correct for anyone's purple.
 
-                    Dark theme uses a lighter mix of the same hue, since #51A8B1 is a mid tone
-                    and goes muddy against a dark surface. Text sitting on the accent is a
-                    near-black teal rather than the usual white: this accent is light enough
-                    that white on it falls well below a readable contrast ratio.
+                    This dictionary is still merged AFTER XamlControlsResources, and that still
+                    matters for the keys below. A ResourceDictionary is searched in the order:
+                    its own entries, then its merged dictionaries last-to-first, then its theme
+                    dictionaries. Putting these in Application.Resources' ThemeDictionaries - a
+                    sibling of MergedDictionaries rather than a member of it - would place them
+                    behind XamlControlsResources, and every key the framework also defines
+                    would resolve to the framework's value.
 
                     The dark dictionary is keyed "Default" rather than "Dark". Both are accepted
                     for the dark theme, but "Default" is the one the framework falls back to, so
@@ -45,15 +48,6 @@
                     <ResourceDictionary.ThemeDictionaries>
 
                         <ResourceDictionary x:Key="Light">
-                            <Color x:Key="MqAccentColor">#FF51A8B1</Color>
-
-                            <!-- Marqora's own keys, referenced directly by Marqora's markup. -->
-                            <SolidColorBrush x:Key="MqAccentBrush" Color="#FF51A8B1" />
-                            <SolidColorBrush x:Key="MqAccentSoftBrush" Color="#2851A8B1" />
-                            <SolidColorBrush x:Key="MqAccentFaintBrush" Color="#1451A8B1" />
-                            <SolidColorBrush x:Key="MqOnAccentBrush" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="MqAccentTextBrush" Color="#FF2E7C84" />
-
                             <!--
                                 Amber, for the few things that report something the user did
                                 not ask for. Marqora's own rather than SystemFillColorCaution:
@@ -68,22 +62,19 @@
                             <SolidColorBrush x:Key="MqWarnBrush" Color="#FFE8A317" />
                             <SolidColorBrush x:Key="MqOnWarnBrush" Color="#FF2B1A00" />
 
-                            <!-- Accent-derived stock keys. -->
-                            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FF51A8B1" />
-                            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E651A8B1" />
-                            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#CC51A8B1" />
-                            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FF2E7C84" />
-                            <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#FF276B72" />
-                            <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#CC04262A" />
+                            <!--
+                                Nothing accent-coloured is stated here any more. The stock
+                                keys - AccentFillColorDefaultBrush, the AccentTextFill pair,
+                                the TextOnAccent pair, and every ToggleButton *Checked* brush -
+                                are left exactly as the framework defines them, which is in
+                                terms of the user's Windows accent.
 
-                            <!-- Toolbar toggles, which read as accent when they are on. -->
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="#FF51A8B1" />
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="#FF469AA3" />
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="#FF3D8B93" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#FF04262A" />
+                                That is the whole point: text on the accent is the half that
+                                cannot be guessed, and the framework already keeps
+                                TextOnAccentFillColorPrimaryBrush correct for whatever accent
+                                the user has chosen. A fixed pairing here could only be right
+                                for one accent, which is what the teal was.
+                            -->
 
                             <!--
                                 The active tab.
@@ -104,21 +95,39 @@
                                 is 1px in both states, so the accent edge below is free.
 
                                 The signal is pushed from both ends: the active tab gains an
-                                accent-tinted plate, an accent edge and full-strength text,
-                                while the inactive ones sit at secondary. Text on the plate is
-                                a near-black teal rather than the accent - accent on accent is
-                                the one pairing here that fails contrast outright.
+                                accent-tinted plate and an accent edge, while the inactive
+                                ones sit at secondary.
+
+                                The tints are the accent at low alpha rather than a mixed
+                                colour, and the text on them is left to the stock foreground.
+                                A pre-mixed plate - which is what the teal #D5EBEE was - only
+                                works for the one accent it was mixed from, and the selected
+                                tab's text was picked to sit on that specific plate. At this
+                                strength the plate barely moves the surface underneath, so the
+                                ordinary text colour keeps its contrast whatever the accent is,
+                                and there is no second colour that has to be kept in step.
+
+                                ThemeResource rather than a StaticResource alias, deliberately:
+                                an alias resolves once, which is the trap described above for
+                                TabViewBorderBrush and again in docs/BROKEN_TAB_BAR.md. The
+                                shade is the one the framework's own accent fill uses in this
+                                theme, so the strip agrees with the accent buttons exactly.
                             -->
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FFD5EBEE" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="#FF0F2C30" />
-                            <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="#FF51A8B1" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderSelectedCloseButtonForeground" Color="#FF0F2C30" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected"
+                                             Color="{ThemeResource SystemAccentColorDark1}"
+                                             Opacity="0.18" />
+                            <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush"
+                                             Color="{ThemeResource SystemAccentColorDark1}" />
 
                             <SolidColorBrush x:Key="TabViewItemHeaderForeground" Color="#9E000000" />
                             <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForeground" Color="#9E000000" />
                             <SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver" Color="#E4000000" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="#1F51A8B1" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="#3351A8B1" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"
+                                             Color="{ThemeResource SystemAccentColorDark1}"
+                                             Opacity="0.10" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"
+                                             Color="{ThemeResource SystemAccentColorDark1}"
+                                             Opacity="0.18" />
 
                             <!--
                                 The chrome rules: the hairline under the tab strip, under the
@@ -152,49 +161,41 @@
                         </ResourceDictionary>
 
                         <ResourceDictionary x:Key="Default">
-                            <Color x:Key="MqAccentColor">#FF63BCC5</Color>
-
-                            <SolidColorBrush x:Key="MqAccentBrush" Color="#FF63BCC5" />
-                            <SolidColorBrush x:Key="MqAccentSoftBrush" Color="#3363BCC5" />
-                            <SolidColorBrush x:Key="MqAccentFaintBrush" Color="#1E63BCC5" />
-                            <SolidColorBrush x:Key="MqOnAccentBrush" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="MqAccentTextBrush" Color="#FF7FCDD5" />
-
-                            <!-- Lifted a little for dark mode, as the accent is. 9.1:1. -->
+                            <!-- Lifted a little for dark mode. 9.1:1. -->
                             <SolidColorBrush x:Key="MqWarnBrush" Color="#FFF2B434" />
                             <SolidColorBrush x:Key="MqOnWarnBrush" Color="#FF2B1A00" />
 
-                            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FF63BCC5" />
-                            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E663BCC5" />
-                            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#CC63BCC5" />
-                            <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FF7FCDD5" />
-                            <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#FF6FC3CC" />
-                            <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#CC04262A" />
-
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="#FF63BCC5" />
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="#FF74C6CE" />
-                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="#FF55AEB7" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#FF04262A" />
-                            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#FF04262A" />
+                            <!--
+                                As in the Light dictionary: every accent-coloured stock key is
+                                left to the framework, which states it in terms of the user's
+                                Windows accent.
+                            -->
 
                             <!--
                                 The active tab - see the Light dictionary for why the strip is
-                                painted at all and why this is brushes only. The plate is a
-                                deep teal rather than a pale one: the same tint that lifts off
-                                a white page would be lost against a dark strip.
+                                painted at all and why this is brushes only.
+
+                                A heavier tint than the light theme's, for the reason the deep
+                                teal plate had: the same alpha that lifts off a white page is
+                                lost against a dark strip. SystemAccentColorLight2 is the shade
+                                the framework's own accent fill uses in dark, where the raw
+                                accent is often too dark to read against the background.
                             -->
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FF1D4A50" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="#FFEAF7F9" />
-                            <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="#FF63BCC5" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderSelectedCloseButtonForeground" Color="#FFEAF7F9" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected"
+                                             Color="{ThemeResource SystemAccentColorLight2}"
+                                             Opacity="0.26" />
+                            <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush"
+                                             Color="{ThemeResource SystemAccentColorLight2}" />
 
                             <SolidColorBrush x:Key="TabViewItemHeaderForeground" Color="#C5FFFFFF" />
                             <SolidColorBrush x:Key="TabViewItemHeaderCloseButtonForeground" Color="#C5FFFFFF" />
                             <SolidColorBrush x:Key="TabViewItemHeaderForegroundPointerOver" Color="#FFFFFFFF" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver" Color="#2663BCC5" />
-                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed" Color="#3D63BCC5" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPointerOver"
+                                             Color="{ThemeResource SystemAccentColorLight2}"
+                                             Opacity="0.14" />
+                            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"
+                                             Color="{ThemeResource SystemAccentColorLight2}"
+                                             Opacity="0.24" />
 
                             <!--
                                 The chrome rules - see the Light dictionary for what these are
@@ -362,27 +363,27 @@
                                         <VisualState x:Name="Checked">
                                             <VisualState.Setters>
                                                 <Setter Target="Root.Background"
-                                                        Value="{ThemeResource MqAccentBrush}" />
+                                                        Value="{ThemeResource AccentFillColorDefaultBrush}" />
                                                 <Setter Target="Label.Foreground"
-                                                        Value="{ThemeResource MqOnAccentBrush}" />
+                                                        Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
 
                                         <VisualState x:Name="CheckedPointerOver">
                                             <VisualState.Setters>
                                                 <Setter Target="Root.Background"
-                                                        Value="{ThemeResource MqAccentBrush}" />
+                                                        Value="{ThemeResource AccentFillColorDefaultBrush}" />
                                                 <Setter Target="Label.Foreground"
-                                                        Value="{ThemeResource MqOnAccentBrush}" />
+                                                        Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
 
                                         <VisualState x:Name="CheckedPressed">
                                             <VisualState.Setters>
                                                 <Setter Target="Root.Background"
-                                                        Value="{ThemeResource MqAccentBrush}" />
+                                                        Value="{ThemeResource AccentFillColorDefaultBrush}" />
                                                 <Setter Target="Label.Foreground"
-                                                        Value="{ThemeResource MqOnAccentBrush}" />
+                                                        Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                             </VisualState.Setters>
                                         </VisualState>
 

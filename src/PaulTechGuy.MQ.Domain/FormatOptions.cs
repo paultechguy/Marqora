@@ -101,8 +101,32 @@ public sealed record FormatOptions
     /// </summary>
     public bool ReflowParagraphs { get; set; }
 
-    /// <summary>Column to wrap at when <see cref="ReflowParagraphs"/> is on.</summary>
-    public int WrapColumn { get; set; } = 80;
+    /// <summary>
+    /// Column to wrap at when <see cref="ReflowParagraphs"/> is on.
+    ///
+    /// This is the width Preferences | Editor sets, and the one Format Document uses. The
+    /// Format Markdown dialog starts from it but deliberately does not write back to it - a
+    /// width typed there is for that one reformat. See ShowFormatOptionsAsync, which is where
+    /// that exception is made and explained.
+    /// </summary>
+    public int WrapColumn { get; set; } = DefaultWrapColumn;
+
+    /// <summary>The width a fresh install wraps at, and what Restore Defaults comes back to.</summary>
+    public const int DefaultWrapColumn = 80;
+
+    /// <summary>
+    /// The range both wrap-column boxes accept, and the range an imported file is held to.
+    ///
+    /// Stated here rather than in either dialog, for the reason
+    /// <see cref="AppSettings.MinimumTabSize"/> is stated on the settings: two dialogs and an
+    /// importer all need the same numbers, and three copies of them would be free to
+    /// disagree. Forty is where ordinary prose starts to break badly; two hundred is past
+    /// the point any of this is still wrapping.
+    /// </summary>
+    public const int MinimumWrapColumn = 40;
+
+    /// <inheritdoc cref="MinimumWrapColumn"/>
+    public const int MaximumWrapColumn = 200;
 
     public BulletMarker Bullet { get; set; } = BulletMarker.Dash;
 

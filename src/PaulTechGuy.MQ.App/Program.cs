@@ -127,7 +127,7 @@ public static class Program
         // Registered under the interface so the whole app shares this one instance, which
         // logging already used before the container existed.
         builder.Services.AddSingleton<IAppPaths>(paths);
-        builder.Services.AddMarqoraRepositories();
+        builder.Services.AddMarqoraRepositories(AppVersion.Current);
         builder.Services.AddMarqoraRendering();
         builder.Services.AddMarqoraFormatting();
         builder.Services.AddMarqoraEditing();

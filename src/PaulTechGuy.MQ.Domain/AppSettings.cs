@@ -192,6 +192,17 @@ public sealed record AppSettings
 
     public int TabSize { get; set; } = 4;
 
+    /// <summary>
+    /// The range the tab-size box accepts, and the range an imported file is held to.
+    ///
+    /// Stated here rather than in the dialog, because import has to clamp to the same numbers
+    /// and a second copy of them would be free to disagree. A hand-edited preferences file is
+    /// the only way a tab size the dialog could not produce gets into the settings at all.
+    /// </summary>
+    public const int MinimumTabSize = 1;
+
+    public const int MaximumTabSize = 16;
+
     /// <summary>Insert spaces when Tab is pressed rather than a tab character.</summary>
     public bool InsertSpaces { get; set; } = true;
 
@@ -299,6 +310,38 @@ public sealed record AppSettings
 
         return Default.WithSessionOf(current);
     }
+
+    /// <summary>
+    /// The same members as <see cref="WithSessionOf"/>, named as they appear in the settings
+    /// file: the state the app recorded about itself rather than anything the user chose.
+    ///
+    /// Exporting preferences strips these, and importing ignores them if a hand-made file
+    /// carries them anyway. Without that, moving preferences between two machines would move
+    /// one machine's open tabs and window position onto the other, which is not what the
+    /// button offered to do.
+    ///
+    /// camelCase because that is the naming policy the settings file is written with, and
+    /// matched case-insensitively at the point of use so a hand-edited file still lines up.
+    ///
+    /// Listed by hand for the same reason <see cref="WithSessionOf"/> lists them: the
+    /// persistence layer is source-generated to keep the app trim- and AOT-friendly, and a
+    /// reflective walk here would undo that. Adding session state means adding it in both
+    /// places, and PreferencesTransferTests holds the test that catches only one of them
+    /// being done.
+    /// </summary>
+    public static IReadOnlySet<string> SessionKeys { get; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "window",
+            "cheatsheetWindow",
+            "cheatsheetScrollTop",
+            "findAllWindow",
+            "findHistory",
+            "openDocuments",
+            "activeDocumentIndex",
+            "splitterPosition",
+            "lastWelcomeVersion",
+        };
 
     /// <summary>
     /// These preferences, carrying <paramref name="current"/>'s record of the session.

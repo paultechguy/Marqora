@@ -122,8 +122,8 @@ internal sealed class FormatOptionsDialog : ContentDialog
         _wrapColumn = new NumberBox
         {
             Value = current.WrapColumn,
-            Minimum = 40,
-            Maximum = 200,
+            Minimum = FormatOptions.MinimumWrapColumn,
+            Maximum = FormatOptions.MaximumWrapColumn,
             SmallChange = 5,
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
             Width = 120,
@@ -196,6 +196,22 @@ internal sealed class FormatOptionsDialog : ContentDialog
         wrapRow.Children.Add(new TextBlock { Text = "columns", VerticalAlignment = VerticalAlignment.Center });
 
         panel.Children.Add(wrapRow);
+
+        // Said here because nothing else on this dialog behaves this way: every other control
+        // is remembered when Format is pressed, and the width is not. Without the line, a
+        // width typed here that is back to 80 next time reads as the dialog losing it.
+        panel.Children.Add(new TextBlock
+        {
+            Text = "The width applies to this format only and is not remembered. "
+                + "Preferences \u2192 Editor sets the width that sticks.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.7,
+            FontSize = 12,
+
+            // Indented to sit under the wrap row it is about rather than under the rule grid.
+            Margin = new Thickness(26, -4, 0, 0),
+        });
+
         panel.Children.Add(_selectionOnly);
         panel.Children.Add(_formatOnSave);
 

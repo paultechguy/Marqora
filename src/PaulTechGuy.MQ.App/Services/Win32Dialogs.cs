@@ -31,7 +31,11 @@ internal static class Win32Dialogs
     private const uint SIGDN_FILESYSPATH = 0x80058000;
 
     /// <summary>Shows the Open dialog. Returns null when the user cancels.</summary>
-    public static string? OpenFile(IntPtr owner, string title, IReadOnlyList<string> extensions)
+    public static string? OpenFile(
+        IntPtr owner,
+        string title,
+        IReadOnlyList<string> extensions,
+        string filterLabel = "Markdown")
     {
         var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
 
@@ -39,7 +43,7 @@ internal static class Win32Dialogs
         {
             dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST);
             dialog.SetTitle(title);
-            SetFilters(dialog, extensions, includeAllFiles: true);
+            SetFilters(dialog, extensions, includeAllFiles: true, filterLabel);
 
             return Show(dialog, owner);
         }

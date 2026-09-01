@@ -135,6 +135,7 @@ internal sealed class PreferencesDialog : ContentDialog
     private readonly CheckBox _highlightLine;
     private readonly CheckBox _continueLists;
     private readonly CheckBox _autoCloseBrackets;
+    private readonly NumberBox _wrapColumn;
 
     private readonly CheckBox _scrollSync;
     private readonly CheckBox _diagnostics;
@@ -254,7 +255,7 @@ internal sealed class PreferencesDialog : ContentDialog
         _wrapGlyph = BuildCheck("Mark wrapped lines");
         Bind(_wrapGlyph, v => _vm.SetWrapGlyphAsync(v));
 
-        _tabSize = BuildNumber(1, 16);
+        _tabSize = BuildNumber(AppSettings.MinimumTabSize, AppSettings.MaximumTabSize);
         _tabSize.ValueChanged += (_, _) => ApplyAsync(() =>
             _vm.UpdateAsync(s => s with { TabSize = ReadInt(_tabSize, s.TabSize) }));
 
@@ -272,6 +273,17 @@ internal sealed class PreferencesDialog : ContentDialog
 
         _autoCloseBrackets = BuildCheck("Close brackets and quotes automatically");
         Bind(_autoCloseBrackets, v => _vm.UpdateAsync(s => s with { AutoCloseBrackets = v }));
+
+        // The formatter's wrap width lives inside FormatRules rather than beside TabSize, so
+        // it is written through the nested record. Formatting is the null-safe reader, which
+        // matters for a settings file written before there were any format rules at all.
+        _wrapColumn = BuildNumber(FormatOptions.MinimumWrapColumn, FormatOptions.MaximumWrapColumn);
+        _wrapColumn.SmallChange = 5;
+        _wrapColumn.ValueChanged += (_, _) => ApplyAsync(() =>
+            _vm.UpdateAsync(s => s with
+            {
+                FormatRules = s.Formatting with { WrapColumn = ReadInt(_wrapColumn, s.Formatting.WrapColumn) },
+            }));
 
         // ------------------------------------------------------------------ preview
         _scrollSync = BuildCheck("Synchronize scrolling between the panes");
@@ -389,6 +401,21 @@ internal sealed class PreferencesDialog : ContentDialog
         // attached would keep it and every control alive until the app shut down.
         _vm.FontsResolved += OnFontsResolved;
         Closed += (_, _) => _vm.FontsResolved -= OnFontsResolved;
+
+        /*
+            Follow the theme while the dialog is open.
+
+            DialogExtensions.AnchorTo gives a dialog the window's theme once, on the way in,
+            because a ContentDialog sits in the popup root and never inherits a later change.
+            That is enough for every other dialog in the app and not enough for this one: this
+            is where the theme is changed from, so picking Dark on the Appearance page left the
+            dialog itself sitting in Light until it was closed and reopened.
+
+            Unsubscribed on close for the same reason as FontsResolved - the theme service is a
+            singleton and outlives this dialog by a long way.
+        */
+        _vm.EffectiveThemeChanged += OnEffectiveThemeChanged;
+        Closed += (_, _) => _vm.EffectiveThemeChanged -= OnEffectiveThemeChanged;
 
         Populate();
 
@@ -636,7 +663,7 @@ internal sealed class PreferencesDialog : ContentDialog
             },
         };
 
-        return flyout;
+        return Themed(flyout);
     }
 
     /// <summary>
@@ -745,6 +772,18 @@ internal sealed class PreferencesDialog : ContentDialog
             "These four also appear on the View menu, where they can be flipped without "
             + "coming here. Both routes change the same setting."));
 
+        // Its own section rather than another row under TYPING, because "Word wrap" three
+        // rows above is soft wrapping that only changes what the pane looks like, and this
+        // one rewrites the file. Sitting them together invites the wrong reading of both.
+        panel.Children.Add(Divider());
+        panel.Children.Add(Heading("FORMATTING"));
+        panel.Children.Add(NumberField("Wrap paragraphs at", _wrapColumn, EditorPage, "columns"));
+
+        panel.Children.Add(Note(
+            "The width Format Document wraps to, and the width Format Markdown opens on. It "
+            + "only takes effect when the formatter's \"Re-wrap paragraphs\" rule is on, "
+            + "which it is not by default: re-wrapping rewrites every line of a paragraph."));
+
         return panel;
     }
 
@@ -837,33 +876,59 @@ internal sealed class PreferencesDialog : ContentDialog
         panel.Children.Add(openFolder);
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("ANOTHER MACHINE"));
+
+        var export = new Button { Content = "Export preferences..." };
+        var import = new Button { Content = "Import preferences..." };
+
+        // The button is its own anchor for the report that follows, which is what puts the
+        // answer where the user is already looking.
+        export.Click += (_, _) => ApplyAsync(() => ExportPreferencesAsync(export));
+        import.Click += (_, _) => ApplyAsync(() => ImportPreferencesAsync(import));
+
+        panel.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { export, import },
+        });
+
+        panel.Children.Add(Note(
+            "Export writes every preference on these six pages to a file, along with the "
+            + "version of Marqora that wrote it. Your open documents, window position, recent "
+            + "files and search history are not included - they describe this machine rather "
+            + "than your preferences.\n\n"
+            + "Import brings across everything the running version understands, whichever "
+            + "version wrote the file, and says afterwards what it could not use. Like every "
+            + "other change here, an import is undone by Cancel."));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("RESET"));
 
         // A Flyout rather than a confirmation dialog: WinUI allows only one ContentDialog at
         // a time and throws on a second, and this is already inside one.
+        //
+        // Shown from a Click handler rather than hung off the button's Flyout property, so it
+        // is built at the moment it is needed. Themed() reads the theme in force when the
+        // flyout is made, and a flyout made here in the constructor would have been given
+        // whatever the dialog's theme was before it was ever on screen.
+        var reset = new Button { Content = "Restore all defaults..." };
+
+        reset.Click += (_, _) => RestoreDefaultsConfirmation().ShowAt(reset);
+
+        panel.Children.Add(reset);
+
+        return panel;
+    }
+
+    private Flyout RestoreDefaultsConfirmation()
+    {
+        var flyout = new Flyout();
+
         var confirm = new Button
         {
             Content = "Restore defaults",
             Margin = new Thickness(0, 4, 0, 0),
-        };
-
-        var flyout = new Flyout
-        {
-            Content = new StackPanel
-            {
-                Spacing = 10,
-                MaxWidth = 280,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Every preference goes back to how it shipped. Your open "
-                            + "documents, window position and recent files are not touched.",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    confirm,
-                },
-            },
         };
 
         confirm.Click += (_, _) =>
@@ -880,14 +945,306 @@ internal sealed class PreferencesDialog : ContentDialog
             });
         };
 
-        panel.Children.Add(new Button
+        flyout.Content = new StackPanel
         {
-            Content = "Restore all defaults...",
-            Flyout = flyout,
-        });
+            Spacing = 10,
+            MaxWidth = 280,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "Every preference goes back to how it shipped. Your open "
+                        + "documents, window position and recent files are not touched.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                confirm,
+            },
+        };
 
-        return panel;
+        return Themed(flyout);
     }
+
+    // ------------------------------------------------------ moving between machines
+
+    /// <summary>
+    /// Export.
+    ///
+    /// The deferred controls are folded onto the settings record on the way out. Those four
+    /// are still only in their controls at this point, and a file that showed the autosave
+    /// setting the user had a minute ago rather than the one on their screen would be wrong
+    /// in the least detectable way possible.
+    /// </summary>
+    private async Task ExportPreferencesAsync(FrameworkElement anchor)
+    {
+        if (await _vm.ExportAsync(ApplyDeferredTo(_vm.Current)).ConfigureAwait(true) is not { } outcome)
+        {
+            return;
+        }
+
+        ShowReport(
+            anchor,
+            outcome.Succeeded ? ReportTone.Done : ReportTone.Problem,
+            outcome.Succeeded ? "Preferences exported" : "Nothing was exported",
+            outcome.Message);
+    }
+
+    /// <summary>
+    /// Import.
+    ///
+    /// An ordinary change to the dialog, applied through the same path as Cancel and Restore
+    /// Defaults - so the View menu, the editor and the theme move with it, and Cancel takes
+    /// it all back.
+    ///
+    /// The deferred four are the fiddly part, and the two steps below are both needed. First
+    /// this machine's own values for them are put back over the imported ones, so that
+    /// applying an import cannot start autosaving or trim the recent list before OK has been
+    /// pressed - the promise the whole deferral exists to keep. Then, once the controls have
+    /// been refilled from the settings, the file's values for those four are written into the
+    /// controls, so OK commits them with everything else. Skipping the first step would let an
+    /// imported autosave setting act immediately; skipping the second would silently drop four
+    /// preferences from every import.
+    /// </summary>
+    private async Task ImportPreferencesAsync(FrameworkElement anchor)
+    {
+        if (await _vm.ImportAsync().ConfigureAwait(true) is not { } result)
+        {
+            return;
+        }
+
+        if (result is { Succeeded: true, Settings: { } imported })
+        {
+            await _vm.ApplyImportedAsync(ApplyDeferredTo(imported)).ConfigureAwait(true);
+
+            Populate();
+
+            _loading = true;
+
+            try
+            {
+                WriteDeferred(imported);
+            }
+            finally
+            {
+                _loading = false;
+            }
+
+            UpdateEnabledState();
+        }
+
+        (ReportTone tone, string headline) = result switch
+        {
+            { Succeeded: false } => (ReportTone.Problem, "Nothing was imported"),
+            { IsPartial: true } => (ReportTone.Attention, "Preferences imported, in part"),
+            _ => (ReportTone.Done, "Preferences imported"),
+        };
+
+        ShowReport(anchor, tone, headline, result.Describe());
+    }
+
+    /// <summary>How loudly a report needs to be said.</summary>
+    private enum ReportTone
+    {
+        /// <summary>It worked, entirely.</summary>
+        Done,
+
+        /// <summary>It worked, but something in the file did not arrive as written.</summary>
+        Attention,
+
+        /// <summary>It did not work.</summary>
+        Problem,
+    }
+
+    /// <summary>
+    /// Gives a flyout the theme the dialog is actually wearing.
+    ///
+    /// The same trap DialogExtensions.AnchorTo documents for ContentDialog, and for the same
+    /// reason: a flyout is hosted in the popup root, a sibling of the window's content rather
+    /// than a child of it, so the RequestedTheme the theme service sets on Window.Content
+    /// never reaches it. What it inherits instead is neither reliably the app's theme nor
+    /// reliably the framework's, and the presenter's background and the text on it were
+    /// resolving against different ones - which is white text on a white card in light mode,
+    /// and black on black in dark. A report nobody can read is worse than no report.
+    ///
+    /// Both halves have to be set. RequestedTheme on the content fixes the text; the
+    /// presenter draws the background behind it and takes its own, so a style carries the
+    /// theme there too.
+    ///
+    /// Taken from the theme service at the moment of showing rather than from this dialog's
+    /// ActualTheme. Two reasons, and both bite: the pages are built before the dialog is in
+    /// the tree, so there is no meaningful ActualTheme to read at construction; and the
+    /// Appearance page can change the theme while the dialog is up, which the service knows
+    /// about first.
+    /// </summary>
+    private Flyout Themed(Flyout flyout)
+    {
+        ElementTheme theme = _vm.EffectiveTheme == AppTheme.Dark
+            ? ElementTheme.Dark
+            : ElementTheme.Light;
+
+        if (flyout.Content is FrameworkElement content)
+        {
+            content.RequestedTheme = theme;
+        }
+
+        var presenter = new Style(typeof(FlyoutPresenter));
+
+        presenter.Setters.Add(new Setter(FrameworkElement.RequestedThemeProperty, theme));
+
+        flyout.FlyoutPresenterStyle = presenter;
+
+        return flyout;
+    }
+
+    /// <summary>
+    /// What an export or an import came to, said beside the button that was pressed.
+    ///
+    /// A Flyout for the same reason every other answer in this dialog is one: WinUI permits a
+    /// single ContentDialog at a time and this is already inside one.
+    ///
+    /// Built to be noticed rather than merely displayed. The first version was a paragraph of
+    /// body text in a plain popup, which is easy to dismiss without reading and - once the
+    /// theme went wrong - easy to miss altogether. So it now leads with a coloured rule and a
+    /// glyph, states the outcome in a line of its own, and only then gives the detail. The
+    /// colour is the one thing that says which of the three outcomes this was before a word
+    /// has been read.
+    ///
+    /// Scrollable, because the import report grows a line for each kind of thing that did not
+    /// come across, and a file from a much older build can produce several.
+    /// </summary>
+    private void ShowReport(FrameworkElement anchor, ReportTone tone, string headline, string detail)
+    {
+        Brush? tint = ToneBrush(tone);
+
+        var glyph = new FontIcon
+        {
+            Glyph = ToneGlyph(tone),
+            FontSize = 18,
+            VerticalAlignment = VerticalAlignment.Top,
+
+            // Nudged onto the cap height of the headline beside it, which sits lower than the
+            // glyph's own box.
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+
+        var title = new TextBlock
+        {
+            Text = headline,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        var rule = new Border
+        {
+            Width = 4,
+            CornerRadius = new CornerRadius(2),
+        };
+
+        if (tint is not null)
+        {
+            glyph.Foreground = tint;
+            rule.Background = tint;
+        }
+
+        var body = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 10,
+                    Children = { glyph, title },
+                },
+                new TextBlock
+                {
+                    Text = detail,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            },
+        };
+
+        var scroller = new ScrollViewer
+        {
+            MaxHeight = 300,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = body,
+        };
+
+        var card = new Grid { ColumnSpacing = 12, MaxWidth = ReportWidth };
+
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        Grid.SetColumn(rule, 0);
+        Grid.SetColumn(scroller, 1);
+
+        card.Children.Add(rule);
+        card.Children.Add(scroller);
+
+        Themed(new Flyout { Content = card }).ShowAt(anchor);
+    }
+
+    /// <summary>Wide enough for the longest report line without becoming a paragraph of prose.</summary>
+    private const double ReportWidth = 380;
+
+    /// <summary>
+    /// The colour that says which outcome this was.
+    ///
+    /// Marqora's own amber rather than the system's caution colour, for the reason given
+    /// beside MqWarnBrush in App.xaml: the system one moves with the OS and this has to stay
+    /// legible against a known text colour. Both it and the critical red read acceptably in
+    /// either theme, which matters because ThemeBrush resolves against the application's
+    /// resources rather than this element's and so cannot be relied on to pick the theme's
+    /// own shade.
+    /// </summary>
+    private Brush? ToneBrush(ReportTone tone) => tone switch
+    {
+        ReportTone.Problem => ThemeBrush("SystemFillColorCriticalBrush"),
+        ReportTone.Attention => ThemeBrush("MqWarnBrush"),
+        _ => AccentBrush(),
+    };
+
+    /// <summary>
+    /// The user's Windows accent, in the shade this theme uses it.
+    ///
+    /// Built from the SystemAccentColor family rather than read from
+    /// AccentFillColorDefaultBrush, and the difference is the point. The brush is a theme
+    /// resource, and ThemeBrush can only ask the application for one - which resolves against
+    /// the application's theme, not the dialog's, so a light app could be handed the dark
+    /// theme's accent. These are plain colours, identical in both theme dictionaries, so
+    /// picking the shade here from the theme actually in force is exact.
+    ///
+    /// The shades are the ones the framework's own accent fill uses: Dark1 in light, Light2
+    /// in dark, where the raw accent is often too dark to read against the background. That
+    /// is what makes the report the same colour as the OK button beneath it rather than
+    /// merely the same hue - and it is the same pair the tab strip is tinted from.
+    /// </summary>
+    private Brush? AccentBrush()
+    {
+        string key = _vm.EffectiveTheme == AppTheme.Dark
+            ? "SystemAccentColorLight2"
+            : "SystemAccentColorDark1";
+
+        return Application.Current.Resources.TryGetValue(key, out object? value)
+            && value is Windows.UI.Color colour
+                ? new SolidColorBrush(colour)
+                : ThemeBrush("AccentFillColorDefaultBrush");
+    }
+
+    /// <summary>
+    /// Segoe Fluent Icons: an error badge (U+E783), a warning triangle (U+E7BA) and a tick
+    /// (U+E73E). Written as the characters themselves, as the rest of the app does - the code
+    /// points are named here because a private-use glyph is unreadable in a diff.
+    /// </summary>
+    private static string ToneGlyph(ReportTone tone) => tone switch
+    {
+        ReportTone.Problem => "",
+        ReportTone.Attention => "",
+        _ => "",
+    };
 
     // ------------------------------------------------------------------- populating
 
@@ -930,26 +1287,24 @@ internal sealed class PreferencesDialog : ContentDialog
             _highlightLine.IsChecked = s.HighlightCurrentLine;
             _continueLists.IsChecked = s.ContinueLists;
             _autoCloseBrackets.IsChecked = s.AutoCloseBrackets;
+            _wrapColumn.Value = s.Formatting.WrapColumn;
 
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;
             _headingNumbers.SelectedIndex = (int)s.HeadingNumbering;
 
             _startup.SelectedIndex = (int)s.Startup;
-            _recentLimit.Value = s.RecentFilesLimit;
             _reloadOnChange.IsChecked = s.ReloadOnExternalChange;
-            _autoSave.SelectedIndex = (int)s.AutoSave;
-            _autoSaveDelay.Value = s.AutoSaveDelaySeconds;
             _lineEnding.SelectedIndex = (int)s.NewFileLineEnding;
             _writeBom.IsChecked = s.WriteUtf8Bom;
+
+            WriteDeferred(s);
 
             PdfPageSetup pdf = s.PdfDefaults;
             _paper.SelectedIndex = (int)pdf.Paper;
             _orientation.SelectedIndex = (int)pdf.Orientation;
             _margin.SelectedIndex = (int)pdf.Margin;
             _backgrounds.IsChecked = pdf.IncludeBackgrounds;
-
-            _logRetention.Value = s.LogRetentionDays;
 
             UpdateEnabledState();
             RefreshFontHints();
@@ -963,6 +1318,25 @@ internal sealed class PreferencesDialog : ContentDialog
         {
             _loading = false;
         }
+    }
+
+    /// <summary>
+    /// The four controls whose values are not written down until OK - see CommitDeferred.
+    ///
+    /// Separated out because import needs them on their own. It puts the file's preferences
+    /// into force through the settings record, which by design cannot carry these four, so
+    /// they are written straight into the controls afterwards and committed with the rest
+    /// when the dialog is accepted.
+    ///
+    /// Caller's job to have set <see cref="_loading"/>: these controls report a change the
+    /// moment they are assigned, exactly as they do when Populate fills them in.
+    /// </summary>
+    private void WriteDeferred(AppSettings s)
+    {
+        _recentLimit.Value = s.RecentFilesLimit;
+        _autoSave.SelectedIndex = (int)s.AutoSave;
+        _autoSaveDelay.Value = s.AutoSaveDelaySeconds;
+        _logRetention.Value = s.LogRetentionDays;
     }
 
     /// <summary>A sensible measure for someone switching the width limit on for the first time.</summary>
@@ -1202,6 +1576,13 @@ internal sealed class PreferencesDialog : ContentDialog
     /// raises its messages there.
     /// </summary>
     private void OnFontsResolved(object? sender, EventArgs e) => RefreshFontHints();
+
+    /// <summary>
+    /// The theme has moved under us - from the Appearance page, or from Windows itself while
+    /// the dialog is up. Repaint this dialog to match, since nothing else will.
+    /// </summary>
+    private void OnEffectiveThemeChanged(object? sender, AppTheme effective) =>
+        RequestedTheme = effective == AppTheme.Dark ? ElementTheme.Dark : ElementTheme.Light;
 
     private void RefreshFontHints()
     {

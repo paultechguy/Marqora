@@ -87,6 +87,26 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
         }
     }
 
+    public Task<string?> PickImportFileAsync(
+        string title,
+        string filterLabel,
+        IReadOnlyList<string> extensions,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string? path = Win32Dialogs.OpenFile(RequireOwner(), title, extensions, filterLabel);
+
+            logger.LogInformation("Import dialog returned {Result}.", path ?? "(cancelled)");
+            return Task.FromResult(path);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The import dialog failed.");
+            return Task.FromResult<string?>(null);
+        }
+    }
+
     public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default)
     {
         try

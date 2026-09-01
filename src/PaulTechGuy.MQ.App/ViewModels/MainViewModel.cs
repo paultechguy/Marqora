@@ -3858,7 +3858,25 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        _settings.Update(s => s with { FormatRules = choice.Rules });
+        /*
+            Every rule the dialog offers is remembered, with one deliberate exception: the
+            wrap column is put back to the saved one before the rules are stored, so a width
+            typed on the dialog governs this reformat and nothing after it.
+
+            The reasoning is that the other controls answer "how should my markdown look",
+            which is a standing preference, while the wrap width is routinely a one-off - a
+            file that has to fit someone else's 72, a table of contents pulled in at 100 -
+            and having that silently become the new default is how a whole tree of documents
+            ends up rewrapped by accident. The width that sticks is set in one place only,
+            Preferences | Editor, and the dialog says so under the box.
+
+            The typed width still reaches the formatter: choice.Rules is passed to
+            ApplyFormatAsync below rather than being read back out of the settings.
+        */
+        _settings.Update(s => s with
+        {
+            FormatRules = choice.Rules with { WrapColumn = s.Formatting.WrapColumn },
+        });
 
         if (!HasContent)
         {
@@ -3869,7 +3887,8 @@ public sealed partial class MainViewModel : ObservableObject
             _workspace.Active!.Id,
             _workspace.Active!.Text,
             choice.SelectionOnly ? selection : null,
-            announce: true).ConfigureAwait(true);
+            announce: true,
+            overrideOptions: choice.Rules).ConfigureAwait(true);
     }
 
     /// <summary>Tidies every open document in one go.</summary>
@@ -3914,12 +3933,18 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// Runs the formatter over one document and pushes the result into the editor.
     /// </summary>
+    /// <param name="overrideOptions">
+    /// Rules to format with just this once, or null to use the saved ones. Only the Format
+    /// Markdown dialog passes it, and only so the wrap width typed there can be honoured
+    /// without being written to the settings - see ShowFormatOptionsAsync.
+    /// </param>
     /// <returns>True when the document actually changed.</returns>
     private async Task<bool> ApplyFormatAsync(
         Guid documentId,
         string text,
         LineRange? selection,
-        bool announce)
+        bool announce,
+        FormatOptions? overrideOptions = null)
     {
         if (_host is null)
         {
@@ -3930,7 +3955,7 @@ public sealed partial class MainViewModel : ObservableObject
             "Formatting {Id}: {Length} characters, selection={Selection}",
             documentId, text.Length, selection is null ? "none" : "yes");
 
-        FormatOptions options = _settings.Current.Formatting;
+        FormatOptions options = overrideOptions ?? _settings.Current.Formatting;
 
         try
         {
