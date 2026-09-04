@@ -64,6 +64,8 @@ public sealed class PreferencesTransferTests : IDisposable
         NewFileLineEnding = LineEndingStyle.Lf,
         WriteUtf8Bom = true,
         LogRetentionDays = 90,
+        ShowOutline = true,
+        OutlineMaxDepth = 3,
     };
 
     /// <summary>Settings carrying a session: open documents, a window, a search history.</summary>
@@ -74,6 +76,7 @@ public sealed class PreferencesTransferTests : IDisposable
         Window = new WindowPlacement { Width = 1234, Height = 987 },
         FindHistory = ["needle"],
         SplitterPosition = 0.31,
+        OutlineWidth = 287,
         LastWelcomeVersion = "0.1.0",
     };
 
@@ -261,6 +264,7 @@ public sealed class PreferencesTransferTests : IDisposable
         imported.Window.ShouldBe(here.Window);
         imported.FindHistory.ShouldBe(here.FindHistory);
         imported.SplitterPosition.ShouldBe(here.SplitterPosition);
+        imported.OutlineWidth.ShouldBe(here.OutlineWidth);
         imported.LastWelcomeVersion.ShouldBe(here.LastWelcomeVersion);
 
         // The preferences did come across, so the session survived an import that did something.

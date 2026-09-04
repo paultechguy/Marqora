@@ -148,6 +148,7 @@ would rather not reach for the mouse.
 | ✍️ | **Monaco editing** | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom |
 | 🎨 | **A formatting bar that pays attention** | Bold, lists, headings and the rest, one click away — and the buttons light up for whatever the caret is sitting inside |
 | 🔍 | **Find All** | Every match in one window, across one tab or all of them, grouped by document. Walk the list with the arrow keys and the editor follows along |
+| 🧭 | **Outline panel** | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there |
 | 🧹 | **One-key document formatting** | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word |
 | 📊 | **Mermaid 11 diagrams** | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast |
 | ∑ | **KaTeX maths** | Inline and display maths, laid out properly, exported the same way it looks |
@@ -252,6 +253,47 @@ view switcher tightens and the scroll-sync toggle steps aside, and below about 7
 switcher and the zoom readout go too. Nothing becomes unreachable — view modes stay on the
 View menu and on `Alt+1`–`Alt+3`, and `Ctrl+0` still resets the zoom. The formatting bar
 below sheds on its own schedule, at about 990px and 780px.
+
+**Outline**
+
+`View > Outline` lists the document's headings in a panel down the left-hand side, indented
+by level. It is off until you ask for it, and remembered after that.
+
+| Action | How |
+|--------|-----|
+| Show or hide the panel | `Alt+4`, or `View > Outline` |
+| Go to the panel, and back again | `Alt+Shift+4` |
+| Jump to a heading, staying in the panel | ↑ / ↓, or a single click |
+| Jump to a heading and start editing there | `Enter`, or a double-click |
+| Narrow the list | Type in the filter box |
+| Leave the panel for the document | `Escape` |
+| Copy a heading | `Ctrl+C` with the panel focused |
+
+Visibility and the keyboard are two separate questions, so they get two separate keys.
+`Alt+4` shows and hides. `Alt+Shift+4` takes you to the panel and brings you back, opening it
+first if it was closed — which is what you want when the outline is already on screen and you
+are typing, where a visibility toggle could only close the thing you were reaching for. It is
+the same split VS Code makes between showing the sidebar and focusing it.
+
+Opening the panel puts the keyboard in it, on whichever section you are currently reading, on
+the grounds that asking for the outline is usually asking to use it. `Escape` hands the
+keyboard back and leaves the panel open. This is the only View menu item that moves the
+focus; the rest leave you where you were.
+
+The highlight follows what you are reading — the caret in the source pane, the top of the
+viewport in preview — so the panel says where you are as well as where you can go. Clicking a
+heading moves *both* panes, since the jump is by source line like everything else here.
+
+`View > Preferences > Preview` limits how deep the list goes if a document's fourth-level
+headings are more than you want to see. The panel is chrome rather than part of the preview,
+so it never appears in a printed page or an exported PDF.
+
+Because the outline is a place to work rather than a menu you pass through, the commands that
+edit at the caret — the whole Format menu and formatting bar, plus Cut, Paste and Select All —
+grey out while the keyboard is in it. There is no caret on screen to apply them to, and
+applying them to one you cannot see is how documents get changed by accident. Everything else
+keeps working: Save, Undo, the Find family, view modes and zoom all behave exactly as usual,
+and zoom still targets the last pane you were in.
 
 **Zoom**
 

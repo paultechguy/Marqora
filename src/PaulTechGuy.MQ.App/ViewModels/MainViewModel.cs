@@ -101,6 +101,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanFormat))]
     [NotifyPropertyChangedFor(nameof(CanUndo))]
     [NotifyPropertyChangedFor(nameof(CanRedo))]
+    [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
     public partial bool HasDocument { get; set; }
 
     [ObservableProperty]
@@ -503,7 +504,25 @@ public sealed partial class MainViewModel : ObservableObject
     /// focus — clicking into the preview to scroll must not disable the toolbar, or it
     /// would flicker every time the user moved between panes.
     /// </summary>
-    public bool CanFormat => HasDocument && ViewMode is not ViewMode.Preview;
+    /// <remarks>
+    /// The outline is the third condition for the same reason Preview view is the second:
+    /// there is no caret the user can see to apply a format to. Bolding whatever the caret
+    /// last sat on, in a pane they are not looking at, is the kind of silent edit the rest
+    /// of this app exists to prevent - so the Format menu and the format bar grey out while
+    /// the keyboard is in the panel.
+    /// </remarks>
+    public bool CanFormat => HasDocument && ViewMode is not ViewMode.Preview && !OutlineHasFocus;
+
+    /// <summary>
+    /// Whether the Edit menu's caret-scoped commands - Cut, Paste, Select All - can do
+    /// anything meaningful.
+    ///
+    /// Copy is deliberately not gated on this: with the keyboard in the outline it copies
+    /// the selected heading instead of greying out. Undo, Redo and the Find family are not
+    /// either - they are document-scoped, or they deliberately take the user back to the
+    /// text, which is not a surprise when they asked to search.
+    /// </summary>
+    public bool CanEditText => HasContent && !OutlineHasFocus;
 
     /// <summary>
     /// Whether Undo has anything to take back, for the toolbar button and its Edit-menu
@@ -561,6 +580,12 @@ public sealed partial class MainViewModel : ObservableObject
         ReloadOnExternalChangeEnabled = current.ReloadOnExternalChange;
         ActiveZoomPercent = current.PreviewZoomPercent;
 
+        // Assigned before ShowOutline so the first rebuild already knows the limit and the
+        // panel does not list levels it is about to drop.
+        OutlineMaxDepth = current.OutlineMaxDepth;
+        OutlineWidth = Math.Max(AppSettings.MinimumOutlineWidth, current.OutlineWidth);
+        ShowOutline = current.ShowOutline;
+
         _themeService.Apply(current.Theme);
 
         RefreshRecentFiles();
@@ -614,6 +639,7 @@ public sealed partial class MainViewModel : ObservableObject
         await _host.SetThemeAsync(_themeService.Effective).ConfigureAwait(true);
         await _host.SetViewModeAsync(ViewMode).ConfigureAwait(true);
         await _host.SetScrollSyncAsync(ScrollSyncEnabled).ConfigureAwait(true);
+        await _host.SetOutlineTrackingAsync(ShowOutline).ConfigureAwait(true);
         await _host.SetWordWrapAsync(WordWrapEnabled).ConfigureAwait(true);
         await _host.SetLineNumbersAsync(LineNumbersEnabled).ConfigureAwait(true);
         await _host.SetShowWhitespaceAsync(ShowWhitespaceEnabled).ConfigureAwait(true);
@@ -626,7 +652,7 @@ public sealed partial class MainViewModel : ObservableObject
         // Documents opened before the shell was ready still need their tabs created.
         foreach (MarkdownDocument document in _workspace.Documents)
         {
-            RenderedMarkdown rendered = await RenderAsync(document.Text).ConfigureAwait(true);
+            RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
@@ -1454,6 +1480,7 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScrollToTopCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScrollToBottomCommand))]
+    [NotifyPropertyChangedFor(nameof(CanEditText))]
     public partial bool HasContent { get; set; }
 
     // ------------------------------------------------------------------ closing
@@ -2200,7 +2227,7 @@ public sealed partial class MainViewModel : ObservableObject
 
                     if (_host is not null)
                     {
-                        RenderedMarkdown rendered = await RenderAsync(reloaded.Text).ConfigureAwait(true);
+                        RenderedMarkdown rendered = await RenderAsync(reloaded.Id, reloaded.Text).ConfigureAwait(true);
 
                         // ReplaceTextAsync rather than SetTabTextAsync, which resets the Monaco
                         // model and takes the undo history and the caret with it. As a single
@@ -2256,7 +2283,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (_host is not null)
         {
-            RenderedMarkdown rendered = await RenderAsync(document.Text).ConfigureAwait(true);
+            RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
@@ -2266,6 +2293,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task RemoveTabAsync(Guid id)
     {
+        // The document is going, and so are its headings. Left behind, they would keep a
+        // closed document's outline alive for as long as the app ran.
+        _outlines.Remove(id);
+
         if (FindTab(id) is { } tab)
         {
             _isSyncingTabs = true;
@@ -2362,6 +2393,16 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // The outline is somewhere to work, not chrome to pass through. A command picked
+        // from a menu while browsing it belongs to that browsing, so the keyboard goes back
+        // to the panel rather than into a pane the user had left.
+        if (OutlineHasFocus)
+        {
+            OutlineFocusRequested?.Invoke(this, EventArgs.Empty);
+
+            return;
+        }
+
         try
         {
             await _host.FocusPaneAsync(ActivePane).ConfigureAwait(true);
@@ -2400,7 +2441,40 @@ public sealed partial class MainViewModel : ObservableObject
         {
             FindTab(document.Id)?.Update(document);
         }
+
+        RefreshOutlineForActiveDocument();
+
+        FocusOutlineCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>
+    /// Points the panel at whatever document is now on screen.
+    ///
+    /// A tab switch is told apart from every other workspace change because only it makes
+    /// the followed line meaningless: it belongs to the document being left, and applying it
+    /// to the new one would highlight a section chosen by nothing but a coincidence of line
+    /// numbers, for the moment it takes the new tab's caret to report.
+    /// </summary>
+    private void RefreshOutlineForActiveDocument()
+    {
+        Guid? id = _workspace.Active?.Id;
+
+        if (id == _outlinedDocumentId)
+        {
+            RebuildOutlineRows();
+
+            return;
+        }
+
+        _outlinedDocumentId = id;
+        _followedLine = -1;
+        OutlineSelectedIndex = -1;
+
+        RebuildOutlineRows(force: true);
+    }
+
+    /// <summary>Which document <see cref="OutlineRows"/> was last built from.</summary>
+    private Guid? _outlinedDocumentId;
 
     private void NotifyTabCountChanged()
     {
@@ -2882,7 +2956,7 @@ public sealed partial class MainViewModel : ObservableObject
         // Back on: the active document has not changed, so nothing would re-publish it.
         if (_workspace.Active is { } document)
         {
-            RenderedMarkdown rendered = await RenderAsync(document.Text).ConfigureAwait(true);
+            RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
 
             await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
@@ -2966,6 +3040,13 @@ public sealed partial class MainViewModel : ObservableObject
         // way. The host has no such restriction.
         switch (command)
         {
+            // With the keyboard in the outline, Copy means the selected heading. A focused
+            // list copies its selection everywhere else in Windows, and the editor's own
+            // selection is somewhere the user cannot currently see.
+            case "copy" when OutlineHasFocus:
+                CopySelectedOutlineHeading();
+                return;
+
             case "copy":
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
                 return;
@@ -3985,7 +4066,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             _workspace.ApplyEdit(documentId, result.Text);
 
-            RenderedMarkdown rendered = await RenderAsync(result.Text).ConfigureAwait(true);
+            RenderedMarkdown rendered = await RenderAsync(documentId, result.Text).ConfigureAwait(true);
             await _host.ReplaceTextAsync(documentId, result.Text, rendered).ConfigureAwait(true);
 
             // Formatting fixes most of the style hints outright, so the marks want clearing
@@ -4106,9 +4187,460 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void Support() => SupportRequested?.Invoke(this, EventArgs.Empty);
 
+    // ----------------------------------------------------------------- outline
+
+    /// <summary>
+    /// Every open document's headings, keyed by document id.
+    ///
+    /// Kept for background tabs too, so switching to one draws its outline immediately
+    /// instead of waiting on a render. Written by <see cref="RenderAsync"/> and dropped in
+    /// <see cref="RemoveTabAsync"/>, which are the only two moments a document's headings
+    /// come into or go out of existence.
+    /// </summary>
+    private readonly Dictionary<Guid, IReadOnlyList<OutlineHeading>> _outlines = [];
+
+    /// <summary>
+    /// The headings the panel is currently showing, after filtering.
+    ///
+    /// Held so a re-render can be compared against what is on screen. Typing inside a
+    /// paragraph re-renders the document without changing a single heading, and rebuilding
+    /// the rows anyway would drop the ListView's selection and flicker the panel on every
+    /// keystroke burst.
+    /// </summary>
+    private IReadOnlyList<OutlineHeading> _shownOutline = [];
+
+    /// <summary>
+    /// The source line the outline is following: the caret's, or the preview's top line.
+    /// See <see cref="RefreshOutlineFollow"/>.
+    /// </summary>
+    private int _followedLine = -1;
+
+    /// <summary>The rows in the panel, filtered and depth-limited.</summary>
+    public ObservableCollection<OutlineRowViewModel> OutlineRows { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
+    public partial bool ShowOutline { get; set; }
+
+    /// <summary>
+    /// Whether the panel is actually on screen.
+    ///
+    /// Wanting the outline and having a document to outline are two different things. With
+    /// no tabs open the empty state fills the content row, and a panel headed "Outline"
+    /// beside a drop target would be listing nothing on purpose.
+    /// </summary>
+    public bool IsOutlineVisible => ShowOutline && HasDocument;
+
+    /// <summary>
+    /// How wide the panel is, in device-independent pixels.
+    ///
+    /// Clamped on the way in by <see cref="SetOutlineWidth"/> rather than trusted, because
+    /// it arrives both from a drag and from a settings file that a person can edit.
+    /// </summary>
+    [ObservableProperty]
+    public partial double OutlineWidth { get; set; }
+
+    [ObservableProperty]
+    public partial int OutlineMaxDepth { get; set; }
+
+    /// <summary>
+    /// Which row is highlighted, or -1 for none.
+    ///
+    /// Written from both directions - the user picking a row, and the document scrolling
+    /// under one - which is why <see cref="OutlineSelectionChanged"/> exists: the view has
+    /// to be able to tell the two apart, and only it can, because only it knows whether it
+    /// was the one that asked.
+    /// </summary>
+    public int OutlineSelectedIndex { get; private set; } = -1;
+
+    /// <summary>
+    /// Whether the keyboard is in the outline panel.
+    ///
+    /// A latch rather than a plain focus flag. A MenuFlyout takes focus while it is open and
+    /// gives it back as it closes, so a naive LostFocus would clear this at exactly the
+    /// moment a command is deciding where to put the keyboard back. It is set when the panel
+    /// takes focus and cleared only when a document pane reports taking it - which is what
+    /// <see cref="SetActivePane"/> already does for <see cref="ActivePane"/>, for the same
+    /// reason. Transient chrome neither sets nor clears it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanFormat))]
+    [NotifyPropertyChangedFor(nameof(CanEditText))]
+    [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InsertSnippetCommand))]
+    public partial bool OutlineHasFocus { get; set; }
+
+    /// <summary>The filter box's text. Narrows the rows; does not touch the document.</summary>
+    [ObservableProperty]
+    public partial string OutlineFilter { get; set; } = string.Empty;
+
+    public bool HasOutlineRows => OutlineRows.Count > 0;
+
+    /// <summary>
+    /// What the panel says when it has nothing to list, which is two different situations
+    /// and would be a puzzle if they read the same.
+    /// </summary>
+    public string OutlineEmptyMessage =>
+        string.IsNullOrWhiteSpace(OutlineFilter)
+            ? "No headings in this document"
+            : "No heading matches";
+
+    /// <summary>
+    /// Asks the view to move the panel's selection. Raised only when the followed heading
+    /// actually changes.
+    /// </summary>
+    public event EventHandler<int>? OutlineSelectionChanged;
+
+    /// <summary>Asks the view to put the keyboard in the outline panel.</summary>
+    public event EventHandler? OutlineFocusRequested;
+
+    partial void OnOutlineFilterChanged(string value) => RebuildOutlineRows();
+
+    partial void OnOutlineMaxDepthChanged(int value) => RebuildOutlineRows();
+
+    /// <summary>
+    /// Shows or hides the panel: View, Outline, and Alt+4.
+    ///
+    /// One command behind both, which is what lets the menu item advertise the key honestly.
+    /// Showing takes the keyboard into the panel as well, on the grounds that asking for the
+    /// outline is asking to use it; Escape is the way back to the document.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleOutlineAsync()
+    {
+        if (ShowOutline)
+        {
+            await SetShowOutlineAsync(false).ConfigureAwait(true);
+
+            // SetShowOutlineAsync has already handed the keyboard back if the panel held
+            // it. This is for the ordinary case, where the menu holds it instead.
+            RestoreDocumentFocusAfterChrome();
+
+            return;
+        }
+
+        await SetShowOutlineAsync(true).ConfigureAwait(true);
+
+        // Opening it means wanting to use it, so the keyboard goes with it - the one place
+        // this differs from its neighbours on the View menu, where the keyboard goes back to
+        // the document. Escape brings it back, and Alt+Shift+4 returns once it is open.
+        RequestOutlineFocus();
+    }
+
+    public async Task SetShowOutlineAsync(bool show)
+    {
+        if (ShowOutline == show)
+        {
+            return;
+        }
+
+        ShowOutline = show;
+        _settings.Update(s => s with { ShowOutline = show });
+
+        if (show)
+        {
+            RebuildOutlineRows(force: true);
+        }
+        else if (OutlineHasFocus)
+        {
+            // The keyboard cannot stay in a panel that is no longer on screen.
+            OutlineHasFocus = false;
+
+            if (_host is not null)
+            {
+                await _host.FocusPaneAsync(ActivePane).ConfigureAwait(true);
+            }
+        }
+
+        if (_host is not null)
+        {
+            // Only worth the preview reporting its scroll position while something is
+            // listening to it. See IPreviewHost.SetOutlineTrackingAsync.
+            await _host.SetOutlineTrackingAsync(show).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Alt+Shift+4: goes to the panel, and comes back.
+    ///
+    /// The companion to <see cref="ToggleOutlineCommand"/>, and the reason there are two
+    /// keys rather than one. A single key cannot serve both jobs: with the panel already
+    /// open and the caret in the source pane, a visibility toggle can only close the thing
+    /// you were reaching for, and there is then no way to the outline from the keyboard at
+    /// all. So visibility is Alt+4 and the keyboard is Alt+Shift+4, which is the split VS
+    /// Code settled on for the same reason.
+    ///
+    /// It opens the panel if it is closed, because being sent to somewhere that is not
+    /// there is not an answer.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnDocument))]
+    private async Task FocusOutlineAsync()
+    {
+        if (OutlineHasFocus)
+        {
+            await LeaveOutlineAsync().ConfigureAwait(true);
+
+            return;
+        }
+
+        await SetShowOutlineAsync(true).ConfigureAwait(true);
+
+        RequestOutlineFocus();
+    }
+
+    /// <summary>
+    /// Asks the view for the keyboard, after the render pass.
+    ///
+    /// Deferred for the two reasons the chrome's own focus restore is: a MenuFlyout holds
+    /// the keyboard until it has finished closing, and a panel that has only just become
+    /// visible has no realised list to put it in yet.
+    /// </summary>
+    private void RequestOutlineFocus() =>
+        _ui.PostAfterRender(() => OutlineFocusRequested?.Invoke(this, EventArgs.Empty));
+
+    /// <summary>
+    /// The deepest heading level the panel lists, or 0 for all of them.
+    ///
+    /// Clamped to the six levels markdown has. A number beyond that is indistinguishable
+    /// from unlimited in effect but not in the settings file, where it would sit looking
+    /// like a setting that had stopped working.
+    /// </summary>
+    public void SetOutlineMaxDepth(int depth)
+    {
+        depth = Math.Clamp(depth, OutlineNavigation.UnlimitedDepth, MaximumHeadingLevel);
+
+        if (OutlineMaxDepth == depth)
+        {
+            return;
+        }
+
+        OutlineMaxDepth = depth;
+        _settings.Update(s => s with { OutlineMaxDepth = depth });
+    }
+
+    /// <summary>Markdown has six heading levels and no seventh to limit to.</summary>
+    public const int MaximumHeadingLevel = 6;
+
+    /// <summary>Called by the panel as focus arrives. See <see cref="OutlineHasFocus"/>.</summary>
+    public void NotifyOutlineFocused() => OutlineHasFocus = true;
+
+    /// <summary>
+    /// Sets the panel's width, clamped, and remembers it.
+    ///
+    /// The ceiling is a fraction of the window rather than a constant: the point of the
+    /// panel is to sit beside the document, and a drag that pushes the panes off the right
+    /// edge has stopped being a resize. Zero means the caller does not know the window
+    /// width, in which case only the floor applies.
+    /// </summary>
+    public void SetOutlineWidth(double width, double availableWidth = 0)
+    {
+        double ceiling = availableWidth > 0
+            ? Math.Max(AppSettings.MinimumOutlineWidth, availableWidth * MaximumOutlineFraction)
+            : double.MaxValue;
+
+        double clamped = Math.Clamp(width, AppSettings.MinimumOutlineWidth, ceiling);
+
+        if (Math.Abs(clamped - OutlineWidth) < 0.5)
+        {
+            return;
+        }
+
+        OutlineWidth = clamped;
+        _settings.Update(s => s with { OutlineWidth = clamped });
+    }
+
+    /// <summary>Most of the window the outline may take. The document is the point of it.</summary>
+    private const double MaximumOutlineFraction = 0.4;
+
+    /// <summary>
+    /// Rebuilds the rows from the active document's cached headings.
+    ///
+    /// Skipped when the result would be identical to what is already listed, which is the
+    /// common case: most edits change a paragraph rather than a heading, and rebuilding
+    /// regardless would drop the selection and flicker the panel on every keystroke burst.
+    /// </summary>
+    private void RebuildOutlineRows(bool force = false)
+    {
+        IReadOnlyList<OutlineHeading> source =
+            _workspace.Active is { } document
+            && _outlines.TryGetValue(document.Id, out IReadOnlyList<OutlineHeading>? cached)
+                ? cached
+                : [];
+
+        IReadOnlyList<OutlineHeading> filtered =
+            OutlineNavigation.Filter(source, OutlineFilter, OutlineMaxDepth);
+
+        if (!force && filtered.SequenceEqual(_shownOutline))
+        {
+            return;
+        }
+
+        _shownOutline = filtered;
+
+        OutlineRows.Clear();
+
+        foreach (OutlineHeading heading in filtered)
+        {
+            OutlineRows.Add(new OutlineRowViewModel(heading));
+        }
+
+        OnPropertyChanged(nameof(HasOutlineRows));
+        OnPropertyChanged(nameof(OutlineEmptyMessage));
+
+        // The rows are new objects, so whatever was selected no longer exists. Recomputing
+        // from the followed line puts the highlight back on the same heading.
+        OutlineSelectedIndex = -1;
+        RefreshOutlineFollow();
+    }
+
+    /// <summary>
+    /// Works out which row the document is sitting in and tells the view, when that has
+    /// changed.
+    /// </summary>
+    private void RefreshOutlineFollow()
+    {
+        if (!ShowOutline)
+        {
+            return;
+        }
+
+        int index = OutlineNavigation.IndexOfHeadingAt(_shownOutline, _followedLine);
+
+        if (index == OutlineSelectedIndex)
+        {
+            return;
+        }
+
+        OutlineSelectedIndex = index;
+        OutlineSelectionChanged?.Invoke(this, index);
+    }
+
+    /// <summary>
+    /// The line the outline should follow, from whichever pane the user is working in.
+    ///
+    /// <see cref="ActivePane"/> decides, because it already records the pane last used and
+    /// the two panes answer the question differently: the source pane has a caret, and the
+    /// preview has a viewport. Reading in Preview view moves no caret at all, which is why
+    /// the caret alone is not enough.
+    /// </summary>
+    private void FollowLine(int zeroBasedLine)
+    {
+        _followedLine = zeroBasedLine;
+
+        RefreshOutlineFollow();
+    }
+
+    /// <summary>The preview scrolled. See <see cref="IPreviewHost.SetOutlineTrackingAsync"/>.</summary>
+    public void UpdateViewportLine(int line)
+    {
+        if (ActivePane == EditorPane.Preview)
+        {
+            FollowLine(line);
+        }
+    }
+
+    /// <summary>
+    /// Takes the editor to a heading the user picked in the panel.
+    ///
+    /// <paramref name="focusEditor"/> is the difference between looking and going, exactly
+    /// as it is for a Find All result: arrowing down the list shows each section with the
+    /// keyboard still in the panel, and Enter or a double-click hands it to the text.
+    /// </summary>
+    public async Task GoToOutlineRowAsync(int index, bool focusEditor)
+    {
+        if (_host is null || index < 0 || index >= OutlineRows.Count)
+        {
+            return;
+        }
+
+        OutlineRowViewModel row = OutlineRows[index];
+
+        // Recorded before the jump. Moving the editor moves the caret, which comes back as
+        // a followed line and would otherwise be read as the document having moved on its
+        // own - re-announcing a selection the panel already has.
+        OutlineSelectedIndex = index;
+        _followedLine = row.SourceLine;
+
+        await _host.ScrollToLineAsync(row.SourceLine).ConfigureAwait(true);
+
+        if (focusEditor)
+        {
+            OutlineHasFocus = false;
+
+            await _host.FocusEditorAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Escape in the panel, and Alt+Shift+4 from inside it: hands the keyboard back to the
+    /// pane it came from, leaving the panel open.
+    ///
+    /// Deliberately not guarded on <see cref="OutlineHasFocus"/>. It was, and that was the
+    /// bug: every caller is a key handler on a control inside the panel, so the panel demonstrably
+    /// has the keyboard by the time this runs - the keystroke could not have arrived
+    /// otherwise. The latch is a record of that fact, not evidence for it, and asking it to
+    /// vouch for something already proven only created a way for Escape to do nothing at all.
+    /// </summary>
+    public async Task LeaveOutlineAsync()
+    {
+        OutlineHasFocus = false;
+
+        if (_host is not null)
+        {
+            await _host.FocusPaneAsync(ActivePane).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+C with the keyboard in the panel.
+    ///
+    /// Copies the heading rather than the editor's selection. A focused list copies the
+    /// selected item everywhere else in Windows, and the editor's selection is somewhere the
+    /// user cannot currently see - so copying that would be a surprise arriving on the
+    /// clipboard.
+    /// </summary>
+    private void CopySelectedOutlineHeading()
+    {
+        if (OutlineSelectedIndex < 0 || OutlineSelectedIndex >= OutlineRows.Count)
+        {
+            return;
+        }
+
+        string text = OutlineRows[OutlineSelectedIndex].Text;
+
+        StatusText = ClipboardText.Set(text, _logger)
+            ? $"Copied “{text}”"
+            : "Could not copy the heading";
+    }
+
     // ---------------------------------------------------------------- plumbing
 
-    private Task<RenderedMarkdown> RenderAsync(string text) => Task.Run(() => _renderer.Render(text));
+    /// <summary>
+    /// Renders a document off the UI thread, and remembers the outline that came with it.
+    ///
+    /// The document id is here rather than at the call sites so that rendering and
+    /// remembering cannot come apart. Every render already produces an outline - the parse
+    /// collects it on the way past, which is what the broken-anchor check reads - so the
+    /// panel costs a dictionary write rather than a second walk over the document.
+    /// </summary>
+    private async Task<RenderedMarkdown> RenderAsync(Guid documentId, string text)
+    {
+        RenderedMarkdown rendered = await Task.Run(() => _renderer.Render(text)).ConfigureAwait(true);
+
+        _outlines[documentId] = rendered.Outline;
+
+        // Only the tab on screen has a panel to refresh. A background tab's outline is kept
+        // so that switching to it is instant, and read when it comes forward.
+        if (_workspace.Active?.Id == documentId)
+        {
+            RebuildOutlineRows();
+        }
+
+        return rendered;
+    }
 
     private async void OnEditorTextChanged(object? sender, EditorTextChangedEventArgs e)
     {
@@ -4118,7 +4650,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             // Rendering a large document is measured in milliseconds but happens on every
             // keystroke burst, so it stays off the UI thread.
-            RenderedMarkdown rendered = await RenderAsync(e.Text).ConfigureAwait(true);
+            RenderedMarkdown rendered = await RenderAsync(e.DocumentId, e.Text).ConfigureAwait(true);
 
             if (_host is not null)
             {
@@ -4387,6 +4919,20 @@ public sealed partial class MainViewModel : ObservableObject
                     await ToggleWordWrapCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
+                // Alt+4 and Alt+Shift+4 pressed with the keyboard in a pane rather than in
+                // the chrome, where the window's own accelerators would have caught them.
+                //
+                // focusOutline can only ever mean "take me there" when it arrives by this
+                // route: the panel cannot have the keyboard, or the key would have reached
+                // the window instead of the shell.
+                case "toggleOutline":
+                    await ToggleOutlineCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "focusOutline" when FocusOutlineCommand.CanExecute(null):
+                    await FocusOutlineCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
                 case "formatDocument" when FormatDocumentCommand.CanExecute(null):
                     await FormatDocumentCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
@@ -4499,12 +5045,29 @@ public sealed partial class MainViewModel : ObservableObject
         CursorColumn = column;
         WordCount = words;
         CharacterCount = characters;
+
+        // The caret is what the outline follows while the source pane is the one in use.
+        // Monaco counts lines from one and every line inside this app is counted from zero.
+        if (ActivePane == EditorPane.Source)
+        {
+            FollowLine(line - 1);
+        }
     }
 
-    /// <summary>Records which pane zoom commands should target.</summary>
+    /// <summary>
+    /// Records which pane zoom commands should target, and that the keyboard has left the
+    /// outline.
+    /// </summary>
+    /// <remarks>
+    /// This is the only thing that clears <see cref="OutlineHasFocus"/>, and deliberately:
+    /// it is raised when a document pane reports taking the keyboard, which is the one event
+    /// that means the user has genuinely moved on. A menu opening and closing does not reach
+    /// here, which is what stops a flyout from being mistaken for leaving the panel.
+    /// </remarks>
     public void SetActivePane(EditorPane pane)
     {
         ActivePane = pane;
+        OutlineHasFocus = false;
 
         AppSettings current = _settings.Current;
         ActiveZoomPercent = pane == EditorPane.Source

@@ -33,6 +33,7 @@
     <Project Path="src/PaulTechGuy.MQ.App/PaulTechGuy.MQ.App.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PaulTechGuy.MQ.Domain.Tests/PaulTechGuy.MQ.Domain.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Finding.Tests/PaulTechGuy.MQ.Finding.Tests.csproj" />

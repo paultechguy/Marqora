@@ -152,6 +152,8 @@ public sealed partial class MainWindow : Window
         ViewModel.SupportRequested += (_, _) => _ = ShowSupportAsync();
         ViewModel.MenuRequested += (_, name) => OpenMenuByName(name);
 
+        InitializeOutline();
+
         RootGrid.Loaded += OnLoaded;
         RootGrid.SizeChanged += OnRootSizeChanged;
         RootGrid.ActualThemeChanged += (_, _) =>
@@ -230,6 +232,17 @@ public sealed partial class MainWindow : Window
 
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
     public Visibility CollapsedWhen(bool value) => value ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>
+    /// Whether Paste is worth offering.
+    ///
+    /// Alone among the clipboard commands it has never been gated on the document having
+    /// content - pasting into an empty file is the ordinary case - so it cannot share
+    /// CanEditText. What it does share is the reason for the new condition: with the
+    /// keyboard in the outline there is no caret on screen to paste at.
+    /// </summary>
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
+    public bool CanPaste(bool outlineHasFocus) => !outlineHasFocus;
 
     /// <summary>
     /// A tooltip, or none at all.
@@ -502,6 +515,19 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.Number1, alt, () => ViewModel.SetViewModeCommand.Execute("Source"));
         Add(VirtualKey.Number2, alt, () => ViewModel.SetViewModeCommand.Execute("SideBySide"));
         Add(VirtualKey.Number3, alt, () => ViewModel.SetViewModeCommand.Execute("Preview"));
+
+        // Alt+4 joins the three above because the outline is the other thing the View menu
+        // shows, though it is a toggle rather than a fourth member of that radio set. Same
+        // command as the menu item, which is what lets that item advertise the key.
+        //
+        // Alt+Shift+4 is the keyboard's way in and out of the panel, and has to be a second
+        // key rather than more behaviour on the first: with the panel already open and the
+        // caret in the source pane, a visibility toggle can only close the thing being
+        // reached for. Visibility and focus are separate questions, so they get separate
+        // keys - the same split VS Code makes.
+        Add(VirtualKey.Number4, alt, () => ViewModel.ToggleOutlineCommand.Execute(null));
+        Add(VirtualKey.Number4, alt | VirtualKeyModifiers.Shift, () => ViewModel.FocusOutlineCommand.Execute(null));
+
         Add(VirtualKey.Z, alt, () => ViewModel.ToggleWordWrapCommand.Execute(null));
 
         // Zoom. Both the numeric keypad and the main-row keys, which report as OEM values.
@@ -570,7 +596,33 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.T, alt, () => OpenMenu(ToolsMenu));
         Add(VirtualKey.H, alt, () => OpenMenu(HelpMenu));
 
-        void RunEdit(string command) => ViewModel.EditActionCommand.Execute(command);
+        /*
+            Edit commands stand down while a text box has the keyboard.
+
+            Until the outline panel arrived, this window contained no editable field at all:
+            every accelerator here could assume that the only text anyone could be typing
+            into was the document inside the WebView, where XAML accelerators never fire in
+            the first place. The outline's filter box broke that assumption. Ctrl+A in it has
+            to select the few letters of the filter, not silently select the whole document
+            behind the panel - and the same for the undo and redo pair, which would otherwise
+            take back an edit rather than a keystroke.
+
+            Only the Edit group is guarded. Ctrl+S, the view switches and the rest of the
+            File and View accelerators mean the same thing wherever the keyboard is, and a
+            filter box is no reason to stop being able to save.
+
+            Ctrl+C, Ctrl+X and Ctrl+V need no guard: they were deliberately never registered
+            here - they are Monaco's own - so they already reach the box untouched.
+        */
+        void RunEdit(string command)
+        {
+            if (IsTextInputFocused())
+            {
+                return;
+            }
+
+            ViewModel.EditActionCommand.Execute(command);
+        }
 
         void RunMarkdown(string command) => ViewModel.ApplyMarkdownCommand.Execute(command);
 
@@ -621,6 +673,7 @@ public sealed partial class MainWindow : Window
             _previewHost.CaretStateChanged += OnCaretStateChanged;
             _previewHost.HistoryStateChanged += OnHistoryStateChanged;
             _previewHost.PaneFocused += OnPaneFocused;
+            _previewHost.ViewportLineChanged += OnViewportLineChanged;
             _previewHost.ContextMenuRequested += OnContextMenuRequested;
             _previewHost.DiagramActivated += OnDiagramActivated;
             _previewHost.DiagramUpdated += OnDiagramUpdated;
@@ -724,6 +777,8 @@ public sealed partial class MainWindow : Window
         ViewModel.UpdateStats(stats.Line, stats.Column, stats.Words, stats.Characters);
 
     private void OnPaneFocused(object? sender, EditorPane pane) => ViewModel.SetActivePane(pane);
+
+    private void OnViewportLineChanged(object? sender, int line) => ViewModel.UpdateViewportLine(line);
 
     /// <summary>
     /// The user double-clicked a diagram in the preview. Opening the window is asynchronous
@@ -1866,6 +1921,7 @@ public sealed partial class MainWindow : Window
 
         ApplyFormatBarDensity(width);
         ApplyEmptyStateDensity(width);
+        ClampOutlineWidth();
     }
 
     /// <summary>

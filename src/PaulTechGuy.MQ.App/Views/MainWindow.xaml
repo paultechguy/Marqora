@@ -388,10 +388,18 @@
 
                         <MenuFlyoutSeparator />
 
+                        <!--
+                            Cut, Paste and Select All are gated on CanEditText rather than
+                            HasContent, which adds one condition: they edit at the caret, and
+                            with the keyboard in the outline there is no caret the user can
+                            see. Copy is not gated with them - it retargets to the selected
+                            heading instead of greying out, the way a focused list copies its
+                            selection everywhere else in Windows.
+                        -->
                         <MenuFlyoutItem Text="Cut"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="cut"
-                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.CanEditText, Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+X" />
                         <MenuFlyoutItem Text="Copy"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
@@ -401,6 +409,7 @@
                         <MenuFlyoutItem Text="Paste"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="paste"
+                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus), Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+V" />
 
                         <!--
@@ -420,7 +429,7 @@
                         <MenuFlyoutItem Text="Select All"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="selectAll"
-                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.CanEditText, Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+A" />
 
                         <MenuFlyoutSeparator />
@@ -654,6 +663,20 @@
                                               Command="{x:Bind ViewModel.SetViewModeCommand}"
                                               CommandParameter="Preview"
                                               KeyboardAcceleratorTextOverride="Alt+3" />
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            The key and the item are the same command, so the accelerator
+                            text is the truth rather than an approximation of it. Showing the
+                            panel this way also puts the keyboard in it - the one place this
+                            differs from the toggles above - and Escape brings it back.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Outline"
+                                              IsChecked="{x:Bind ViewModel.ShowOutline, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleOutlineCommand}"
+                                              KeyboardAcceleratorTextOverride="Alt+4"
+                                              ToolTipService.ToolTip="List the document's headings beside it" />
 
                         <MenuFlyoutSeparator />
 
@@ -1451,6 +1474,115 @@
         <Grid Grid.Row="4">
 
             <!--
+                Three columns rather than one: the outline, its drag handle, and the panes.
+
+                The outline is deliberately outside the WebView. It is chrome, so it inherits
+                Fluent theming and a real ListView's virtualization and accessibility - and,
+                just as usefully, it cannot appear in an exported PDF or a printed page,
+                because those are produced by printing the WebView's own content.
+
+                Auto rather than a bound width on the first column, with the width set on the
+                panel inside it. A star-sized pane beside a fixed one is what keeps the
+                WebView taking every pixel the outline is not using, at every window size.
+            -->
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--
+                The outline panel.
+
+                Shown only when there is a document to outline: with no tabs open the empty
+                state below fills the row, and a panel headed "Outline" beside a drop target
+                would be listing nothing on purpose.
+            -->
+            <Border x:Name="OutlinePanel"
+                    Grid.Column="0"
+                    Width="{x:Bind ViewModel.OutlineWidth, Mode=OneWay}"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{ThemeResource MqChromeRuleBrush}"
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineVisible), Mode=OneWay}">
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Outline"
+                               Margin="12,10,12,6"
+                               Style="{StaticResource MqCaptionTextStyle}" />
+
+                    <!--
+                        The first editable field ever to live in this window, which is why
+                        RegisterAccelerators now asks what has focus before running an Edit
+                        command: Ctrl+A here has to select these few letters rather than the
+                        whole document behind it.
+                    -->
+                    <TextBox x:Name="OutlineFilterBox"
+                             Grid.Row="1"
+                             Margin="8,0,8,8"
+                             PlaceholderText="Filter"
+                             Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Filter the outline" />
+
+                    <!--
+                        The hint sits behind the list and shows through when it is empty,
+                        exactly as the Find All results do.
+                    -->
+                    <Grid Grid.Row="2">
+                        <TextBlock Text="{x:Bind ViewModel.OutlineEmptyMessage, Mode=OneWay}"
+                                   Margin="16,4"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource MqCaptionTextStyle}"
+                                   Visibility="{x:Bind CollapsedWhen(ViewModel.HasOutlineRows), Mode=OneWay}" />
+
+                        <ListView x:Name="OutlineList"
+                                  ItemsSource="{x:Bind ViewModel.OutlineRows, Mode=OneWay}"
+                                  SelectionMode="Single"
+                                  Padding="0,0,0,8"
+                                  AutomationProperties.Name="Document outline">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="Padding" Value="10,4" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OutlineRowViewModel">
+                                    <TextBlock Text="{x:Bind Text}"
+                                               Margin="{x:Bind Indent}"
+                                               FontWeight="{x:Bind Weight}"
+                                               FontSize="12.5"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTipService.ToolTip="{x:Bind Tooltip}" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!--
+                The drag handle. Four pixels of hit area over a one-pixel rule, which is the
+                same trade the in-page splitter makes: a grabbable target that does not look
+                like a gap between the panels.
+            -->
+            <controls:ColumnSplitter x:Name="OutlineSplitter"
+                                     Grid.Column="1"
+                                     Width="4"
+                                     Background="Transparent"
+                                     Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineVisible), Mode=OneWay}" />
+
+            <!--
                 Holds the WebView2, which is created in code rather than declared here.
                 A browser process that dies cannot be revived - the control goes with it -
                 so the only way back from a crash is to drop the control and put a fresh
@@ -1458,10 +1590,19 @@
                 controls, which is also where DefaultBackgroundColor follows the theme.
             -->
             <Grid x:Name="PreviewSurface"
+                  Grid.Column="2"
                   Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}" />
 
-            <!-- Empty state: the drop target and the way back into recent work. -->
-            <ScrollViewer Visibility="{x:Bind CollapsedWhen(ViewModel.HasDocument), Mode=OneWay}"
+            <!--
+                Empty state: the drop target and the way back into recent work.
+
+                Spans all three columns. With no document open the outline and its handle are
+                both collapsed, so the drop target has the row to itself and stays centred in
+                the window rather than in whatever is left beside a panel.
+            -->
+            <ScrollViewer Grid.Column="0"
+                          Grid.ColumnSpan="3"
+                          Visibility="{x:Bind CollapsedWhen(ViewModel.HasDocument), Mode=OneWay}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel MaxWidth="660"

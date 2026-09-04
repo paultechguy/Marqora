@@ -141,6 +141,10 @@ internal sealed class PreferencesDialog : ContentDialog
     private readonly CheckBox _diagnostics;
     private readonly ComboBox _headingNumbers;
 
+    private readonly CheckBox _showOutline;
+
+    private readonly ComboBox _outlineDepth;
+
     private readonly ComboBox _startup;
     private readonly NumberBox _recentLimit;
     private readonly CheckBox _reloadOnChange;
@@ -291,6 +295,24 @@ internal sealed class PreferencesDialog : ContentDialog
 
         _diagnostics = BuildCheck("Underline problems in the source");
         Bind(_diagnostics, v => _vm.SetDiagnosticsAsync(v));
+
+        _showOutline = BuildCheck("Show the outline panel");
+        Bind(_showOutline, v => _vm.SetShowOutlineAsync(v));
+
+        // Index is the depth, which is what makes zero mean "all levels" without a lookup:
+        // the entries below it read as "down to heading N".
+        _outlineDepth = BuildCombo(
+            [
+                "All levels",
+                "Heading 1",
+                "To heading 2",
+                "To heading 3",
+                "To heading 4",
+                "To heading 5",
+                "To heading 6",
+            ]);
+        _outlineDepth.SelectionChanged += (_, _) =>
+            Apply(() => _vm.SetOutlineMaxDepth(Math.Max(0, _outlineDepth.SelectedIndex)));
 
         _headingNumbers = BuildCombo(
             ["Off", "From heading 1", "From heading 2", "From heading 3"]);
@@ -796,6 +818,11 @@ internal sealed class PreferencesDialog : ContentDialog
         panel.Children.Add(_diagnostics);
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("OUTLINE"));
+        panel.Children.Add(_showOutline);
+        panel.Children.Add(Field("List headings", _outlineDepth));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("HEADING NUMBERS"));
         panel.Children.Add(Field("Number headings", _headingNumbers));
 
@@ -1291,6 +1318,13 @@ internal sealed class PreferencesDialog : ContentDialog
 
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;
+            _showOutline.IsChecked = s.ShowOutline;
+
+            // Clamped on the way in: the depth is an index here, and a settings file edited
+            // by hand can name a level the list does not have.
+            _outlineDepth.SelectedIndex =
+                Math.Clamp(s.OutlineMaxDepth, 0, MainViewModel.MaximumHeadingLevel);
+
             _headingNumbers.SelectedIndex = (int)s.HeadingNumbering;
 
             _startup.SelectedIndex = (int)s.Startup;

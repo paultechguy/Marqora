@@ -138,7 +138,19 @@
       pane is back on screen. The widget cannot open on a pane that is display:none, so the
       command waits for the setViewMode the host sends back. See runFindCommand.
     */
-    pendingFind: null
+    pendingFind: null,
+
+    /*
+      Whether the outline panel is open and so wants to be told where the preview is.
+
+      Off until the host asks. Scrolling is continuous and the panel is usually closed, so
+      reporting unconditionally would put a message on the bridge for every frame of every
+      scroll in exchange for nothing. See reportViewportLine.
+    */
+    outlineTracking: false,
+
+    /* The last line reported, so an unchanged answer is not sent twice. */
+    reportedViewportLine: -1
   };
 
   // Which pane initiated the current programmatic scroll, so the other side's scroll
@@ -614,7 +626,43 @@
     state.editor.setScrollTop(top + (next - top) * fraction);
   }
 
+  /*
+    Tells the host which source line the preview is showing, for the outline panel to
+    highlight.
+
+    Coalesced onto an animation frame rather than debounced. A scroll produces events far
+    faster than the panel can usefully repaint, but unlike a search or a re-render there is
+    nothing expensive at the far end - so the answer should keep up with the scroll rather
+    than arrive a beat after it stops, which is what a debounce would give.
+
+    Whole lines only, and only when the answer moves. previewTopLine is fractional and
+    changes on every pixel; the outline cares which heading the line falls under, and that
+    cannot change without the integer changing.
+  */
+  var viewportReportHandle = 0;
+
+  function reportViewportLine() {
+    if (!state.outlineTracking) { return; }
+
+    if (viewportReportHandle) { return; }
+
+    viewportReportHandle = requestAnimationFrame(function () {
+      viewportReportHandle = 0;
+
+      if (!state.outlineTracking) { return; }
+
+      var line = Math.max(0, Math.floor(previewTopLine()));
+
+      if (line === state.reportedViewportLine) { return; }
+
+      state.reportedViewportLine = line;
+      post('viewportLine', { line: line });
+    });
+  }
+
   els.previewPane.addEventListener('scroll', function () {
+    reportViewportLine();
+
     if (syncOwner === 'source') { return; }
     syncPreviewToEditor();
   }, { passive: true });
@@ -1851,6 +1899,19 @@
     { alt: true, code: 'Digit1', run: 'viewSource' },
     { alt: true, code: 'Digit2', run: 'viewSplit' },
     { alt: true, code: 'Digit3', run: 'viewPreview' },
+
+    /*
+      Alt+4 joins the three above because the outline is the other thing the View menu
+      shows, though it is a toggle rather than a fourth member of that radio set. Showing
+      the panel takes the keyboard into it; Escape there brings it back to the document.
+
+      Alt+Shift+4 is the way into a panel that is already open, and back out again. It has
+      to be a key of its own: from here - the caret in the source pane, the panel already
+      showing - a visibility toggle could only close the thing being reached for.
+    */
+    { alt: true, code: 'Digit4', run: 'toggleOutline' },
+    { alt: true, shift: true, code: 'Digit4', run: 'focusOutline' },
+
     { alt: true, code: 'KeyZ', run: 'wordWrap' },
 
     /*
@@ -2969,6 +3030,21 @@
     setScrollSync: function (p) {
       state.scrollSync = !!p.enabled;
       if (state.scrollSync) { syncEditorToPreview(); }
+    },
+
+    /*
+      Whether the outline panel is open and wants to know where the preview is.
+
+      Turning it on reports straight away rather than waiting for a scroll: the panel has
+      just appeared and has to highlight something, and the document may not be touched for
+      a while. The remembered line is cleared first so that report is never suppressed as a
+      repeat of one sent before the panel was closed.
+    */
+    setOutlineTracking: function (p) {
+      state.outlineTracking = !!p.enabled;
+      state.reportedViewportLine = -1;
+
+      if (state.outlineTracking) { reportViewportLine(); }
     },
 
     setWordWrap: function (p) {

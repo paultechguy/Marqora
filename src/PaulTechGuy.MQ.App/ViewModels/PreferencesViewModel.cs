@@ -134,6 +134,10 @@ public sealed class PreferencesViewModel(
 
     public Task SetDiagnosticsAsync(bool value) => main.SetDiagnosticsAsync(value);
 
+    public Task SetShowOutlineAsync(bool value) => main.SetShowOutlineAsync(value);
+
+    public void SetOutlineMaxDepth(int value) => main.SetOutlineMaxDepth(value);
+
     public void SetReloadOnExternalChange(bool value) => main.SetReloadOnExternalChange(value);
 
     public void SetTheme(AppTheme theme) => main.ApplyTheme(theme);
@@ -213,6 +217,9 @@ public sealed class PreferencesViewModel(
         await main.SetWrapGlyphAsync(restored.ShowWrapGlyph).ConfigureAwait(true);
         await main.SetScrollSyncAsync(restored.ScrollSyncEnabled).ConfigureAwait(true);
         await main.SetDiagnosticsAsync(restored.ShowDiagnostics).ConfigureAwait(true);
+
+        SetOutlineMaxDepth(restored.OutlineMaxDepth);
+        await SetShowOutlineAsync(restored.ShowOutline).ConfigureAwait(true);
 
         await main.ApplyPreviewPreferencesAsync().ConfigureAwait(true);
     }

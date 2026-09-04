@@ -100,6 +100,11 @@ internal static class KeyboardShortcuts
             new("Source only", "Alt+1"),
             new("Split", "Alt+2"),
             new("Preview only", "Alt+3"),
+
+            new("Show or hide the outline", "Alt+4"),
+            new("Go to the outline, and back", "Alt+Shift+4"),
+            new("Leave the outline", "Escape"),
+
             new("Word wrap", "Alt+Z"),
             new("Zoom the active pane", "Ctrl+= / Ctrl+- / Ctrl+0"),
             new("Zoom both panes", "Ctrl+Shift+= / Ctrl+Shift+- / Ctrl+Shift+0"),

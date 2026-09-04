@@ -219,6 +219,20 @@ public interface IPreviewHost
 
     Task SetScrollSyncAsync(bool enabled);
 
+    /// <summary>
+    /// Asks the preview to report the source line at the top of its viewport as it scrolls,
+    /// or to stop.
+    ///
+    /// The outline panel is what listens, and only while it is on screen. Scrolling is
+    /// continuous and the panel is usually closed, so a standing broadcast would be the
+    /// chattiest thing on the bridge in exchange for nothing - the same reasoning behind
+    /// <see cref="WatchDiagrams"/> being a subscription rather than a broadcast.
+    ///
+    /// Only the preview needs asking. In the source pane the caret answers the same question
+    /// and already travels with the editor statistics.
+    /// </summary>
+    Task SetOutlineTrackingAsync(bool enabled);
+
     Task SetWordWrapAsync(bool enabled);
 
     Task SetLineNumbersAsync(bool enabled);

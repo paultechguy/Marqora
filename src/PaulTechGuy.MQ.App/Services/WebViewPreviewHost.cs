@@ -160,6 +160,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <summary>Which pane the user last interacted with, so zoom commands have a target.</summary>
     public event EventHandler<EditorPane>? PaneFocused;
 
+    /// <summary>
+    /// The zero-based source line now at the top of the preview, for the outline panel to
+    /// highlight against.
+    ///
+    /// Silent unless <see cref="SetOutlineTrackingAsync"/> has asked for it. The source
+    /// pane needs no equivalent: the caret answers the same question there and already
+    /// travels with <see cref="StatsChanged"/>.
+    /// </summary>
+    public event EventHandler<int>? ViewportLineChanged;
+
     // ------------------------------------------------------------------ startup
 
     /// <param name="initialTheme">
@@ -461,6 +471,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         SendAsync("setZoom", new { pane = pane.ToString(), percent = zoom.Percent });
 
     public Task SetScrollSyncAsync(bool enabled) => SendAsync("setScrollSync", new { enabled });
+
+    public Task SetOutlineTrackingAsync(bool enabled) =>
+        SendAsync("setOutlineTracking", new { enabled });
 
     public Task SetWordWrapAsync(bool enabled) => SendAsync("setWordWrap", new { enabled });
 
@@ -1155,6 +1168,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 {
                     PaneFocused?.Invoke(this, focused);
                 }
+                break;
+
+            case "viewportLine":
+                ViewportLineChanged?.Invoke(this, ReadInt(payload, "line", 0));
                 break;
 
             case "stats":

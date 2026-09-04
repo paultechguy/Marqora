@@ -15,6 +15,7 @@ thing runs on your machine: no account, no sign-in, no network call, no telemetr
 
 - [x] Open this document — done
 - [ ] Press `Alt+2` for the split view, then `Alt+3` to come back to the preview
+- [ ] Press `Alt+4` to list this page's headings beside it, and arrow down them
 - [ ] Press `Ctrl+F1` for the Markdown cheatsheet, and leave it beside the editor
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
@@ -79,6 +80,15 @@ small style slips the formatter would fix.
 **Find All.** `Ctrl+Shift+F` answers "where does this appear?" in one window: every match at
 once, across every open document, grouped by the file it came from. Select a row and the
 source pane switches tabs, scrolls to the line and selects the text.
+
+**The outline.** `Alt+4` lists this document's headings down the side, indented by level, and
+highlights whichever section you are reading — the caret's in the source pane, the top of the
+page in preview. Click one, or walk them with the arrow keys, and both panes move together.
+Type in the box at the top to narrow a long document down to the headings you meant.
+
+`Alt+4` shows and hides it. Once it is open, `Alt+Shift+4` is the way to it and back again,
+and `Escape` returns you to the text without closing it. This page is long enough to be worth
+trying it on.
 
 ---
 
@@ -172,6 +182,7 @@ Deleting any of it is safe. Marqora writes it again.
 | Save / Save all | `Ctrl+S` / `Ctrl+Shift+S` | Format document | `Shift+Alt+F` |
 | New tab / close tab | `Ctrl+N` / `Ctrl+W` | Find All | `Ctrl+Shift+F` |
 | Source / split / preview | `Alt+1` `Alt+2` `Alt+3` | Cheatsheet | `Ctrl+F1` |
+| Show / hide the outline | `Alt+4` | Go to the outline, and back | `Alt+Shift+4` |
 | Zoom the active pane | `Ctrl` `+` `-` `0` | Word wrap | `Alt+Z` |
 
 ---

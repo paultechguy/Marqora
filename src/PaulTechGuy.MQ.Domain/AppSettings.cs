@@ -59,8 +59,51 @@ public sealed record AppSettings
     /// <summary>Reload the document automatically when it changes on disk and has no unsaved edits.</summary>
     public bool ReloadOnExternalChange { get; set; } = true;
 
+    /// <summary>
+    /// Show the outline panel beside the document.
+    ///
+    /// Off by default. The panel takes width from the two panes that are the point of the
+    /// app, and a reader who has never asked for it should not have to close it first.
+    /// </summary>
+    public bool ShowOutline { get; set; }
+
+    /// <summary>
+    /// Deepest heading level the outline lists, or 0 for every level.
+    ///
+    /// Unlimited by default, deliberately. An outline that quietly stopped at H3 would look
+    /// like a document with no deeper headings rather than like a setting, and the first
+    /// thing anyone would do is go looking for the bug.
+    /// </summary>
+    public int OutlineMaxDepth { get; set; }
+
     /// <summary>Fraction of the content width given to the source pane in side-by-side view.</summary>
     public double SplitterPosition { get; set; } = 0.5;
+
+    /// <summary>
+    /// Width of the outline panel in device-independent pixels.
+    ///
+    /// State rather than preference, exactly as <see cref="SplitterPosition"/> is: it
+    /// records where a splitter was left on this machine, at this window size, and carrying
+    /// it to another machine would be as unwelcome as carrying the window position. Listed
+    /// in <see cref="SessionKeys"/> and <see cref="WithSessionOf"/> for that reason.
+    /// </summary>
+    public double OutlineWidth { get; set; } = DefaultOutlineWidth;
+
+    /// <summary>
+    /// What the panel opens at before it has been dragged.
+    ///
+    /// Wide enough for a third-level heading at the default font without the indent eating
+    /// the text, which is the width the panel stops being readable below.
+    /// </summary>
+    public const double DefaultOutlineWidth = 240;
+
+    /// <summary>
+    /// Narrowest the panel may be dragged.
+    ///
+    /// Below this an indented outline is a column of ellipses: the deepest headings have
+    /// spent most of the width on their own indent before the first character is drawn.
+    /// </summary>
+    public const double MinimumOutlineWidth = 160;
 
     public WindowPlacement Window { get; set; } = WindowPlacement.Default;
 
@@ -340,6 +383,7 @@ public sealed record AppSettings
             "openDocuments",
             "activeDocumentIndex",
             "splitterPosition",
+            "outlineWidth",
             "lastWelcomeVersion",
         };
 
@@ -375,6 +419,7 @@ public sealed record AppSettings
             OpenDocuments = current.OpenDocuments,
             ActiveDocumentIndex = current.ActiveDocumentIndex,
             SplitterPosition = current.SplitterPosition,
+            OutlineWidth = current.OutlineWidth,
             LastWelcomeVersion = current.LastWelcomeVersion,
         };
     }
