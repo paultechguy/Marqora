@@ -2031,6 +2031,15 @@
       wordWrap: 'on',
       wrappingIndent: 'same',
       minimap: { enabled: false },
+      // Off, and not merely because nothing renders it. Sticky scroll is on by default in
+      // Monaco, and it charges for itself whether or not it draws anything: the reveal
+      // computation moves the target up by stickyScroll.maxLineCount lines - five - before
+      // it works out where the top of the viewport should be. Nothing ever draws a sticky
+      // header here, because markdown has no document-symbol provider and its only folding
+      // is region markers, so those five lines were paid and never used. They are what left
+      // a heading clicked in the outline sitting five lines below the top of the pane. See
+      // scrollToLine, which asks for the top and now gets it.
+      stickyScroll: { enabled: false },
       renderLineHighlight: 'line',
       scrollBeyondLastLine: true,
       smoothScrolling: true,
@@ -3350,8 +3359,15 @@
 
     scrollToLine: function (p) {
       if (state.editor) {
-        state.editor.revealLineNearTop(p.line + 1);
-        state.editor.setPosition({ lineNumber: p.line + 1, column: 1 });
+        // At the top, not near it. revealLineNearTop leaves a gap above of whichever is
+        // larger, five lines or a fifth of the pane, so the heading lands somewhere between
+        // a fifth and a third of the way down depending on how tall the pane happens to be -
+        // while scrollPreviewToLine below puts that same heading at the very top of the
+        // preview. One heading, two panes, two places. A heading is the start of a section
+        // and what sits above it is the section just left, so both panes go to the top.
+        var line = p.line + 1;
+        state.editor.revealRangeAtTop(new state.monaco.Range(line, 1, line, 1));
+        state.editor.setPosition({ lineNumber: line, column: 1 });
       }
       beginSync('source');
       scrollPreviewToLine(p.line);
