@@ -151,12 +151,13 @@ would rather not reach for the mouse.
 | 🧭 | **Outline panel** | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there |
 | 🧹 | **One-key document formatting** | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word |
 | 📊 | **Mermaid 11 diagrams** | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast |
-| ∑ | **KaTeX maths** | Inline and display maths, laid out properly, exported the same way it looks |
+| ∑ | **KaTeX math** | Inline and display math, laid out properly, exported the same way it looks |
 | 🌈 | **Rich markdown** | Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and syntax-highlighted code in *both* panes |
 | 🩺 | **Document problems** | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you |
+| 🔤 | **Spell check** | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤 | **Exports worth sending** | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, and rich text on the clipboard for Word, Outlook or Confluence |
 | 🧩 | **Snippets and diagram starters** | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them |
-| 📖 | **Cheatsheet at your elbow** | `Ctrl+F1` opens a live markdown reference — real diagrams, real maths — in a window you can leave open beside the editor |
+| 📖 | **Cheatsheet at your elbow** | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor |
 | 🌗 | **Light, dark or system** | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included |
 | 🪟 | **One window, well behaved** | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it |
 | 👀 | **Files stay in sync** | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work |
@@ -222,7 +223,7 @@ below it, ruled off from the formatting proper. Save and Save All are lit only w
 something to write: Save when this tab has unsaved changes, Save All when any tab does.
 
 `Alt` on its own puts the keyboard on the menu bar. From there the arrow keys walk along it
-and `Enter` opens a menu, so nothing has to be memorised to drive the app without a mouse.
+and `Enter` opens a menu, so nothing has to be memorized to drive the app without a mouse.
 
 Each menu also opens directly: `Alt+F` File, `Alt+E` Edit, `Alt+O` Format, `Alt+V` View,
 `Alt+T` Tools, `Alt+H` Help. Format takes `O` because File has `F`, as Windows menus have
@@ -447,7 +448,7 @@ you did not edit.
 | Export | What you get |
 |--------|--------------|
 | `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence |
-| `Tools > Export to PDF...` | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colours |
+| `Tools > Export to PDF...` | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
 | `Tools > Export to HTML...` | One self-contained `.html` file |
 
 All three are enabled whenever a document is open, and the two file exports default the
@@ -456,12 +457,12 @@ filename to the document's own name with the new extension.
 **Copy as Rich Text** takes whatever is selected in the preview, or the whole document when
 nothing is. It puts two things on the clipboard at once: the formatted version for anything
 that understands formatting, and the markdown source for anything that does not, so pasting
-into a terminal or a code editor still gives you markdown. Colours are resolved to fixed
+into a terminal or a code editor still gives you markdown. Colors are resolved to fixed
 values on the way out, because the stylesheet is built on CSS custom properties and Word has
 never supported them.
 
 Exports come from the **live preview**, not from a fresh render, so diagrams are already
-inline SVG, maths is already laid out and code is already highlighted — what you export is
+inline SVG, math is already laid out and code is already highlighted — what you export is
 what you were looking at. The HTML export inlines the stylesheets, embeds local images as
 data URIs and embeds the KaTeX fonts, so the file survives being emailed on its own. Exports
 are always light-themed: a dark background is rarely wanted in something printed or pasted
@@ -516,7 +517,7 @@ which is what a bug report needs. `Help > Open Log Folder` goes straight to the 
 **Markdown support**
 
 Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and
-maths via KaTeX. Fenced code is syntax-highlighted in both panes. Relative image and link
+math via KaTeX. Fenced code is syntax-highlighted in both panes. Relative image and link
 paths resolve against the document's own folder.
 
 **Mermaid diagrams**
@@ -546,6 +547,36 @@ has no folder for a relative path to resolve against, so its file links are left
 though its anchors are still checked.
 
 Nothing inside a fenced code block or YAML front matter is ever flagged.
+
+**Spell check**
+
+`View > Spell Check` (`F7`) underlines words that are not in the dictionary. It is on by
+default. Right-click one — or press `Ctrl+.` — for corrections, to add the word to your
+dictionary, or to delete a word you have typed twice in a row.
+
+The words come from the spelling dictionary Windows already has, so there is nothing to
+download and nothing leaves the machine. If Windows has no dictionary for your language, spell
+check stays quiet and the setting greys out to say why.
+
+A document about software is mostly not prose, so most of what is on screen is never checked:
+
+| Never checked | Checked |
+|---------------|---------|
+| Fenced, indented and inline code | The text of a link, and a reference's title |
+| Link and image targets, autolinks, bare URLs | The alt text of an image |
+| HTML tags and attributes, entities | Everything else |
+| Maths, footnote markers, emoji shortcodes | |
+| YAML front matter | |
+| `SDK`, `win-x64`, `MainViewModel` — acronyms, anything with a digit, camelCase names | |
+
+**Your own dictionary** is a plain text file, one word per line, at
+`%LOCALAPPDATA%\PaulTechGuy\Marqora\user-dictionary.txt`. Lines beginning `#` are comments.
+Open it in Marqora and correct it like any other document — it is re-read the moment you save.
+Keep it in a project beside the documents it belongs to, review it in a diff, and export or
+import it from the Advanced page of Preferences; an import adds words and never removes any.
+
+A word in your dictionary stays known when you make it possessive, so adding `Marqora` covers
+`Marqora's` too.
 
 **Appearance**
 
@@ -699,7 +730,7 @@ Close Marqora and delete `%LOCALAPPDATA%\PaulTechGuy\Marqora`.
 
 Restored by `build/Get-WebAssets.ps1`, served locally, never fetched at runtime.
 
-| Component | Version | Licence |
+| Component | Version | License |
 |-----------|---------|---------|
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT |
 | [Mermaid](https://github.com/mermaid-js/mermaid) | 11.17.0 | MIT |
@@ -731,7 +762,7 @@ Marqora is released under the [Apache License 2.0](LICENSE). You are free to use
 redistribute it, commercially or otherwise, provided you keep the copyright and license
 notices, state what you changed, and accept that it comes with no warranty.
 
-Every source file carries the licence as a two-line
+Every source file carries the license as a two-line
 [SPDX](https://spdx.dev/learn/handling-license-info/) header:
 
 ```csharp
@@ -751,5 +782,5 @@ pwsh ./build/Add-FileHeaders.ps1 -Check   # verify, non-zero exit if any are mis
 The header is also declared as `file_header_template` in `.editorconfig` with `IDE0073` set
 to warning level, so a new file without one is flagged at build time.
 
-The third-party components listed above keep their own licences, which are separate from
+The third-party components listed above keep their own licenses, which are separate from
 this one.

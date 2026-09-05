@@ -42,11 +42,13 @@ namespace PaulTechGuy.MQ.App.Views;
     Justification = "A Window's lifetime belongs to the framework; the search's cancellation "
         + "source is disposed whenever it is replaced and again in Shutdown, which the "
         + "application calls as it exits.")]
-public sealed partial class FindAllWindow : Window
+public sealed partial class FindAllWindow : PaletteWindow
 {
     /// <summary>Narrow enough to sit beside the editor, wide enough for a line of markdown.</summary>
-    private const int MinimumWidth = 520;
-    private const int MinimumHeight = 320;
+    private const int DefaultMinimumWidth = 520;
+
+    private const int DefaultMinimumHeight = 320;
+
 
     /// <summary>How many terms the recent list keeps. A dropdown, not a history file.</summary>
     private const int HistoryLimit = 10;
@@ -62,7 +64,6 @@ public sealed partial class FindAllWindow : Window
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
     private readonly IUiDispatcher _ui;
-    private readonly IntPtr _ownerHandle;
     private readonly ILogger<FindAllWindow> _logger;
 
     /// <summary>
@@ -130,9 +131,7 @@ public sealed partial class FindAllWindow : Window
 
     private FindScope _selectedScope = FindScope.AllDocuments;
 
-    private bool _isOwned;
     private bool _isShuttingDown;
-    private bool _hasRestoredPlacement;
 
     public FindAllWindow(
         IWorkspaceService workspace,
@@ -141,12 +140,12 @@ public sealed partial class FindAllWindow : Window
         IUiDispatcher ui,
         IntPtr ownerHandle,
         ILogger<FindAllWindow> logger)
+        : base("Find All", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
     {
         _workspace = workspace;
         _settings = settings;
         _theme = theme;
         _ui = ui;
-        _ownerHandle = ownerHandle;
         _logger = logger;
 
         Title = "Find All";
@@ -172,9 +171,6 @@ public sealed partial class FindAllWindow : Window
 
     /// <summary>Raised when the user picks a result out of the list.</summary>
     public event EventHandler<FindMatchActivatedEventArgs>? MatchActivated;
-
-    /// <summary>Native handle, for the owner relationship with the main window.</summary>
-    public IntPtr Handle => WinRT.Interop.WindowNative.GetWindowHandle(this);
 
     /// <summary>
     /// Shows the window and puts the keyboard in the search box.
@@ -1003,80 +999,6 @@ public sealed partial class FindAllWindow : Window
 
     // -------------------------------------------------------------------- window
 
-    private void ConfigurePresenter()
-    {
-        // A tool window, like the cheatsheet: resizable, nothing to maximize or minimize, and
-        // out of the taskbar. It belongs to the editor rather than standing beside it.
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.IsResizable = true;
-            presenter.IsMaximizable = false;
-            presenter.IsMinimizable = false;
-            presenter.PreferredMinimumWidth = MinimumWidth;
-            presenter.PreferredMinimumHeight = MinimumHeight;
-        }
-
-        AppWindow.IsShownInSwitchers = false;
-
-        if (AppImages.HasIcon)
-        {
-            try
-            {
-                AppWindow.SetIcon(AppImages.IconPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not apply the Find All window icon.");
-            }
-        }
-
-        ApplyTitleBarTheme(_theme.Effective);
-    }
-
-    /// <summary>Paints the caption to match the form below it, as the cheatsheet does.</summary>
-    private void ApplyTitleBarTheme(AppTheme theme)
-    {
-        AppWindowTitleBar bar = AppWindow.TitleBar;
-
-        bool dark = theme == AppTheme.Dark;
-
-        Windows.UI.Color surface = dark ? Rgb(0x27, 0x27, 0x27) : Rgb(0xF6, 0xF6, 0xF6);
-        Windows.UI.Color text = dark ? Rgb(0xE6, 0xE6, 0xE6) : Rgb(0x1B, 0x1B, 0x1B);
-        Windows.UI.Color muted = Rgb(0x8A, 0x8A, 0x8A);
-        Windows.UI.Color hover = dark ? Rgb(0x38, 0x38, 0x38) : Rgb(0xE6, 0xE6, 0xE6);
-        Windows.UI.Color pressed = dark ? Rgb(0x4A, 0x4A, 0x4A) : Rgb(0xD0, 0xD0, 0xD0);
-
-        bar.BackgroundColor = surface;
-        bar.InactiveBackgroundColor = surface;
-        bar.ForegroundColor = text;
-        bar.InactiveForegroundColor = muted;
-
-        bar.ButtonBackgroundColor = surface;
-        bar.ButtonInactiveBackgroundColor = surface;
-        bar.ButtonForegroundColor = text;
-        bar.ButtonInactiveForegroundColor = muted;
-        bar.ButtonHoverBackgroundColor = hover;
-        bar.ButtonHoverForegroundColor = text;
-        bar.ButtonPressedBackgroundColor = pressed;
-        bar.ButtonPressedForegroundColor = text;
-    }
-
-    private static Windows.UI.Color Rgb(byte r, byte g, byte b) =>
-        Windows.UI.Color.FromArgb(0xFF, r, g, b);
-
-    /// <summary>
-    /// The page behind the form.
-    ///
-    /// WinUI's own two values for it, written out rather than looked up. A code lookup of
-    /// ApplicationPageBackgroundThemeBrush resolves against the application's theme, which is
-    /// the operating system's; this window follows the theme the user chose in Marqora. With
-    /// the OS dark and Marqora set to light, the lookup painted a black page under light
-    /// controls. Nothing about that is visible in the cheatsheet window, which does the same
-    /// lookup, because a WebView covers every pixel of it.
-    /// </summary>
-    private static SolidColorBrush SurfaceBrush(AppTheme theme) =>
-        new(theme == AppTheme.Dark ? Rgb(0x20, 0x20, 0x20) : Rgb(0xF3, 0xF3, 0xF3));
-
     /// <summary>
     /// The tint behind a match in the list.
     ///
@@ -1165,36 +1087,6 @@ public sealed partial class FindAllWindow : Window
         _isPopulating = false;
     }
 
-    /// <summary>
-    /// Makes the main window this window's owner, once, the first time it is shown.
-    ///
-    /// An owned window floats above its owner, so a results list cannot end up behind the
-    /// document it is describing. It also minimises and restores with the editor, which is
-    /// what one expects of a panel belonging to it. Ownership is not modality: the editor
-    /// stays fully usable, which this window depends on — the whole point is to click a
-    /// result and watch the text move.
-    ///
-    /// It has to happen after the first show. Setting the owner on a window WinUI has created
-    /// but not yet displayed leaves it without WS_VISIBLE, and every later Show does nothing.
-    /// </summary>
-    private void EnsureOwned()
-    {
-        if (_isOwned)
-        {
-            return;
-        }
-
-        _isOwned = true;
-
-        if (_ownerHandle == IntPtr.Zero)
-        {
-            _logger.LogWarning("Find All has no owner window; it may fall behind the editor.");
-            return;
-        }
-
-        _ = SetWindowLongPtr(Handle, GwlpHwndParent, _ownerHandle);
-    }
-
     private void Dismiss()
     {
         CapturePlacement();
@@ -1237,39 +1129,6 @@ public sealed partial class FindAllWindow : Window
 
     // ----------------------------------------------------------------- placement
 
-    /// <summary>
-    /// Restores the remembered size and position, or places the window over the lower half of
-    /// the main one the first time, where a results list does not cover the text it lists.
-    /// </summary>
-    private void RestorePlacement(RectInt32 nearby)
-    {
-        if (_hasRestoredPlacement)
-        {
-            return;
-        }
-
-        _hasRestoredPlacement = true;
-
-        WindowPlacement placement = _settings.Current.FindAllPlacement;
-
-        int width = Math.Max(placement.Width, MinimumWidth);
-        int height = Math.Max(placement.Height, MinimumHeight);
-
-        if (placement.HasPosition && FitsOnADisplay(placement.X, placement.Y, width, height))
-        {
-            AppWindow.MoveAndResize(new RectInt32(placement.X, placement.Y, width, height));
-            return;
-        }
-
-        int x = nearby.X + Math.Max(0, (nearby.Width - width) / 2);
-        int y = nearby.Y + Math.Max(0, nearby.Height - height - 72);
-
-        AppWindow.MoveAndResize(
-            FitsOnADisplay(x, y, width, height)
-                ? new RectInt32(x, y, width, height)
-                : new RectInt32(nearby.X + 64, nearby.Y + 64, width, height));
-    }
-
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (_isShuttingDown)
@@ -1295,52 +1154,9 @@ public sealed partial class FindAllWindow : Window
         CapturePlacement();
     }
 
-    private void CapturePlacement()
-    {
-        AppWindow window = AppWindow;
+    /// <summary>Where Find All was last left. See <see cref="AppSettings.FindAllPlacement"/>.</summary>
+    protected override WindowPlacement SavedPlacement => _settings.Current.FindAllPlacement;
 
-        // A hidden or minimized window reports bounds that must not be persisted.
-        if (!window.IsVisible
-            || window.Size.Width < MinimumWidth
-            || window.Size.Height < MinimumHeight)
-        {
-            return;
-        }
-
-        _settings.Update(s => s with
-        {
-            FindAllWindow = new WindowPlacement
-            {
-                X = window.Position.X,
-                Y = window.Position.Y,
-                Width = window.Size.Width,
-                Height = window.Size.Height,
-            },
-        });
-    }
-
-    /// <summary>Guards against restoring onto a monitor that is no longer attached.</summary>
-    private static bool FitsOnADisplay(int x, int y, int width, int height)
-    {
-        var area = DisplayArea.GetFromRect(new RectInt32(x, y, width, height), DisplayAreaFallback.Nearest);
-        RectInt32 bounds = area.WorkArea;
-
-        return x < bounds.X + bounds.Width
-            && y < bounds.Y + bounds.Height
-            && x + width > bounds.X
-            && y + height > bounds.Y;
-    }
-
-    // ------------------------------------------------------------------- interop
-
-    /// <summary>Index of the owner-window slot in the extended window data.</summary>
-    private const int GwlpHwndParent = -8;
-
-    /// <summary>
-    /// DllImport rather than the source-generated LibraryImport, for the reason the
-    /// cheatsheet's copy gives: the generator emits unsafe marshalling code for a call that
-    /// passes nothing but handles.
-    /// </summary>
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    protected override AppSettings StorePlacement(AppSettings settings, WindowPlacement placement) =>
+        settings with { FindAllWindow = placement };
 }

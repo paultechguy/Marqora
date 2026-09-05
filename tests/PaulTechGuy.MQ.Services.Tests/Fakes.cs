@@ -137,6 +137,8 @@ internal sealed class FakeAppPaths(string root) : IAppPaths
 
     public string RecentFilesFilePath => System.IO.Path.Combine(DataDirectory, "recent-files.json");
 
+    public string UserDictionaryPath => System.IO.Path.Combine(DataDirectory, "user-dictionary.txt");
+
     public string LogDirectory => System.IO.Path.Combine(DataDirectory, "logs");
 
     public string SnippetsDirectory => System.IO.Path.Combine(DataDirectory, "snippets");

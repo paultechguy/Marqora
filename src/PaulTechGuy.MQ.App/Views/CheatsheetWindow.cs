@@ -36,11 +36,12 @@ namespace PaulTechGuy.MQ.App.Views;
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "A Window's lifetime belongs to the framework; the WebView is released in "
         + "Shutdown, which the application calls as it exits.")]
-public sealed partial class CheatsheetWindow : Window
+public sealed partial class CheatsheetWindow : PaletteWindow
 {
     /// <summary>Small enough to tuck beside an editor, large enough for a table to fit.</summary>
-    private const int MinimumWidth = 360;
-    private const int MinimumHeight = 320;
+    private const int DefaultMinimumWidth = 360;
+
+    private const int DefaultMinimumHeight = 320;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -62,12 +63,8 @@ public sealed partial class CheatsheetWindow : Window
     /// <summary>Messages raised before the page announced itself, replayed once it does.</summary>
     private readonly List<string> _pending = [];
 
-    private readonly IntPtr _ownerHandle;
-
     private bool _isReady;
     private bool _isShuttingDown;
-    private bool _hasRestoredPlacement;
-    private bool _isOwned;
 
     public CheatsheetWindow(
         IWebAssetProvider assets,
@@ -76,12 +73,12 @@ public sealed partial class CheatsheetWindow : Window
         IThemeService theme,
         IntPtr ownerHandle,
         ILogger<CheatsheetWindow> logger)
+        : base("Cheatsheet", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
     {
         _assets = assets;
         _renderer = renderer;
         _settings = settings;
         _theme = theme;
-        _ownerHandle = ownerHandle;
         _logger = logger;
 
         Title = "Markdown Cheatsheet";
@@ -105,44 +102,11 @@ public sealed partial class CheatsheetWindow : Window
         _theme.EffectiveThemeChanged += OnEffectiveThemeChanged;
     }
 
-    /// <summary>
-    /// Makes the main window this window's owner, once, the first time it is shown.
-    ///
-    /// An owned window always floats above its owner, so the cheatsheet cannot end up buried
-    /// behind the editor. That is worth more than it first appears: it is what lets the Tools
-    /// menu item be a plain toggle. Without ownership, opening the menu activates the main
-    /// window and raises it over the cheatsheet, so any rule asking "can the user see it right
-    /// now" would be answering about a state the click itself had just changed.
-    ///
-    /// Ownership is not modality — the main window stays fully usable. It also means the
-    /// cheatsheet minimises and restores along with the editor, which is what one expects of a
-    /// palette belonging to a document window.
-    ///
-    /// It has to happen after the first show, not in the constructor. Setting the owner on a
-    /// window WinUI has created but not yet displayed leaves it without WS_VISIBLE, and every
-    /// later AppWindow.Show() silently does nothing.
-    /// </summary>
-    private void EnsureOwned()
-    {
-        if (_isOwned)
-        {
-            return;
-        }
+    /// <summary>Where the cheatsheet was last left. See <see cref="AppSettings.CheatsheetPlacement"/>.</summary>
+    protected override WindowPlacement SavedPlacement => _settings.Current.CheatsheetPlacement;
 
-        _isOwned = true;
-
-        if (_ownerHandle == IntPtr.Zero)
-        {
-            _logger.LogWarning("The cheatsheet has no owner window; it may fall behind the editor.");
-            return;
-        }
-
-        _ = SetWindowLongPtr(Handle, GwlpHwndParent, _ownerHandle);
-        _logger.LogDebug("The cheatsheet is now owned by the main window.");
-    }
-
-    /// <summary>Native handle, so the service can ask the shell what the user can see.</summary>
-    public IntPtr Handle => WinRT.Interop.WindowNative.GetWindowHandle(this);
+    protected override AppSettings StorePlacement(AppSettings settings, WindowPlacement placement) =>
+        settings with { CheatsheetWindow = placement };
 
     /// <summary>
     /// Raised when the window is shown or hidden. Sourced from AppWindow rather than from
@@ -154,79 +118,6 @@ public sealed partial class CheatsheetWindow : Window
     /// unsure which of the two they had subscribed to.
     /// </summary>
     public event EventHandler<bool>? ShownOrHidden;
-
-    private void ConfigurePresenter()
-    {
-        // A reference palette rather than a second document: resizable, but with nothing to
-        // maximize or minimize, and out of Alt+Tab and the taskbar. The Tools menu is how it
-        // is recalled, so a taskbar button would only be a second, inconsistent way to
-        // manage it.
-        //
-        // The flags are set individually rather than through CreateForToolWindow, whose
-        // defaults do not survive being applied to a XAML Window's AppWindow.
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.IsResizable = true;
-            presenter.IsMaximizable = false;
-            presenter.IsMinimizable = false;
-            presenter.PreferredMinimumWidth = MinimumWidth;
-            presenter.PreferredMinimumHeight = MinimumHeight;
-        }
-
-        AppWindow.IsShownInSwitchers = false;
-
-        if (AppImages.HasIcon)
-        {
-            try
-            {
-                AppWindow.SetIcon(AppImages.IconPath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not apply the cheatsheet window icon.");
-            }
-        }
-
-        ApplyTitleBarTheme(_theme.Effective);
-    }
-
-    /// <summary>
-    /// Paints the caption to match the page below it.
-    ///
-    /// Left alone, Windows draws the caption in the user's accent colour, which on a window
-    /// that is almost entirely one document reads as a stripe of unrelated colour. The main
-    /// window sidesteps this by extending its content into the title bar; this one is too
-    /// small to give up the caption, so the caption is coloured instead.
-    /// </summary>
-    private void ApplyTitleBarTheme(AppTheme theme)
-    {
-        AppWindowTitleBar bar = AppWindow.TitleBar;
-
-        bool dark = theme == AppTheme.Dark;
-
-        Windows.UI.Color surface = dark ? Rgb(0x27, 0x27, 0x27) : Rgb(0xF6, 0xF6, 0xF6);
-        Windows.UI.Color text = dark ? Rgb(0xE6, 0xE6, 0xE6) : Rgb(0x1B, 0x1B, 0x1B);
-        Windows.UI.Color muted = dark ? Rgb(0x8A, 0x8A, 0x8A) : Rgb(0x8A, 0x8A, 0x8A);
-        Windows.UI.Color hover = dark ? Rgb(0x38, 0x38, 0x38) : Rgb(0xE6, 0xE6, 0xE6);
-        Windows.UI.Color pressed = dark ? Rgb(0x4A, 0x4A, 0x4A) : Rgb(0xD0, 0xD0, 0xD0);
-
-        bar.BackgroundColor = surface;
-        bar.InactiveBackgroundColor = surface;
-        bar.ForegroundColor = text;
-        bar.InactiveForegroundColor = muted;
-
-        bar.ButtonBackgroundColor = surface;
-        bar.ButtonInactiveBackgroundColor = surface;
-        bar.ButtonForegroundColor = text;
-        bar.ButtonInactiveForegroundColor = muted;
-        bar.ButtonHoverBackgroundColor = hover;
-        bar.ButtonHoverForegroundColor = text;
-        bar.ButtonPressedBackgroundColor = pressed;
-        bar.ButtonPressedForegroundColor = text;
-    }
-
-    private static Windows.UI.Color Rgb(byte r, byte g, byte b) =>
-        Windows.UI.Color.FromArgb(0xFF, r, g, b);
 
     // ------------------------------------------------------------------ startup
 
@@ -622,41 +513,6 @@ public sealed partial class CheatsheetWindow : Window
 
     // ---------------------------------------------------------------- placement
 
-    /// <summary>
-    /// Restores the remembered size and position, or places the window beside the main one
-    /// the first time it is opened.
-    /// </summary>
-    private void RestorePlacement(RectInt32 nearby)
-    {
-        if (_hasRestoredPlacement)
-        {
-            return;
-        }
-
-        _hasRestoredPlacement = true;
-
-        WindowPlacement placement = _settings.Current.CheatsheetPlacement;
-
-        int width = Math.Max(placement.Width, MinimumWidth);
-        int height = Math.Max(placement.Height, MinimumHeight);
-
-        if (placement.HasPosition && FitsOnADisplay(placement.X, placement.Y, width, height))
-        {
-            AppWindow.MoveAndResize(new RectInt32(placement.X, placement.Y, width, height));
-            return;
-        }
-
-        // No remembered position: sit just inside the main window's right edge, which reads
-        // as belonging to it without covering the document.
-        int x = nearby.X + Math.Max(0, nearby.Width - width - 48);
-        int y = nearby.Y + 64;
-
-        AppWindow.MoveAndResize(
-            FitsOnADisplay(x, y, width, height)
-                ? new RectInt32(x, y, width, height)
-                : new RectInt32(nearby.X + 48, nearby.Y + 48, width, height));
-    }
-
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (_isShuttingDown)
@@ -686,56 +542,6 @@ public sealed partial class CheatsheetWindow : Window
 
         CapturePlacement();
     }
-
-    private void CapturePlacement()
-    {
-        AppWindow window = AppWindow;
-
-        // A hidden or minimized window reports bounds that must not be persisted; the main
-        // window learned the same lesson.
-        if (!window.IsVisible
-            || window.Size.Width < MinimumWidth
-            || window.Size.Height < MinimumHeight)
-        {
-            return;
-        }
-
-        _settings.Update(s => s with
-        {
-            CheatsheetWindow = new WindowPlacement
-            {
-                X = window.Position.X,
-                Y = window.Position.Y,
-                Width = window.Size.Width,
-                Height = window.Size.Height,
-            },
-        });
-    }
-
-    /// <summary>Guards against restoring onto a monitor that is no longer attached.</summary>
-    private static bool FitsOnADisplay(int x, int y, int width, int height)
-    {
-        var area = DisplayArea.GetFromRect(new RectInt32(x, y, width, height), DisplayAreaFallback.Nearest);
-        RectInt32 bounds = area.WorkArea;
-
-        return x < bounds.X + bounds.Width
-            && y < bounds.Y + bounds.Height
-            && x + width > bounds.X
-            && y + height > bounds.Y;
-    }
-
-    // ------------------------------------------------------------------- interop
-
-    /// <summary>Index of the owner-window slot in the extended window data.</summary>
-    private const int GwlpHwndParent = -8;
-
-    /// <summary>
-    /// DllImport rather than the source-generated LibraryImport: the generator emits unsafe
-    /// marshalling code, which would mean enabling AllowUnsafeBlocks across the project for
-    /// one call that passes nothing but handles.
-    /// </summary>
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
     // -------------------------------------------------------------- json helpers
 

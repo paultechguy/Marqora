@@ -5,12 +5,17 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using PaulTechGuy.MQ.Abstractions.Services;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.ViewModels;
 using PaulTechGuy.MQ.Domain;
+using Windows.Graphics;
+using Windows.System;
 
 namespace PaulTechGuy.MQ.App.Views;
 
@@ -38,20 +43,22 @@ namespace PaulTechGuy.MQ.App.Views;
 /// controls with a repetitive shape, and the layout helpers below express that far more
 /// briefly than forty hand-written rows of markup would.
 /// </summary>
-internal sealed class PreferencesDialog : ContentDialog
+internal sealed class PreferencesWindow : PaletteWindow
 {
     /// <summary>
-    /// The dialog's content is a fixed size, not a size that follows the page on show.
+    /// Small enough to fit a laptop screen, large enough that the sidebar and a page can sit
+    /// side by side without either being squeezed.
     ///
-    /// Both dimensions are pinned for the same reason: a ContentDialog measures itself
-    /// against its content, and the six pages do not want the same room. The wrapping notes
-    /// at the foot of each page are the worst of it - a paragraph with nowhere to wrap asks
-    /// for as much width as it can get - so the dialog grew and shrank as the user moved
-    /// down the sidebar, which is a lot of movement for a window nobody asked to resize.
+    /// This used to be a fixed content size, because a ContentDialog measures itself against
+    /// its content and the six pages do not want the same room - the wrapping notes at the foot
+    /// of several are the worst of it, and the dialog grew and shrank as the user moved down the
+    /// sidebar. As a resizable window the problem goes away: the pages stretch to whatever the
+    /// window is, and this is only the floor.
     /// </summary>
-    private const double ContentWidth = 680;
+    private const int DefaultMinimumWidth = 900;
 
-    private const double ContentHeight = 460;
+    private const int DefaultMinimumHeight = 620;
+
     private const double SidebarWidth = 150;
     private const double FieldWidth = 240;
 
@@ -101,7 +108,38 @@ internal sealed class PreferencesDialog : ContentDialog
     private const string DefaultFontLabel = "(default)";
 
     private readonly PreferencesViewModel _vm;
+    private readonly ISettingsService _settings;
     private readonly ILogger _logger;
+
+    /// <summary>
+    /// OK and Cancel.
+    ///
+    /// Real buttons in the content, because a window has no template buttons to borrow. They
+    /// keep the order a ContentDialog gave them - OK to the left of Cancel, as Windows lays a
+    /// dialog out - and Enter still commits, handled on the content root below. WinUI has no
+    /// Button.IsDefault; that is a WPF property.
+    /// </summary>
+    private readonly Button _ok = new() { Content = "OK", MinWidth = 96 };
+
+    private readonly Button _cancel = new() { Content = "Cancel", MinWidth = 96 };
+
+    private readonly StackPanel _buttons = new()
+    {
+        Orientation = Orientation.Horizontal,
+        HorizontalAlignment = HorizontalAlignment.Right,
+        Spacing = 8,
+    };
+
+    /// <summary>
+    /// The window's content root.
+    ///
+    /// Held because a Window is not a FrameworkElement and has no RequestedTheme of its own, so
+    /// following the theme means repainting this rather than the window.
+    /// </summary>
+    private readonly Grid _root;
+
+    /// <summary>Set while a confirmed Cancel is closing the window, so the close is not asked about twice.</summary>
+    private bool _closing;
 
     /// <summary>
     /// Set while the controls are being filled in from settings.
@@ -113,7 +151,13 @@ internal sealed class PreferencesDialog : ContentDialog
     /// </summary>
     private bool _loading;
 
-    private readonly RadioButtons _theme;
+    /// <summary>
+    /// The Appearance page's theme picker. Named for the control rather than the concept,
+    /// because PaletteWindow already has a _theme and it is the theme service - two very
+    /// different things one letter apart.
+    /// </summary>
+    private readonly RadioButtons _themeChoice;
+
     private readonly ComboBox _sourceFont;
     private readonly NumberBox _sourceFontSize;
     private readonly ComboBox _previewFont;
@@ -139,6 +183,7 @@ internal sealed class PreferencesDialog : ContentDialog
 
     private readonly CheckBox _scrollSync;
     private readonly CheckBox _diagnostics;
+    private readonly CheckBox _spellCheck;
     private readonly ComboBox _headingNumbers;
 
     private readonly CheckBox _showOutline;
@@ -164,8 +209,8 @@ internal sealed class PreferencesDialog : ContentDialog
     private readonly ListView _categories;
 
     /// <summary>
-    /// The dialog's content, kept only so the discard confirmation has something to anchor
-    /// to. A ContentDialog's own buttons are inside its template and cannot be reached.
+    /// The sidebar and the page beside it. Held so the window can put it in a row above the
+    /// button strip, and so a flyout has something to anchor to.
     /// </summary>
     private readonly Grid _shell;
 
@@ -179,36 +224,37 @@ internal sealed class PreferencesDialog : ContentDialog
     /// </summary>
     private readonly UIElement[] _pages;
 
-    public PreferencesDialog(PreferencesViewModel viewModel, ILogger logger)
+    public PreferencesWindow(
+        PreferencesViewModel viewModel,
+        ISettingsService settings,
+        IThemeService theme,
+        IntPtr ownerHandle,
+        ILogger logger)
+        : base("Preferences", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
     {
         _vm = viewModel;
+        _settings = settings;
         _logger = logger;
 
         Title = "Preferences";
-        PrimaryButtonText = "OK";
-        CloseButtonText = "Cancel";
-        DefaultButton = ContentDialogButton.Primary;
 
-        PrimaryButtonClick += OnAccept;
-        CloseButtonClick += OnCancel;
+        _ok.Click += (_, _) => Accept();
+        _cancel.Click += (_, _) => RequestCancel();
 
-        // A ContentDialog is 548px wide at most, which the template reads from this resource
-        // rather than from MaxWidth - so setting MaxWidth on the dialog would do nothing and
-        // the sidebar and its page would be squeezed into half the room they need. Overridden
-        // locally rather than app-wide, because every other dialog is happy at the stock size.
-        Resources["ContentDialogMaxWidth"] = 820d;
+        _buttons.Children.Add(_ok);
+        _buttons.Children.Add(_cancel);
 
         // --------------------------------------------------------------- appearance
-        _theme = new RadioButtons
+        _themeChoice = new RadioButtons
         {
             Items = { "Use system setting", "Light", "Dark" },
         };
 
-        _theme.SelectionChanged += (_, _) => Apply(() =>
+        _themeChoice.SelectionChanged += (_, _) => Apply(() =>
         {
-            if (_theme.SelectedIndex >= 0)
+            if (_themeChoice.SelectedIndex >= 0)
             {
-                _vm.SetTheme((AppTheme)_theme.SelectedIndex);
+                _vm.SetTheme((AppTheme)_themeChoice.SelectedIndex);
             }
         });
 
@@ -295,6 +341,9 @@ internal sealed class PreferencesDialog : ContentDialog
 
         _diagnostics = BuildCheck("Underline problems in the source");
         Bind(_diagnostics, v => _vm.SetDiagnosticsAsync(v));
+
+        _spellCheck = BuildCheck("Underline words that are not in the dictionary");
+        Bind(_spellCheck, v => _vm.SetSpellCheckAsync(v));
 
         _showOutline = BuildCheck("Show the outline panel");
         Bind(_showOutline, v => _vm.SetShowOutlineAsync(v));
@@ -416,7 +465,62 @@ internal sealed class PreferencesDialog : ContentDialog
         _categories.SelectionChanged += (_, _) => ShowPage(_categories.SelectedIndex);
 
         _shell = BuildShell();
-        Content = _shell;
+
+        _root = new Grid
+        {
+            Padding = new Thickness(20),
+            RowSpacing = 16,
+            // SurfaceBrush, not a lookup of ApplicationPageBackgroundThemeBrush. That resolves
+            // against the application's theme - the operating system's - while this window
+            // follows the one chosen in Marqora, so with Windows dark and Marqora light it
+            // painted a black page under light controls. See PaletteWindow.SurfaceBrush.
+            Background = SurfaceBrush(_vm.EffectiveTheme),
+            RequestedTheme = _vm.EffectiveTheme == AppTheme.Dark ? ElementTheme.Dark : ElementTheme.Light,
+        };
+
+        _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        Grid.SetRow(_shell, 0);
+        _root.Children.Add(_shell);
+
+        Grid.SetRow(_buttons, 1);
+        _root.Children.Add(_buttons);
+
+        Content = _root;
+
+        ConfigurePresenter();
+
+        // Escape is what a dialog trained everyone to press, and the window keeps that: it goes
+        // through Cancel rather than straight to Close, so the discard prompt still appears when
+        // there is something to lose.
+        _root.KeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                // Only reached when nothing nearer took the key: a handler attached this way
+                // does not see an event a control has already handled, so Enter inside a number
+                // box still commits the number rather than the window.
+                case VirtualKey.Enter:
+                    e.Handled = true;
+                    Accept();
+                    break;
+
+                case VirtualKey.Escape:
+                    e.Handled = true;
+                    RequestCancel();
+                    break;
+
+                default:
+                    break;
+            }
+        };
+
+        AppWindow.Closing += OnWindowClosing;
+
+        // Remember where it is put, as it is put there. Waiting for the close missed every exit
+        // but the caption X, because OK and Cancel call Window.Close directly.
+        TrackPlacementChanges();
 
         // The shell re-measures after every preference change and says what it landed on.
         // Unsubscribed on close: the view model outlives this dialog, so a handler left
@@ -425,16 +529,15 @@ internal sealed class PreferencesDialog : ContentDialog
         Closed += (_, _) => _vm.FontsResolved -= OnFontsResolved;
 
         /*
-            Follow the theme while the dialog is open.
+            Follow the theme while the window is open.
 
-            DialogExtensions.AnchorTo gives a dialog the window's theme once, on the way in,
-            because a ContentDialog sits in the popup root and never inherits a later change.
-            That is enough for every other dialog in the app and not enough for this one: this
-            is where the theme is changed from, so picking Dark on the Appearance page left the
-            dialog itself sitting in Light until it was closed and reopened.
+            This is where the theme is changed from, so it has to repaint itself: picking Dark on
+            the Appearance page would otherwise leave this window in Light until it was closed and
+            reopened. Its own window, so there are two halves to it - the content root and the
+            caption - and OnEffectiveThemeChanged does both.
 
             Unsubscribed on close for the same reason as FontsResolved - the theme service is a
-            singleton and outlives this dialog by a long way.
+            singleton and outlives this window by a long way.
         */
         _vm.EffectiveThemeChanged += OnEffectiveThemeChanged;
         Closed += (_, _) => _vm.EffectiveThemeChanged -= OnEffectiveThemeChanged;
@@ -454,17 +557,116 @@ internal sealed class PreferencesDialog : ContentDialog
     /// Everything else is already in force - it was applied as it was changed - so there is
     /// nothing here for the rest of them.
     /// </summary>
-    private void OnAccept(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    private void Accept()
     {
         if (FirstInvalidField() is { } invalid)
         {
-            args.Cancel = true;
             Reveal(invalid);
 
             return;
         }
 
         Apply(() => _vm.CommitDeferred(ApplyDeferredTo));
+
+        _closing = true;
+        Close();
+    }
+
+    /// <summary>Where this window remembers its geometry. See <see cref="AppSettings.PreferencesPlacement"/>.</summary>
+    protected override WindowPlacement SavedPlacement => _settings.Current.PreferencesPlacement;
+
+    protected override AppSettings StorePlacement(AppSettings settings, WindowPlacement placement) =>
+        settings with { PreferencesWindow = placement };
+
+    /// <summary>
+    /// Fixed size. The sidebar and the fields are both fixed width, so extra width would be dead
+    /// space rather than more room - and a size nobody can change is one less thing to restore.
+    /// </summary>
+    protected override bool IsResizable => false;
+
+    /// <summary>
+    /// Centred on the editor, not tucked against its right edge.
+    ///
+    /// The palette default suits something you read alongside the document. This is a dialog
+    /// that happens to be a window - it is looked at rather than referred to - and a dialog
+    /// opens in the middle of what it belongs to.
+    /// </summary>
+    protected override RectInt32 DefaultPosition(RectInt32 nearby, int width, int height) =>
+        CentredOn(nearby, width, height);
+
+    /// <summary>
+    /// Puts the window where it was last left and brings it up.
+    ///
+    /// Ownership is claimed after the window is showing, not before - see
+    /// <see cref="PaletteWindow.EnsureOwned"/> for why that order is not optional.
+    /// </summary>
+    /// <param name="nearby">The main window, for a first opening that has nothing remembered.</param>
+    public void ShowNear(RectInt32 nearby)
+    {
+        RestorePlacement(nearby);
+
+        // AppWindow.Show rather than Window.Activate, which is what the cheatsheet and Find All
+        // use. Activate re-initialises the title bar and throws away the caption colours set in
+        // the constructor, which left a dark caption sitting over light content.
+        AppWindow.Show();
+
+        EnsureOwned();
+
+        // And painted again now the window exists, so a theme changed while it was closed is
+        // picked up too.
+        RefreshTitleBar();
+    }
+
+    /// <summary>
+    /// Closes the window as the application exits.
+    ///
+    /// WinUI keeps the process alive until every window is closed, so preferences left open
+    /// would outlive the editor. Closed without asking about unsaved changes: the app is going
+    /// either way, and a confirmation nobody can answer would only hang the shutdown.
+    /// </summary>
+    public void Shutdown()
+    {
+        _closing = true;
+
+        Close();
+    }
+
+    /// <summary>
+    /// The window is closing - by Cancel, by Escape, or by the caption's X.
+    ///
+    /// All three mean the same thing, so all three ask the same question. The close is deferred
+    /// while the discard prompt is up, which is the window's version of what Cancel used to do
+    /// by setting args.Cancel on the dialog's own button.
+    /// </summary>
+    private void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        CapturePlacement();
+
+        if (_closing || !HasChanges)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+
+        AskToDiscard();
+    }
+
+    /// <summary>
+    /// Cancel, from the button or from Escape. Closes straight away when there is nothing to
+    /// lose, and asks first when there is.
+    /// </summary>
+    private void RequestCancel()
+    {
+        if (!HasChanges)
+        {
+            _closing = true;
+            Close();
+
+            return;
+        }
+
+        AskToDiscard();
     }
 
     // ----------------------------------------------------------------- validation
@@ -609,36 +811,25 @@ internal sealed class PreferencesDialog : ContentDialog
 
         // A turn later, because selecting the page swaps the content and the box is not laid
         // out - so cannot take focus, or be scrolled to - until that has happened.
-        DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() =>
-            field.Box.Focus(FocusState.Programmatic));
+        this.DispatcherQueue.TryEnqueue(() => field.Box.Focus(FocusState.Programmatic));
     }
 
     /// <summary>
-    /// Cancel, and the Escape key, which raises this same event.
+    /// Asks whether to throw the changes away.
     ///
-    /// Asks first when there is anything to lose. Changes here have already been applied and
-    /// watched, so discarding them undoes something the user has seen happen - a heavier
-    /// thing than abandoning a form that never took effect, and too heavy to do on a
-    /// reflexive Escape without asking.
+    /// Worth asking. Changes here have already been applied and watched, so discarding them
+    /// undoes something the user has seen happen - a heavier thing than abandoning a form that
+    /// never took effect, and too heavy to do on a reflexive Escape without a question.
     ///
-    /// The confirmation is a Flyout rather than a dialog because WinUI permits one
-    /// ContentDialog at a time and we are inside one; the same wall the formatter rules ran
-    /// into. Cancelling the close keeps this dialog up while the flyout is answered.
+    /// Still a Flyout now that this is a window and a real dialog would be allowed. Anchored to
+    /// the Cancel button, it appears where the user is already looking and points at what they
+    /// just pressed; a centred dialog for a two-word question would be the heavier answer.
     /// </summary>
-    private void OnCancel(ContentDialog sender, ContentDialogButtonClickEventArgs args)
-    {
-        if (!HasChanges)
+    private void AskToDiscard() =>
+        DiscardConfirmation().ShowAt(_cancel, new FlyoutShowOptions
         {
-            return;
-        }
-
-        args.Cancel = true;
-
-        DiscardConfirmation().ShowAt(_shell, new FlyoutShowOptions
-        {
-            Placement = FlyoutPlacementMode.Bottom,
+            Placement = FlyoutPlacementMode.Top,
         });
-    }
 
     private Flyout DiscardConfirmation()
     {
@@ -651,12 +842,13 @@ internal sealed class PreferencesDialog : ContentDialog
         {
             flyout.Hide();
 
-            // Closed by hand because the close that would have done it was cancelled above.
+            // Closed by hand: the close that would have done it was deferred while this was up.
             ApplyAsync(async () =>
             {
                 await _vm.RevertAsync().ConfigureAwait(true);
 
-                Hide();
+                _closing = true;
+                Close();
             });
         };
 
@@ -718,7 +910,7 @@ internal sealed class PreferencesDialog : ContentDialog
 
     private Grid BuildShell()
     {
-        var grid = new Grid { Width = ContentWidth, Height = ContentHeight, ColumnSpacing = 18 };
+        var grid = new Grid { ColumnSpacing = 18 };
 
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -748,7 +940,7 @@ internal sealed class PreferencesDialog : ContentDialog
         var panel = NewPage();
 
         panel.Children.Add(Heading("THEME"));
-        panel.Children.Add(_theme);
+        panel.Children.Add(_themeChoice);
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SOURCE PANE"));
@@ -816,6 +1008,10 @@ internal sealed class PreferencesDialog : ContentDialog
         panel.Children.Add(Heading("BEHAVIOUR"));
         panel.Children.Add(_scrollSync);
         panel.Children.Add(_diagnostics);
+
+        panel.Children.Add(Divider());
+        panel.Children.Add(Heading("SPELLING"));
+        panel.Children.Add(_spellCheck);
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("OUTLINE"));
@@ -922,18 +1118,47 @@ internal sealed class PreferencesDialog : ContentDialog
 
         panel.Children.Add(Note(
             "Export writes every preference on these six pages to a file, along with the "
-            + "version of Marqora that wrote it. Your open documents, window position, recent "
-            + "files and search history are not included - they describe this machine rather "
+            + "version of Marqora that wrote it. Your custom dictionary is not included; it has "
+            + "its own buttons below, because it is a list you built rather than a preference "
+            + "you set. Your open documents, window position, recent "
+            + "files and search history are not included either - they describe this machine rather "
             + "than your preferences.\n\n"
             + "Import brings across everything the running version understands, whichever "
             + "version wrote the file, and says afterwards what it could not use. Like every "
             + "other change here, an import is undone by Cancel."));
 
+        // The dictionary's own pair, directly beneath the preferences pair and under the same
+        // heading. Both halves of moving to another machine in one place, so it is hard to do
+        // only one of them and not notice.
+        var exportWords = new Button { Content = "Export dictionary..." };
+        var importWords = new Button { Content = "Import dictionary..." };
+
+        exportWords.Click += (_, _) => ApplyAsync(() => ExportDictionaryAsync(exportWords));
+        importWords.Click += (_, _) => ApplyAsync(() => ImportDictionaryAsync(importWords));
+
+        panel.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { exportWords, importWords },
+        });
+
+        panel.Children.Add(Note(
+            "Your dictionary is a plain text file, one word per line, so it can be kept in a "
+            + "project alongside the documents it belongs to and reviewed in a diff like "
+            + "anything else. Lines starting with \"#\" are comments and are there for you "
+            + "rather than for Marqora.\n\n"
+            + "Import adds words and never removes any, and says how many were new. Unlike a "
+            + "preferences import, this one is not undone by Cancel: the words are written as "
+            + "soon as they arrive."));
+
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("RESET"));
 
-        // A Flyout rather than a confirmation dialog: WinUI allows only one ContentDialog at
-        // a time and throws on a second, and this is already inside one.
+        // A Flyout rather than a dialog. It used to be forced - WinUI allows one ContentDialog
+        // at a time and this was one - and is now a choice: anchored to the button it answers
+        // for, it appears where the user is already looking.
         //
         // Shown from a Click handler rather than hung off the button's Flyout property, so it
         // is built at the moment it is needed. Themed() reads the theme in force when the
@@ -1012,6 +1237,41 @@ internal sealed class PreferencesDialog : ContentDialog
             anchor,
             outcome.Succeeded ? ReportTone.Done : ReportTone.Problem,
             outcome.Succeeded ? "Preferences exported" : "Nothing was exported",
+            outcome.Message);
+    }
+
+    /// <summary>
+    /// The dictionary's own export and import.
+    ///
+    /// Simpler than the preferences pair, because a word list has no versions to reconcile and
+    /// nothing to clamp: it is a list of words, and the only question is how many of them were
+    /// new. Both report beside the button that was pressed, like everything else here.
+    /// </summary>
+    private async Task ExportDictionaryAsync(FrameworkElement anchor)
+    {
+        if (await _vm.ExportDictionaryAsync().ConfigureAwait(true) is not { } outcome)
+        {
+            return;
+        }
+
+        ShowReport(
+            anchor,
+            outcome.Succeeded ? ReportTone.Done : ReportTone.Problem,
+            outcome.Succeeded ? "Dictionary exported" : "Nothing was exported",
+            outcome.Message);
+    }
+
+    private async Task ImportDictionaryAsync(FrameworkElement anchor)
+    {
+        if (await _vm.ImportDictionaryAsync().ConfigureAwait(true) is not { } outcome)
+        {
+            return;
+        }
+
+        ShowReport(
+            anchor,
+            outcome.Succeeded ? ReportTone.Done : ReportTone.Problem,
+            outcome.Succeeded ? "Dictionary imported" : "Nothing was imported",
             outcome.Message);
     }
 
@@ -1125,8 +1385,8 @@ internal sealed class PreferencesDialog : ContentDialog
     /// <summary>
     /// What an export or an import came to, said beside the button that was pressed.
     ///
-    /// A Flyout for the same reason every other answer in this dialog is one: WinUI permits a
-    /// single ContentDialog at a time and this is already inside one.
+    /// A Flyout for the same reason every other answer here is one: anchored to the button that
+    /// was pressed, it says what happened where the user is already looking.
     ///
     /// Built to be noticed rather than merely displayed. The first version was a paragraph of
     /// body text in a plain popup, which is easy to dismiss without reading and - once the
@@ -1290,7 +1550,7 @@ internal sealed class PreferencesDialog : ContentDialog
         {
             AppSettings s = _vm.Current;
 
-            _theme.SelectedIndex = (int)s.Theme;
+            _themeChoice.SelectedIndex = (int)s.Theme;
 
             WriteFont(_sourceFont, s.SourceFontFamily);
             _sourceFontSize.Value = s.SourceFontSize;
@@ -1318,6 +1578,20 @@ internal sealed class PreferencesDialog : ContentDialog
 
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;
+            _spellCheck.IsChecked = s.SpellCheckEnabled;
+
+            // Greyed out, with the reason, when Windows has no dictionary for this language.
+            // A switch that stays on and does nothing is worse than one that says why it cannot.
+            // Set here rather than in the constructor because Populate runs under the _loading
+            // guard, so touching the control cannot write the setting back.
+            _spellCheck.IsEnabled = _vm.SpellCheckAvailable;
+
+            ToolTipService.SetToolTip(
+                _spellCheck,
+                _vm.SpellCheckAvailable
+                    ? null
+                    : "Windows has no spelling dictionary installed for your language. "
+                        + "Add one in Windows Settings, under Time & language.");
             _showOutline.IsChecked = s.ShowOutline;
 
             // Clamped on the way in: the depth is an index here, and a settings file edited
@@ -1615,8 +1889,16 @@ internal sealed class PreferencesDialog : ContentDialog
     /// The theme has moved under us - from the Appearance page, or from Windows itself while
     /// the dialog is up. Repaint this dialog to match, since nothing else will.
     /// </summary>
-    private void OnEffectiveThemeChanged(object? sender, AppTheme effective) =>
-        RequestedTheme = effective == AppTheme.Dark ? ElementTheme.Dark : ElementTheme.Light;
+    private void OnEffectiveThemeChanged(object? sender, AppTheme effective)
+    {
+        // A Window has no RequestedTheme of its own, so the content root wears it. Three separate
+        // things, and all three are needed: the controls follow RequestedTheme, the page behind
+        // them is an explicit brush, and the caption is painted by Windows rather than XAML.
+        _root.RequestedTheme = effective == AppTheme.Dark ? ElementTheme.Dark : ElementTheme.Light;
+        _root.Background = SurfaceBrush(effective);
+
+        ApplyTitleBarTheme(effective);
+    }
 
     private void RefreshFontHints()
     {

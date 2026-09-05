@@ -56,6 +56,32 @@ public sealed record AppSettings
     /// </summary>
     public bool ShowDiagnostics { get; set; } = true;
 
+    /// <summary>
+    /// Underline words that are not in the dictionary.
+    ///
+    /// On by default, matching <see cref="ShowDiagnostics"/> and the rest of the field: a spell
+    /// checker nobody switches on is a spell checker nobody has.
+    /// </summary>
+    public bool SpellCheckEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How many spelling suggestions the right-click menu offers.
+    ///
+    /// Deliberately not on any preferences page. It is the sort of number almost nobody changes,
+    /// and the dialog is better for not carrying a control for it - but a hand-edited settings
+    /// file can set it, which is the same escape hatch <see cref="TabSize"/> documents. The menu
+    /// builds <see cref="MaximumSpellSuggestionCount"/> slots once and shows this many, so the
+    /// value can change without the menu being rebuilt.
+    /// </summary>
+    public int SpellSuggestionCount { get; set; } = DefaultSpellSuggestionCount;
+
+    public const int DefaultSpellSuggestionCount = 5;
+
+    public const int MinimumSpellSuggestionCount = 1;
+
+    /// <summary>The number of slots the context menu pre-builds, and the ceiling on the setting.</summary>
+    public const int MaximumSpellSuggestionCount = 10;
+
     /// <summary>Reload the document automatically when it changes on disk and has no unsaved edits.</summary>
     public bool ReloadOnExternalChange { get; set; } = true;
 
@@ -149,6 +175,25 @@ public sealed record AppSettings
 
     /// <summary>Wide enough for a line of markdown beside its line number, deep enough to scan.</summary>
     public static WindowPlacement DefaultFindAllWindow { get; } = new() { Width = 760, Height = 560 };
+
+    /// <summary>
+    /// Geometry of the preferences window. Nullable for the same reason as
+    /// <see cref="CheatsheetWindow"/>; read it through <see cref="PreferencesPlacement"/>.
+    /// </summary>
+    public WindowPlacement? PreferencesWindow { get; set; }
+
+    /// <summary>The preferences window's geometry, safe to use whatever the settings file held.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WindowPlacement PreferencesPlacement => PreferencesWindow ?? DefaultPreferencesWindow;
+
+    /// <summary>
+    /// Room for the sidebar beside a page, and for the longest page without scrolling.
+    ///
+    /// Wider than it strictly needs to be, deliberately: the wrapping notes at the foot of
+    /// several pages are the widest thing on them, and a narrow window turns each into a
+    /// column of six words.
+    /// </summary>
+    public static WindowPlacement DefaultPreferencesWindow { get; } = new() { Width = 900, Height = 620 };
 
     /// <summary>
     /// Find All's switches, remembered so a search never has to be set up twice. They are
@@ -379,6 +424,7 @@ public sealed record AppSettings
             "cheatsheetWindow",
             "cheatsheetScrollTop",
             "findAllWindow",
+            "preferencesWindow",
             "findHistory",
             "openDocuments",
             "activeDocumentIndex",
@@ -415,6 +461,7 @@ public sealed record AppSettings
             CheatsheetWindow = current.CheatsheetWindow,
             CheatsheetScrollTop = current.CheatsheetScrollTop,
             FindAllWindow = current.FindAllWindow,
+            PreferencesWindow = current.PreferencesWindow,
             FindHistory = current.FindHistory,
             OpenDocuments = current.OpenDocuments,
             ActiveDocumentIndex = current.ActiveDocumentIndex,

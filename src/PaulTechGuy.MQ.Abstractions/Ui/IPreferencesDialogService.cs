@@ -19,4 +19,12 @@ namespace PaulTechGuy.MQ.Abstractions.Ui;
 public interface IPreferencesDialogService
 {
     Task ShowPreferencesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes the window as the application exits.
+    ///
+    /// Preferences is a window rather than a modal dialog, and WinUI keeps the process alive
+    /// until every window is closed - so one left open would outlive the editor.
+    /// </summary>
+    void Shutdown();
 }

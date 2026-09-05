@@ -28,6 +28,7 @@ public static class RepositoryServiceCollectionExtensions
         services.TryAddSingleton<IAppPaths, AppPaths>();
         services.TryAddSingleton<ISettingsRepository, JsonSettingsRepository>();
         services.TryAddSingleton<IRecentFilesRepository, JsonRecentFilesRepository>();
+        services.TryAddSingleton<IUserDictionaryRepository, TextUserDictionaryRepository>();
         services.TryAddSingleton<ISnippetCatalog, SnippetCatalog>();
 
         services.TryAddSingleton<IPreferencesTransfer>(provider => new PreferencesTransferService(

@@ -287,6 +287,11 @@ public sealed class PreferencesTransferService(
             PreviewMaxWidth = Width(settings.PreviewMaxWidth),
             TabSize = Whole(
                 "tabSize", settings.TabSize, AppSettings.MinimumTabSize, AppSettings.MaximumTabSize),
+            SpellSuggestionCount = Whole(
+                "spellSuggestionCount",
+                settings.SpellSuggestionCount,
+                AppSettings.MinimumSpellSuggestionCount,
+                AppSettings.MaximumSpellSuggestionCount),
             RecentFilesLimit = Whole(
                 "recentFilesLimit",
                 settings.RecentFilesLimit,

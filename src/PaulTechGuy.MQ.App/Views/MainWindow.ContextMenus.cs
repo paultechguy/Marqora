@@ -54,6 +54,27 @@ public sealed partial class MainWindow
     // Items that need a document with something in it.
     private readonly List<MenuFlyoutItem> _contentItems = [];
 
+    /// <summary>
+    /// The spelling suggestions, built once and relabelled per click.
+    ///
+    /// A fixed set of slots rather than items created and destroyed each time, because this file
+    /// keeps its menus rather than rebuilding them - see the note at the top. There are always
+    /// AppSettings.MaximumSpellSuggestionCount of them and the click shows as many as it has
+    /// words for, so changing the setting needs no rebuild.
+    ///
+    /// Deliberately not in _contentItems: those are enabled by whether the document has any text,
+    /// and these are shown by whether the pointer was on a misspelling. Putting them in both
+    /// lists would have the two rules fighting.
+    /// </summary>
+    private MenuFlyoutItem[]? _suggestionItems;
+    private MenuFlyoutItem? _noSuggestionsItem;
+    private MenuFlyoutItem? _deleteRepeatedItem;
+    private MenuFlyoutItem? _addToDictionaryItem;
+    private MenuFlyoutSeparator? _spellingSeparator;
+
+    /// <summary>The misspelling that was right-clicked, captured for the item handlers.</summary>
+    private SpellingHit? _clickedSpelling;
+
     /// <summary>What the pointer was over, captured at the click and used by the two Copy items.</summary>
     private string? _clickedLinkUrl;
     private string? _clickedImageUrl;
@@ -70,6 +91,7 @@ public sealed partial class MainWindow
 
         _clickedLinkUrl = e.LinkUrl;
         _clickedImageUrl = e.ImageUrl;
+        _clickedSpelling = e.Spelling;
 
         MenuFlyout menu = e.Pane == EditorPane.Source
             ? BuildSourceMenu()
@@ -84,6 +106,8 @@ public sealed partial class MainWindow
         {
             if (_cutItem is not null) { _cutItem.IsEnabled = e.HasSelection; }
             if (_sourceCopyItem is not null) { _sourceCopyItem.IsEnabled = e.HasSelection; }
+
+            FitSpellingItems(e.Spelling);
         }
         else
         {
@@ -109,14 +133,112 @@ public sealed partial class MainWindow
             // with the arrow keys the way the header menus can.
             ShowMode = FlyoutShowMode.Standard,
         });
+    }
 
-        static void Show(MenuFlyoutItemBase? item, bool visible)
+    /// <summary>Collapses or reveals one item. Typed for the base so it takes separators too.</summary>
+    private static void Show(MenuFlyoutItemBase? item, bool visible)
+    {
+        if (item is not null)
         {
-            if (item is not null)
-            {
-                item.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-            }
+            item.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         }
+    }
+
+    /// <summary>
+    /// Fits the spelling block to the word under the pointer, or hides it entirely.
+    ///
+    /// Nothing is created or destroyed here: the slots were built with the menu and this only
+    /// relabels them, which is what keeps the promise made at the top of this file.
+    ///
+    /// The suggestions themselves are fetched now rather than in advance. It is one call to the
+    /// spell engine, on the UI thread, in the moment between the click and the menu appearing -
+    /// a few milliseconds the first time a given word is asked about and nothing at all
+    /// afterwards, because the analyzer caches by word. Computing them for every misspelling as
+    /// the document was checked would mean hundreds of calls to fill a menu opened once.
+    /// </summary>
+    private void FitSpellingItems(SpellingHit? spelling)
+    {
+        if (_suggestionItems is null)
+        {
+            return;
+        }
+
+        bool repeated = spelling is { Repeated: true };
+
+        // A repeated word has nothing to suggest: the fix is to delete it, not to respell it.
+        IReadOnlyList<string> words = spelling is { } hit && !repeated
+            ? ViewModel.SuggestionsFor(hit)
+            : [];
+
+        int offered = Math.Min(words.Count, Math.Clamp(
+            ViewModel.SpellSuggestionCount,
+            AppSettings.MinimumSpellSuggestionCount,
+            _suggestionItems.Length));
+
+        for (int i = 0; i < _suggestionItems.Length; i++)
+        {
+            bool used = i < offered;
+
+            if (used)
+            {
+                _suggestionItems[i].Text = words[i];
+            }
+
+            Show(_suggestionItems[i], used);
+        }
+
+        Show(_noSuggestionsItem, spelling is not null && !repeated && offered == 0);
+        Show(_deleteRepeatedItem, repeated);
+
+        // Offered for a misspelling but not for a repeat: "has" is already a word, and adding it
+        // would teach the dictionary nothing.
+        Show(_addToDictionaryItem, spelling is not null && !repeated);
+        Show(_spellingSeparator, spelling is not null);
+    }
+
+    /// <summary>
+    /// Puts a chosen suggestion in place of the misspelling.
+    ///
+    /// The word is read from the item that was clicked rather than captured when the menu was
+    /// built: these slots are reused for every right-click, so anything captured at build time
+    /// would be a word from some earlier menu.
+    /// </summary>
+    private void OnSuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Text.Length: > 0 } item && _clickedSpelling is { } hit)
+        {
+            _ = ViewModel.ReplaceSpellingAsync(hit, item.Text);
+        }
+    }
+
+    /// <summary>
+    /// Accepts the misspelled word permanently.
+    ///
+    /// The squiggles clear on the next pass without the engine being asked anything: the
+    /// analyzer caches what the engine said rather than what survived the filter, so a new word
+    /// only changes the filter.
+    /// </summary>
+    private void AddClickedWordToDictionary()
+    {
+        if (_clickedSpelling is { } hit)
+        {
+            _ = ViewModel.AddToDictionaryAsync(hit.Word);
+        }
+    }
+
+    private void DeleteRepeatedWord()
+    {
+        if (_clickedSpelling is not { } hit)
+        {
+            return;
+        }
+
+        // The space in front goes with it, so "has has" becomes "has" rather than "has  ". There
+        // is always something there: a word can only be flagged as a repeat if another one
+        // precedes it on the same line.
+        SpellingHit range = hit.Start > 0 ? hit with { Start = hit.Start - 1 } : hit;
+
+        _ = ViewModel.ReplaceSpellingAsync(range, string.Empty);
     }
 
     /// <summary>
@@ -132,6 +254,54 @@ public sealed partial class MainWindow
         }
 
         var menu = new MenuFlyout();
+
+        // Spelling goes first, above Undo, because a menu raised on a squiggle is a menu about
+        // that word - which is where Word, Chrome and VS Code all put it. Every item here is
+        // collapsed unless the pointer was actually on a misspelling.
+        _suggestionItems = new MenuFlyoutItem[AppSettings.MaximumSpellSuggestionCount];
+
+        for (int i = 0; i < _suggestionItems.Length; i++)
+        {
+            var suggestion = new MenuFlyoutItem { Visibility = Visibility.Collapsed };
+
+            // The word is read from the item's own Text at click time rather than captured here:
+            // these ten items outlive every right-click, and a closure over the loop variable
+            // would be answering for whatever the slot held when the menu was built.
+            suggestion.Click += OnSuggestionClick;
+
+            _suggestionItems[i] = suggestion;
+            menu.Items.Add(suggestion);
+        }
+
+        _noSuggestionsItem = new MenuFlyoutItem
+        {
+            Text = "No suggestions",
+            IsEnabled = false,
+            Visibility = Visibility.Collapsed,
+        };
+
+        _deleteRepeatedItem = new MenuFlyoutItem
+        {
+            Text = "Delete repeated word",
+            Visibility = Visibility.Collapsed,
+        };
+
+        _deleteRepeatedItem.Click += (_, _) => DeleteRepeatedWord();
+
+        _addToDictionaryItem = new MenuFlyoutItem
+        {
+            Text = "Add to Dictionary",
+            Visibility = Visibility.Collapsed,
+        };
+
+        _addToDictionaryItem.Click += (_, _) => AddClickedWordToDictionary();
+
+        _spellingSeparator = new MenuFlyoutSeparator { Visibility = Visibility.Collapsed };
+
+        menu.Items.Add(_noSuggestionsItem);
+        menu.Items.Add(_deleteRepeatedItem);
+        menu.Items.Add(_addToDictionaryItem);
+        menu.Items.Add(_spellingSeparator);
 
         menu.Items.Add(Edit("Undo", "undo", "Ctrl+Z"));
         menu.Items.Add(Edit("Redo", "redo", "Ctrl+Y"));

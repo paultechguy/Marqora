@@ -78,6 +78,7 @@ internal static class KeyboardShortcuts
             new("Redo", "Ctrl+Y"),
             new("Select all", "Ctrl+A"),
             new("Format document", "Shift+Alt+F"),
+            new("Correct the misspelling at the cursor", "Ctrl+."),
         ]),
 
         new("Formatting",
@@ -104,6 +105,8 @@ internal static class KeyboardShortcuts
             new("Show or hide the outline", "Alt+4"),
             new("Go to the outline, and back", "Alt+Shift+4"),
             new("Leave the outline", "Escape"),
+
+            new("Spell check", "F7"),
 
             new("Word wrap", "Alt+Z"),
             new("Zoom the active pane", "Ctrl+= / Ctrl+- / Ctrl+0"),

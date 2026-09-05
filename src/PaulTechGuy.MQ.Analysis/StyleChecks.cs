@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Markdown;
 
 namespace PaulTechGuy.MQ.Analysis;
 
@@ -33,7 +34,7 @@ internal static partial class StyleChecks
 
             // Inline rules run against a copy with code spans blanked out, so a backticked
             // example of bad syntax is not reported as bad syntax.
-            string outsideCode = MaskCodeSpans(text);
+            string outsideCode = LineMasker.MaskCodeSpans(text);
 
             Check(HeadingWithoutSpace(), text, line, "heading-space",
                 "Put a space between the hashes and the heading text.", into);
@@ -109,81 +110,6 @@ internal static partial class StyleChecks
             Rule = rule,
             Message = message,
         });
-
-    /// <summary>
-    /// Replaces the contents of inline code spans with spaces, keeping every other character
-    /// where it was so match positions still line up with the real line.
-    /// </summary>
-    private static string MaskCodeSpans(string line)
-    {
-        if (!line.Contains('`', StringComparison.Ordinal))
-        {
-            return line;
-        }
-
-        char[] masked = line.ToCharArray();
-        int i = 0;
-
-        while (i < masked.Length)
-        {
-            if (masked[i] != '`')
-            {
-                i++;
-
-                continue;
-            }
-
-            int open = i;
-            while (i < masked.Length && masked[i] == '`')
-            {
-                i++;
-            }
-
-            int runLength = i - open;
-            int close = FindClosingRun(masked, i, runLength);
-
-            if (close < 0)
-            {
-                // No partner, so the backticks are just characters. Nothing to mask.
-                return new string(masked);
-            }
-
-            for (int j = open; j < close + runLength && j < masked.Length; j++)
-            {
-                masked[j] = ' ';
-            }
-
-            i = close + runLength;
-        }
-
-        return new string(masked);
-    }
-
-    private static int FindClosingRun(char[] text, int from, int runLength)
-    {
-        for (int i = from; i < text.Length; i++)
-        {
-            if (text[i] != '`')
-            {
-                continue;
-            }
-
-            int start = i;
-            while (i < text.Length && text[i] == '`')
-            {
-                i++;
-            }
-
-            if (i - start == runLength)
-            {
-                return start;
-            }
-
-            i--;
-        }
-
-        return -1;
-    }
 
     [GeneratedRegex(@"^\s{0,3}(?<at>#{1,6})[^\s#]")]
     private static partial Regex HeadingWithoutSpace();

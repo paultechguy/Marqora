@@ -40,6 +40,8 @@ public sealed class AppPaths : IAppPaths
 
     public string RecentFilesFilePath => Path.Combine(DataDirectory, "recent-files.json");
 
+    public string UserDictionaryPath => Path.Combine(DataDirectory, "user-dictionary.txt");
+
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     public string SnippetsDirectory => Path.Combine(DataDirectory, "snippets");

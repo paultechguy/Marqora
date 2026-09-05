@@ -51,6 +51,12 @@ public partial class App : Application
 
         _window.Activate();
 
+        // The spell service is COM, and building the checker is the expensive part of using it.
+        // Warming it here puts that cost on a pool thread just after the window appears rather
+        // than inside the first render - and keeps the object on a pool thread, which is where
+        // every later call to it comes from. Deliberately not awaited: nothing waits on spelling.
+        _ = Services.GetRequiredService<WindowsSpellingEngine>().WarmUpAsync();
+
         if (_startupFiles.Count > 0)
         {
             Log.Information("Opening {Count} file(s) from the command line.", _startupFiles.Count);

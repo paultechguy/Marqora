@@ -472,6 +472,8 @@
         var image = e.target.closest ? e.target.closest('img[src]') : null;
         var href = anchor ? anchor.getAttribute('href') : '';
 
+        var spelling = spellingAt(pane, e.clientX, e.clientY);
+
         post('contextMenu', {
           pane: pane,
           x: Math.round(e.clientX),
@@ -480,10 +482,126 @@
           // A link to a heading in this same document is not worth a Copy Link item:
           // there is no address to paste anywhere.
           linkUrl: href.charAt(0) === '#' ? '' : absoluteUrl(href),
-          imageUrl: image ? absoluteUrl(image.getAttribute('src')) : ''
+          imageUrl: image ? absoluteUrl(image.getAttribute('src')) : '',
+
+          // Empty when the pointer was not over a misspelling, which is how the host decides
+          // whether to offer suggestions at all. Zero-based, like every other position the
+          // host is given.
+          word: spelling ? spelling.word : '',
+          wordLine: spelling ? spelling.line : -1,
+          wordStart: spelling ? spelling.start : -1,
+          wordEnd: spelling ? spelling.end : -1,
+          wordRepeated: !!(spelling && spelling.repeated)
         });
       });
     }
+  }
+
+  /*
+    The misspelling under the pointer, or null.
+
+    Asks the marker rather than the model's own getWordAtPosition. The marker is the range the
+    analyzer produced, so the word offered for replacement is exactly the one that was flagged -
+    there is no chance of Monaco's word separators disagreeing with the masker about where a
+    word begins, which they would for a hyphenated or apostrophised one.
+
+    Only the source pane has markers; the preview is HTML.
+  */
+  function spellingAt(pane, clientX, clientY) {
+    if (pane !== 'Source' || !state.editor || !state.monaco) { return null; }
+
+    var model = state.editor.getModel();
+    if (!model) { return null; }
+
+    var target = state.editor.getTargetAtClientPoint(clientX, clientY);
+    if (!target || !target.position) { return null; }
+
+    return spellingAtPosition(model, target.position);
+  }
+
+  /*
+    The misspelling covering one position, or null.
+
+    Shared by the two ways of asking: a right-click, which has a point on screen, and Ctrl+.,
+    which has the caret. Both end up here so both offer exactly the same word.
+  */
+  function spellingAtPosition(model, position) {
+    // An empty range at the position: what comes back is every decoration covering that spot.
+    var covering = model.getDecorationsInRange(new state.monaco.Range(
+      position.lineNumber, position.column, position.lineNumber, position.column));
+
+    for (var i = 0; i < covering.length; i++) {
+      var options = covering[i].options || {};
+      var className = options.inlineClassName;
+
+      // Ours, and not the selection ink or anything Monaco put there itself.
+      if (className !== 'mq-misspelled' && className !== 'mq-repeated-word') { continue; }
+
+      var range = covering[i].range;
+
+      return {
+        word: model.getValueInRange(range),
+        line: range.startLineNumber - 1,
+        start: range.startColumn - 1,
+        end: range.endColumn - 1,
+        // Which class it wears is what tells a repeated word from a misspelling: one is
+        // replaced, the other is deleted.
+        repeated: className === 'mq-repeated-word'
+      };
+    }
+
+    return null;
+  }
+
+  /*
+    Ctrl+. - the corrections, without the mouse.
+
+    It raises the same WinUI menu a right-click does, at the caret instead of at the pointer,
+    rather than going through Monaco's own quick-fix list. One menu, one set of items, one place
+    that decides how they look - the same reason both panes report their right-click to the host
+    instead of drawing a menu of their own. It also keeps the lightbulb and the "no quick fixes"
+    line out of the editor, neither of which was wanted.
+
+    Silent when the caret is not on a misspelling. There is nothing to offer, and a menu saying
+    so is the sort of box that has to be dismissed for no reason.
+  */
+  function openSpellingMenuAtCaret() {
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+
+    if (!model || !state.monaco) { return; }
+
+    var position = editor.getPosition();
+
+    if (!position) { return; }
+
+    var spelling = spellingAtPosition(model, position);
+
+    if (!spelling) { return; }
+
+    // Where that character actually is on screen. The menu wants the WebView's own coordinates,
+    // which is what a pointer event would have given it, so the editor's own offset goes back on.
+    var visible = editor.getScrolledVisiblePosition(position);
+
+    if (!visible) { return; }
+
+    var host = els.monacoHost.getBoundingClientRect();
+
+    post('contextMenu', {
+      pane: 'Source',
+      x: Math.round(host.left + visible.left),
+
+      // Below the line rather than on it, so the menu does not cover the word it is about.
+      y: Math.round(host.top + visible.top + visible.height),
+      hasSelection: paneHasSelection('Source'),
+      linkUrl: '',
+      imageUrl: '',
+      word: spelling.word,
+      wordLine: spelling.line,
+      wordStart: spelling.start,
+      wordEnd: spelling.end,
+      wordRepeated: spelling.repeated
+    });
   }
 
   function wireCtrlWheelZoom(element, pane) {
@@ -1582,6 +1700,22 @@
         'editorWhitespace.foreground': token('--mq-whitespace'),
 
         /*
+          The spelling red, and the one place it is chosen.
+
+          Misspellings are drawn as decorations rather than markers, so this key no longer
+          colours a squiggle - the stylesheet does that. What it still colours is the tick each
+          one puts in the overview ruler, which names this id rather than a hex value so the
+          ticks follow a theme change without anything being re-checked. See setSpelling.
+
+          Nothing else in the app publishes an Info marker, so the key is free for this.
+
+          --mq-danger rather than a colour of its own: it is already the app's red and already
+          has a dark-mode value, and a second token holding the same colour is a second thing
+          to keep in step.
+        */
+        'editorInfo.foreground': token('--mq-danger'),
+
+        /*
           One colour for both, so a selection does not change colour when the keyboard
           leaves the editor.
 
@@ -1611,7 +1745,11 @@
       'editorIndentGuide.background1': token('--mq-border'),
       // Monaco's default whitespace marks are nearly invisible; a tinted colour makes
       // Show Whitespace actually readable without competing with the text.
-      'editorWhitespace.foreground': token('--mq-whitespace')
+      'editorWhitespace.foreground': token('--mq-whitespace'),
+
+      // The spelling squiggle. See the light theme above for why info means misspelling and
+      // why it borrows --mq-danger rather than carrying a colour of its own.
+      'editorInfo.foreground': token('--mq-danger')
     };
 
     /*
@@ -1914,6 +2052,14 @@
 
     { alt: true, code: 'KeyZ', run: 'wordWrap' },
 
+    // Spell check. The window has the same binding; this is the half that fires while the
+    // caret is in the editor, which is most of the time.
+    { code: 'F7', run: 'toggleSpellCheck' },
+
+    // The corrections for the word at the caret. Answered here rather than by the host: only
+    // this side knows where the caret is or what is underlined beneath it.
+    { ctrl: true, code: 'Period', run: openSpellingMenuAtCaret },
+
     /*
       Zoom, answered here rather than by the host: the panes are this file's to scale, and
       the host is told afterwards so the size is remembered. Both the main row and the
@@ -2056,6 +2202,25 @@
       bracketPairColorization: { enabled: false },
       guides: { indentation: false },
       quickSuggestions: false,
+      /*
+        Let a hover escape the pane it is in.
+
+        Monaco draws hovers as content widgets positioned inside the editor, and .mq-pane is
+        overflow:hidden - so a marker hover near the right-hand edge was cut off at the
+        splitter, with the rest of it drawn underneath. The splitter is position:relative with
+        no z-index and comes after the source pane in the DOM, so it paints over anything the
+        pane lets through.
+
+        This switches the overflow-widget container to position:fixed, which is not clipped by
+        an ancestor's overflow. It works here because nothing above the editor establishes a
+        containing block for fixed elements - no transform, filter, will-change or contain on
+        .mq-pane, .mq-root or body. The transforms in app.css are on the zoom badge and the
+        boot spinner, neither of which is an ancestor.
+
+        Not specific to spelling: document problems have always had hovers, and they were
+        clipped the same way.
+      */
+      fixedOverflowWidgets: true,
       // Monaco's own context menu is off, and so is Chromium's. Both panes report the
       // right-click to the host instead, which puts a WinUI flyout up: one menu toolkit
       // for the whole app rather than three, and one place that decides how they look.
@@ -2768,7 +2933,10 @@
       html: html,
       previewScrollTop: 0,
       // Decoration ids for this tab's selected text. See paintSelectionForeground.
-      selectionInk: []
+      selectionInk: [],
+
+      // Decoration ids for this tab's misspellings. See setSpelling.
+      spellInk: []
     };
   }
 
@@ -2859,6 +3027,34 @@
     els.previewPane.scrollTop = 0;
     state.lineMapDirty = true;
     updateWrapGlyphs();
+  }
+
+  /*
+    Squiggles, by owner.
+
+    Monaco keeps markers per model and per owner string, and setModelMarkers replaces an
+    owner's whole set rather than adding to it. Document problems and spelling are switched
+    on and off independently, so they own separate names: publishing one under the other's
+    name would silently wipe it.
+
+    Markers hang off the model rather than the editor, so a tab that is not on screen can be
+    marked up without being brought forward, exactly as updatePreview already updates its HTML.
+  */
+  function setMarkers(id, owner, markers) {
+    var tab = state.tabs[id];
+    if (!tab || !tab.model || !state.monaco) { return; }
+
+    state.monaco.editor.setModelMarkers(tab.model, owner, markers || []);
+  }
+
+  function clearMarkers(owner) {
+    if (!state.monaco) { return; }
+
+    for (var id in state.tabs) {
+      if (Object.prototype.hasOwnProperty.call(state.tabs, id) && state.tabs[id].model) {
+        state.monaco.editor.setModelMarkers(state.tabs[id].model, owner, []);
+      }
+    }
   }
 
   // ---------------------------------------------------------------- inbound
@@ -3178,18 +3374,78 @@
       already updates its HTML.
     */
     setDiagnostics: function (p) {
-      var tab = state.tabs[p.id];
-      if (!tab || !tab.model || !state.monaco) { return; }
-
-      state.monaco.editor.setModelMarkers(tab.model, 'marqora-lint', p.markers || []);
+      setMarkers(p.id, 'marqora-lint', p.markers);
     },
 
     clearDiagnostics: function () {
-      if (!state.monaco) { return; }
+      clearMarkers('marqora-lint');
+    },
 
+    /*
+      Misspellings, drawn as decorations rather than as markers.
+
+      Markers would bring a hover that repeats what the squiggle already says, an Alt+F8 peek
+      panel to dismiss, a "No quick fixes available" line that is untrue, and a place in the
+      document's problem count beside the dead links - which is a different kind of thing. A
+      decoration draws the line and brings none of it. See app.css for the squiggle itself.
+
+      Like markers, decorations hang off the model, so a tab that is not on screen can be marked
+      up without being brought forward.
+    */
+    setSpelling: function (p) {
+      var tab = state.tabs[p.id];
+      if (!tab || !tab.model || !state.monaco) { return; }
+
+      var issues = p.issues || [];
+      var ink = [];
+
+      for (var i = 0; i < issues.length; i++) {
+        var issue = issues[i];
+
+        ink.push({
+          // The host counts from zero; Monaco counts from one. Converted here, as applyEdits
+          // does, rather than on the way out.
+          range: new state.monaco.Range(
+            issue.line + 1,
+            issue.start + 1,
+            issue.line + 1,
+            issue.start + issue.length + 1),
+          options: {
+            inlineClassName: issue.repeated ? 'mq-repeated-word' : 'mq-misspelled',
+            description: 'marqora-spelling',
+            // Typing at either edge of a flagged word should not drag the squiggle along with
+            // it; the next check will say where the word now ends.
+            stickiness: state.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+
+            /*
+              A tick in the scrollbar for every misspelling, so a document can be scanned for
+              them without scrolling through it. Markers gave these for nothing; a decoration
+              has to ask.
+
+              Named as a theme colour rather than given a hex value, so Monaco resolves it
+              against whichever theme is in force and the ticks follow a theme change with no
+              re-check. editorInfo.foreground is set from --mq-danger in defineThemes, which is
+              also where the squiggle's red comes from - one place chooses the colour.
+            */
+            overviewRuler: {
+              color: { id: 'editorInfo.foreground' },
+              position: state.monaco.editor.OverviewRulerLane.Right
+            }
+          }
+        });
+      }
+
+      tab.spellInk = tab.model.deltaDecorations(tab.spellInk || [], ink);
+    },
+
+    clearSpelling: function () {
       for (var id in state.tabs) {
-        if (Object.prototype.hasOwnProperty.call(state.tabs, id) && state.tabs[id].model) {
-          state.monaco.editor.setModelMarkers(state.tabs[id].model, 'marqora-lint', []);
+        if (Object.prototype.hasOwnProperty.call(state.tabs, id)) {
+          var tab = state.tabs[id];
+
+          if (tab.model && tab.spellInk && tab.spellInk.length) {
+            tab.spellInk = tab.model.deltaDecorations(tab.spellInk, []);
+          }
         }
       }
     },

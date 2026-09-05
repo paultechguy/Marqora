@@ -16,6 +16,14 @@ public interface IAppPaths
 
     string RecentFilesFilePath { get; }
 
+    /// <summary>
+    /// The words the user has accepted, one per line.
+    ///
+    /// Plain text rather than JSON on purpose: it is a list of words, it can be shared and
+    /// diffed like any other file, and it can be opened and edited in Marqora itself.
+    /// </summary>
+    string UserDictionaryPath { get; }
+
     string LogDirectory { get; }
 
     /// <summary>Folder holding the user's own snippet files, one snippet per file.</summary>

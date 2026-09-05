@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Spell checking: prose in, misspellings out. It owns the decision about what counts as a word
+    worth checking - the masking, the skip rules, the seed and personal word lists, and the cache
+    that keeps the cost off the keystroke path - but knows nothing about how to spell.
+
+    That last part arrives as ISpellingEngine, implemented in the app project because the only
+    engine is Windows COM. Nothing here mentions Monaco or a marker: the analyzer returns
+    SpellingIssue, and the app maps it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Spelling</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Markdown\PaulTechGuy.MQ.Markdown.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+</Project>

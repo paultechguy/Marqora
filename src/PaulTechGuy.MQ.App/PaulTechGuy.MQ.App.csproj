@@ -60,6 +60,7 @@
     <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Services\PaulTechGuy.MQ.Services.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Spelling\PaulTechGuy.MQ.Spelling.csproj" />
   </ItemGroup>
 
   <!--

@@ -11,9 +11,11 @@ using PaulTechGuy.MQ.Abstractions.Editing;
 using PaulTechGuy.MQ.Abstractions.Formatting;
 using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Services;
+using PaulTechGuy.MQ.Abstractions.Spelling;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Finding;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -46,6 +48,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IMarkdownFormatter _formatter;
     private readonly IMarkdownEditor _editor;
     private readonly IMarkdownAnalyzer _analyzer;
+    private readonly ISpellingAnalyzer _spelling;
+    private readonly UserDictionaryService _dictionary;
     private readonly ISnippetCatalog _snippets;
     private readonly IFormatDialogService _formatDialogs;
     private readonly IPreferencesDialogService _preferencesDialogs;
@@ -205,6 +209,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool DiagnosticsEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool SpellCheckEnabled { get; set; }
 
     // What the formatting toolbar shows. Each of these says what its button would *do*
     // rather than what the text *is* -- see MarkdownMarkState for why the distinction
@@ -404,6 +411,8 @@ public sealed partial class MainViewModel : ObservableObject
         IMarkdownFormatter formatter,
         IMarkdownEditor editor,
         IMarkdownAnalyzer analyzer,
+        ISpellingAnalyzer spelling,
+        UserDictionaryService dictionary,
         ISnippetCatalog snippets,
         IFormatDialogService formatDialogs,
         IPreferencesDialogService preferencesDialogs,
@@ -428,6 +437,8 @@ public sealed partial class MainViewModel : ObservableObject
         _formatter = formatter;
         _editor = editor;
         _analyzer = analyzer;
+        _spelling = spelling;
+        _dictionary = dictionary;
         _snippets = snippets;
         _formatDialogs = formatDialogs;
         _preferencesDialogs = preferencesDialogs;
@@ -567,6 +578,14 @@ public sealed partial class MainViewModel : ObservableObject
         await _recent.InitializeAsync().ConfigureAwait(true);
         await _recent.PruneMissingAsync().ConfigureAwait(true);
 
+        // Reads the word list and starts watching it. Before any document is checked, so the
+        // first pass already knows every word the user has accepted.
+        await _dictionary.InitializeAsync().ConfigureAwait(true);
+
+        // Subscribed after the first read, so the load itself does not trigger a re-check of
+        // documents that have not been opened yet.
+        _dictionary.Changed += OnDictionaryChanged;
+
         AppSettings current = _settings.Current;
 
         ViewMode = current.ViewMode;
@@ -576,6 +595,7 @@ public sealed partial class MainViewModel : ObservableObject
         LineNumbersEnabled = current.ShowLineNumbers;
         ShowWhitespaceEnabled = current.ShowWhitespace;
         DiagnosticsEnabled = current.ShowDiagnostics;
+        SpellCheckEnabled = current.SpellCheckEnabled;
         ShowWrapGlyphEnabled = current.ShowWrapGlyph;
         ReloadOnExternalChangeEnabled = current.ReloadOnExternalChange;
         ActiveZoomPercent = current.PreviewZoomPercent;
@@ -654,7 +674,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
-            await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
+            await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
 
         if (_workspace.Active is { } active)
@@ -2235,7 +2255,7 @@ public sealed partial class MainViewModel : ObservableObject
                         // Ctrl+Z takes one back, which is what makes reloading without asking
                         // something the user can recover from.
                         await _host.ReplaceTextAsync(reloaded.Id, reloaded.Text, rendered).ConfigureAwait(true);
-                        await PublishDiagnosticsAsync(reloaded.Id, reloaded.Text, reloaded.Path, rendered)
+                        await PublishChecksAsync(reloaded.Id, reloaded.Text, reloaded.Path, rendered)
                             .ConfigureAwait(true);
                     }
 
@@ -2285,7 +2305,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
-            await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
+            await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
 
         PersistSession();
@@ -2592,19 +2612,18 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens the preferences dialog.
+    /// Opens the preferences window.
     ///
-    /// Nothing is applied here afterwards: preferences take effect as they are changed, so
-    /// by the time the dialog closes every one of them is already in force. The focus
-    /// restore is the same one every menu command owes.
+    /// Nothing is applied here afterwards: preferences take effect as they are changed, so by
+    /// the time it closes every one of them is already in force.
+    ///
+    /// No focus restore, unlike every other menu command. Preferences is a window rather than a
+    /// modal dialog, so this returns the moment it is on screen rather than when it closes -
+    /// and handing focus back to the document here would take it straight off the window the
+    /// user just asked for.
     /// </summary>
     [RelayCommand]
-    private async Task ShowPreferencesAsync()
-    {
-        await _preferencesDialogs.ShowPreferencesAsync().ConfigureAwait(true);
-
-        RestoreDocumentFocusAfterChrome();
-    }
+    private Task ShowPreferencesAsync() => _preferencesDialogs.ShowPreferencesAsync();
 
     [RelayCommand]
     private void SetTheme(string? themeName)
@@ -2953,13 +2972,214 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        // Back on: the active document has not changed, so nothing would re-publish it.
+        // Back on: the active document has not changed, so nothing would re-publish it. Only the
+        // diagnostics half, deliberately - spelling has its own switch and is not being asked
+        // about here.
         if (_workspace.Active is { } document)
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
 
             await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// Turns the misspelling squiggles on and off. Switching them off clears every tab at once,
+    /// rather than leaving stale marks on the ones not currently in front.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleSpellCheckAsync()
+    {
+        await SetSpellCheckAsync(!SpellCheckEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Turns spell checking on or off and remembers the choice. Driven by the View menu, F7 and
+    /// the preferences dialog.
+    /// </summary>
+    public async Task SetSpellCheckAsync(bool enabled)
+    {
+        if (SpellCheckEnabled == enabled)
+        {
+            return;
+        }
+
+        SpellCheckEnabled = enabled;
+        _settings.Update(s => s with { SpellCheckEnabled = enabled });
+
+        if (_host is null)
+        {
+            return;
+        }
+
+        if (!SpellCheckEnabled)
+        {
+            await _host.ClearSpellingAsync().ConfigureAwait(true);
+
+            return;
+        }
+
+        if (_workspace.Active is { } document)
+        {
+            await PublishSpellingAsync(document.Id, document.Text).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Runs both families of check over one render and publishes what each found.
+    ///
+    /// One call site rather than two scattered everywhere, because they ride the same debounce
+    /// and the same render. They stay independent inside it: each is gated on its own switch,
+    /// publishes under its own marker owner, and one failing does not stop the other.
+    /// </summary>
+    private async Task PublishChecksAsync(
+        Guid documentId,
+        string text,
+        string? path,
+        RenderedMarkdown rendered)
+    {
+        await PublishDiagnosticsAsync(documentId, text, path, rendered).ConfigureAwait(true);
+        await PublishSpellingAsync(documentId, text).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Checks a document's prose and sends the misspellings to the editor.
+    ///
+    /// Takes only the text: unlike the document checks, spelling needs nothing from the render.
+    /// It is on the same debounce all the same, because it is the same keystroke that invalidates
+    /// both, and the analyzer's per-line cache means a keystroke re-checks one line.
+    /// </summary>
+    private async Task PublishSpellingAsync(Guid documentId, string text)
+    {
+        if (_host is null || !SpellCheckEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<SpellingIssue> found =
+                await Task.Run(() => _spelling.Check(text)).ConfigureAwait(true);
+
+            await _host.SetSpellingAsync(documentId, found).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Spell checking is a convenience. Failing at it must not disturb editing.
+            _logger.LogError(ex, "Could not spell check document {DocumentId}.", documentId);
+        }
+    }
+
+    /// <summary>Whether Windows has a dictionary to check against. See ISpellingAnalyzer.</summary>
+    public bool SpellCheckAvailable => _spelling.IsAvailable;
+
+    /// <summary>How many suggestions the right-click menu should offer. See AppSettings.</summary>
+    public int SpellSuggestionCount => _settings.Current.SpellSuggestionCount;
+
+    /// <summary>
+    /// Accepts a word permanently, and clears its squiggles everywhere.
+    ///
+    /// The re-check costs no calls to the spell engine at all. The analyzer's cache holds what
+    /// the engine said about each line rather than what survived the filter, so a new word only
+    /// changes the filter - which is what makes this feel instant even on a large document.
+    /// </summary>
+    public async Task AddToDictionaryAsync(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+
+        try
+        {
+            // No re-check here: adding raises Changed, and OnDictionaryChanged does it. One
+            // path, so a word that arrives any other way - an import, or the file being edited
+            // in Marqora and saved - clears its squiggles just the same.
+            await _dictionary.AddAsync(word).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not add {Word} to the dictionary.", word);
+        }
+    }
+
+    /// <summary>
+    /// The word list changed - a word added here, an import, or the file edited outside and
+    /// noticed by the watcher.
+    ///
+    /// Posted to the UI thread because the watcher raises this from a pool thread, and what
+    /// follows talks to the preview host.
+    /// </summary>
+    private void OnDictionaryChanged(object? sender, EventArgs e) =>
+        _ui.Post(() => _ = RepublishSpellingAsync());
+
+    /// <summary>
+    /// Re-checks every open document, for when the word list has changed rather than the text.
+    ///
+    /// All of them, not just the one in front: a word accepted here is accepted everywhere, and
+    /// a background tab left carrying a squiggle for it would be wrong the moment it was brought
+    /// forward. Markers hang off each document's model, so none of them has to be activated.
+    /// </summary>
+    private async Task RepublishSpellingAsync()
+    {
+        if (_host is null || !SpellCheckEnabled)
+        {
+            return;
+        }
+
+        foreach (MarkdownDocument document in _workspace.Documents)
+        {
+            await PublishSpellingAsync(document.Id, document.Text).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// What the misspelled word might have been, best first.
+    ///
+    /// Called on the UI thread while the context menu is being fitted, which is why the analyzer
+    /// caches by word: the first right-click on a given misspelling costs a few milliseconds and
+    /// every one after it costs nothing.
+    /// </summary>
+    public IReadOnlyList<string> SuggestionsFor(SpellingHit hit)
+    {
+        if (!SpellCheckEnabled)
+        {
+            return [];
+        }
+
+        try
+        {
+            return _spelling.Suggest(hit.Word);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not suggest a correction for {Word}.", hit.Word);
+
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Puts the chosen word in place of the misspelled one.
+    ///
+    /// Goes through the same edit path as everything else the app writes, so it lands as a single
+    /// undoable change and the preview follows. The range came from the marker rather than from
+    /// the editor's idea of a word, so it is exactly what was underlined.
+    /// </summary>
+    public async Task ReplaceSpellingAsync(SpellingHit hit, string replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        if (_host is null)
+        {
+            return;
+        }
+
+        var range = new TextRange(
+            new TextPosition(hit.Line, hit.Start),
+            new TextPosition(hit.Line, hit.End));
+
+        await _host.ApplyEditsAsync(new EditResult([new TextEdit(range, replacement)], null))
+            .ConfigureAwait(true);
     }
 
     /// <summary>
@@ -4071,7 +4291,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             // Formatting fixes most of the style hints outright, so the marks want clearing
             // straight away rather than at the next keystroke.
-            await PublishDiagnosticsAsync(
+            await PublishChecksAsync(
                 documentId, result.Text, _workspace.Find(documentId)?.Path, rendered).ConfigureAwait(true);
 
             _logger.LogInformation("Sent the formatted text for {Id} to the editor.", documentId);
@@ -4657,7 +4877,7 @@ public sealed partial class MainViewModel : ObservableObject
                 await _host.UpdatePreviewAsync(e.DocumentId, rendered).ConfigureAwait(true);
             }
 
-            await PublishDiagnosticsAsync(
+            await PublishChecksAsync(
                 e.DocumentId, e.Text, _workspace.Find(e.DocumentId)?.Path, rendered).ConfigureAwait(true);
 
             RestartAutoSaveTimer();
@@ -4931,6 +5151,10 @@ public sealed partial class MainViewModel : ObservableObject
 
                 case "focusOutline" when FocusOutlineCommand.CanExecute(null):
                     await FocusOutlineCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "toggleSpellCheck":
+                    await ToggleSpellCheckCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "formatDocument" when FormatDocumentCommand.CanExecute(null):

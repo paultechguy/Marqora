@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     private readonly ICheatsheetService _cheatsheet;
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
+    private readonly IPreferencesDialogService _preferencesDialogs;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<MainWindow> _logger;
 
@@ -79,6 +80,7 @@ public sealed partial class MainWindow : Window
         ICheatsheetService cheatsheet,
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
+        IPreferencesDialogService preferencesDialogs,
         ILoggerFactory loggerFactory,
         ILogger<MainWindow> logger)
     {
@@ -91,6 +93,7 @@ public sealed partial class MainWindow : Window
         _cheatsheet = cheatsheet;
         _diagramWindows = diagramWindows;
         _findAll = findAll;
+        _preferencesDialogs = preferencesDialogs;
         _loggerFactory = loggerFactory;
         _logger = logger;
 
@@ -530,6 +533,11 @@ public sealed partial class MainWindow : Window
 
         Add(VirtualKey.Z, alt, () => ViewModel.ToggleWordWrapCommand.Execute(null));
 
+        // F7 is the spell-check key everywhere else - Word, LibreOffice - so it needs no
+        // teaching. The webshell carries the same binding, because the caret is usually inside
+        // Monaco and this accelerator never sees the key when it is.
+        Add(VirtualKey.F7, VirtualKeyModifiers.None, () => ViewModel.ToggleSpellCheckCommand.Execute(null));
+
         // Zoom. Both the numeric keypad and the main-row keys, which report as OEM values.
         // Ctrl+0 is free for the reset because tab selection stops at Ctrl+9.
         Add(VirtualKey.Add, ctrl, () => ViewModel.ZoomInCommand.Execute(null));
@@ -859,6 +867,7 @@ public sealed partial class MainWindow : Window
         _cheatsheet.Shutdown();
         _diagramWindows.Shutdown();
         _findAll.Shutdown();
+        _preferencesDialogs.Shutdown();
 
         _previewHost?.Dispose();
         _beepFilter.Dispose();

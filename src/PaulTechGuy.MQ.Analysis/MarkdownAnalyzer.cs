@@ -3,6 +3,7 @@
 
 using PaulTechGuy.MQ.Abstractions.Analysis;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Markdown;
 
 namespace PaulTechGuy.MQ.Analysis;
 

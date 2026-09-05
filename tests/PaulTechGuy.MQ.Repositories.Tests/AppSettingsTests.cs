@@ -102,6 +102,10 @@ public sealed class AppSettingsTests : IDisposable
         settings.TabSize.ShouldBe(4);
         settings.InsertSpaces.ShouldBeTrue();
         settings.ShowMinimap.ShouldBeFalse();
+
+        // Spell checking arrived on by default, and a settings file written before it existed
+        // must come back with it on rather than silently off.
+        settings.SpellCheckEnabled.ShouldBeTrue();
         settings.HighlightCurrentLine.ShouldBeTrue();
         settings.ContinueLists.ShouldBeTrue();
         settings.AutoCloseBrackets.ShouldBeTrue();
@@ -147,6 +151,7 @@ public sealed class AppSettingsTests : IDisposable
             WriteUtf8Bom = true,
             PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape },
             LogRetentionDays = 30,
+            SpellCheckEnabled = false,
         };
 
         var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);

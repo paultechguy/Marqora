@@ -19,6 +19,7 @@ thing runs on your machine: no account, no sign-in, no network call, no telemetr
 - [ ] Press `Ctrl+F1` for the Markdown cheatsheet, and leave it beside the editor
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
+- [ ] Type a word wrong on purpose, then press `Ctrl+.` on it
 
 Nothing here is a demo mode. It is the app, and this is an ordinary Markdown file.
 
@@ -151,10 +152,16 @@ writes them back where you put them. There is nothing to sign in to and nothing 
 |-------|------|
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\settings.json` | Preferences and window placement |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\recent-files.json` | Recent and pinned files |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\user-dictionary.txt` | Words you have taught the spell checker |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\snippets\` | Your own snippets, one per file |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\logs\` | Rolling logs, kept 14 days |
 
 Deleting any of it is safe. Marqora writes it again.
+
+Spell checking is part of that promise rather than an exception to it. The words come from the
+dictionary Windows already has on this machine, so nothing you type is sent anywhere to be
+checked and there is nothing to download. Editors that lean on a web service for this are
+common; Marqora is not one of them.
 
 ---
 
@@ -183,6 +190,7 @@ Deleting any of it is safe. Marqora writes it again.
 | New tab / close tab | `Ctrl+N` / `Ctrl+W` | Find All | `Ctrl+Shift+F` |
 | Source / split / preview | `Alt+1` `Alt+2` `Alt+3` | Cheatsheet | `Ctrl+F1` |
 | Show / hide the outline | `Alt+4` | Go to the outline, and back | `Alt+Shift+4` |
+| Spell check on / off | `F7` | Correct the word at the cursor | `Ctrl+.` |
 | Zoom the active pane | `Ctrl` `+` `-` `0` | Word wrap | `Alt+Z` |
 
 ---

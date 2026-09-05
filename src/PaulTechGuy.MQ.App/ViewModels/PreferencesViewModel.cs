@@ -3,9 +3,11 @@
 
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Repositories;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Services;
 using Windows.System;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -36,6 +38,8 @@ public sealed class PreferencesViewModel(
     IAppPaths paths,
     IFileDialogService files,
     IPreferencesTransfer transfer,
+    IUserDictionaryRepository dictionaryFile,
+    UserDictionaryService dictionary,
     IThemeService theme,
     ILogger<PreferencesViewModel> logger)
 {
@@ -134,6 +138,10 @@ public sealed class PreferencesViewModel(
 
     public Task SetDiagnosticsAsync(bool value) => main.SetDiagnosticsAsync(value);
 
+    public bool SpellCheckAvailable => main.SpellCheckAvailable;
+
+    public Task SetSpellCheckAsync(bool value) => main.SetSpellCheckAsync(value);
+
     public Task SetShowOutlineAsync(bool value) => main.SetShowOutlineAsync(value);
 
     public void SetOutlineMaxDepth(int value) => main.SetOutlineMaxDepth(value);
@@ -217,6 +225,7 @@ public sealed class PreferencesViewModel(
         await main.SetWrapGlyphAsync(restored.ShowWrapGlyph).ConfigureAwait(true);
         await main.SetScrollSyncAsync(restored.ScrollSyncEnabled).ConfigureAwait(true);
         await main.SetDiagnosticsAsync(restored.ShowDiagnostics).ConfigureAwait(true);
+        await main.SetSpellCheckAsync(restored.SpellCheckEnabled).ConfigureAwait(true);
 
         SetOutlineMaxDepth(restored.OutlineMaxDepth);
         await SetShowOutlineAsync(restored.ShowOutline).ConfigureAwait(true);
@@ -266,6 +275,90 @@ public sealed class PreferencesViewModel(
             return (false, $"The file could not be written. {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Writes the word list to a file the user picks. Null when the dialog was cancelled.
+    ///
+    /// Separate from the preferences export on purpose. The preferences file carries the things
+    /// you chose; this carries a list you built, and it is worth being able to share one without
+    /// the other - a project glossary can go into a repository where a set of font sizes should
+    /// not.
+    /// </summary>
+    public async Task<(bool Succeeded, string Message)?> ExportDictionaryAsync()
+    {
+        string? path = await files.PickExportFileAsync(
+            "marqora-dictionary.txt",
+            DictionaryFilterLabel,
+            [DictionaryFileExtension]).ConfigureAwait(true);
+
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            IReadOnlyCollection<string> words = dictionary.Words;
+
+            await dictionaryFile.ExportToAsync(path, words).ConfigureAwait(true);
+
+            return (true, $"{Count(words.Count)} written to {Path.GetFileName(path)}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "The dictionary could not be exported to {Path}.", path);
+
+            return (false, $"The file could not be written. {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Adds the words from a file the user picks. Null when the dialog was cancelled.
+    ///
+    /// Merges rather than replaces, and says how many were genuinely new. A word list is
+    /// something you accumulate, so importing one from another machine should never be a way to
+    /// lose the words you added on this one - which is exactly what a replace would be.
+    /// </summary>
+    public async Task<(bool Succeeded, string Message)?> ImportDictionaryAsync()
+    {
+        string? path = await files.PickImportFileAsync(
+            "Import a Marqora dictionary",
+            DictionaryFilterLabel,
+            [DictionaryFileExtension]).ConfigureAwait(true);
+
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            IReadOnlyList<string> words = await dictionaryFile.ImportFromAsync(path).ConfigureAwait(true);
+
+            int added = await dictionary.AddRangeAsync(words).ConfigureAwait(true);
+            int known = words.Count - added;
+
+            string message = added == 0
+                ? $"Nothing new: all {Count(words.Count)} were already in your dictionary."
+                : $"Added {Count(added)}"
+                    + (known > 0 ? $"; {known} were already there." : ".");
+
+            return (true, message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "The dictionary could not be imported from {Path}.", path);
+
+            return (false, $"The file could not be read. {ex.Message}");
+        }
+    }
+
+    /// <summary>How many words this is, said in English rather than as a bare number.</summary>
+    private static string Count(int words) => words == 1 ? "1 word" : $"{words} words";
+
+    private const string DictionaryFileExtension = ".txt";
+
+    private const string DictionaryFilterLabel = "Text file";
 
     /// <summary>
     /// Reads a preferences file the user picks. Null when the dialog was cancelled.

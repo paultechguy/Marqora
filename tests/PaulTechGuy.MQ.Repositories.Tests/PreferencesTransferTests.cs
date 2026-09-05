@@ -66,6 +66,7 @@ public sealed class PreferencesTransferTests : IDisposable
         LogRetentionDays = 90,
         ShowOutline = true,
         OutlineMaxDepth = 3,
+        SpellCheckEnabled = false,
     };
 
     /// <summary>Settings carrying a session: open documents, a window, a search history.</summary>
@@ -290,6 +291,7 @@ public sealed class PreferencesTransferTests : IDisposable
             CheatsheetWindow = new WindowPlacement { Width = 111, Height = 222 },
             CheatsheetScrollTop = 42,
             FindAllWindow = new WindowPlacement { Width = 333, Height = 444 },
+            PreferencesWindow = new WindowPlacement { Width = 555, Height = 666 },
         };
 
         AppSettings carried = AppSettings.Default.WithSessionOf(session);

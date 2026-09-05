@@ -728,6 +728,11 @@
                                               IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
                                               ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax" />
+                        <ToggleMenuFlyoutItem Text="Spell Check"
+                                              IsChecked="{x:Bind ViewModel.SpellCheckEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleSpellCheckCommand}"
+                                              KeyboardAcceleratorTextOverride="F7"
+                                              ToolTipService.ToolTip="Underline words that are not in the dictionary" />
                         <ToggleMenuFlyoutItem Text="Wrapped Line Markers"
                                               IsChecked="{x:Bind ViewModel.ShowWrapGlyphEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleWrapGlyphCommand}" />

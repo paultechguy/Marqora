@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Dispatching;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Spelling;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.App.ViewModels;
@@ -17,6 +18,7 @@ using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Services;
+using PaulTechGuy.MQ.Spelling;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -132,6 +134,7 @@ public static class Program
         builder.Services.AddMarqoraFormatting();
         builder.Services.AddMarqoraEditing();
         builder.Services.AddMarqoraAnalysis();
+        builder.Services.AddMarqoraSpelling();
         builder.Services.AddMarqoraServices(AppVersion.Current, welcomeRequested);
 
         // UI-layer implementations of the shared abstractions.
@@ -149,6 +152,12 @@ public static class Program
         builder.Services.AddSingleton<IDiagramWindowService, DiagramWindowService>();
         builder.Services.AddSingleton<IFindAllWindowService, FindAllWindowService>();
         builder.Services.AddSingleton<WindowContext>();
+
+        // Windows-only COM, so it belongs here rather than in a library. Registered under both
+        // its interface and its own type: the app talks to the interface, and startup needs the
+        // concrete one to warm it up off the UI thread.
+        builder.Services.AddSingleton<WindowsSpellingEngine>();
+        builder.Services.AddSingleton<ISpellingEngine>(p => p.GetRequiredService<WindowsSpellingEngine>());
 
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainWindow>();

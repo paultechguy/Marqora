@@ -153,6 +153,31 @@ body {
   color: var(--mq-selection-text);
 }
 
+/*
+  Misspellings.
+
+  Drawn as our own decoration rather than as a Monaco marker, and that is the point. A marker
+  brings a hover repeating what the squiggle already said, an Alt+F8 peek panel that has to be
+  dismissed by hand, a "No quick fixes available" line that is simply untrue - the corrections
+  are on the right-click menu - and it counts the word among the document's problems, which are
+  dead links and missing images and a different thing entirely.
+
+  A decoration draws the line and brings none of that.
+
+  skip-ink is off because a wavy underline that breaks around every descender reads as a dashed
+  line rather than a squiggle, and the offset lifts it clear of the text at the sizes the source
+  pane is actually used at.
+
+  The two classes look identical; they differ so that a right-click can tell a misspelling from a
+  repeated word and offer the correct action for each.
+*/
+.monaco-editor .view-line span.mq-misspelled,
+.monaco-editor .view-line span.mq-repeated-word {
+  text-decoration: underline wavy var(--mq-danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.22em;
+}
+
 .mq-pane--preview {
   overflow-y: auto;
   overflow-x: hidden;

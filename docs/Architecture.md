@@ -12,24 +12,33 @@ Dependencies point one way only. No concrete layer references another concrete l
 meet at the composition root in `src/PaulTechGuy.MQ.App/Program.cs`.
 
 ```
-Domain          models and enums, no dependencies whatsoever
-   ^
-Abstractions    interfaces and DTOs
-   ^        ^        ^            ^
-Repositories Rendering Services   App
+Domain          Markdown        foundations: models, and pure functions over text
+   ^               ^
+Abstractions       |            interfaces and DTOs
+   ^        ^      |     ^            ^
+Repositories Rendering Analysis Spelling Services   App
 ```
 
 | Project | Holds | Deliberately does not |
 |---------|-------|-----------------------|
 | `Domain` | `AppSettings`, `MarkdownDocument`, `ZoomLevel`, enums | reference anything, including the BCL beyond primitives |
+| `Markdown` | `MarkdownRegionScanner`, `LineMasker` — which lines a rule must keep out of, and how to blank the parts of a line that are not prose | hold state, touch the file system, or reference anything at all |
 | `Abstractions` | every interface, plus event argument types | contain behaviour |
-| `Repositories` | atomic JSON reads and writes | know about markdown or UI |
+| `Repositories` | atomic reads and writes, JSON and text | know about markdown or UI |
 | `Rendering` | the Markdig pipeline and the source-line extension | touch the file system or UI |
-| `Services` | the document workspace, settings, recent files, file watching | reference WinUI |
-| `App` | window, view models, WebView bridge | contain file or rendering logic |
+| `Analysis` | dead links, missing images, the style rules | rewrite anything |
+| `Spelling` | the spelling analyzer, the skip rules, the seed list, the cache | know how to spell — that arrives as `ISpellingEngine`. See `Spelling.md` |
+| `Services` | the document workspace, settings, recent files, file watching, the word list | reference WinUI |
+| `App` | window, view models, WebView bridge, the Windows spell engine | contain file or rendering logic |
+
+**`Markdown` is a foundation rather than a concrete layer**, which is why two concrete layers may
+both depend on it. It has no state, no I/O and no references — every member takes and returns
+strings and arrays — so it sits beside `Domain` rather than among the layers that meet at the
+composition root. It exists because `Analysis` and `Spelling` both need the same answer to "which
+part of this line is prose?", and a second copy of a fence scanner is a second copy to keep right.
 
 Each layer registers itself: `AddMarqoraRepositories()`, `AddMarqoraRendering()`,
-`AddMarqoraServices()`. The composition root stays a list of intents.
+`AddMarqoraServices()`, `AddMarqoraSpelling()`. The composition root stays a list of intents.
 
 ---
 
@@ -701,18 +710,34 @@ markdown models, and a language worker is fetched only when a model of that lang
 
 ## Testing
 
-There are no tests yet; the seams for them are in place.
+Eight projects under `tests/`, run with `dotnet test`. xUnit v3 and Shouldly; `Directory.Build.props`
+recognises anything under `tests/` and turns on the test SDK, so a new one needs no wiring beyond
+a reference to the project it exercises.
+
+**Fakes are hand-written.** `NSubstitute` is pinned in `Directory.Packages.props` and used by
+nothing: a fake with a name and a doc comment saying what it stands in for reads better than a
+mock built line by line at the top of each test, and it can carry the small amount of behaviour a
+test actually needs. `tests/PaulTechGuy.MQ.Services.Tests/Fakes.cs` is the pattern, and the fake
+spelling engine is the clearest example — it doubles as the second implementation of
+`ISpellingEngine`, which is the cheapest proof that the seam is real.
+
+What the seams buy:
 
 - `MarkdigMarkdownRenderer` is synchronous and takes only a logger. Give it markdown, assert
   on the HTML.
 - `AppPaths` has a second constructor taking a data root and an install root, so repository
   tests can point at a temp directory.
+- `Markdown` and `Spelling` reference nothing they cannot be handed, so both test without a
+  language pack installed or a file on disk.
 - `SettingsService`, `RecentFilesService` and `DocumentService` depend only on interfaces.
 - `MainViewModel` depends on interfaces throughout, including `IUiDispatcher`, `IDialogService`
   and `IPreviewHost`, so it can be exercised with no UI thread and no WebView.
 
-`tests/` is already recognised by `Directory.Build.props`, and `Directory.Packages.props`
-pins the test packages.
+The gap worth naming: **the composition root is not tested**, and it has bitten once. A
+null-object registration won a `TryAdd` race against the real one and silently disabled a feature
+that looked implemented. `SpellingRegistrationTests` pins what one layer must *not* register,
+which is the cheap half of that lesson; the wiring as a whole is still only exercised by running
+the app.
 
 ---
 

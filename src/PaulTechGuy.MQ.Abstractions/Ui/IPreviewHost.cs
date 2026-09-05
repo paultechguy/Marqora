@@ -45,7 +45,8 @@ public sealed class PaneContextMenuEventArgs(
     double y,
     bool hasSelection,
     string? linkUrl,
-    string? imageUrl) : EventArgs
+    string? imageUrl,
+    SpellingHit? spelling) : EventArgs
 {
     public EditorPane Pane { get; } = pane;
 
@@ -61,7 +62,20 @@ public sealed class PaneContextMenuEventArgs(
 
     /// <summary>The image that was right-clicked, already absolute, or null.</summary>
     public string? ImageUrl { get; } = imageUrl;
+
+    /// <summary>The misspelling that was right-clicked, or null if the pointer was not on one.</summary>
+    public SpellingHit? Spelling { get; } = spelling;
 }
+
+/// <summary>
+/// A misspelled word the pointer was over, and the range that would be replaced.
+///
+/// The range comes from the marker the analyzer published rather than from asking the editor
+/// what word is at that position: the two can disagree about where a hyphenated or
+/// apostrophised word begins, and the one that was underlined is the one the user is pointing
+/// at. Positions are zero-based, like everything else inside the app.
+/// </summary>
+public readonly record struct SpellingHit(string Word, int Line, int Start, int End, bool Repeated);
 
 /// <summary>
 /// What the preview needs in order to keep following a diagram on behalf of a window.
@@ -250,6 +264,19 @@ public interface IPreviewHost
 
     /// <summary>Clears diagnostics from every open document, for when linting is switched off.</summary>
     Task ClearDiagnosticsAsync();
+
+    /// <summary>
+    /// Replaces the misspellings shown against one document; an empty list clears them.
+    ///
+    /// Separate from <see cref="SetDiagnosticsAsync"/> and shaped differently on purpose. Document
+    /// problems are Monaco markers, which carry a hover and a place in the problem list. A
+    /// misspelling is drawn as a decoration instead - a squiggle and nothing else - so what
+    /// crosses the bridge is the domain type rather than a marker.
+    /// </summary>
+    Task SetSpellingAsync(Guid documentId, IReadOnlyList<SpellingIssue> misspellings);
+
+    /// <summary>Clears misspellings from every open document, for when spell check is switched off.</summary>
+    Task ClearSpellingAsync();
 
     /// <summary>Mark where a wrapped source line continues.</summary>
     Task SetWrapGlyphAsync(bool enabled);

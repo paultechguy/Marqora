@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions;
 using PaulTechGuy.MQ.Abstractions.Services;
+using PaulTechGuy.MQ.Abstractions.Spelling;
 
 namespace PaulTechGuy.MQ.Services;
 
@@ -38,6 +39,11 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<ILogger<WelcomeDocumentService>>()));
 
         // One watcher per open document, so the factory is the singleton, not the watcher.
+        // Registered under both: the analyzer talks to IUserDictionary, and startup needs the
+        // concrete one to read the file and start watching it.
+        services.TryAddSingleton<UserDictionaryService>();
+        services.TryAddSingleton<IUserDictionary>(p => p.GetRequiredService<UserDictionaryService>());
+
         services.TryAddSingleton<IFileWatcherFactory, FileWatcherFactory>();
         services.TryAddSingleton<IWorkspaceService, DocumentWorkspace>();
 

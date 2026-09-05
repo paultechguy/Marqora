@@ -12,6 +12,7 @@
   <Folder Name="/Solution Items/docs/">
     <File Path="docs/Architecture.md" />
     <File Path="docs/DiskWatch.md" />
+    <File Path="docs/Spelling.md" />
   </Folder>
   <Folder Name="/webshell/">
     <File Path="webshell/shell.html" />
@@ -22,6 +23,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/PaulTechGuy.MQ.Domain/PaulTechGuy.MQ.Domain.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Markdown/PaulTechGuy.MQ.Markdown.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Spelling/PaulTechGuy.MQ.Spelling.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Abstractions/PaulTechGuy.MQ.Abstractions.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Repositories/PaulTechGuy.MQ.Repositories.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Rendering/PaulTechGuy.MQ.Rendering.csproj" />
@@ -34,6 +37,8 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PaulTechGuy.MQ.Domain.Tests/PaulTechGuy.MQ.Domain.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Markdown.Tests/PaulTechGuy.MQ.Markdown.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Spelling.Tests/PaulTechGuy.MQ.Spelling.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Finding.Tests/PaulTechGuy.MQ.Finding.Tests.csproj" />

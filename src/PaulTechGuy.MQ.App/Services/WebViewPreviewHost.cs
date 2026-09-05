@@ -513,10 +513,42 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     {
         ArgumentNullException.ThrowIfNull(diagnostics);
 
-        var markers = diagnostics.Select(diagnostic => new
+        return SendAsync("setDiagnostics", new { id = documentId, markers = ToMarkers(diagnostics) });
+    }
+
+    public Task ClearDiagnosticsAsync() => SendAsync("clearDiagnostics", new { });
+
+    public Task SetSpellingAsync(Guid documentId, IReadOnlyList<SpellingIssue> misspellings)
+    {
+        ArgumentNullException.ThrowIfNull(misspellings);
+
+        // The domain type, near enough as it stands, rather than dressed up as a Monaco marker.
+        // Misspellings are drawn as decorations - see the shell's setSpelling - so there is no
+        // marker shape to fit and no severity to invent, and the zero-based positions stay
+        // zero-based all the way across. The shell adds the one, as it does for edits.
+        var issues = misspellings.Select(issue => new
         {
-            // Monaco counts lines and columns from one. Everything inside the app counts
-            // from zero, and this is the one place the two meet.
+            line = issue.Line,
+            start = issue.Start,
+            length = issue.Length,
+            repeated = issue.Kind == SpellingIssueKind.RepeatedWord,
+        });
+
+        return SendAsync("setSpelling", new { id = documentId, issues });
+    }
+
+    public Task ClearSpellingAsync() => SendAsync("clearSpelling", new { });
+
+    /// <summary>
+    /// Turns diagnostics into Monaco's own IMarkerData shape.
+    ///
+    /// The one place the app's zero-based positions meet Monaco's one-based ones. Unlike
+    /// ApplyEditsAsync, where the JS side adds the one, the conversion happens here because what
+    /// is being produced is Monaco's own structure rather than an instruction to be translated.
+    /// </summary>
+    private static object ToMarkers(IReadOnlyList<Diagnostic> diagnostics) =>
+        diagnostics.Select(diagnostic => new
+        {
             startLineNumber = diagnostic.Line + 1,
             startColumn = diagnostic.Column + 1,
             endLineNumber = diagnostic.Line + 1,
@@ -533,11 +565,6 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             message = diagnostic.Message,
             source = diagnostic.Rule,
         });
-
-        return SendAsync("setDiagnostics", new { id = documentId, markers });
-    }
-
-    public Task ClearDiagnosticsAsync() => SendAsync("clearDiagnostics", new { });
 
     public Task SetWrapGlyphAsync(bool enabled) => SendAsync("setWrapGlyph", new { enabled });
 
@@ -1153,13 +1180,27 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             case "contextMenu":
                 if (Enum.TryParse(ReadString(payload, "pane"), out EditorPane clicked))
                 {
+                    // An empty word means the pointer was not over a misspelling, which is how
+                    // the menu decides whether to offer suggestions at all.
+                    string misspelled = ReadString(payload, "word") ?? string.Empty;
+
+                    SpellingHit? spelling = misspelled.Length == 0
+                        ? null
+                        : new SpellingHit(
+                            misspelled,
+                            ReadInt(payload, "wordLine", -1),
+                            ReadInt(payload, "wordStart", -1),
+                            ReadInt(payload, "wordEnd", -1),
+                            ReadBool(payload, "wordRepeated", false));
+
                     ContextMenuRequested?.Invoke(this, new PaneContextMenuEventArgs(
                         clicked,
                         ReadDouble(payload, "x", 0),
                         ReadDouble(payload, "y", 0),
                         ReadBool(payload, "hasSelection", false),
                         Localize(ReadString(payload, "linkUrl")),
-                        Localize(ReadString(payload, "imageUrl"))));
+                        Localize(ReadString(payload, "imageUrl")),
+                        spelling));
                 }
                 break;
 

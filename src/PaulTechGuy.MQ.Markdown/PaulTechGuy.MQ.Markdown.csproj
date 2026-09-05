@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Pure functions over markdown source text: which lines a rule must keep out of, and how to
+    blank the runs of a line that are not prose.
+
+    A foundation library rather than a concrete layer. It has zero package and project
+    references - every member takes and returns strings and arrays - so Analysis and Spelling
+    can both depend on it without either depending on the other. That is the same shape as
+    Domain, and it leaves the one-way rule in docs/Architecture.md untouched.
+
+    The formatter carries its own copy of the fence knowledge in MarkdownLineRules. This is
+    where the two should be folded together once the formatter has tests of its own; see the
+    note on MarkdownRegionScanner.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Markdown</RootNamespace>
+  </PropertyGroup>
+
+</Project>
