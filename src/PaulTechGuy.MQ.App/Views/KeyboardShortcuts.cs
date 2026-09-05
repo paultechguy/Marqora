@@ -118,4 +118,51 @@ internal static class KeyboardShortcuts
             new("Markdown cheatsheet", "Ctrl+F1"),
         ]),
     ];
+
+    /// <summary>
+    /// The groups that answer to a quick-filter term, in the order they are declared, with
+    /// any group nothing survives in left out entirely.
+    ///
+    /// A group is rebuilt around its surviving rows rather than emptied, so a filtered list
+    /// keeps the shape of the unfiltered one: the headings still standing say what the rows
+    /// under them are for.
+    /// </summary>
+    public static IReadOnlyList<ShortcutGroup> Filter(string? term)
+    {
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return Groups;
+        }
+
+        string needle = term.Trim();
+        List<ShortcutGroup> kept = [];
+
+        foreach (ShortcutGroup group in Groups)
+        {
+            IReadOnlyList<Shortcut> matches = [.. group.Shortcuts.Where(s => Matches(s, needle))];
+
+            if (matches.Count > 0)
+            {
+                kept.Add(group with { Shortcuts = matches });
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// Whether a shortcut answers to a filter term.
+    ///
+    /// The keys count as well as the action, so "tab" finds the tab commands and "ctrl+shift"
+    /// finds everything bound behind that modifier - which is the question a person usually
+    /// arrives with: what else is on this chord.
+    ///
+    /// Ordinal rather than culture-aware, for the reason OutlineNavigation.Matches gives: a
+    /// filter box is judged on being predictable while the letters are still arriving, and
+    /// culture-aware comparison brings ignorable characters with it, under which an
+    /// apparently non-empty term matches every row.
+    /// </summary>
+    private static bool Matches(Shortcut shortcut, string term) =>
+        shortcut.Action.Contains(term, StringComparison.OrdinalIgnoreCase)
+        || shortcut.Keys.Contains(term, StringComparison.OrdinalIgnoreCase);
 }

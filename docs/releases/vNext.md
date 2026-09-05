@@ -14,3 +14,4 @@ Misspelled words are underlined in the source pane as you type; F7 turns them of
 
 ## Keyboard Shortcuts Quick Filter
 
+Help | Keyboard shortcuts now has a quick filter. Type in the box to narrow the list as you go — it matches both the action and the keys, so "tab" finds the tab commands and "ctrl+shift" finds everything on that chord. Empty groups drop out, the caption shows how many matched, and the copy button copies what's on screen. Escape clears the filter.
