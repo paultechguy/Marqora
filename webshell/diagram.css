@@ -2,7 +2,7 @@
   Styling for the diagram pop-out. Deliberately plain: the diagram is the content, and the
   only chrome is the zoom strip along the top.
 
-  Colours follow the theme the host sends, applied as a data-theme attribute on the root, so
+  Colors follow the theme the host sends, applied as a data-theme attribute on the root, so
   the window matches the app rather than the browser default.
 */
 
@@ -37,7 +37,7 @@
   A CSS pixel here is a device-independent pixel: WebView2 takes the window's rasterization
   scale, so these mean what the XAML numbers mean at any DPI and need no converting.
 
-  Written here rather than pushed across the bridge, unlike the match colours in
+  Written here rather than pushed across the bridge, unlike the match colors in
   MatchColors.cs. Those change with the theme at run time and have to arrive from the host;
   these are constants. build/Test-ButtonStandards.ps1 reads both files and fails if the two
   ever disagree, which is the cheaper source of truth for five buttons.

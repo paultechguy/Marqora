@@ -32,13 +32,15 @@ internal sealed class PdfExportDialog : ContentDialog
         CloseButtonText = "Cancel";
         DefaultButton = ContentDialogButton.Primary;
 
-        _paper = BuildCombo(["Letter", "A4", "Legal"], (int)current.Paper);
-        _orientation = BuildCombo(["Portrait", "Landscape"], (int)current.Orientation);
-        _margin = BuildCombo(["Normal (0.5 in)", "Narrow (0.25 in)", "Wide (1 in)", "None"], (int)current.Margin);
+        _paper = DialogFields.Combo(["Letter", "A4", "Legal"], (int)current.Paper);
+        _orientation = DialogFields.Combo(["Portrait", "Landscape"], (int)current.Orientation);
+        _margin = DialogFields.Combo(
+            ["Normal (0.5 in)", "Narrow (0.25 in)", "Wide (1 in)", "None"],
+            (int)current.Margin);
 
         _backgrounds = new CheckBox
         {
-            Content = "Include background colours",
+            Content = "Include background colors",
             IsChecked = current.IncludeBackgrounds,
         };
 
@@ -65,14 +67,14 @@ internal sealed class PdfExportDialog : ContentDialog
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        panel.Children.Add(Labelled("Paper size", _paper));
-        panel.Children.Add(Labelled("Orientation", _orientation));
-        panel.Children.Add(Labelled("Margins", _margin));
+        panel.Children.Add(DialogFields.Labelled("Paper size", _paper));
+        panel.Children.Add(DialogFields.Labelled("Orientation", _orientation));
+        panel.Children.Add(DialogFields.Labelled("Margins", _margin));
         panel.Children.Add(_backgrounds);
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Diagrams, code blocks and tables rely on their background colours. "
+            Text = "Diagrams, code blocks and tables rely on their background colors. "
                 + "Turning them off saves ink but flattens those blocks.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
@@ -80,30 +82,5 @@ internal sealed class PdfExportDialog : ContentDialog
         });
 
         return panel;
-    }
-
-    private static StackPanel Labelled(string label, FrameworkElement control)
-    {
-        var group = new StackPanel { Spacing = 4 };
-
-        group.Children.Add(new TextBlock { Text = label, FontSize = 12.5, Opacity = 0.75 });
-
-        control.HorizontalAlignment = HorizontalAlignment.Stretch;
-        group.Children.Add(control);
-
-        return group;
-    }
-
-    private static ComboBox BuildCombo(string[] options, int selected)
-    {
-        var combo = new ComboBox { SelectedIndex = Math.Clamp(selected, 0, options.Length - 1) };
-
-        foreach (string option in options)
-        {
-            combo.Items.Add(new ComboBoxItem { Content = option });
-        }
-
-        combo.SelectedIndex = Math.Clamp(selected, 0, options.Length - 1);
-        return combo;
     }
 }

@@ -175,7 +175,7 @@
 
   /*
     A theme change has to redraw the diagrams: mermaid bakes its palette into the SVG it
-    produces, so restyling the page would leave them the colour of the previous theme.
+    produces, so restyling the page would leave them the color of the previous theme.
   */
   function redrawDiagrams() {
     if (!mermaidReady) { return; }
@@ -269,7 +269,7 @@
     var language = match[1].toLowerCase();
 
     // The syntax samples are tagged `text` on purpose: they are markdown shown literally,
-    // and colouring them as any language would misrepresent what the reader has to type.
+    // and coloring them as any language would misrepresent what the reader has to type.
     if (language === 'text' || !hljs.getLanguage(language)) { return; }
 
     try {

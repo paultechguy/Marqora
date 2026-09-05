@@ -201,8 +201,8 @@ above and the marker says more. `TabTitleFitter.Shorten` takes the middle out of
 keeps both ends, so a one-glyph prefix survives truncation — the pre-existing `●` prefix
 already proved that.
 
-`!` rather than `⚠` deliberately: several Windows font stacks render U+26A0 as a colour emoji,
-which sits at the wrong size and weight next to tab text and cannot be recoloured.
+`!` rather than `⚠` deliberately: several Windows font stacks render U+26A0 as a color emoji,
+which sits at the wrong size and weight next to tab text and cannot be recolored.
 
 ---
 

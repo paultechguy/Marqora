@@ -348,7 +348,7 @@ public sealed partial class FindAllWindow : PaletteWindow
 
             This used to be a plain button, and the comment here used to explain that an accent
             button would come up in the user's Windows accent rather than Marqora's teal, which
-            "is the one colour in the app that is nobody's choice". Both halves of that have
+            "is the one color in the app that is nobody's choice". Both halves of that have
             since stopped being true: the teal override was removed from App.xaml deliberately,
             and the user's accent is now what the tab strip, the change notice and every dialog
             already wear. There is no longer an accent for a second window's tree to miss.
@@ -1066,12 +1066,12 @@ public sealed partial class FindAllWindow : PaletteWindow
     /// <summary>
     /// The tint behind a match in the list.
     ///
-    /// Dark is <see cref="MatchColors"/>, the same colour the source pane selects a picked
+    /// Dark is <see cref="MatchColors"/>, the same color the source pane selects a picked
     /// result with, so a match looks the same in the row as it does in the text the row
     /// points at. Light keeps the accent at about a third strength, which is all it has ever
-    /// needed, and is the one place that colour appears.
+    /// needed, and is the one place that color appears.
     ///
-    /// A fixed colour rather than a resource lookup, for the same reason
+    /// A fixed color rather than a resource lookup, for the same reason
     /// <see cref="SurfaceBrush"/> is.
     /// </summary>
     private static SolidColorBrush HighlightBrush(AppTheme theme) =>
@@ -1081,14 +1081,14 @@ public sealed partial class FindAllWindow : PaletteWindow
 
     /// <summary>
     /// The text on the tint, in dark mode only: the light tint is translucent and the row's
-    /// ordinary colour still reads through it, while the dark one is chosen to be seen and
+    /// ordinary color still reads through it, while the dark one is chosen to be seen and
     /// needs text that can be seen on top of it. Null leaves the row as it was.
     /// </summary>
     private static SolidColorBrush? HighlightForegroundBrush(AppTheme theme) =>
         theme == AppTheme.Dark ? new SolidColorBrush(MatchColors.Foreground) : null;
 
     /// <summary>
-    /// Paints the staleness notice in Windows' own caution colour - amber, and the colour
+    /// Paints the staleness notice in Windows' own caution color - amber, and the color
     /// this app uses for nothing else, so the notice cannot be mistaken for another line of
     /// status. Written out per theme for the reason <see cref="SurfaceBrush"/> gives.
     /// </summary>

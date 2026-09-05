@@ -62,8 +62,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <see cref="AttachAsync"/> for the seed and shell.html for the end that reads it.
     ///
     /// Updated by <see cref="SetThemeAsync"/> as well as set at start-up, because a WebView
-    /// rebuilt after a crash navigates again and has to come back the colour the window is
-    /// now rather than the colour it was when the app started.
+    /// rebuilt after a crash navigates again and has to come back the color the window is
+    /// now rather than the color it was when the app started.
     /// </summary>
     private AppTheme _theme = AppTheme.Light;
 
@@ -85,7 +85,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// </param>
     /// <param name="createWebView">
     /// Supplies a control ready to be attached. The window makes them rather than the host,
-    /// because a new one has to be given the background colour of the current theme and the
+    /// because a new one has to be given the background color of the current theme and the
     /// theme is the window's business.
     /// </param>
     public WebViewPreviewHost(
@@ -274,9 +274,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <see cref="OnNavigationStarting"/> matches on the part in front of it either way.
     ///
     /// The page reads it in the head, before the body is parsed, and is already the right
-    /// colour by its first paint. The setTheme message that follows once the shell reports
+    /// color by its first paint. The setTheme message that follows once the shell reports
     /// ready then changes nothing, which is the point - it is still sent, because it also
-    /// carries the match colours and because the theme can change later.
+    /// carries the match colors and because the theme can change later.
     /// </summary>
     private Uri ShellUriForTheme(AppTheme theme) =>
         new($"{_assets.ShellUri}#theme={(theme == AppTheme.Dark ? "dark" : "light")}");
@@ -443,18 +443,18 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         SendAsync("setViewMode", new { mode = mode.ToString() });
 
     /// <summary>
-    /// The theme, and with it the two colours a match is drawn in.
+    /// The theme, and with it the two colors a match is drawn in.
     ///
     /// They ride along here rather than being written into app.css because the Find All
-    /// window paints the same two colours with WinUI brushes, and a colour written down
-    /// twice is a colour that will one day disagree with itself. <see cref="MatchColors"/>
+    /// window paints the same two colors with WinUI brushes, and a color written down
+    /// twice is a color that will one day disagree with itself. <see cref="MatchColors"/>
     /// is where they are chosen; the shell puts them into --mq-selection and
     /// --mq-selection-text as it arrives, so Monaco and the stylesheet both read one value.
     /// </summary>
     public Task SetThemeAsync(AppTheme effectiveTheme)
     {
         // Remembered as well as sent, so a WebView rebuilt after a crash navigates to the
-        // colour the window is wearing now. See _theme.
+        // color the window is wearing now. See _theme.
         _theme = effectiveTheme;
 
         return SendAsync(
@@ -790,7 +790,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <summary>
     /// Paints the canvas behind the page white until the returned handle is disposed.
     ///
-    /// The print stylesheet already forces every colour in the document to its light values,
+    /// The print stylesheet already forces every color in the document to its light values,
     /// but the canvas the page is drawn onto is not part of the document: it is the
     /// WebView's own background, set to match the app's theme so the window does not flash
     /// white on a dark desktop. Chromium composites it underneath the printed page, so a
@@ -799,15 +799,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     ///
     /// Restored afterwards, so the window goes straight back to matching its theme.
     /// </summary>
-    private CanvasColour ForceLightCanvas()
+    private CanvasColor ForceLightCanvas()
     {
         Windows.UI.Color previous = _webView.DefaultBackgroundColor;
         _webView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
 
-        return new CanvasColour(_webView, previous);
+        return new CanvasColor(_webView, previous);
     }
 
-    private sealed class CanvasColour(WebView2 view, Windows.UI.Color previous) : IDisposable
+    private sealed class CanvasColor(WebView2 view, Windows.UI.Color previous) : IDisposable
     {
         public void Dispose() => view.DefaultBackgroundColor = previous;
     }

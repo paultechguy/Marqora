@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Ui;
+using PaulTechGuy.MQ.App.Views;
 using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Services;
@@ -10,41 +11,38 @@ namespace PaulTechGuy.MQ.App.Services;
 /// <summary>
 /// The print dialog.
 ///
-/// The same shape as <see cref="FileDialogService"/>, and for the same reason: it calls the
-/// Win32 common dialog rather than anything the WebView offers. The dialog is modal and runs
-/// its own message loop, so it is shown on the UI thread and the answer is handed back as a
-/// completed task.
+/// The same shape as <see cref="ExportDialogService"/>, and for the same reason: what it shows
+/// is a ContentDialog of Marqora's own, anchored to the window so that it carries the theme
+/// the app is actually using. It used to call the Windows common dialog, as Open and Save
+/// still do; <see cref="PrintDialog"/> records why that stopped being possible.
 /// </summary>
-public sealed class PrintDialogService(WindowContext window, ILogger<PrintDialogService> logger) : IPrintDialogService
+public sealed class PrintDialogService(WindowContext window, ILogger<PrintDialogService> logger)
+    : IPrintDialogService
 {
-    public Task<PrintJob?> PickPrinterAsync(
+    public async Task<PrintJob?> PickPrinterAsync(
         PdfPageSetup defaults,
         CancellationToken cancellationToken = default)
     {
+        if (window.Root is null)
+        {
+            logger.LogWarning("Cannot ask which printer: no window is available yet.");
+            return null;
+        }
+
         try
         {
-            PrintJob? job = Win32PrintDialog.Show(RequireOwner(), defaults);
+            PrintJob? job = await PrintDialog.ShowAsync(window.Root, defaults);
 
             logger.LogInformation(
                 "Print dialog returned {Result}.",
                 job is null ? "(cancelled)" : job.PrinterName);
 
-            return Task.FromResult(job);
+            return job;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "The print dialog failed.");
-            return Task.FromResult<PrintJob?>(null);
+            return null;
         }
-    }
-
-    /// <summary>Owner handle for the modal dialog, so it centres on and blocks the window.</summary>
-    private IntPtr RequireOwner()
-    {
-        IntPtr handle = window.WindowHandle;
-
-        return handle == IntPtr.Zero
-            ? throw new InvalidOperationException("The print dialog was requested before the window existed.")
-            : handle;
     }
 }

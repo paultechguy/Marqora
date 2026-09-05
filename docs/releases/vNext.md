@@ -1,4 +1,4 @@
-# Marqora vNext - What's New
+﻿# Marqora vNext - What's New
 
 ## Preferences
 
@@ -28,3 +28,12 @@ Help | Keyboard shortcuts now has a quick filter. Type in the box to narrow the 
 ## Standardize Button UX
 
 Buttons now come from one set of shared styles, so they are the same size and sit in the same order wherever you meet them. The action that commits — OK, Find All, Reload — wears your Windows accent color and sits to the left of the one that backs out. Prompts that throw work away start on Cancel instead, so a stray Enter no longer discards unsaved changes when reloading a file from disk.
+
+## Marqora's Own Print Dialog
+
+Ctrl+P now opens Marqora's print dialog instead of the Windows one. It follows the app's theme,
+so a light Marqora on a dark Windows no longer throws up a dark dialog, and it offers what the
+printer you picked can actually do — the paper its driver names, and color or two-sided only
+where it supports them. Copies, collate and a page range are there too, and a range it cannot read tells you
+before you print rather than failing the job afterwards. The cheatsheet and diagram windows use
+the same dialog, and now start from the paper and margins you set in Preferences.

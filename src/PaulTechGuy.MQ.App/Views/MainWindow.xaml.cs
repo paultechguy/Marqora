@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// The control the preview is currently drawing in, so the theme has something to
-    /// colour. The host replaces it after a crash, which is why this is not the x:Name of
+    /// color. The host replaces it after a crash, which is why this is not the x:Name of
     /// something in the XAML - see CreatePreviewWebView.
     /// </summary>
     private WebView2? _previewWebView;
@@ -327,7 +327,7 @@ public sealed partial class MainWindow : Window
         SetTitleBar(DocumentTabs);
 
         // Windows still draws the three caption buttons over the extended content, and it
-        // colours them from the app theme rather than the root's - so they are painted here.
+        // colors them from the app theme rather than the root's - so they are painted here.
         ApplyCaptionButtonTheme();
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -343,7 +343,7 @@ public sealed partial class MainWindow : Window
     ///
     /// The same question ApplyWebViewBackground asks, and asked in the same place, because
     /// the two answers have to agree: the control's background and the page drawn over it
-    /// are the same colour by intent.
+    /// are the same color by intent.
     /// </summary>
     private AppTheme CurrentEffectiveTheme =>
         RootGrid.ActualTheme == ElementTheme.Dark ? AppTheme.Dark : AppTheme.Light;
@@ -354,13 +354,13 @@ public sealed partial class MainWindow : Window
     /// It used to be Transparent, which bought nothing: the page paints its own background
     /// over every pixel it occupies. What transparency did cost was a slower composition
     /// path - an alpha-blended surface takes longer to settle after a resize, and switching
-    /// view mode resizes the panes drastically. Matching the page's own colour also means
-    /// the moment before the first paint is the right colour rather than a flash of white.
+    /// view mode resizes the panes drastically. Matching the page's own color also means
+    /// the moment before the first paint is the right color rather than a flash of white.
     /// </summary>
     private void ApplyWebViewBackground()
     {
-        // ConfigureChrome runs before there is a control to colour. The one built after it
-        // takes the colour on its way in, so there is nothing to do yet.
+        // ConfigureChrome runs before there is a control to color. The one built after it
+        // takes the color on its way in, so there is nothing to do yet.
         if (_previewWebView is null)
         {
             return;
@@ -378,8 +378,8 @@ public sealed partial class MainWindow : Window
     /// Builds a WebView for the preview surface, ready for the host to attach to.
     ///
     /// Called once at startup and again for every replacement the host makes after a crash,
-    /// which is the reason the theme colour is applied here rather than once and for all:
-    /// a control created at three in the morning has to arrive the right colour too.
+    /// which is the reason the theme color is applied here rather than once and for all:
+    /// a control created at three in the morning has to arrive the right color too.
     /// </summary>
     private WebView2 CreatePreviewWebView()
     {
@@ -394,11 +394,11 @@ public sealed partial class MainWindow : Window
     /// actually using.
     ///
     /// Windows draws those three buttons itself even when the content is extended into the
-    /// title bar, and it picks their colour from the application's theme - not from the
+    /// title bar, and it picks their color from the application's theme - not from the
     /// element tree. The theme here is applied as <see cref="FrameworkElement.RequestedTheme"/>
     /// on the root, so a dark window under a light Windows leaves the caption drawing
     /// near-black glyphs over dark chrome: invisible until hovered, when the hover plate
-    /// finally gives them something to contrast against. Setting the colours explicitly, and
+    /// finally gives them something to contrast against. Setting the colors explicitly, and
     /// again whenever the resolved theme changes, is the only way to keep the two in step.
     ///
     /// The backgrounds stay transparent so the Mica and the tab strip continue through the
@@ -697,7 +697,7 @@ public sealed partial class MainWindow : Window
             // The theme goes in before the page is navigated to, not after it reports ready.
             // Ready is the far side of a Monaco load, and the restored session is flushed
             // out of the host's queue just in front of it, so a shell that had to be told
-            // its colour drew the boot screen and every reopened document in the wrong one
+            // its color drew the boot screen and every reopened document in the wrong one
             // and then repainted. The window has resolved the theme by now - see
             // ApplyWebViewBackground, which reads it from the same place for the same reason.
             await _previewHost.InitializeAsync(CurrentEffectiveTheme);

@@ -1748,8 +1748,8 @@ public sealed partial class MainViewModel : ObservableObject
     /// Segoe Fluent's refresh arrow, in front of a reload message.
     ///
     /// A glyph from the icon font rather than a character like ⟳: several Windows font stacks
-    /// render symbol characters as colour emoji, at the wrong size and weight and immune to
-    /// being recoloured, which is the same reason the tab strip's missing-file marker is a
+    /// render symbol characters as color emoji, at the wrong size and weight and immune to
+    /// being recolored, which is the same reason the tab strip's missing-file marker is a
     /// plain exclamation mark.
     /// </summary>
     private const string ReloadedGlyph = "\uE72C";
@@ -1817,7 +1817,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// Any other message replacing this one takes the highlight down with it.
     ///
     /// Without this the pill would stay lit around whatever came next - "Saved notes.md"
-    /// wearing the colour that belonged to a reload notice two seconds earlier, which reads
+    /// wearing the color that belonged to a reload notice two seconds earlier, which reads
     /// as the save having gone strangely rather than as a leftover.
     /// </summary>
     partial void OnStatusTextChanged(string value)

@@ -67,7 +67,7 @@ reason (§7).
 
 ---
 
-## 2. Emphasis and colour
+## 2. Emphasis and color
 
 **Exactly one accented button per surface, and only if it commits.** Everything else is a neutral
 button. That is the whole rule.
@@ -77,7 +77,7 @@ and override every stock accent key with it. That is gone, and the comment at th
 `App.xaml` records why: a `ContentDialog` is hosted in the popup root rather than under the
 window's content, and the accent keys are reached there through aliases the framework resolves
 once — so dialog buttons and list selection kept the Windows accent whatever the dictionary said.
-The app was two-toned, teal in the window and the user's own colour in every dialog, and the seam
+The app was two-toned, teal in the window and the user's own color in every dialog, and the seam
 showed wherever the two met.
 
 The consequence for buttons is direct, and it retires an argument that used to be made in
@@ -88,7 +88,7 @@ What this forbids:
 
 - No `Background` or `Foreground` set on a button, ever. Not a hex, not a named brush, not a
   `ThemeResource` lookup done in code.
-- No hover, pressed or disabled colours. Those are the framework's, in all three tiers.
+- No hover, pressed or disabled colors. Those are the framework's, in all three tiers.
 - No red for destructive actions. See §6 — Windows does not do this, and WinUI ships no critical
   button style to do it with.
 
@@ -266,9 +266,9 @@ actions and none of them commits anything, so the one-accent-per-surface rule ha
 place. Do not add one for the sake of consistency.
 
 **On keeping the two sides in step.** Marqora's rule for a value shared between C# and the web is
-that one side owns it and pushes it to the other: `MatchColors` holds the search-match colours,
+that one side owns it and pushes it to the other: `MatchColors` holds the search-match colors,
 `WebViewPreviewHost` sends them across, `app.js` installs them as custom properties, and `app.css`
-deliberately never names them. That is the right shape for a *colour*, which changes with theme
+deliberately never names them. That is the right shape for a *color*, which changes with theme
 and selection.
 
 These are metrics, and five zoom buttons do not justify a runtime bridge. So they are duplicated

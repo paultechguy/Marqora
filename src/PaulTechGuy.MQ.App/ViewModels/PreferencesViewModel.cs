@@ -241,7 +241,7 @@ public sealed class PreferencesViewModel(
     /// report at all.
     ///
     /// Whether it worked is returned rather than left to be inferred from the wording: the
-    /// dialog colours the report by outcome, and deciding that by reading the message back
+    /// dialog colors the report by outcome, and deciding that by reading the message back
     /// would break the first time the message was reworded.
     ///
     /// The settings are passed in rather than read off <see cref="Current"/>, because four of

@@ -58,6 +58,24 @@ internal static class WebViewPrinting
 
         settings.ShouldPrintBackgrounds = job.IncludeBackgrounds;
 
+        // Color and sides, which the dialog offers only where the driver said it could do
+        // them. Default means the printer was not asked, and decides for itself - which is
+        // what every job did before Marqora had a dialog of its own to ask in.
+        settings.ColorMode = job.ColorMode switch
+        {
+            PrintColorMode.Color => CoreWebView2PrintColorMode.Color,
+            PrintColorMode.Grayscale => CoreWebView2PrintColorMode.Grayscale,
+            _ => CoreWebView2PrintColorMode.Default,
+        };
+
+        settings.Duplex = job.Duplex switch
+        {
+            PrintDuplex.OneSided => CoreWebView2PrintDuplex.OneSided,
+            PrintDuplex.LongEdge => CoreWebView2PrintDuplex.TwoSidedLongEdge,
+            PrintDuplex.ShortEdge => CoreWebView2PrintDuplex.TwoSidedShortEdge,
+            _ => CoreWebView2PrintDuplex.Default,
+        };
+
         // The point of the whole exercise: off, and not offered to the reader as a choice.
         settings.ShouldPrintHeaderAndFooter = false;
 

@@ -38,7 +38,7 @@
         overrides in the theme dictionaries below point the framework's keys at Marqora's
         own tokens. Same effect, opposite direction.
 
-        Colours are written out rather than borrowed with a StaticResource alias from the
+        Colors are written out rather than borrowed with a StaticResource alias from the
         framework's palette. An alias inside a theme dictionary is resolved once, when the
         dictionary is parsed, against whichever theme happened to be active at the time -
         so a light-theme alias can end up holding a dark-theme brush. Literal values

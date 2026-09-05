@@ -40,7 +40,7 @@
     message is the far side of a Monaco load, with the restored session flushed out of the
     host's queue just in front of it, so under a light theme the boot screen, both panes and
     every reopened document painted dark and then repainted. What it looked like was the app
-    loading the previous session in the wrong colour and correcting itself.
+    loading the previous session in the wrong color and correcting itself.
 
     So the host writes the answer into the address instead - see ShellUriForTheme in
     WebViewPreviewHost - and this reads it out. Inline, in the head, and after the two
@@ -50,7 +50,7 @@
     Light when there is no fragment to read, matching app.css's own default. That is only
     reached by opening shell.html outside the app.
 
-    The setTheme message still arrives and is still needed - it carries the match colours,
+    The setTheme message still arrives and is still needed - it carries the match colors,
     and the theme can change while the app is running. It just no longer has anything to
     correct on the way in.
   -->

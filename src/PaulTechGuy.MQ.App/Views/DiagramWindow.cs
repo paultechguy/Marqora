@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using PaulTechGuy.MQ.Abstractions.Rendering;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
@@ -52,6 +53,10 @@ public sealed partial class DiagramWindow : Window
 
     private readonly IWebAssetProvider _assets;
     private readonly IThemeService _theme;
+
+    /// <summary>Only for the page setup a print starts from; a diagram window stores nothing.</summary>
+    private readonly ISettingsService _settings;
+
     private readonly ILogger<DiagramWindow> _logger;
 
     private readonly WebView2 _webView = new();
@@ -77,6 +82,7 @@ public sealed partial class DiagramWindow : Window
     public DiagramWindow(
         IWebAssetProvider assets,
         IThemeService theme,
+        ISettingsService settings,
         Guid id,
         Guid documentId,
         string hash,
@@ -88,6 +94,7 @@ public sealed partial class DiagramWindow : Window
     {
         _assets = assets;
         _theme = theme;
+        _settings = settings;
         _logger = logger;
         _svg = svg;
         _title = title;
@@ -434,7 +441,7 @@ public sealed partial class DiagramWindow : Window
     /// <summary>
     /// The window's own commands, as a menu. A WinUI flyout rather than the browser's menu,
     /// so it is the same menu as everywhere else in Marqora and takes its font, spacing and
-    /// colours from Themes/Menus.xaml.
+    /// colors from Themes/Menus.xaml.
     ///
     /// Built once and kept: a context menu is opened often and nothing in it changes.
     /// </summary>
@@ -489,10 +496,14 @@ public sealed partial class DiagramWindow : Window
     }
 
     /// <summary>
-    /// Prints the diagram: the Windows print dialog, then the pages.
+    /// Prints the diagram: the print dialog, then the pages.
     ///
-    /// The same two steps the preview takes, and for the same reason - see
-    /// <see cref="Services.Win32PrintDialog"/>. Neither dialog the WebView can raise will do.
+    /// The same two steps the preview takes, through the same dialog - see
+    /// <see cref="PrintDialog"/>. Neither dialog the WebView can raise will do.
+    ///
+    /// Anchored to this window's own content rather than the main window's, so it opens over
+    /// the diagram and in the theme the diagram is wearing. The page setup is the one held in
+    /// preferences, so a diagram prints on the paper everything else does.
     /// </summary>
     private async void Print()
     {
@@ -503,9 +514,9 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
-            PrintJob? job = Win32PrintDialog.Show(
-                WinRT.Interop.WindowNative.GetWindowHandle(this),
-                PdfPageSetup.Default);
+            PrintJob? job = await PrintDialog.ShowAsync(
+                Content as FrameworkElement,
+                _settings.Current.PdfDefaults);
 
             if (job is null)
             {

@@ -202,7 +202,7 @@ internal sealed class AboutDialog : ContentDialog
 
         // A Hyperlink inline rather than a HyperlinkButton: a button wraps its content in a
         // presenter, so a TextBlock inside one keeps its own foreground and the path ends up
-        // looking like ordinary text. This keeps the link colouring, the wrapping these long
+        // looking like ordinary text. This keeps the link coloring, the wrapping these long
         // paths need, and the same metrics as every other row.
         var link = new Hyperlink();
         link.Inlines.Add(new Run { Text = path });

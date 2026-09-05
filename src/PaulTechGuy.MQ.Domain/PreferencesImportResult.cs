@@ -81,7 +81,7 @@ public sealed record PreferencesImportResult
     /// Not the same as "there were notes". Two of the five kinds are the feature working as
     /// designed rather than anything going wrong: a file from an older build is missing keys
     /// this one has, and a settings.json carries session state that import is right to leave
-    /// behind. Neither is worth putting a warning colour on a report, and treating them as
+    /// behind. Neither is worth putting a warning color on a report, and treating them as
     /// one would put a warning on almost every cross-version import - which is the ordinary
     /// case, and the case the feature exists for.
     ///

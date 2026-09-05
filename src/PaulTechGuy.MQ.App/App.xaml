@@ -17,7 +17,7 @@
                     under the window's content, and the accent-button and list-selection keys
                     are reached there through aliases the framework resolves once, so dialog
                     buttons and list selection kept the Windows accent whatever this dictionary
-                    said. The app was two-toned - teal in the window, the user's own colour in
+                    said. The app was two-toned - teal in the window, the user's own color in
                     every dialog - and the seam showed wherever the two met.
 
                     So the accent is the user's now, throughout, the way the title bar and Mica
@@ -29,7 +29,7 @@
                     What that buys, beyond consistency: the accent and the text on it are a
                     pair, and only the framework can keep the pair right for an accent it has
                     not seen. The teal needed a near-black on it, because white on #51A8B1
-                    measures 1.9:1 - a pairing that was correct for that one colour and could
+                    measures 1.9:1 - a pairing that was correct for that one color and could
                     not have been correct for anyone's purple.
 
                     This dictionary is still merged AFTER XamlControlsResources, and that still
@@ -52,7 +52,7 @@
                                 Amber, for the few things that report something the user did
                                 not ask for. Marqora's own rather than SystemFillColorCaution:
                                 that one moves with the OS, and this has to stay legible
-                                against a known text colour at 12px.
+                                against a known text color at 12px.
 
                                 Dark brown on amber rather than white: 7.8:1, where white on
                                 the same amber is 1.9:1 and unreadable. The same near-black is
@@ -63,7 +63,7 @@
                             <SolidColorBrush x:Key="MqOnWarnBrush" Color="#FF2B1A00" />
 
                             <!--
-                                Nothing accent-coloured is stated here any more. The stock
+                                Nothing accent-colored is stated here any more. The stock
                                 keys - AccentFillColorDefaultBrush, the AccentTextFill pair,
                                 the TextOnAccent pair, and every ToggleButton *Checked* brush -
                                 are left exactly as the framework defines them, which is in
@@ -90,7 +90,7 @@
                                 template metrics (ClosableTabChrome in MainWindow.xaml.cs,
                                 which includes the 1px border), and the strip cannot scroll,
                                 so anything that changes a tab's measured width silently
-                                falsifies the fit pass and clips the last tab. Colour cannot
+                                falsifies the fit pass and clips the last tab. Color cannot
                                 move a pixel - measuring the strip since confirms the border
                                 is 1px in both states, so the accent edge below is free.
 
@@ -99,13 +99,13 @@
                                 ones sit at secondary.
 
                                 The tints are the accent at low alpha rather than a mixed
-                                colour, and the text on them is left to the stock foreground.
+                                color, and the text on them is left to the stock foreground.
                                 A pre-mixed plate - which is what the teal #D5EBEE was - only
                                 works for the one accent it was mixed from, and the selected
                                 tab's text was picked to sit on that specific plate. At this
                                 strength the plate barely moves the surface underneath, so the
-                                ordinary text colour keeps its contrast whatever the accent is,
-                                and there is no second colour that has to be kept in step.
+                                ordinary text color keeps its contrast whatever the accent is,
+                                and there is no second color that has to be kept in step.
 
                                 ThemeResource rather than a StaticResource alias, deliberately:
                                 an alias resolves once, which is the trap described above for
@@ -151,7 +151,7 @@
                                 TabViewBorderBrush has to be restated even though stock aliases
                                 it to CardStrokeColorDefault. That alias is a StaticResource,
                                 resolved once inside the framework dictionary, so rewriting the
-                                colour here would never reach the line TabView draws along the
+                                color here would never reach the line TabView draws along the
                                 foot of the strip - and that line sits a few pixels above the
                                 menu bar's own, where any mismatch between the two is obvious.
                             -->
@@ -166,7 +166,7 @@
                             <SolidColorBrush x:Key="MqOnWarnBrush" Color="#FF2B1A00" />
 
                             <!--
-                                As in the Light dictionary: every accent-coloured stock key is
+                                As in the Light dictionary: every accent-colored stock key is
                                 left to the framework, which states it in terms of the user's
                                 Windows accent.
                             -->
@@ -214,7 +214,7 @@
                 <!--
                     Every menu in the app - the header bar, both context menus and the ones
                     the diagram and cheatsheet windows build in code - takes its font,
-                    spacing and colours from this one dictionary. Merged last for the same
+                    spacing and colors from this one dictionary. Merged last for the same
                     reason as the accent above: a dictionary merged after
                     XamlControlsResources wins, one merged before it does not.
                 -->
@@ -326,7 +326,7 @@
                 The button a dialog or a window ends with: OK, Cancel, Export, Find All.
 
                 Nothing here but size. The chrome - padding, radius, font, border, and every
-                hover and pressed colour - is the framework's, which is the point: a command
+                hover and pressed color - is the framework's, which is the point: a command
                 button should look like a Windows command button and not like Marqora's idea
                 of one.
             -->

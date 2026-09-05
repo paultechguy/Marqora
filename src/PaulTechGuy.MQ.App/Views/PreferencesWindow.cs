@@ -441,7 +441,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             Margin = (PageMargin)Math.Max(0, _margin.SelectedIndex),
         }));
 
-        _backgrounds = BuildCheck("Include background colours");
+        _backgrounds = BuildCheck("Include background colors");
         Bind(_backgrounds, v => UpdatePdfAsync(setup => setup with { IncludeBackgrounds = v }));
 
         // ----------------------------------------------------------------- advanced
@@ -596,7 +596,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         RestorePlacement(nearby);
 
         // AppWindow.Show rather than Window.Activate, which is what the cheatsheet and Find All
-        // use. Activate re-initialises the title bar and throws away the caption colours set in
+        // use. Activate re-initialises the title bar and throws away the caption colors set in
         // the constructor, which left a dark caption sitting over light content.
         AppWindow.Show();
 
@@ -1398,9 +1398,9 @@ internal sealed class PreferencesWindow : PaletteWindow
     ///
     /// Built to be noticed rather than merely displayed. The first version was a paragraph of
     /// body text in a plain popup, which is easy to dismiss without reading and - once the
-    /// theme went wrong - easy to miss altogether. So it now leads with a coloured rule and a
+    /// theme went wrong - easy to miss altogether. So it now leads with a colored rule and a
     /// glyph, states the outcome in a line of its own, and only then gives the detail. The
-    /// colour is the one thing that says which of the three outcomes this was before a word
+    /// color is the one thing that says which of the three outcomes this was before a word
     /// has been read.
     ///
     /// Scrollable, because the import report grows a line for each kind of thing that did not
@@ -1486,11 +1486,11 @@ internal sealed class PreferencesWindow : PaletteWindow
     private const double ReportWidth = 380;
 
     /// <summary>
-    /// The colour that says which outcome this was.
+    /// The color that says which outcome this was.
     ///
-    /// Marqora's own amber rather than the system's caution colour, for the reason given
+    /// Marqora's own amber rather than the system's caution color, for the reason given
     /// beside MqWarnBrush in App.xaml: the system one moves with the OS and this has to stay
-    /// legible against a known text colour. Both it and the critical red read acceptably in
+    /// legible against a known text color. Both it and the critical red read acceptably in
     /// either theme, which matters because ThemeBrush resolves against the application's
     /// resources rather than this element's and so cannot be relied on to pick the theme's
     /// own shade.
@@ -1509,12 +1509,12 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// AccentFillColorDefaultBrush, and the difference is the point. The brush is a theme
     /// resource, and ThemeBrush can only ask the application for one - which resolves against
     /// the application's theme, not the dialog's, so a light app could be handed the dark
-    /// theme's accent. These are plain colours, identical in both theme dictionaries, so
+    /// theme's accent. These are plain colors, identical in both theme dictionaries, so
     /// picking the shade here from the theme actually in force is exact.
     ///
     /// The shades are the ones the framework's own accent fill uses: Dark1 in light, Light2
     /// in dark, where the raw accent is often too dark to read against the background. That
-    /// is what makes the report the same colour as the OK button beneath it rather than
+    /// is what makes the report the same color as the OK button beneath it rather than
     /// merely the same hue - and it is the same pair the tab strip is tinted from.
     /// </summary>
     private Brush? AccentBrush()
@@ -1524,8 +1524,8 @@ internal sealed class PreferencesWindow : PaletteWindow
             : "SystemAccentColorDark1";
 
         return Application.Current.Resources.TryGetValue(key, out object? value)
-            && value is Windows.UI.Color colour
-                ? new SolidColorBrush(colour)
+            && value is Windows.UI.Color color
+                ? new SolidColorBrush(color)
                 : ThemeBrush("AccentFillColorDefaultBrush");
     }
 

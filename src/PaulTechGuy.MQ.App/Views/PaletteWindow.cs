@@ -18,7 +18,7 @@ namespace PaulTechGuy.MQ.App.Views;
 /// remembers where it was left.
 ///
 /// This exists because three windows were about to carry the same code. The cheatsheet and Find
-/// All each had their own copy of all of it - including the caption colour table, written out
+/// All each had their own copy of all of it - including the caption color table, written out
 /// twice with the same hex values - and a preferences window would have made a third. What
 /// differs between them is a name for the log, a minimum size, and which settings property the
 /// placement lands in; everything else was identical, down to the whitespace.
@@ -149,10 +149,10 @@ public abstract class PaletteWindow : Window
     /// <summary>
     /// Paints the caption to match the page below it.
     ///
-    /// Left alone, Windows draws the caption in the user's accent colour, which on a window
-    /// that is almost entirely one document reads as a stripe of unrelated colour. The main
+    /// Left alone, Windows draws the caption in the user's accent color, which on a window
+    /// that is almost entirely one document reads as a stripe of unrelated color. The main
     /// window sidesteps this by extending its content into the title bar; these are too small
-    /// to give up the caption, so the caption is coloured instead.
+    /// to give up the caption, so the caption is colored instead.
     /// </summary>
     protected void ApplyTitleBarTheme(AppTheme theme)
     {
@@ -166,10 +166,10 @@ public abstract class PaletteWindow : Window
             This is the line that actually decides. PreferredTheme defaults to
             UseDefaultAppMode, which follows the *system* app mode rather than the app's - so on
             a machine with Windows in dark mode and Marqora set to light, the caption came up
-            dark no matter what the colours below said. The colours were being applied inside a
+            dark no matter what the colors below said. The colors were being applied inside a
             dark title bar rather than replacing it.
 
-            The colours still earn their place: they match the caption to the page beneath it
+            The colors still earn their place: they match the caption to the page beneath it
             rather than to the stock light or dark grey, which is the whole reason this method
             exists. PreferredTheme decides the mode; the rest decides the shade.
         */
@@ -199,14 +199,14 @@ public abstract class PaletteWindow : Window
     /// <summary>
     /// Paints the caption for whatever theme is in force now.
     ///
-    /// Worth calling again after the window is shown. Caption colours set before a window has
+    /// Worth calling again after the window is shown. Caption colors set before a window has
     /// ever been displayed do not always survive it being brought up - Window.Activate in
     /// particular re-initialises the title bar and drops them, which showed up as a dark caption
     /// over light content. It also covers the theme having changed while the window was closed.
     /// </summary>
     protected void RefreshTitleBar() => ApplyTitleBarTheme(_theme.Effective);
 
-    /// <summary>An opaque colour from three bytes. Shared: subclasses paint their own surfaces too.</summary>
+    /// <summary>An opaque color from three bytes. Shared: subclasses paint their own surfaces too.</summary>
     protected static Windows.UI.Color Rgb(byte r, byte g, byte b) =>
         Windows.UI.Color.FromArgb(0xFF, r, g, b);
 

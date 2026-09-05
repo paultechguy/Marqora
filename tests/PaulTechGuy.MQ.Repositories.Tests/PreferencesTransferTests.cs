@@ -656,7 +656,7 @@ public sealed class PreferencesTransferTests : IDisposable
     // -------------------------------------------------------------------- reporting
 
     /// <summary>
-    /// What the dialog colours its report by, so it is worth being exact about.
+    /// What the dialog colors its report by, so it is worth being exact about.
     ///
     /// The rule is not "were there notes". A file from an older build produces a note for
     /// every key it predates, and a settings.json produces one for the session state left

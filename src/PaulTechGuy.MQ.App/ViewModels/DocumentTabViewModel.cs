@@ -54,8 +54,8 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     /// two things.
     ///
     /// An exclamation mark rather than a warning sign: several Windows font stacks render
-    /// U+26A0 as a colour emoji, which lands at the wrong size and weight beside tab text and
-    /// cannot be recoloured with it.
+    /// U+26A0 as a color emoji, which lands at the wrong size and weight beside tab text and
+    /// cannot be recolored with it.
     /// </summary>
     public string Marker => _document.External switch
     {

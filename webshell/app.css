@@ -3,8 +3,8 @@
 
   Palette tokens mirror the Windows 11 Fluent surfaces the native chrome uses, so the
   WebView content reads as part of the window rather than an embedded web page. Every
-  colour is defined once on :root and re-pointed under [data-theme="dark"]; nothing
-  below this block hard-codes a colour.
+  color is defined once on :root and re-pointed under [data-theme="dark"]; nothing
+  below this block hard-codes a color.
 */
 
 :root {
@@ -24,7 +24,7 @@
   --mq-danger: #b3261e;
   --mq-danger-soft: rgba(179, 38, 30, 0.08);
 
-  /* Alert callouts. Note reuses the accent and caution the danger colour; the rest are
+  /* Alert callouts. Note reuses the accent and caution the danger color; the rest are
      their own, following the same convention GitHub set. */
   --mq-tip: #1a7f37;
   --mq-tip-soft: rgba(26, 127, 55, 0.08);
@@ -36,7 +36,7 @@
   /* Whitespace marks in the source pane: present enough to read, quiet enough to ignore. */
   --mq-whitespace: #7fb0da;
   /* The source pane's selection in light mode, focused and unfocused alike. Monaco's own
-     light selection colour, so only the dimming goes away and nothing looks different;
+     light selection color, so only the dimming goes away and nothing looks different;
      defineThemes in app.js says why both halves are set to it. Light only, and so not
      re-pointed under [data-theme="dark"]: dark takes the same pair from --mq-selection. */
   --mq-selection-light: #add6ff;
@@ -78,7 +78,7 @@
     --mq-whitespace: #4d7ea6;
     /* --mq-selection and --mq-selection-text are the two exceptions to the rule above:
        they are not named here, because the Find All window paints the same pair with WinUI
-       brushes and the colour is chosen once, in MatchColors in the app project. setTheme
+       brushes and the color is chosen once, in MatchColors in the app project. setTheme
        puts what the host sends onto the document, and everything downstream - Monaco's
        theme in app.js, and any rule here - reads them as ordinary custom properties. */
     --mq-shadow: 0 2px 12px rgba(0, 0, 0, 0.40);
@@ -147,7 +147,7 @@ body {
   selected range; Monaco's own editor.selectionForeground only reaches high-contrast themes.
 
   Three parts to the selector on purpose: it has to outweigh the single-class .mtkN rule
-  Monaco writes each token's colour into, and those are injected after this stylesheet.
+  Monaco writes each token's color into, and those are injected after this stylesheet.
 */
 .monaco-editor .view-line span.mq-selected-text {
   color: var(--mq-selection-text);
@@ -418,7 +418,7 @@ body {
 
   Markdig writes the icon as an inline SVG immediately followed by the label, with nothing
   at all between them, so without the gap below the two run together. It also emits no
-  colour of its own -- the whole appearance is this block's job.
+  color of its own -- the whole appearance is this block's job.
 
   The accent is set once per type as a variable and then used for the bar, the title and
   the tint, so adding a type later is one rule rather than four.
@@ -456,8 +456,8 @@ body {
 /*
   Written out per type rather than routed through one shared variable set on the class.
   The rich-text clipboard resolves custom properties from :root only, so an indirection
-  the class supplies would collapse to a single colour the moment a document was pasted
-  into Word. Every var() below resolves from :root, so the colours survive the trip.
+  the class supplies would collapse to a single color the moment a document was pasted
+  into Word. Every var() below resolves from :root, so the colors survive the trip.
 */
 .mq-preview .markdown-alert-note {
   border-left-color: var(--mq-accent);
@@ -734,13 +734,13 @@ body {
   opacity: 0.55;
 }
 
-/* KaTeX inherits the preview colour rather than its own default. */
+/* KaTeX inherits the preview color rather than its own default. */
 .mq-preview .katex { color: inherit; font-size: 1.04em; }
 .mq-preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
 
 /*
   highlight.js themes paint their own surface on the code element. The Marqora pre already
-  supplies the surface, so only the token colours from the theme are wanted here.
+  supplies the surface, so only the token colors from the theme are wanted here.
 */
 .mq-preview pre code.hljs {
   padding: 0;
@@ -782,7 +782,7 @@ body {
   width: 12px;
   text-align: center;
   /*
-    The same colour as the whitespace dots. Both mark invisible characters rather than
+    The same color as the whitespace dots. Both mark invisible characters rather than
     content, so they should read as one family of marks and not two.
   */
   color: var(--mq-whitespace);
@@ -879,7 +879,7 @@ body {
     break-after: avoid;
   }
 
-  /* A link's target is invisible on paper, so the colour is all that is left of it. */
+  /* A link's target is invisible on paper, so the color is all that is left of it. */
   .mq-preview a {
     color: var(--mq-accent);
     border-bottom: none;

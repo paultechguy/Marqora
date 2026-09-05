@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Rendering;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Views;
 using Windows.Graphics;
@@ -16,6 +17,7 @@ public sealed class DiagramWindowService(
     WindowContext window,
     IWebAssetProvider assets,
     IThemeService theme,
+    ISettingsService settings,
     ILoggerFactory loggerFactory,
     ILogger<DiagramWindowService> logger) : IDiagramWindowService
 {
@@ -85,6 +87,7 @@ public sealed class DiagramWindowService(
             opened = new DiagramWindow(
                 assets,
                 theme,
+                settings,
                 Guid.NewGuid(),
                 documentId,
                 hash,

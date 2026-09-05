@@ -38,7 +38,7 @@ public sealed record PdfPageSetup
 
     public PageMargin Margin { get; set; } = PageMargin.Normal;
 
-    /// <summary>Print the page background colours, which diagram and code surfaces rely on.</summary>
+    /// <summary>Print the page background colors, which diagram and code surfaces rely on.</summary>
     public bool IncludeBackgrounds { get; set; } = true;
 
     public static PdfPageSetup Default => new();

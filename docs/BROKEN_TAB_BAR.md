@@ -135,8 +135,8 @@ between the two reads far worse than either line being faint.
 Two things to know before touching it:
 
 - **Stock `TabViewBorderBrush` is a `StaticResource` alias to the `CardStrokeColorDefault`
-  *colour*,** not to `CardStrokeColorDefaultBrush`. That alias resolves once, inside the
-  framework dictionary, so overriding either the colour or the brush at app level never
+  *color*,** not to `CardStrokeColorDefaultBrush`. That alias resolves once, inside the
+  framework dictionary, so overriding either the color or the brush at app level never
   reaches the line. It has to be restated as its own `SolidColorBrush`.
 - **Overrides only win because the dictionary carrying them is merged *after*
   `XamlControlsResources`.** The long note at the top of `App.xaml` explains why; moving that
@@ -146,7 +146,7 @@ Two things to know before touching it:
 **Brushes only. Never a thickness, padding or size key on `TabView`.** The fit pass books
 each tab's chrome from the template metrics below, and the strip cannot scroll — so anything
 that changes a tab's measured width silently falsifies the booking and clips the last tab,
-with no scroll arrows to reveal that it happened. Colour cannot move a pixel, which is why
+with no scroll arrows to reveal that it happened. Color cannot move a pixel, which is why
 the accent edge on the active tab is free: the 1px border is present in both states.
 
 ## The numbers, and where they came from

@@ -341,10 +341,14 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     }
 
     /// <summary>
-    /// Prints the cheatsheet: the Windows print dialog, then the pages.
+    /// Prints the cheatsheet: the print dialog, then the pages.
     ///
-    /// The same two steps the preview takes, and for the same reason - see
-    /// <see cref="Services.Win32PrintDialog"/>. Neither dialog the WebView can raise will do.
+    /// The same two steps the preview takes, through the same dialog - see
+    /// <see cref="PrintDialog"/>. Neither dialog the WebView can raise will do.
+    ///
+    /// Anchored to this window's own content rather than the main window's, so it opens over
+    /// the cheatsheet and in the theme the cheatsheet is wearing. The page setup is the one
+    /// held in preferences, so a cheatsheet prints on the paper everything else does.
     /// </summary>
     private async void Print()
     {
@@ -355,9 +359,9 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                 return;
             }
 
-            PrintJob? job = Win32PrintDialog.Show(
-                WinRT.Interop.WindowNative.GetWindowHandle(this),
-                PdfPageSetup.Default);
+            PrintJob? job = await PrintDialog.ShowAsync(
+                Content as FrameworkElement,
+                _settings.Current.PdfDefaults);
 
             if (job is null)
             {

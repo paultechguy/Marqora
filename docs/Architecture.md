@@ -242,7 +242,7 @@ both panes, the two windows, Copy Full Path — goes through `ClipboardText`.
 ## One place decides what a menu looks like
 
 Every menu in Marqora is a WinUI `MenuFlyout`, and every one of them takes its font,
-spacing, background and colours from `App/Themes/Menus.xaml`. Change a value there and the
+spacing, background and colors from `App/Themes/Menus.xaml`. Change a value there and the
 header menu bar, all three context menus and the two auxiliary windows' menus all follow.
 
 They did not start out that way. There were three menus from three toolkits: WinUI drew the
@@ -421,6 +421,13 @@ hides the editor pane and the splitter and pins the light palette, which is why 
 only the preview whatever the app is showing. The built-in header and footer are switched
 off; they would print the page title and `https://marqora.assets/shell.html`.
 
+**Printing** takes the same rendered preview through `CoreWebView2.PrintAsync`, with the
+settings a `PrintJob` carries — which is the only route on which the browser's header and
+footer can be switched off. The dialog in front of it is Marqora's own `PrintDialog` rather
+than the Windows one: Windows 11 answers a `PrintDlg` call with its own modern print
+experience, themed by the system and handing back settings the app had no way to honour.
+`docs/DialogTheming.md` records why, and what `Win32Printers` asks the spooler instead.
+
 **HTML** is assembled by `HtmlExporter`. It reuses `app.css` rather than maintaining a second
 stylesheet, which is what keeps exports looking like the preview; it carries a few pane and
 splitter rules an exported document has no use for, a fair trade for not having two
@@ -523,9 +530,9 @@ The menu item's tick is bound to the window's actual visibility, sourced from
 `AppWindow.Changed`, not to the command — so dismissing the cheatsheet with its own close
 button unticks the menu too.
 
-The caption is coloured by hand from the theme. Left alone Windows draws it in the user's
-accent colour, which on a window that is almost entirely one document reads as a stripe of
-unrelated colour. The main window sidesteps this by extending its content into the title bar;
+The caption is colored by hand from the theme. Left alone Windows draws it in the user's
+accent color, which on a window that is almost entirely one document reads as a stripe of
+unrelated color. The main window sidesteps this by extending its content into the title bar;
 this one is too small to give up the caption, so the caption is painted instead.
 
 ---
@@ -631,12 +638,12 @@ operating system's, not the one the user chose in Marqora. `Application.Current.
 ["ApplicationPageBackgroundThemeBrush"]` painted a black page under light controls on a
 machine with a dark desktop and Marqora set to light. The cheatsheet window does the same
 lookup and gets away with it only because a WebView covers every pixel of the result. Find
-All writes its surface and highlight colours out per theme instead, the way the caption
-colours already were.
+All writes its surface and highlight colors out per theme instead, the way the caption
+colors already were.
 
 **The accent overrides in `App.xaml` do not reach a second window's tree.** An
 `AccentButtonStyle` button came up in the user's Windows accent rather than Marqora's teal,
-which is the one colour in the app that is nobody's choice. Find All uses a plain button;
+which is the one color in the app that is nobody's choice. Find All uses a plain button;
 `Enter` runs the search anyway, so the emphasis was carrying little.
 
 ---

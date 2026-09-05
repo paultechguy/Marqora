@@ -1672,12 +1672,12 @@
     function token(name) { return style.getPropertyValue(name).trim(); }
 
     /*
-      The same colour, quieter: an alpha byte on the end of a plain #rrggbb.
+      The same color, quieter: an alpha byte on the end of a plain #rrggbb.
 
-      A colour that already carries alpha, or is not hex at all, is handed back untouched -
+      A color that already carries alpha, or is not hex at all, is handed back untouched -
       Monaco reads these with Color.fromHex and paints anything malformed bright red, and a
-      derived colour is not worth that. Derived rather than sent as a third value, so the
-      host's MatchColors stays the one place a colour is chosen.
+      derived color is not worth that. Derived rather than sent as a third value, so the
+      host's MatchColors stays the one place a color is chosen.
     */
     function soften(hex, alpha) {
       return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + alpha : hex;
@@ -1695,7 +1695,7 @@
         'editorGutter.background': token('--mq-bg'),
         'editor.lineHighlightBackground': token('--mq-bg-subtle'),
         'editorIndentGuide.background1': token('--mq-border'),
-        // Monaco's default whitespace marks are nearly invisible; a tinted colour makes
+        // Monaco's default whitespace marks are nearly invisible; a tinted color makes
         // Show Whitespace actually readable without competing with the text.
         'editorWhitespace.foreground': token('--mq-whitespace'),
 
@@ -1703,20 +1703,20 @@
           The spelling red, and the one place it is chosen.
 
           Misspellings are drawn as decorations rather than markers, so this key no longer
-          colours a squiggle - the stylesheet does that. What it still colours is the tick each
+          colors a squiggle - the stylesheet does that. What it still colors is the tick each
           one puts in the overview ruler, which names this id rather than a hex value so the
           ticks follow a theme change without anything being re-checked. See setSpelling.
 
           Nothing else in the app publishes an Info marker, so the key is free for this.
 
-          --mq-danger rather than a colour of its own: it is already the app's red and already
-          has a dark-mode value, and a second token holding the same colour is a second thing
+          --mq-danger rather than a color of its own: it is already the app's red and already
+          has a dark-mode value, and a second token holding the same color is a second thing
           to keep in step.
         */
         'editorInfo.foreground': token('--mq-danger'),
 
         /*
-          One colour for both, so a selection does not change colour when the keyboard
+          One color for both, so a selection does not change color when the keyboard
           leaves the editor.
 
           vs gives these two different answers - #ADD6FF focused, #E5EBF1 unfocused - and
@@ -1726,9 +1726,9 @@
           a results list leaves it. That last one is the same complaint the dark pair below
           answers with inactiveSelectionBackground; light was simply never given it.
 
-          The value is vs's own focused colour, so nothing looks different from before -
+          The value is vs's own focused color, so nothing looks different from before -
           the selection just stops dimming. Only the pair Monaco dims is set here; the find
-          match colours have no unfocused form and keep vs's.
+          match colors have no unfocused form and keep vs's.
         */
         'editor.selectionBackground': token('--mq-selection-light'),
         'editor.inactiveSelectionBackground': token('--mq-selection-light')
@@ -1743,20 +1743,20 @@
       'editorGutter.background': token('--mq-bg'),
       'editor.lineHighlightBackground': token('--mq-bg-subtle'),
       'editorIndentGuide.background1': token('--mq-border'),
-      // Monaco's default whitespace marks are nearly invisible; a tinted colour makes
+      // Monaco's default whitespace marks are nearly invisible; a tinted color makes
       // Show Whitespace actually readable without competing with the text.
       'editorWhitespace.foreground': token('--mq-whitespace'),
 
       // The spelling squiggle. See the light theme above for why info means misspelling and
-      // why it borrows --mq-danger rather than carrying a colour of its own.
+      // why it borrows --mq-danger rather than carrying a color of its own.
       'editorInfo.foreground': token('--mq-danger')
     };
 
     /*
-      The dark-mode hit colours: one pair, every place a match is pointed at.
+      The dark-mode hit colors: one pair, every place a match is pointed at.
 
       --mq-selection and --mq-selection-text are put on the document by setTheme, from the
-      host's MatchColors - the single place either colour is chosen, because the Find All
+      host's MatchColors - the single place either color is chosen, because the Find All
       window paints the same pair in WinUI. The keys below are all that one pair, because
       they are all the same idea: this is the text you asked for.
 
@@ -1768,11 +1768,11 @@
         findMatchHighlightBackground the other matches Find turned up, softened, so the one
                                      being looked at still stands out from the rest
 
-      Monaco's own vs-dark colours for these are a navy, a grey and an orange: three
+      Monaco's own vs-dark colors for these are a navy, a grey and an orange: three
       different answers to one question, and the two that matter most are the faintest.
 
       The foreground goes on the two that are drawn at full strength. The softened one is
-      mostly page showing through, so the ordinary text colour is the readable one there.
+      mostly page showing through, so the ordinary text color is the readable one there.
 
       Left out when nothing has been posted yet. defineThemes runs at editor creation as
       well, which can be before the first setTheme - and Monaco parses these with
@@ -1809,20 +1809,20 @@
   /*
     The text inside a selection, dark mode only.
 
-    Monaco has a theme colour for exactly this - editor.selectionForeground, set from
+    Monaco has a theme color for exactly this - editor.selectionForeground, set from
     MatchColors alongside the background - and outside a high-contrast theme it does nothing
-    at all. The span it colours, .inline-selected-text, is only ever emitted when the theme
+    at all. The span it colors, .inline-selected-text, is only ever emitted when the theme
     type is high contrast; every other theme leaves selected text in its ordinary token
-    colour, which on an opaque selection is near-white on pale blue. Nor is there anything
+    color, which on an opaque selection is near-white on pale blue. Nor is there anything
     for a stylesheet to reach instead: the selection is painted as a layer behind the text
     rather than as a box around it.
 
-    So the foreground is applied the way Monaco colours text everywhere else - an inline
+    So the foreground is applied the way Monaco colors text everywhere else - an inline
     decoration over each selected range, carrying the class app.css paints from
     --mq-selection-text. The decorations belong to the model rather than to the editor, so
     they follow a tab across a switch instead of needing to be torn down and rebuilt.
 
-    The theme colour is still set: it costs nothing, it is the documented way to say this,
+    The theme color is still set: it costs nothing, it is the documented way to say this,
     and it is what a high-contrast Windows theme would read. This is the part that shows.
   */
   function paintSelectionForeground() {
@@ -2618,7 +2618,7 @@
     Word applies the formatting a tag implies -- bold is bold, a table is a table -- but it
     will not be relied on to parse a stylesheet. Its CSS support predates most of what
     app.css uses, and anything carried by a class rather than a tag arrives unstyled, which
-    is every callout colour, every code background and the whole of the syntax
+    is every callout color, every code background and the whole of the syntax
     highlighting.
 
     So the browser is asked instead. The preview is already laid out with the real CSS
@@ -2668,7 +2668,7 @@
       The palette lives on :root, so anything measured while the app is dark comes back as
       light text on a dark ground -- which would then be pasted into somebody's white
       document. The exports have always pinned light for the same reason; this is that rule
-      applied to the clipboard, which now takes its colours from the page rather than from
+      applied to the clipboard, which now takes its colors from the page rather than from
       a stylesheet that could be pinned on the host side.
 
       Restored before returning, and no paint happens in between, so nothing flickers.
@@ -2701,12 +2701,12 @@
   }
 
   /*
-    Flattens a translucent colour onto white.
+    Flattens a translucent color onto white.
 
     Word's HTML parser is old enough to predate rgba(), and drops a declaration it cannot
     read rather than approximating it -- so every tinted callout background would simply
     vanish. Compositing here against the white the fragment is pinned to gives the same
-    colour in a form anything can read.
+    color in a form anything can read.
   */
   function opaque(value) {
     var parts = /^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/.exec(value);
@@ -3184,12 +3184,12 @@
       document.documentElement.setAttribute('data-theme', p.theme === 'Dark' ? 'dark' : 'light');
 
       /*
-        The two colours a match is drawn in come from the host, not from app.css: the Find
+        The two colors a match is drawn in come from the host, not from app.css: the Find
         All window paints the same pair with WinUI brushes, and the app keeps them in one
         place - MatchColors in the app project - rather than writing them down twice.
 
         They are put into the palette as custom properties so everything downstream reads
-        them the way it reads every other colour: defineThemes below, and any stylesheet
+        them the way it reads every other color: defineThemes below, and any stylesheet
         rule that wants them. Set on the element rather than in a rule, so they hold in
         both themes and there is nothing to re-point.
       */
@@ -3212,7 +3212,7 @@
       // already on screen has to be repainted rather than waiting for the next one.
       paintSelectionForeground();
 
-      // Diagrams bake their colours into the SVG, so they must be produced again. The
+      // Diagrams bake their colors into the SVG, so they must be produced again. The
       // module stays loaded; only its theme configuration is replaced.
       mermaidCache = {};
       reinitializeMermaid();
@@ -3422,10 +3422,10 @@
               them without scrolling through it. Markers gave these for nothing; a decoration
               has to ask.
 
-              Named as a theme colour rather than given a hex value, so Monaco resolves it
+              Named as a theme color rather than given a hex value, so Monaco resolves it
               against whichever theme is in force and the ticks follow a theme change with no
               re-check. editorInfo.foreground is set from --mq-danger in defineThemes, which is
-              also where the squiggle's red comes from - one place chooses the colour.
+              also where the squiggle's red comes from - one place chooses the color.
             */
             overviewRuler: {
               color: { id: 'editorInfo.foreground' },

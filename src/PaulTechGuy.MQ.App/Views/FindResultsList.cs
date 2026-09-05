@@ -72,7 +72,7 @@ internal sealed partial class FindResultsList : ListView
     public Brush? Highlight { get; set; }
 
     /// <summary>
-    /// The text drawn on that tint, or null to leave the row's own colour alone. Supplied by
+    /// The text drawn on that tint, or null to leave the row's own color alone. Supplied by
     /// the window for the same reason <see cref="Highlight"/> is.
     /// </summary>
     public Brush? HighlightForeground { get; set; }

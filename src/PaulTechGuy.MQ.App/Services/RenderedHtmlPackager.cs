@@ -146,7 +146,7 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// <summary>
     /// Substitutes the stylesheet's custom properties for their light-theme values.
     ///
-    /// Every colour in the app's stylesheet is a var(--mq-...) declared on :root and
+    /// Every color in the app's stylesheet is a var(--mq-...) declared on :root and
     /// re-pointed for dark mode. That works in a whole page, but a clipboard fragment has no
     /// root element to carry the declarations, and Word and Outlook do not implement custom
     /// properties regardless. Folding the values in leaves plain CSS they understand, and

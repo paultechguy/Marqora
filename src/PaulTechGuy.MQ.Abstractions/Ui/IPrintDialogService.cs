@@ -6,17 +6,22 @@ using PaulTechGuy.MQ.Domain;
 namespace PaulTechGuy.MQ.Abstractions.Ui;
 
 /// <summary>
-/// The Windows print dialog - printer, copies, page range.
+/// The print dialog - printer, copies, page range, paper, and what the printer can do with
+/// ink and paper sides.
 ///
-/// Separate from <see cref="IFileDialogService"/> only because it answers with a
-/// <see cref="PrintJob"/> rather than a path; it is the same kind of thing, and is shown
-/// the same way.
+/// Marqora's own dialog rather than the Windows one, which is where it differs from
+/// <see cref="IFileDialogService"/>: Windows 11 answers a PrintDlg call with its own modern
+/// print experience, themed by the system rather than by the app and handing back settings
+/// the app then has no way to honour. See docs/DialogTheming.md.
+///
+/// Asynchronous because it is a ContentDialog and genuinely awaits the user, where the file
+/// dialogs run their own modal loop and answer with a completed task.
 /// </summary>
 public interface IPrintDialogService
 {
     /// <summary>
-    /// Shows the print dialog. Returns null when the user cancels, or when no printer is
-    /// installed and the dialog therefore has nothing to offer.
+    /// Shows the print dialog. Returns null when the user cancels, which includes the case of
+    /// a machine with no printer installed: the dialog says so and offers only Cancel.
     /// </summary>
     Task<PrintJob?> PickPrinterAsync(PdfPageSetup defaults, CancellationToken cancellationToken = default);
 }
