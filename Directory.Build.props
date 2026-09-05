@@ -37,7 +37,7 @@
     <Authors>Paul Carver</Authors>
     <Copyright>Copyright (c) 2026 Paul Carver</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 
