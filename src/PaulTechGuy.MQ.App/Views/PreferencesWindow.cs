@@ -183,6 +183,8 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _autoCloseBrackets;
     private readonly NumberBox _wrapColumn;
 
+    private readonly CheckBox _selectFirstResult;
+
     private readonly CheckBox _scrollSync;
     private readonly CheckBox _diagnostics;
     private readonly CheckBox _spellCheck;
@@ -335,6 +337,13 @@ internal sealed class PreferencesWindow : PaletteWindow
             {
                 FormatRules = s.Formatting with { WrapColumn = ReadInt(_wrapColumn, s.Formatting.WrapColumn) },
             }));
+
+        // ------------------------------------------------------------------ finding
+        //
+        // Read live by the Find All window off ISettingsService.Current, so there is nothing
+        // to push and nothing to tell: a window already open picks this up on its next search.
+        _selectFirstResult = BuildCheck("Select the first result when a search finishes");
+        Bind(_selectFirstResult, v => _vm.UpdateAsync(s => s with { FindSelectFirstResult = v }));
 
         // ------------------------------------------------------------------ preview
         _scrollSync = BuildCheck("Synchronize scrolling between the panes");
@@ -979,6 +988,18 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "only takes effect when the formatter's \"Re-wrap paragraphs\" rule is on, "
             + "which it is not by default: re-wrapping rewrites every line of a paragraph."));
 
+        panel.Children.Add(Divider());
+        panel.Children.Add(Heading("FINDING"));
+        panel.Children.Add(_selectFirstResult);
+
+        panel.Children.Add(Note(
+            "Edit > Find All lists every match and waits for you to pick one. With this on it "
+            + "picks the first as each search finishes and puts the keyboard on it, so the "
+            + "arrow keys walk the results straight away and Enter goes to the text.\n\n"
+            + "It is the same as clicking that first row, which means a search across all "
+            + "open tabs can change which tab you are on: the first match is often not in the "
+            + "document you were reading."));
+
         return panel;
     }
 
@@ -1562,6 +1583,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _continueLists.IsChecked = s.ContinueLists;
             _autoCloseBrackets.IsChecked = s.AutoCloseBrackets;
             _wrapColumn.Value = s.Formatting.WrapColumn;
+            _selectFirstResult.IsChecked = s.FindSelectFirstResult;
 
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;

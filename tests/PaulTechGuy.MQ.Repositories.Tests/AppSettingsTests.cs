@@ -116,6 +116,11 @@ public sealed class AppSettingsTests : IDisposable
         settings.NewFileLineEnding.ShouldBe(LineEndingStyle.Detect);
         settings.WriteUtf8Bom.ShouldBeFalse();
 
+        // Find All listed matches and waited to be told which one to go to, so a file written
+        // before this existed must not start jumping to the first one - and possibly to
+        // another tab - the moment a search finishes.
+        settings.FindSelectFirstResult.ShouldBeFalse();
+
         // Session restore was unconditional before it was a preference.
         settings.Startup.ShouldBe(StartupBehavior.RestoreSession);
         settings.RecentFilesLimit.ShouldBe(AppSettings.DefaultRecentFilesLimit);
@@ -152,6 +157,7 @@ public sealed class AppSettingsTests : IDisposable
             PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape },
             LogRetentionDays = 30,
             SpellCheckEnabled = false,
+            FindSelectFirstResult = true,
         };
 
         var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);

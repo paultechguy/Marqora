@@ -1,4 +1,4 @@
-﻿# Marqora vNext - What's New
+# Marqora vNext - What's New
 
 ## Preferences
 
@@ -11,6 +11,15 @@ View > Outline lists the document's headings beside it, indented by level, and h
 ## Spell Checker
 
 Misspelled words are underlined in the source pane as you type; F7 turns them off. Right-click or press Ctrl+. for corrections or to add a word. Code, links, URLs, math and front matter are left alone, as are acronyms and names writtenLikeThis. The words come from Windows' own dictionary, so nothing is sent anywhere; your own additions live in a plain text file you can edit, share and import from Preferences.
+
+## Find All Can Go Straight to the First Match
+
+Edit > Find All lists every match and waits for you to pick one. On the Editor page of
+Preferences, under FINDING, "Select the first result when a search finishes" makes it pick the
+first for you as each search completes and puts the keyboard on it, so the arrow keys walk the
+results straight away and Enter goes to the text. It is off by default, and it is exactly the
+same as clicking that first row - which means a search across all your open tabs can switch
+tabs, since the first match is often not in the document you were reading.
 
 ## Keyboard Shortcuts Quick Filter
 

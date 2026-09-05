@@ -208,6 +208,19 @@ public sealed record AppSettings
     public FindScope FindScope { get; set; } = FindScope.AllDocuments;
 
     /// <summary>
+    /// Select the first match as soon as a Find All search finishes, and put the keyboard on
+    /// it - exactly what clicking that row does: the document holding it is activated, the
+    /// panes are split if the preview had them to itself, and the match is selected in the
+    /// source.
+    ///
+    /// Off by default. A search that moves you to another tab before you have read the
+    /// summary line is a surprise, and the window answers "how many, and where?" at least as
+    /// often as it is used to go somewhere. Anyone who does want the jump wants it on every
+    /// search, which is what makes this a preference rather than a second button.
+    /// </summary>
+    public bool FindSelectFirstResult { get; set; }
+
+    /// <summary>
     /// Recent search terms, most recent first. Nullable for the same reason as
     /// <see cref="OpenDocuments"/>; read it through <see cref="RecentSearches"/>.
     /// </summary>

@@ -693,7 +693,53 @@ public sealed partial class FindAllWindow : PaletteWindow
             return;
         }
 
-        Display(Rows(results), Describe(results), NothingFound, documents);
+        List<FindRow> rows = Rows(results);
+
+        Display(rows, Describe(results), NothingFound, documents);
+
+        if (_settings.Current.FindSelectFirstResult)
+        {
+            SelectFirstMatch(rows);
+        }
+    }
+
+    /// <summary>
+    /// Picks the first match and hands the list the keyboard, which is what the preference
+    /// asks for and what a click on that row would have done anyway.
+    ///
+    /// The selection is deliberately made outside <see cref="_isPopulating"/>: it is meant to
+    /// be read as a pick, so <see cref="OnResultSelectionChanged"/> takes the editor there.
+    /// That carries the whole of the behaviour - activating the document the match is in,
+    /// splitting the panes if the preview had them to itself, and selecting the match -
+    /// rather than opening a second route to the same place that could drift from the first.
+    ///
+    /// Focus goes to the row's own container rather than to the list, so the arrow keys walk
+    /// on from this match rather than from wherever the list last had focus. A container
+    /// exists only once the list has been laid out and the list was handed its items a moment
+    /// ago, which is what the UpdateLayout is for; the list itself is the fallback for a row
+    /// that still has none - virtualisation means one is not guaranteed.
+    /// </summary>
+    private void SelectFirstMatch(IReadOnlyList<FindRow> rows)
+    {
+        // The first row is a heading, always: Rows writes one per document before its
+        // matches. A heading is not somewhere to be sent, so the first *match* is the target.
+        if (rows.FirstOrDefault(row => row is FindMatchRow) is not { } first)
+        {
+            return;
+        }
+
+        _results.SelectedItem = first;
+        _results.ScrollIntoView(first);
+        _results.UpdateLayout();
+
+        if (_results.ContainerFromItem(first) is Control container)
+        {
+            container.Focus(FocusState.Programmatic);
+        }
+        else
+        {
+            _results.Focus(FocusState.Programmatic);
+        }
     }
 
     /// <summary>

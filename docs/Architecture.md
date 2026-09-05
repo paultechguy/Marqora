@@ -590,6 +590,29 @@ Selecting a row does not take the keyboard; `Enter` and double-click do. That is
 the arrow keys walk the list with the editor following along, which is most of the value of
 having a list at all.
 
+### Going to the first result on its own
+
+`FindSelectFirstResult`, off by default, is the preference on the Editor page under FINDING.
+When it is on, `SearchAsync` assigns the first `FindMatchRow` to `SelectedItem` once the
+results are on screen, and moves focus to that row's container.
+
+The assignment is made **outside the `_isPopulating` guard on purpose**. Everything the
+feature has to do - activate the document the match is in, split the panes if the preview had
+them to itself, select the match in the source - is already what `OnResultSelectionChanged`
+does for a click, so the setting reaches all of it by making a selection the handler is
+allowed to see. A second path to the editor would be a second thing to keep in step with
+`Locate` and the workspace chain.
+
+Two consequences follow from it being exactly a click rather than something gentler. A search
+scoped to all open tabs **can change which tab you are on**, because the first match is
+usually not in the document you were reading; that is the behaviour, not a rough edge. And
+focus lands on the row rather than on the list, so the arrow keys walk on from that match
+rather than from wherever the list last had focus - `ContainerFromItem` returns null until the
+list has been laid out, hence the `UpdateLayout` before it and the list itself as a fallback.
+
+The window reads the preference from `ISettingsService.Current` at the point of use, so a Find
+All window that is already open picks up a change on its next search with nothing to notify.
+
 ### Three things only running it revealed
 
 None of these fail to compile, and none of them are visible in a diff. They are worth knowing
