@@ -15,3 +15,7 @@ Misspelled words are underlined in the source pane as you type; F7 turns them of
 ## Keyboard Shortcuts Quick Filter
 
 Help | Keyboard shortcuts now has a quick filter. Type in the box to narrow the list as you go — it matches both the action and the keys, so "tab" finds the tab commands and "ctrl+shift" finds everything on that chord. Empty groups drop out, the caption shows how many matched, and the copy button copies what's on screen. Escape clears the filter.
+
+## Standardize Button UX
+
+Buttons now come from one set of shared styles, so they are the same size and sit in the same order wherever you meet them. The action that commits — OK, Find All, Reload — wears your Windows accent color and sits to the left of the one that backs out. Prompts that throw work away start on Cancel instead, so a stray Enter no longer discards unsaved changes when reloading a file from disk.

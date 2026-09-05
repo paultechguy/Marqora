@@ -1220,7 +1220,8 @@ public sealed partial class MainViewModel : ObservableObject
                 "Reload from disk",
                 $"\"{document.DisplayName}\" has unsaved changes. Reloading replaces them with "
                     + "the version on disk, and they cannot be recovered.",
-                "Discard changes and reload").ConfigureAwait(true);
+                "Discard changes and reload",
+                destructivePrimary: true).ConfigureAwait(true);
 
             if (answer != ConfirmResult.Primary)
             {
@@ -3560,13 +3561,15 @@ public sealed partial class MainViewModel : ObservableObject
             ? await _dialogs.ConfirmAsync(
                 "Clear recent files?",
                 $"{entries} will be removed from the list. The files themselves are left alone.",
-                primaryText: "Clear all").ConfigureAwait(true)
+                primaryText: "Clear all",
+                destructivePrimary: true).ConfigureAwait(true)
             : await _dialogs.ConfirmAsync(
                 "Clear recent files?",
                 $"{entries} will be removed from the list, {pinned} of them pinned. "
                 + "The files themselves are left alone.",
                 primaryText: "Clear everything",
-                secondaryText: "Keep pinned").ConfigureAwait(true);
+                secondaryText: "Keep pinned",
+                destructivePrimary: true).ConfigureAwait(true);
 
         if (answer == ConfirmResult.Cancel)
         {

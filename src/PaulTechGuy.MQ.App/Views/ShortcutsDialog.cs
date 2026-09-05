@@ -102,7 +102,10 @@ internal sealed class ShortcutsDialog : ContentDialog
         _caption.FontSize = 12.5;
         _caption.VerticalAlignment = VerticalAlignment.Center;
 
-        _copy.Style = Application.Current.Resources["MqToolButtonStyle"] as Style;
+        // Through MqStyles rather than a cast off the dictionary: "as Style" hands back null for
+        // a key that has been renamed, assigning null is legal, and the button would quietly
+        // wear the stock style instead.
+        _copy.Style = MqStyles.ToolButton;
         _copy.HorizontalAlignment = HorizontalAlignment.Right;
         _copy.Content = new FontIcon
         {

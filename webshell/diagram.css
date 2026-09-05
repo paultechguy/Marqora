@@ -24,6 +24,36 @@
   --mq-hover: #333333;
 }
 
+/*
+  The zoom strip's buttons: the Compact chrome tier from docs/Button-App-Standards.md, and
+  the only buttons in the whole web layer. They mirror MqCompactToolButtonStyle in App.xaml.
+
+  Compact rather than the 34 the main window's chrome wears, and for the same reason the
+  native palette toolbars are: this window's floor is 320x240, and a taller strip takes
+  height the diagram needs. What matters for consistency is that it is a *named* tier rather
+  than the shape this file had invented for itself - 26 tall with a 4px radius, found nowhere
+  else in the app.
+
+  A CSS pixel here is a device-independent pixel: WebView2 takes the window's rasterization
+  scale, so these mean what the XAML numbers mean at any DPI and need no converting.
+
+  Written here rather than pushed across the bridge, unlike the match colours in
+  MatchColors.cs. Those change with the theme at run time and have to arrive from the host;
+  these are constants. build/Test-ButtonStandards.ps1 reads both files and fails if the two
+  ever disagree, which is the cheaper source of truth for five buttons.
+
+  There is deliberately no accent button on this toolbar. These are peer zoom controls and
+  none of them commits anything, so the one-accent-per-surface rule has nothing to place
+  here. Do not add one for the sake of consistency.
+*/
+:root {
+  --mq-btn-height: 28px;
+  --mq-btn-min-width: 32px;
+  --mq-btn-padding-x: 10px;
+  --mq-btn-radius: 6px;
+  --mq-btn-font-size: 13px;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -52,14 +82,15 @@ body {
 }
 
 .mq-toolbar button {
-  min-width: 30px;
-  height: 26px;
-  padding: 0 9px;
+  min-width: var(--mq-btn-min-width);
+  height: var(--mq-btn-height);
+  padding: 0 var(--mq-btn-padding-x);
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--mq-btn-radius);
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: var(--mq-btn-font-size);
   cursor: pointer;
 }
 

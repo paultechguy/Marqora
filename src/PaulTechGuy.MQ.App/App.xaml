@@ -253,6 +253,39 @@
             <CornerRadius x:Key="MqPillRadius">6</CornerRadius>
 
             <!--
+                The three control heights, stated once each. See docs/Button-App-Standards.md
+                for the argument; the short form is that they are not interchangeable.
+
+                34 is the main window's chrome rows, sized to the 48-tall toolbar they sit in.
+                It is Marqora's own number and applies to nothing else.
+
+                32 is a form row - a text box, a drop-down, the button beside them - and the
+                floor under every command button. It is not chosen: it is what the framework's
+                own Button, TextBox and ComboBox come out at with their stock padding, so a
+                row built from stock controls is already 32 and a footer that says 32 is
+                agreeing with the platform rather than overriding it.
+
+                28 is a palette window's own toolbar. Those windows go down to 320x240, and at
+                34 the strip would take a fifth of the height the content needs.
+            -->
+            <x:Double x:Key="MqChromeButtonHeight">34</x:Double>
+            <x:Double x:Key="MqFormRowHeight">32</x:Double>
+            <x:Double x:Key="MqCompactButtonHeight">28</x:Double>
+
+            <!--
+                The width floor under a command button. The one thing the framework does not
+                supply: without it a "No" sits at 40 pixels beside a "Discard changes" at 140
+                and the pair reads as two unrelated controls rather than as one question.
+            -->
+            <x:Double x:Key="MqCommandButtonMinWidth">96</x:Double>
+
+            <!--
+                Between buttons in a row. The one metric the app was already consistent about,
+                and the same 8 the framework spaces a ContentDialog's own footer with.
+            -->
+            <x:Double x:Key="MqButtonGroupSpacing">8</x:Double>
+
+            <!--
                 A quiet toolbar button: no chrome until the pointer arrives. Keeps the
                 command bar visually calm while remaining a full-size hit target.
             -->
@@ -261,10 +294,137 @@
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Padding" Value="10,6" />
                 <Setter Property="MinWidth" Value="36" />
-                <Setter Property="Height" Value="34" />
+                <Setter Property="Height" Value="{StaticResource MqChromeButtonHeight}" />
                 <Setter Property="CornerRadius" Value="{StaticResource MqPillRadius}" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="FontSize" Value="13" />
+            </Style>
+
+            <!--
+                Square, glyph only. Derived rather than restated so it cannot drift from the
+                tool button it sits beside; BasedOn looks backwards only, hence the order.
+            -->
+            <Style x:Key="MqIconButtonStyle" TargetType="Button" BasedOn="{StaticResource MqToolButtonStyle}">
+                <Setter Property="Width" Value="{StaticResource MqChromeButtonHeight}" />
+                <Setter Property="MinWidth" Value="{StaticResource MqChromeButtonHeight}" />
+                <Setter Property="Padding" Value="0" />
+            </Style>
+
+            <!--
+                A palette window's toolbar. Same shape, one step denser, because these windows
+                go down to 320x240 and the strip is competing with the content for the height.
+                webshell/diagram.css carries the same numbers for the diagram window's HTML
+                toolbar; build/Test-ButtonStandards.ps1 is what keeps the two in step.
+            -->
+            <Style x:Key="MqCompactToolButtonStyle" TargetType="Button" BasedOn="{StaticResource MqToolButtonStyle}">
+                <Setter Property="Height" Value="{StaticResource MqCompactButtonHeight}" />
+                <Setter Property="MinWidth" Value="32" />
+                <Setter Property="Padding" Value="10,0" />
+            </Style>
+
+            <!--
+                The button a dialog or a window ends with: OK, Cancel, Export, Find All.
+
+                Nothing here but size. The chrome - padding, radius, font, border, and every
+                hover and pressed colour - is the framework's, which is the point: a command
+                button should look like a Windows command button and not like Marqora's idea
+                of one.
+            -->
+            <Style x:Key="MqCommandButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="MinWidth" Value="{StaticResource MqCommandButtonMinWidth}" />
+                <Setter Property="MinHeight" Value="{StaticResource MqFormRowHeight}" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <!--
+                The one button on a surface that commits, in the user's Windows accent.
+
+                Padding, font and border thickness are restated rather than inherited, and
+                that is not belt and braces: AccentButtonStyle in the Windows App SDK declares
+                no BasedOn and sets six properties - Foreground, Background, BackgroundSizing,
+                BorderBrush, CornerRadius and Template. Deriving from it and assuming the rest
+                arrives is how an accent button ends up a different size from the neutral one
+                beside it.
+            -->
+            <Style x:Key="MqPrimaryCommandButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                <Setter Property="MinWidth" Value="{StaticResource MqCommandButtonMinWidth}" />
+                <Setter Property="MinHeight" Value="{StaticResource MqFormRowHeight}" />
+                <Setter Property="Padding" Value="{StaticResource ButtonPadding}" />
+                <Setter Property="FontFamily" Value="{ThemeResource ContentControlThemeFontFamily}" />
+                <Setter Property="FontSize" Value="{ThemeResource ControlContentThemeFontSize}" />
+                <Setter Property="BorderThickness" Value="{ThemeResource ButtonBorderThemeThickness}" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <!-- A split action standing in an action row: Reload All, on the change notice. -->
+            <Style x:Key="MqCommandDropDownStyle" TargetType="DropDownButton">
+                <Setter Property="MinWidth" Value="{StaticResource MqCommandButtonMinWidth}" />
+                <Setter Property="MinHeight" Value="{StaticResource MqFormRowHeight}" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <!--
+                The empty state's four entry actions.
+
+                Roomier than a footer button because they are the page rather than the foot of
+                it: with no document open they are the only things on screen to press. The
+                padding and margin are what the markup carried inline, moved here so they are
+                said once rather than four times.
+
+                They are deliberately NOT command buttons. The row of four measures about 570
+                and folds to two rows below EmptyStateStackWidth - 700, in MainWindow.xaml.cs -
+                and narrowing these to the 96 floor would make that threshold fold a row that
+                still fitted. The margin stays a margin rather than becoming ColumnSpacing for
+                the reason given at the Grid itself.
+            -->
+            <Style x:Key="MqPageActionButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="20,8" />
+                <Setter Property="Margin" Value="5,0" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="MqPageActionPrimaryStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                <Setter Property="Padding" Value="20,8" />
+                <Setter Property="Margin" Value="5,0" />
+                <Setter Property="FontFamily" Value="{ThemeResource ContentControlThemeFontFamily}" />
+                <Setter Property="FontSize" Value="{ThemeResource ControlContentThemeFontSize}" />
+                <Setter Property="BorderThickness" Value="{ThemeResource ButtonBorderThemeThickness}" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <!--
+                A recent-file card, and the two square controls that sit beside it.
+
+                38 rather than the 34 an icon button wears elsewhere. That is the one size in
+                the app the standard has not resolved: these sit in a two-line card rather than
+                a control row, so the taller square may well be right - but it is a judgement
+                that wants eyes on it, and until then the number is at least stated once here
+                instead of six times in the markup.
+            -->
+            <Style x:Key="MqCardButtonStyle" TargetType="Button">
+                <Setter Property="Padding" Value="14,10" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+
+            <Style x:Key="MqCardIconButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="38" />
+                <Setter Property="Height" Value="38" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Margin" Value="4,0,0,0" />
+            </Style>
+
+            <Style x:Key="MqCardIconToggleStyle" TargetType="ToggleButton">
+                <Setter Property="Width" Value="38" />
+                <Setter Property="Height" Value="38" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Margin" Value="4,0,0,0" />
             </Style>
 
             <Style x:Key="MqToolToggleStyle" TargetType="ToggleButton">
@@ -272,7 +432,7 @@
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Padding" Value="10,6" />
                 <Setter Property="MinWidth" Value="36" />
-                <Setter Property="Height" Value="34" />
+                <Setter Property="Height" Value="{StaticResource MqChromeButtonHeight}" />
                 <Setter Property="CornerRadius" Value="{StaticResource MqPillRadius}" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="FontSize" Value="13" />
@@ -299,7 +459,7 @@
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="Padding" Value="10,6" />
-                <Setter Property="Height" Value="34" />
+                <Setter Property="Height" Value="{StaticResource MqChromeButtonHeight}" />
                 <Setter Property="CornerRadius" Value="{StaticResource MqPillRadius}" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="FontSize" Value="13" />

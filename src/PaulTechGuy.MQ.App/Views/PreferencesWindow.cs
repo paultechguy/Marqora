@@ -15,7 +15,6 @@ using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.ViewModels;
 using PaulTechGuy.MQ.Domain;
 using Windows.Graphics;
-using Windows.System;
 
 namespace PaulTechGuy.MQ.App.Views;
 
@@ -114,21 +113,24 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// <summary>
     /// OK and Cancel.
     ///
-    /// Real buttons in the content, because a window has no template buttons to borrow. They
-    /// keep the order a ContentDialog gave them - OK to the left of Cancel, as Windows lays a
-    /// dialog out - and Enter still commits, handled on the content root below. WinUI has no
-    /// Button.IsDefault; that is a WPF property.
+    /// Real buttons in the content, because a window has no template buttons to borrow.
+    /// CommandFooter gives them the order a ContentDialog gave them - OK to the left of Cancel,
+    /// as Windows lays a dialog out - the width floor every action button in the app stands on,
+    /// and the accent that says which of the two commits. WinUI has no Button.IsDefault; that is
+    /// a WPF property, and the accent plus the Enter handler on the content root are what stand
+    /// in for one.
     /// </summary>
-    private readonly Button _ok = new() { Content = "OK", MinWidth = 96 };
+    private readonly Button _ok = new() { Content = "OK" };
 
-    private readonly Button _cancel = new() { Content = "Cancel", MinWidth = 96 };
+    private readonly Button _cancel = new() { Content = "Cancel" };
 
-    private readonly StackPanel _buttons = new()
-    {
-        Orientation = Orientation.Horizontal,
-        HorizontalAlignment = HorizontalAlignment.Right,
-        Spacing = 8,
-    };
+    /// <summary>
+    /// The footer holding the two above.
+    ///
+    /// Built in the constructor rather than here: a field initialiser may not read another
+    /// instance field, and this one is made out of both.
+    /// </summary>
+    private readonly StackPanel _buttons;
 
     /// <summary>
     /// The window's content root.
@@ -241,8 +243,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         _ok.Click += (_, _) => Accept();
         _cancel.Click += (_, _) => RequestCancel();
 
-        _buttons.Children.Add(_ok);
-        _buttons.Children.Add(_cancel);
+        _buttons = CommandFooter.Commit(_ok, _cancel);
 
         // --------------------------------------------------------------- appearance
         _themeChoice = new RadioButtons
@@ -494,27 +495,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         // Escape is what a dialog trained everyone to press, and the window keeps that: it goes
         // through Cancel rather than straight to Close, so the discard prompt still appears when
         // there is something to lose.
-        _root.KeyDown += (_, e) =>
-        {
-            switch (e.Key)
-            {
-                // Only reached when nothing nearer took the key: a handler attached this way
-                // does not see an event a control has already handled, so Enter inside a number
-                // box still commits the number rather than the window.
-                case VirtualKey.Enter:
-                    e.Handled = true;
-                    Accept();
-                    break;
-
-                case VirtualKey.Escape:
-                    e.Handled = true;
-                    RequestCancel();
-                    break;
-
-                default:
-                    break;
-            }
-        };
+        CommandFooter.WireKeys(_root, onEnter: Accept, onEscape: RequestCancel);
 
         AppWindow.Closing += OnWindowClosing;
 
@@ -835,6 +816,8 @@ internal sealed class PreferencesWindow : PaletteWindow
     {
         var flyout = new Flyout();
 
+        // "Discard" rather than "Yes". It is the quiet button of the pair and has nothing but its
+        // label to warn with, so the label has to say what pressing it does.
         var discard = new Button { Content = "Discard" };
         var keep = new Button { Content = "Keep editing" };
 
@@ -854,12 +837,10 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         keep.Click += (_, _) => flyout.Hide();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { discard, keep },
-        };
+        // Keep editing is the accented, focused one: the safe answer is what Enter and a
+        // reflexive click on the emphasised button should both reach. Escape needs no wiring -
+        // a Flyout is light-dismiss, and dismissing it is Keep editing by another route.
+        StackPanel buttons = CommandFooter.Destructive(discard, keep);
 
         flyout.Content = new StackPanel
         {
@@ -1093,7 +1074,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SETTINGS FILE"));
 
-        var openFolder = new Button { Content = "Open settings folder" };
+        var openFolder = new Button { Content = "Open settings folder", Style = MqStyles.CommandButton };
         openFolder.Click += (_, _) => ApplyAsync(_vm.OpenSettingsFolderAsync);
 
         panel.Children.Add(openFolder);
@@ -1101,8 +1082,8 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("ANOTHER MACHINE"));
 
-        var export = new Button { Content = "Export preferences..." };
-        var import = new Button { Content = "Import preferences..." };
+        var export = new Button { Content = "Export preferences...", Style = MqStyles.CommandButton };
+        var import = new Button { Content = "Import preferences...", Style = MqStyles.CommandButton };
 
         // The button is its own anchor for the report that follows, which is what puts the
         // answer where the user is already looking.
@@ -1112,7 +1093,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = MqStyles.ButtonGroupSpacing,
             Children = { export, import },
         });
 
@@ -1130,8 +1111,8 @@ internal sealed class PreferencesWindow : PaletteWindow
         // The dictionary's own pair, directly beneath the preferences pair and under the same
         // heading. Both halves of moving to another machine in one place, so it is hard to do
         // only one of them and not notice.
-        var exportWords = new Button { Content = "Export dictionary..." };
-        var importWords = new Button { Content = "Import dictionary..." };
+        var exportWords = new Button { Content = "Export dictionary...", Style = MqStyles.CommandButton };
+        var importWords = new Button { Content = "Import dictionary...", Style = MqStyles.CommandButton };
 
         exportWords.Click += (_, _) => ApplyAsync(() => ExportDictionaryAsync(exportWords));
         importWords.Click += (_, _) => ApplyAsync(() => ImportDictionaryAsync(importWords));
@@ -1139,7 +1120,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = MqStyles.ButtonGroupSpacing,
             Margin = new Thickness(0, 12, 0, 0),
             Children = { exportWords, importWords },
         });
@@ -1164,7 +1145,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         // is built at the moment it is needed. Themed() reads the theme in force when the
         // flyout is made, and a flyout made here in the constructor would have been given
         // whatever the dialog's theme was before it was ever on screen.
-        var reset = new Button { Content = "Restore all defaults..." };
+        var reset = new Button { Content = "Restore all defaults...", Style = MqStyles.CommandButton };
 
         reset.Click += (_, _) => RestoreDefaultsConfirmation().ShowAt(reset);
 
@@ -1177,11 +1158,8 @@ internal sealed class PreferencesWindow : PaletteWindow
     {
         var flyout = new Flyout();
 
-        var confirm = new Button
-        {
-            Content = "Restore defaults",
-            Margin = new Thickness(0, 4, 0, 0),
-        };
+        var confirm = new Button { Content = "Restore defaults" };
+        var cancel = new Button { Content = "Cancel" };
 
         confirm.Click += (_, _) =>
         {
@@ -1197,6 +1175,15 @@ internal sealed class PreferencesWindow : PaletteWindow
             });
         };
 
+        cancel.Click += (_, _) => flyout.Hide();
+
+        // A destructive verb needs something to be the safe answer, and until now this flyout had
+        // none: the only button in it was the one that reset everything, and declining meant
+        // clicking somewhere else and hoping. Cancel is the accented, focused one.
+        //
+        // The old top margin is gone with it - the panel below already spaces its children.
+        StackPanel buttons = CommandFooter.Destructive(confirm, cancel);
+
         flyout.Content = new StackPanel
         {
             Spacing = 10,
@@ -1209,7 +1196,7 @@ internal sealed class PreferencesWindow : PaletteWindow
                         + "documents, window position and recent files are not touched.",
                     TextWrapping = TextWrapping.Wrap,
                 },
-                confirm,
+                buttons,
             },
         };
 

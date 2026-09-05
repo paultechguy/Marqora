@@ -25,6 +25,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             primaryText: "OK",
             secondaryText: null,
             showCancel: false,
+            destructivePrimary: false,
             cancellationToken).ConfigureAwait(true);
     }
 
@@ -33,6 +34,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         string message,
         string primaryText,
         string? secondaryText = null,
+        bool destructivePrimary = false,
         CancellationToken cancellationToken = default)
     {
         ContentDialogResult result = await ShowAsync(
@@ -41,6 +43,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             primaryText,
             secondaryText,
             showCancel: true,
+            destructivePrimary,
             cancellationToken).ConfigureAwait(true);
 
         return result switch
@@ -57,6 +60,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         string primaryText,
         string? secondaryText,
         bool showCancel,
+        bool destructivePrimary,
         CancellationToken cancellationToken)
     {
         if (window.XamlRoot is null)
@@ -69,12 +73,26 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
 
         try
         {
+            /*
+                Which button Enter reaches.
+
+                Primary normally: the prompt exists because the caller wants an answer, and the
+                answer it is asking for is the primary one.
+
+                Close when the primary throws work away. This used to be hard-coded to Primary,
+                and the reload-from-disk prompt carried a comment at its call site saying Cancel
+                was the default so a stray Enter could not discard an afternoon's work - which it
+                was not, and it could. A destructive prompt always has a Cancel to fall back to,
+                because ConfirmAsync is the only route in and it always asks for one.
+            */
             var dialog = new ContentDialog
             {
                 Title = title,
                 Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
                 PrimaryButtonText = primaryText,
-                DefaultButton = ContentDialogButton.Primary,
+                DefaultButton = destructivePrimary && showCancel
+                    ? ContentDialogButton.Close
+                    : ContentDialogButton.Primary,
             }.AnchorTo(window.Root);
 
             if (!string.IsNullOrEmpty(secondaryText))

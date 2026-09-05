@@ -884,6 +884,9 @@
                         <FontIcon Glyph="&#xE738;" Style="{StaticResource MqIconStyle}" />
                     </Button>
 
+                    <!-- button-standard: exempt, a width its own content demands - the label
+                         runs from "50%" to "400%" and the button must not resize under the
+                         pointer as the user holds Ctrl+- down. -->
                     <Button x:Name="ZoomLabelButton"
                             Style="{StaticResource MqToolButtonStyle}"
                             MinWidth="52"
@@ -1414,15 +1417,24 @@
                                TextWrapping="Wrap"
                                Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.HasDetail), Mode=OneWay}" />
 
+                    <!--
+                        Two accent buttons in one panel, which the button standard otherwise
+                        allows one of. They are mutually exclusive: everything bound to
+                        CanReload is on screen when Reload is, and everything bound to its
+                        inverse is on screen when Save Now is, so exactly one accent is ever
+                        visible. Anything checking this file for a second accent should read
+                        the Visibility bindings before believing it.
+                    -->
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
 
                         <Button Content="Reload"
-                                Style="{ThemeResource AccentButtonStyle}"
+                                Style="{StaticResource MqPrimaryCommandButtonStyle}"
                                 Command="{x:Bind ViewModel.ReloadExternalCommand}"
                                 Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
                                 ToolTipService.ToolTip="Take what is on disk" />
 
                         <Button Content="Keep Mine"
+                                Style="{StaticResource MqCommandButtonStyle}"
                                 Command="{x:Bind ViewModel.KeepMineCommand}"
                                 Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
                                 ToolTipService.ToolTip="Keep this text and clear the marker" />
@@ -1434,17 +1446,19 @@
                             already uses for that.
                         -->
                         <Button Content="Save Mine As..."
+                                Style="{StaticResource MqCommandButtonStyle}"
                                 Command="{x:Bind ViewModel.SaveMineAsCommand}"
                                 Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
                                 ToolTipService.ToolTip="Write this text to a copy beside the original and open it" />
 
                         <Button Content="Save Now"
-                                Style="{ThemeResource AccentButtonStyle}"
+                                Style="{StaticResource MqPrimaryCommandButtonStyle}"
                                 Command="{x:Bind ViewModel.SaveCommand}"
                                 Visibility="{x:Bind CollapsedWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}"
                                 ToolTipService.ToolTip="Write this text back to the file" />
 
                         <Button Content="Save As..."
+                                Style="{StaticResource MqCommandButtonStyle}"
                                 Command="{x:Bind ViewModel.SaveAsCommand}"
                                 Visibility="{x:Bind CollapsedWhen(ViewModel.ExternalNotice.CanReload), Mode=OneWay}" />
 
@@ -1454,6 +1468,7 @@
                             tabs that hold edits.
                         -->
                         <DropDownButton Content="Reload All"
+                                        Style="{StaticResource MqCommandDropDownStyle}"
                                         Visibility="{x:Bind VisibleWhen(ViewModel.ExternalNotice.CanReloadAll), Mode=OneWay}">
                             <DropDownButton.Flyout>
                                 <MenuFlyout>
@@ -1682,36 +1697,30 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
+                                <!--
+                                    Page actions rather than command buttons, and the styles
+                                    carry the padding and margin the four used to repeat inline.
+                                    The pixels are unchanged on purpose: this row measures about
+                                    570 and folds below EmptyStateStackWidth, so narrowing these
+                                    to a command button's floor would fold a row that still fits.
+                                -->
                                 <Button Grid.Row="0" Grid.Column="0"
-                                        Style="{ThemeResource AccentButtonStyle}"
-                                        Padding="20,8"
-                                        Margin="5,0"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center"
+                                        Style="{StaticResource MqPageActionPrimaryStyle}"
                                         Command="{x:Bind ViewModel.OpenCommand}"
                                         Content="Browse files" />
                                 <Button Grid.Row="0" Grid.Column="1"
-                                        Padding="20,8"
-                                        Margin="5,0"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center"
+                                        Style="{StaticResource MqPageActionButtonStyle}"
                                         Command="{x:Bind ViewModel.OpenFolderCommand}"
                                         Content="Open folder"
                                         ToolTipService.ToolTip="Open every markdown file in a folder" />
                                 <Button x:Name="NewDocumentButton"
                                         Grid.Row="0" Grid.Column="2"
-                                        Padding="20,8"
-                                        Margin="5,0"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center"
+                                        Style="{StaticResource MqPageActionButtonStyle}"
                                         Command="{x:Bind ViewModel.NewTabCommand}"
                                         Content="New document" />
                                 <Button x:Name="NewFromClipboardButton"
                                         Grid.Row="0" Grid.Column="3"
-                                        Padding="20,8"
-                                        Margin="5,0"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center"
+                                        Style="{StaticResource MqPageActionButtonStyle}"
                                         Command="{x:Bind ViewModel.NewFromClipboardCommand}"
                                         Content="New from clipboard"
                                         ToolTipService.ToolTip="Open the text on the clipboard as a new document" />
@@ -1754,10 +1763,7 @@
                                         </Grid.ColumnDefinitions>
 
                                         <Button Grid.Column="0"
-                                                HorizontalAlignment="Stretch"
-                                                HorizontalContentAlignment="Stretch"
-                                                Padding="14,10"
-                                                CornerRadius="8"
+                                                Style="{StaticResource MqCardButtonStyle}"
                                                 Click="OnRecentCardClick"
                                                 Tag="{x:Bind Path}"
                                                 ToolTipService.ToolTip="{x:Bind Tooltip}">
@@ -1808,10 +1814,7 @@
                                         </Button>
 
                                         <ToggleButton Grid.Column="1"
-                                                      Width="38" Height="38"
-                                                      Margin="4,0,0,0"
-                                                      Padding="0"
-                                                      CornerRadius="8"
+                                                      Style="{StaticResource MqCardIconToggleStyle}"
                                                       IsChecked="{x:Bind IsPinned}"
                                                       Click="OnTogglePinClick"
                                                       Tag="{x:Bind Path}"
@@ -1820,10 +1823,7 @@
                                         </ToggleButton>
 
                                         <Button Grid.Column="2"
-                                                Width="38" Height="38"
-                                                Margin="4,0,0,0"
-                                                Padding="0"
-                                                CornerRadius="8"
+                                                Style="{StaticResource MqCardIconButtonStyle}"
                                                 Click="OnRemoveRecentClick"
                                                 Tag="{x:Bind Path}"
                                                 ToolTipService.ToolTip="Remove from list">

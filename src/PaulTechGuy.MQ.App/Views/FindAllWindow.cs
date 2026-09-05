@@ -53,7 +53,19 @@ public sealed partial class FindAllWindow : PaletteWindow
     /// <summary>How many terms the recent list keeps. A dropdown, not a history file.</summary>
     private const int HistoryLimit = 10;
 
-    /// <summary>One height and one size of type for every control on the form.</summary>
+    /// <summary>
+    /// One height and one size of type for the form controls - the term box, the history
+    /// button, the scope drop-down and the status row they sit above.
+    ///
+    /// The two buttons used to be sized from here as well, and that is what let this window
+    /// drift: 32 and 14 were being restated privately where the rest of the app was reading
+    /// them from App.xaml. They are command buttons now and take MqCommandButtonStyle, whose
+    /// floor is the same 32 - MqFormRowHeight - so the row did not move.
+    ///
+    /// These two stay because the controls above are not buttons and have no shared style to
+    /// take. The values are the framework's own for a TextBox and a ComboBox, so a row built
+    /// from them is already this tall.
+    /// </summary>
     private const int ControlHeight = 32;
     private const double ControlFontSize = 14;
 
@@ -331,28 +343,34 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         ShowScope();
 
-        // A plain button rather than an accent one. AccentButtonStyle draws itself from
-        // AccentFillColorDefaultBrush, and the override in App.xaml that turns that key
-        // Marqora's teal does not reach a second window's tree - the button came up in the
-        // user's Windows accent instead, which is the one colour in the app that is nobody's
-        // choice. Enter in the search box runs the search anyway, so the emphasis was never
-        // carrying much.
+        /*
+            The accent one, because it is what this window is for.
+
+            This used to be a plain button, and the comment here used to explain that an accent
+            button would come up in the user's Windows accent rather than Marqora's teal, which
+            "is the one colour in the app that is nobody's choice". Both halves of that have
+            since stopped being true: the teal override was removed from App.xaml deliberately,
+            and the user's accent is now what the tab strip, the change notice and every dialog
+            already wear. There is no longer an accent for a second window's tree to miss.
+
+            Size and type come from the shared style rather than from this window's own
+            constants - it is the same button as the one at the foot of Preferences, and it
+            should not be a different size because it was written on a different day.
+        */
         var find = new Button
         {
             Content = "Find All",
-            MinWidth = 96,
-            Height = ControlHeight,
-            FontSize = ControlFontSize,
+            Style = MqStyles.PrimaryCommandButton,
         };
 
         find.Click += (_, _) => Search();
 
-        // Same height, same size of type, sitting together at the right edge: between them
-        // they are one control - what to search, and go.
+        // Sitting together at the right edge: between them they are one control - what to
+        // search, and go.
         var action = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = MqStyles.ButtonGroupSpacing,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
@@ -407,16 +425,16 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         ApplyCautionTheme(_theme.Effective);
 
-        // An ordinary button, with the background one has. It was a quiet toolbar button and
-        // was invisible in both themes until the pointer found it.
+        // An ordinary command button, with the background one has. It was a quiet toolbar button
+        // and was invisible in both themes until the pointer found it. Neutral rather than
+        // accent: Find All is what this window commits, and a surface gets one accent.
         //
         // It is the only button on this line. There was a Refresh here as well, and it ran
         // exactly what Find All runs - the same method, off the same controls - so the window
         // offered two buttons for one action and no way to tell them apart. Find All is that
         // one action, F5 is its shortcut, and the notice above says when it is worth pressing.
         _clear.Content = "Clear";
-        _clear.Height = ControlHeight;
-        _clear.FontSize = ControlFontSize;
+        _clear.Style = MqStyles.CommandButton;
         _clear.Visibility = Visibility.Collapsed;
         _clear.Click += (_, _) => ClearResults();
         ToolTipService.SetToolTip(_clear, "Empty the search box and the results");

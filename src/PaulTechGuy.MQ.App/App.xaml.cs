@@ -44,6 +44,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Before any window is built. The shared button styles are looked up by name from code,
+        // and a name that no longer resolves would otherwise surface as a control quietly wearing
+        // the stock style in whichever flyout happened to be opened first. This turns that into a
+        // failure at launch, naming the key.
+        MqStyles.Verify();
+
         MainWindow window = Services.GetRequiredService<MainWindow>();
 
         _window = window;
