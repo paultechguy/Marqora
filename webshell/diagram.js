@@ -257,7 +257,7 @@
     if (!axes.horizontal && !axes.vertical) { return; }
 
     // Also suppresses the browser's own middle-click autoscroll, so there is one pan
-    // behaviour in this window rather than two fighting over the same button.
+    // behavior in this window rather than two fighting over the same button.
     e.preventDefault();
 
     panning = {

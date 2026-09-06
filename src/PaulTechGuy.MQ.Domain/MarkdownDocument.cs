@@ -64,7 +64,7 @@ public sealed record MarkdownDocument
     /// Whether there is anything here that disk does not have.
     ///
     /// A missing file counts, and that single clause is the whole of the deleted-file
-    /// behaviour: the tab's dot appears, the close prompt offers to save, <c>CanSave</c> turns
+    /// behavior: the tab's dot appears, the close prompt offers to save, <c>CanSave</c> turns
     /// on and the buffer is written back on the next Ctrl+S. Faking it by writing a sentinel
     /// into <see cref="SavedText"/> would do the same on the surface and quietly break reload
     /// and the close prompt, which is exactly what a comparison rather than a mutable flag

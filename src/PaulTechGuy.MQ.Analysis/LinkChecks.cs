@@ -16,10 +16,15 @@ namespace PaulTechGuy.MQ.Analysis;
 ///
 /// Links inside fenced code blocks never reach here, because the parser does not read them
 /// as links in the first place.
+///
+/// What comes out is a <see cref="LinkFinding"/> rather than a <see cref="Diagnostic"/>, because
+/// each one has a specific repair - which heading was meant, which file was meant - and a menu
+/// is where a repair belongs. The style rules next door stay diagnostics: they are advisory and
+/// the formatter fixes all of them at once.
 /// </summary>
 internal static partial class LinkChecks
 {
-    public static void Run(AnalysisRequest request, List<Diagnostic> into)
+    public static void Run(AnalysisRequest request, List<LinkFinding> into)
     {
         string? folder = string.IsNullOrWhiteSpace(request.DocumentPath)
             ? null
@@ -50,7 +55,11 @@ internal static partial class LinkChecks
 
                 if (!anchors.Contains(url[1..], StringComparer.OrdinalIgnoreCase))
                 {
-                    Report(link, "dead-anchor", $"Nothing in this document is named \"{url}\".", into);
+                    Report(
+                        link,
+                        LinkFindingKind.DeadAnchor,
+                        $"Nothing in this document is named \"{url}\".",
+                        into);
                 }
 
                 continue;
@@ -81,7 +90,7 @@ internal static partial class LinkChecks
             {
                 Report(
                     link,
-                    link.IsImage ? "missing-image" : "broken-link",
+                    link.IsImage ? LinkFindingKind.MissingImage : LinkFindingKind.BrokenLink,
                     link.IsImage ? $"No image at \"{url}\"." : $"Nothing at \"{url}\".",
                     into);
             }
@@ -97,9 +106,14 @@ internal static partial class LinkChecks
         try
         {
             string decoded = WebUtility.UrlDecode(relative).Replace('/', Path.DirectorySeparatorChar);
-            string full = Path.GetFullPath(Path.Combine(folder, decoded));
+            string root = Path.GetFullPath(folder + Path.DirectorySeparatorChar);
+            string full = Path.GetFullPath(Path.Combine(root, decoded));
 
-            if (!full.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+            // The trailing separator on the root is what stops a sibling folder passing the
+            // prefix test: without it "C:\docs2\logo.png" starts with "C:\docs" and is read as
+            // being inside it. Comparing the target with a separator appended keeps the folder
+            // itself contained, which is what a link written as "." resolves to.
+            if (!(full + Path.DirectorySeparatorChar).StartsWith(root, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -122,14 +136,18 @@ internal static partial class LinkChecks
         return cut < 0 ? url : url[..cut];
     }
 
-    private static void Report(LinkReference link, string rule, string message, List<Diagnostic> into) =>
-        into.Add(new Diagnostic
+    private static void Report(
+        LinkReference link,
+        LinkFindingKind kind,
+        string message,
+        List<LinkFinding> into) =>
+        into.Add(new LinkFinding
         {
             Line = link.SourceLine,
-            Column = link.SourceColumn,
-            EndColumn = link.SourceColumn + Math.Max(1, link.Length),
-            Severity = DiagnosticSeverity.Warning,
-            Rule = rule,
+            Start = link.SourceColumn,
+            Length = Math.Max(1, link.Length),
+            Url = link.Url.Trim(),
+            Kind = kind,
             Message = message,
         });
 

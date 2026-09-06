@@ -543,18 +543,6 @@
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Link..."
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="Link"
-                                        KeyboardAcceleratorTextOverride="Ctrl+K"
-                                        ToolTipService.ToolTip="Wrap the selection in a link, or drop an empty one in">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE71B;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-
-                        <MenuFlyoutSeparator />
-
                         <MenuFlyoutSubItem Text="Heading">
                             <MenuFlyoutItem Text="Heading 1"
                                             Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
@@ -618,6 +606,58 @@
                                         Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                         CommandParameter="Blockquote"
                                         KeyboardAcceleratorTextOverride="Ctrl+Shift+." />
+
+                    </MenuBarItem>
+
+                    <!--
+                        Insert, split out of Format.
+
+                        Format marks up text that is already there; Insert puts something new in
+                        at the caret. They had grown together into one menu of fourteen items
+                        answering two different questions, and the split is along the line the
+                        commands themselves already fell on: everything here needs no selection
+                        to mean something, and everything left in Format does.
+
+                        Gated once on the MenuBarItem, exactly as Format is, and for the reason
+                        given above it - CanExecute owns the items, this owns the menu.
+                    -->
+                    <MenuBarItem x:Name="InsertMenu"
+                                 Title="Insert"
+                                 IsEnabled="{x:Bind ViewModel.CanFormat, Mode=OneWay}">
+                        <!--
+                            No accelerator. Ctrl+V covers the way images actually arrive; this is
+                            the discoverable route and the one that needs no clipboard at all.
+                        -->
+                        <MenuFlyoutItem Text="Image..."
+                                        Command="{x:Bind ViewModel.InsertImageCommand}"
+                                        ToolTipService.ToolTip="Copy an image in beside the document and link to it">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xEB9F;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <!--
+                            Hidden rather than disabled when the Snipping Tool is not installed:
+                            a permanently grey item is a promise the machine cannot keep.
+                        -->
+                        <MenuFlyoutItem Text="Screen Clip..."
+                                        Command="{x:Bind ViewModel.ScreenClipCommand}"
+                                        Visibility="{x:Bind VisibleWhen(ViewModel.ScreenClipAvailable), Mode=OneWay}"
+                                        ToolTipService.ToolTip="Capture part of the screen and put it in the document">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7B3;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Link..."
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Link"
+                                        KeyboardAcceleratorTextOverride="Ctrl+K"
+                                        ToolTipService.ToolTip="Wrap the selection in a link, or drop an empty one in">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE71B;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
 
                         <MenuFlyoutSeparator />
 
@@ -1106,13 +1146,20 @@
                         <FontIcon Glyph="&#xEDE0;" Style="{StaticResource MqIconStyle}" />
                     </ToggleButton>
 
+                    <!--
+                        Angle brackets, written rather than drawn, because this is the mark every
+                        other editor puts on its inline-code button - GitHub, Slack, Notion - so a
+                        reader arrives already knowing it. It reads as a short run of code, which
+                        is what this command makes, and it leaves the braces free for the block
+                        below, where an enclosure is the truer picture.
+                    -->
                     <ToggleButton Style="{StaticResource MqToolToggleStyle}"
                                   IsChecked="{x:Bind ViewModel.IsInlineCodeActive, Mode=OneWay}"
                                   Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                   CommandParameter="InlineCode"
                                   ToolTipService.ToolTip="Inline code (Ctrl+`)"
                                   AutomationProperties.Name="Inline code">
-                        <FontIcon Glyph="&#xE943;" Style="{StaticResource MqIconStyle}" />
+                        <TextBlock Text="&lt;/&gt;" Style="{StaticResource MqGlyphTextStyle}" />
                     </ToggleButton>
 
                     <Button Style="{StaticResource MqToolButtonStyle}"
@@ -1124,11 +1171,34 @@
                     </Button>
 
                     <!--
-                        A block element among inline ones, which is not where taxonomy would
-                        put it. It is here because it was the last of its own group once the
-                        code block and the table moved into Insert, and a lone button fenced
-                        off by two rules reads as something having gone missing. It keeps the
-                        pinned group's company instead, where a one-stroke command belongs.
+                        Promoted out of the dropdown it used to sit in. It is the most-reached-for
+                        block in a document about software, it already answers to Ctrl+Shift+K,
+                        and behind a dropdown it cost two clicks to do a one-stroke thing.
+
+                        Segoe Fluent Icons U+E943, braces. They enclose a block in every language
+                        anyone writing here is likely to be documenting, so an enclosure is the
+                        truer picture of the thing this command makes - and the angle brackets a
+                        few buttons to the left are inline code's, because that is the mark other
+                        editors put on theirs.
+
+                        The pair was the other way round for a moment, and both halves were wrong:
+                        the brackets sat on the block and the braces on the run. Fluent's nearest
+                        offer for a block, the console box at U+E756, was tried and abandoned - it
+                        turns to mud in a 34px button and says "command prompt" besides.
+                    -->
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                            CommandParameter="CodeBlock"
+                            ToolTipService.ToolTip="Code block (Ctrl+Shift+K)"
+                            AutomationProperties.Name="Code block">
+                        <FontIcon Glyph="&#xE943;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <!--
+                        Block elements among inline ones, which is not where taxonomy would put
+                        them. They are here because a lone button fenced off by two rules reads
+                        as something having gone missing, and both are one-stroke commands - which
+                        is the line this group is actually drawn on, not inline versus block.
                     -->
                     <Button Style="{StaticResource MqToolButtonStyle}"
                             Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
@@ -1245,33 +1315,28 @@
                            Fill="{ThemeResource MqChromeDividerBrush}" />
 
                 <!-- Populated from the snippet catalogue when each flyout opens. -->
+                <!--
+                    One dropdown, and it holds snippets only.
+
+                    It used to be called "Insert" and carry the code block and the table as well.
+                    Both of those had to change once the menu bar gained a real Insert menu: the
+                    same word naming two surfaces with different contents is worse than plain
+                    duplication, because duplication is obvious and this is not.
+
+                    What stayed is the half that had to. Snippets are the one thing here the user
+                    extends - files they drop in a folder - and this dropdown is the only place
+                    the feature announces itself. Menu-only would hide it. Diagram left because it
+                    is a fixed, curated list reached for occasionally, and Insert > Diagram serves
+                    it completely; the code block was promoted to a button of its own; the table
+                    lives on the menu, being the least used of the three and the only one with no
+                    keystroke to miss.
+                -->
                 <StackPanel x:Name="FormatInsertGroup" Orientation="Horizontal" Spacing="2">
-                    <DropDownButton x:Name="DiagramButton"
-                                    Style="{StaticResource MqDropDownStyle}"
-                                    Content="Diagram"
-                                    ToolTipService.ToolTip="Insert a mermaid diagram"
-                                    AutomationProperties.Name="Insert diagram">
-                        <DropDownButton.Flyout>
-                            <MenuFlyout x:Name="DiagramMenu" />
-                        </DropDownButton.Flyout>
-                    </DropDownButton>
-
-                    <!--
-                        "Insert" rather than "Snippet" because it holds both the code block
-                        and the table and the snippet catalogue, in one run in name order
-                        rather than in bands. Every one of them is something you insert and
-                        none of them toggles, which is the line between what belongs here and
-                        what belongs on the bar as a button - and the group this sits in was
-                        already called Insert.
-
-                        The two fixed items are built in FillSnippetMenu with the rest,
-                        because the flyout is cleared and refilled on every open.
-                    -->
                     <DropDownButton x:Name="SnippetButton"
                                     Style="{StaticResource MqDropDownStyle}"
-                                    Content="Insert"
-                                    ToolTipService.ToolTip="Insert a block or a snippet"
-                                    AutomationProperties.Name="Insert">
+                                    Content="Snippet"
+                                    ToolTipService.ToolTip="Insert a snippet"
+                                    AutomationProperties.Name="Insert a snippet">
                         <DropDownButton.Flyout>
                             <MenuFlyout x:Name="SnippetMenu" />
                         </DropDownButton.Flyout>
@@ -1313,18 +1378,19 @@
                                             Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                             CommandParameter="Blockquote" />
 
-                            <MenuFlyoutItem x:Name="OverflowCodeBlock" Text="Code Block"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="CodeBlock" />
-                            <MenuFlyoutItem x:Name="OverflowTable" Text="Table"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Table" />
+                            <!--
+                                No Code Block and no Table here any more, for opposite reasons.
+                                Code Block became a pinned button, and the pinned group never
+                                sheds - a mirror for something that cannot disappear would be a
+                                second way to reach a control still sitting in view. Table left
+                                the bar altogether, so there is nothing here to stand in for it.
+                                Insert has both, at every width.
+                            -->
 
                             <!--
-                                Last, with Diagram and Insert, rather than first: on the bar
-                                those three sit in one run of dropdowns, and the menu keeps
-                                that run rather than promoting Heading above the commands it
-                                follows there.
+                                Last, with Snippet, rather than first: on the bar those two sit
+                                in one run of dropdowns, and the menu keeps that run rather than
+                                promoting Heading above the commands it follows there.
 
                                 Its label is the bar button's own HeadingLabel, so the mirror
                                 says what the control it stands in for would have said - "H2"
@@ -1359,8 +1425,7 @@
                                                 CommandParameter="HeadingDecrease" />
                             </MenuFlyoutSubItem>
 
-                            <MenuFlyoutSubItem x:Name="OverflowDiagram" Text="Diagram" />
-                            <MenuFlyoutSubItem x:Name="OverflowSnippet" Text="Insert" />
+                            <MenuFlyoutSubItem x:Name="OverflowSnippet" Text="Snippet" />
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>

@@ -113,14 +113,11 @@ public sealed partial class MainWindow : Window
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.RecentFiles.CollectionChanged += (_, _) => RebuildRecentMenu();
 
-        // The toolbar's dropdowns are MenuFlyouts, so they can be filled as they open.
-        DiagramMenu.Opening += (_, _) => FillSnippetMenu(DiagramMenu.Items, SnippetGroup.Diagram);
-
-        // The bar's Insert dropdown is the one surface that carries the three block commands
-        // above the catalogue. Its overflow twin lists them flat instead, and the Format menu
-        // keeps them as top-level items, so neither asks for them here.
-        SnippetMenu.Opening += (_, _) =>
-            FillSnippetMenu(SnippetMenu.Items, SnippetGroup.General, withBlocks: true);
+        // The bar's one dropdown is a MenuFlyout, so it can be filled as it opens. It carries
+        // the snippet catalogue and nothing else now: the code block became a button beside
+        // Link, the table and the diagrams live on the Insert menu, and what is left is the one
+        // thing on this bar the user extends themselves.
+        SnippetMenu.Opening += (_, _) => FillSnippetMenu(SnippetMenu.Items, SnippetGroup.General);
         TabListMenu.Opening += (_, _) => RebuildTabListMenu();
 
         // Picking a document from the list ends with the keyboard in it. On Closed rather
@@ -130,14 +127,10 @@ public sealed partial class MainWindow : Window
         // place for the keyboard to be - it is where the click came from.
         TabListMenu.Closed += (_, _) => ViewModel.RestoreDocumentFocus();
 
-        // The overflow copies of those two are submenus, which have no Opening of their own,
-        // so they are filled when the overflow menu opens. Each surface gets its own items:
-        // a MenuFlyoutItem cannot belong to two parents at once.
-        OverflowMenu.Opening += (_, _) =>
-        {
-            FillSnippetMenu(OverflowDiagram.Items, SnippetGroup.Diagram);
-            FillSnippetMenu(OverflowSnippet.Items, SnippetGroup.General);
-        };
+        // The overflow copy is a submenu, which has no Opening of its own, so it is filled when
+        // the overflow menu opens. It gets its own items: a MenuFlyoutItem cannot belong to two
+        // parents at once.
+        OverflowMenu.Opening += (_, _) => FillSnippetMenu(OverflowSnippet.Items, SnippetGroup.General);
 
         // The Format menu's are MenuFlyoutSubItems, which have no Opening event, so they
         // are refreshed when the window is activated instead. That covers the way a
@@ -524,7 +517,7 @@ public sealed partial class MainWindow : Window
         // command as the menu item, which is what lets that item advertise the key.
         //
         // Alt+Shift+4 is the keyboard's way in and out of the panel, and has to be a second
-        // key rather than more behaviour on the first: with the panel already open and the
+        // key rather than more behavior on the first: with the panel already open and the
         // caret in the source pane, a visibility toggle can only close the thing being
         // reached for. Visibility and focus are separate questions, so they get separate
         // keys - the same split VS Code makes.
@@ -852,6 +845,12 @@ public sealed partial class MainWindow : Window
             }
 
             await _settings.FlushAsync();
+
+            // Only here, on the path where every document has been closed and the user has
+            // answered for anything unsaved. A crash deliberately leaves the recycle folder
+            // alone: a few files nobody wanted cost nothing, and deleting files somebody did
+            // want during a failure costs a great deal.
+            ViewModel.DiscardRecycledImages();
         }
         catch (Exception ex)
         {
@@ -932,6 +931,7 @@ public sealed partial class MainWindow : Window
             "file" => FileMenu,
             "edit" => EditMenu,
             "format" => FormatMenu,
+            "insert" => InsertMenu,
             "view" => ViewMenu,
             "tools" => ToolsMenu,
             "help" => HelpMenu,
@@ -1865,7 +1865,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Double-clicking the Split button evens up the divider, the same as double-clicking the
     /// divider itself. The first click of the pair has already switched to split view through
-    /// the button's own command, which is the behaviour wanted anyway.
+    /// the button's own command, which is the behavior wanted anyway.
     /// </summary>
     private void OnSplitSegmentDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
@@ -2004,16 +2004,10 @@ public sealed partial class MainWindow : Window
         bool minimal = width < FormatBarMinimalWidth;
         bool compact = width < FormatBarCompactWidth;
 
-        // Code Block and Table live in the Insert dropdown now, so their overflow mirrors
-        // travel with that group rather than with the block group that used to hold them.
-        SetFormatGroup(
-            !compact,
-            FormatInsertGroup,
-            InsertSeparator,
-            OverflowDiagram,
-            OverflowSnippet,
-            OverflowCodeBlock,
-            OverflowTable);
+        // Code Block is a pinned button now, so it never sheds and needs no mirror here; the
+        // group is the snippet dropdown alone. Table and the diagrams left the bar entirely and
+        // live on the Insert menu, which is the same at every width.
+        SetFormatGroup(!compact, FormatInsertGroup, InsertSeparator, OverflowSnippet);
 
         SetFormatGroup(!minimal, FormatHeadingGroup, HeadingSeparator, OverflowHeading);
         SetFormatGroup(
@@ -2227,16 +2221,16 @@ public sealed partial class MainWindow : Window
     /// Each menu gets its own items. The same snippet appears in the toolbar dropdown and
     /// in the Format menu, and a MenuFlyoutItem cannot belong to two parents.
     ///
-    /// <paramref name="withBlocks"/> adds Code Block and Table to the catalogue, which is what
-    /// makes the bar's dropdown Insert rather than Snippet. They are built here rather than
-    /// declared in the markup because this clears the list on every open; declared items would
-    /// survive exactly once.
+    /// The result is one continuous run of snippets, broken once where the user's own files
+    /// start, and once more before the folder link - which is the only entry here that inserts
+    /// nothing.
     ///
-    /// The result is one continuous run of things to insert, broken once where the user's own
-    /// files start, and once more before the folder link - which is the only entry here that
-    /// inserts nothing.
+    /// It used to take a flag that added Code Block and Table to the top, which is what let the
+    /// bar call its dropdown "Insert". Both went when the menu bar gained a real Insert menu:
+    /// one word naming two different sets is worse than duplication, so the code block became a
+    /// button and the table a menu item, and what is left here is the catalogue alone.
     /// </summary>
-    private void FillSnippetMenu(IList<MenuFlyoutItemBase> items, SnippetGroup group, bool withBlocks = false)
+    private void FillSnippetMenu(IList<MenuFlyoutItemBase> items, SnippetGroup group)
     {
         items.Clear();
 
@@ -2247,19 +2241,8 @@ public sealed partial class MainWindow : Window
             items.Add(new MenuFlyoutItem { Text = "No snippets", IsEnabled = false });
         }
 
-        // Everything that ships with the app, gathered into one run before any of it is shown:
-        // the two block commands and the built-in snippets together, with no rule between them.
-        // The boundary a rule would draw there is one the user cannot see - Code Block emits a
-        // fence and the built-in "Maths Block" emits a $$ pair, and the only difference is that
-        // one is a command and the other a row in a table, which is a fact about this code
-        // rather than about what is being chosen between.
+        // Everything that ships with the app, gathered into one run before any of it is shown.
         List<MenuFlyoutItem> shipped = [];
-
-        if (withBlocks)
-        {
-            shipped.Add(BlockItem("Code Block", "CodeBlock", "Ctrl+Shift+K"));
-            shipped.Add(BlockItem("Table", "Table", null));
-        }
 
         foreach (Snippet snippet in snippets)
         {
@@ -2270,10 +2253,8 @@ public sealed partial class MainWindow : Window
         }
 
         // Name order for the general list, and the same comparison the catalogue sorts the
-        // user's files with, so the two halves of the menu read alike. It is what puts the two
-        // block commands in their place among the snippets rather than pinned above them:
-        // pinning would have reinstated, quietly, exactly the distinction the rule was removed
-        // for. The diagrams keep the order they are written in - see BuiltInSnippets.
+        // user's files with, so the two halves of the menu read alike. The diagrams keep the
+        // order they are written in - see BuiltInSnippets.
         if (group == SnippetGroup.General)
         {
             shipped.Sort(static (a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(a.Text, b.Text));
@@ -2348,29 +2329,6 @@ public sealed partial class MainWindow : Window
         return item;
     }
 
-    /// <summary>
-    /// One of the three block commands at the head of the Insert dropdown.
-    ///
-    /// Bound to ApplyMarkdownCommand with the same parameter its Format-menu twin uses, so
-    /// the two cannot come to mean different things. The accelerator text is display-only,
-    /// as everywhere else: the real keys are registered once, with Monaco and on the root.
-    /// </summary>
-    private MenuFlyoutItem BlockItem(string text, string parameter, string? accelerator)
-    {
-        var item = new MenuFlyoutItem
-        {
-            Text = text,
-            Command = ViewModel.ApplyMarkdownCommand,
-            CommandParameter = parameter,
-        };
-
-        if (accelerator is not null)
-        {
-            item.KeyboardAcceleratorTextOverride = accelerator;
-        }
-
-        return item;
-    }
 
     private void OnWindowActivatedRefresh(object sender, WindowActivatedEventArgs e)
     {

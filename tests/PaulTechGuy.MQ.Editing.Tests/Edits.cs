@@ -35,6 +35,14 @@ internal static class Edits
     public static string RunSnippet(EditContext context, string body) =>
         Apply(context, Editor.Insert(body, context));
 
+    /// <summary>The document after inserting one or more images.</summary>
+    public static string RunImages(EditContext context, params string[] references) =>
+        Apply(context, Editor.InsertImages(references, context));
+
+    /// <summary>Where the caret ended up after an image insert, as a column on its line.</summary>
+    public static int CaretAfterImages(EditContext context, params string[] references) =>
+        Editor.InsertImages(references, context).Selection?.Ordered.Start.Column ?? -1;
+
     /// <summary>What the toolbar would show for this selection.</summary>
     public static MarkdownMarkState Describe(EditContext context) => Editor.Describe(context);
 

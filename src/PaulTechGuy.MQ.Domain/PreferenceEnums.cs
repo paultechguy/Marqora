@@ -63,3 +63,26 @@ public enum HeadingNumbering
     FromHeading2 = 2,
     FromHeading3 = 3,
 }
+
+/// <summary>
+/// Where a pasted image is written, relative to the document it is pasted into.
+///
+/// <see cref="DocumentAssets"/> is member zero and the default. A folder per document makes
+/// "which images belong to this one" answerable from the path alone, which is what a Save As
+/// that has to bring them along, and any later report of images nothing references, both need.
+///
+/// The other two exist because a repository usually has a convention already. Pasting into a
+/// README that has sat beside a docs/images folder for three years should not have to create
+/// README.assets next to it.
+/// </summary>
+public enum ImageFolderMode
+{
+    /// <summary>A folder per document: "guide.md" gets "guide.assets".</summary>
+    DocumentAssets = 0,
+
+    /// <summary>One "images" folder beside the document, shared by every document in it.</summary>
+    SharedImages = 1,
+
+    /// <summary>Directly beside the document, with no folder at all.</summary>
+    BesideDocument = 2,
+}

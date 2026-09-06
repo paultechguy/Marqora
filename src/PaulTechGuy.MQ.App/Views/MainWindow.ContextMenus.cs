@@ -75,6 +75,22 @@ public sealed partial class MainWindow
     /// <summary>The misspelling that was right-clicked, captured for the item handlers.</summary>
     private SpellingHit? _clickedSpelling;
 
+    /// <summary>
+    /// The replacements offered for a dead link, built once and relabelled per click - the same
+    /// arrangement as the spelling suggestions above, and for the same reason.
+    /// </summary>
+    private MenuFlyoutItem[]? _linkSuggestionItems;
+
+    private MenuFlyoutItem? _removeLinkItem;
+
+    private MenuFlyoutSeparator? _linkSeparator;
+
+    /// <summary>Shown only when the clipboard is actually carrying a picture.</summary>
+    private MenuFlyoutItem? _pasteImageItem;
+
+    /// <summary>The dead link that was right-clicked, captured for the item handlers.</summary>
+    private LinkFindingHit? _clickedLink;
+
     /// <summary>What the pointer was over, captured at the click and used by the two Copy items.</summary>
     private string? _clickedLinkUrl;
     private string? _clickedImageUrl;
@@ -92,6 +108,7 @@ public sealed partial class MainWindow
         _clickedLinkUrl = e.LinkUrl;
         _clickedImageUrl = e.ImageUrl;
         _clickedSpelling = e.Spelling;
+        _clickedLink = e.LinkFinding;
 
         MenuFlyout menu = e.Pane == EditorPane.Source
             ? BuildSourceMenu()
@@ -108,6 +125,11 @@ public sealed partial class MainWindow
             if (_sourceCopyItem is not null) { _sourceCopyItem.IsEnabled = e.HasSelection; }
 
             FitSpellingItems(e.Spelling);
+            FitLinkItems(e.LinkFinding);
+
+            // Collapsed rather than disabled, for the same reason the preview's Copy Link is:
+            // an item that can never do anything on this clipboard is not worth a greyed row.
+            Show(_pasteImageItem, ViewModel.ClipboardHasImage);
         }
         else
         {
@@ -194,6 +216,90 @@ public sealed partial class MainWindow
         // would teach the dictionary nothing.
         Show(_addToDictionaryItem, spelling is not null && !repeated);
         Show(_spellingSeparator, spelling is not null);
+    }
+
+    /// <summary>
+    /// Fits the dead-link block to whatever is under the pointer, or hides it entirely.
+    ///
+    /// Same arrangement as the spelling block: nothing is created or destroyed, the slots are
+    /// relabelled, and the suggestions are fetched now rather than in advance because working
+    /// them out costs a folder listing.
+    ///
+    /// Browsing for a replacement image and pasting one from the clipboard both belong here too.
+    /// Neither is wired yet: they need the asset store that writes a file beside the document
+    /// and rewrites the path, which does not exist until image paste lands.
+    /// </summary>
+    private void FitLinkItems(LinkFindingHit? finding)
+    {
+        if (_linkSuggestionItems is null)
+        {
+            return;
+        }
+
+        // Missing alt text has nothing to put on a menu. There is no other file it might have
+        // meant, and removing a perfectly good image because nobody has described it yet would
+        // be the wrong answer to the question. The hover says what is missing; typing fixes it.
+        if (finding is { Kind: LinkFindingKind.MissingAltText })
+        {
+            finding = null;
+        }
+
+        IReadOnlyList<string> targets = finding is { } hit ? ViewModel.SuggestionsFor(hit) : [];
+        int offered = Math.Min(targets.Count, _linkSuggestionItems.Length);
+
+        for (int i = 0; i < _linkSuggestionItems.Length; i++)
+        {
+            bool used = i < offered;
+
+            if (used)
+            {
+                // The target is what gets written, but the menu says what the reader will see
+                // happen. "Did you mean" rather than a bare path, so the item reads as an offer
+                // rather than as a fact.
+                _linkSuggestionItems[i].Text = $"Did you mean \"{targets[i]}\"?";
+                _linkSuggestionItems[i].Tag = targets[i];
+            }
+
+            Show(_linkSuggestionItems[i], used);
+        }
+
+        // Worded for what it removes. An image and a link are the same construct to the parser
+        // and a different thing entirely to the person looking at the screen.
+        if (_removeLinkItem is not null && finding is { } removable)
+        {
+            _removeLinkItem.Text = removable.Kind == LinkFindingKind.MissingImage
+                ? "Remove this image"
+                : "Remove this link";
+        }
+
+        // A dead anchor is not removed from here. The heading it wanted usually exists under
+        // another name, and if it truly does not the sentence around the link needs rewriting
+        // rather than the link deleting.
+        Show(_removeLinkItem, finding is { Kind: not LinkFindingKind.DeadAnchor });
+        Show(_linkSeparator, finding is not null);
+    }
+
+    /// <summary>
+    /// Points a dead link at one of the suggestions.
+    ///
+    /// The target comes off the item's Tag rather than being captured when the menu was built,
+    /// for the same reason the spelling suggestions read their own Text: these slots outlive
+    /// every right-click.
+    /// </summary>
+    private void OnLinkSuggestionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem { Tag: string target } && _clickedLink is { } hit)
+        {
+            _ = ViewModel.RepointLinkAsync(hit, target);
+        }
+    }
+
+    private void RemoveClickedLink()
+    {
+        if (_clickedLink is { } hit)
+        {
+            _ = ViewModel.RemoveLinkAsync(hit);
+        }
     }
 
     /// <summary>
@@ -303,6 +409,39 @@ public sealed partial class MainWindow
         menu.Items.Add(_addToDictionaryItem);
         menu.Items.Add(_spellingSeparator);
 
+        // Dead links sit directly below the spelling block and above Undo, for the same reason
+        // spelling is up there: a menu raised on a squiggle is a menu about that squiggle.
+        //
+        // Both blocks can be showing at once, and that is correct rather than a defect: a
+        // misspelled word inside the label of a broken link - "[teh readme](gone.md)" - really is
+        // two separate problems at one position, and hiding either would be answering a question
+        // the user did not ask. Spelling comes first because it is about the word under the
+        // pointer and the link is about the construct around it.
+        _linkSuggestionItems = new MenuFlyoutItem[3];
+
+        for (int i = 0; i < _linkSuggestionItems.Length; i++)
+        {
+            var suggestion = new MenuFlyoutItem { Visibility = Visibility.Collapsed };
+
+            suggestion.Click += OnLinkSuggestionClick;
+
+            _linkSuggestionItems[i] = suggestion;
+            menu.Items.Add(suggestion);
+        }
+
+        _removeLinkItem = new MenuFlyoutItem
+        {
+            Text = "Remove this link",
+            Visibility = Visibility.Collapsed,
+        };
+
+        _removeLinkItem.Click += (_, _) => RemoveClickedLink();
+
+        _linkSeparator = new MenuFlyoutSeparator { Visibility = Visibility.Collapsed };
+
+        menu.Items.Add(_removeLinkItem);
+        menu.Items.Add(_linkSeparator);
+
         menu.Items.Add(Edit("Undo", "undo", "Ctrl+Z"));
         menu.Items.Add(Edit("Redo", "redo", "Ctrl+Y"));
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -313,6 +452,13 @@ public sealed partial class MainWindow
         menu.Items.Add(_cutItem);
         menu.Items.Add(_sourceCopyItem);
         menu.Items.Add(Edit("Paste", "paste", "Ctrl+V"));
+
+        // Paste already takes an image when there is one, so this is the same command under a
+        // name that says so. It exists because "Paste" alone gives no hint that a screenshot is
+        // something the app will do anything sensible with, and it is shown only when there
+        // really is one - an item that does nothing is worse than no item.
+        _pasteImageItem = Edit("Paste Image", "paste", string.Empty);
+        menu.Items.Add(_pasteImageItem);
         menu.Items.Add(NeedsContent(Edit("Select All", "selectAll", "Ctrl+A")));
         menu.Items.Add(new MenuFlyoutSeparator());
 

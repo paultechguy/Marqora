@@ -29,6 +29,15 @@ public interface IAppPaths
     /// <summary>Folder holding the user's own snippet files, one snippet per file.</summary>
     string SnippetsDirectory { get; }
 
+    /// <summary>
+    /// Where an image is put when the paste that created it is undone.
+    ///
+    /// Moved rather than deleted, and this is the whole reason the folder exists: nothing in
+    /// Marqora destroys a file a user might want back. Emptied on a clean exit, so a crash
+    /// leaves the bytes recoverable rather than gone.
+    /// </summary>
+    string RecycleDirectory { get; }
+
     /// <summary>Folder containing the bundled preview web assets, shipped next to the executable.</summary>
     string WebAssetsDirectory { get; }
 

@@ -573,6 +573,26 @@
                 <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}" />
             </Style>
 
+            <!--
+                A toolbar mark written in the UI font rather than drawn from the icon font, for
+                the times the icon font has nothing legible to offer. Sized here rather than at
+                the button so the two kinds of mark stay optically equal, which is the same
+                reason MqIconStyle exists above.
+
+                A point larger than the icons and at the ordinary weight. Semibold was tried
+                first, on the assumption that punctuation would look thin beside a picture, and
+                it was the wrong way round: Segoe Fluent's glyphs are hairline outlines, so the
+                heavier text stood out as the boldest thing on the bar. Matching their stroke
+                means not competing with it.
+
+                Used by inline code. The heading control does the same thing with a word.
+            -->
+            <Style x:Key="MqGlyphTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
             <Style x:Key="MqCaptionTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />

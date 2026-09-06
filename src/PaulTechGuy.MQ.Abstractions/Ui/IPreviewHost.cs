@@ -46,7 +46,8 @@ public sealed class PaneContextMenuEventArgs(
     bool hasSelection,
     string? linkUrl,
     string? imageUrl,
-    SpellingHit? spelling) : EventArgs
+    SpellingHit? spelling,
+    LinkFindingHit? linkFinding) : EventArgs
 {
     public EditorPane Pane { get; } = pane;
 
@@ -65,7 +66,25 @@ public sealed class PaneContextMenuEventArgs(
 
     /// <summary>The misspelling that was right-clicked, or null if the pointer was not on one.</summary>
     public SpellingHit? Spelling { get; } = spelling;
+
+    /// <summary>The dead link that was right-clicked, or null if the pointer was not on one.</summary>
+    public LinkFindingHit? LinkFinding { get; } = linkFinding;
 }
+
+/// <summary>
+/// A dead link the pointer was over, and the range the whole reference occupies.
+///
+/// The range comes from the decoration the analyzer published rather than from re-reading the
+/// line, for the same reason <see cref="SpellingHit"/> does: the decoration has moved with every
+/// edit since, so it is the one place that still knows where the reference is. Positions are
+/// zero-based, like everything else inside the app.
+/// </summary>
+public readonly record struct LinkFindingHit(
+    string Url,
+    LinkFindingKind Kind,
+    int Line,
+    int Start,
+    int End);
 
 /// <summary>
 /// A misspelled word the pointer was over, and the range that would be replaced.
@@ -175,6 +194,16 @@ public interface IPreviewHost
     /// <summary>Raised when the user right-clicks in either pane.</summary>
     event EventHandler<PaneContextMenuEventArgs>? ContextMenuRequested;
 
+    /// <summary>
+    /// Ctrl+V arrived with an image on the clipboard, and the editor stood down so the host
+    /// could take it.
+    ///
+    /// Carries nothing on purpose. What the page can see of a pasted image is the browser's own
+    /// re-encode of it, and a copied file's path it cannot see at all - so the host reads the
+    /// Windows clipboard itself rather than being handed several megabytes across the bridge.
+    /// </summary>
+    event EventHandler? ImagePasteRequested;
+
     /// <summary>Raised when the user double-clicks a rendered diagram in the preview.</summary>
     event EventHandler<DiagramActivatedEventArgs>? DiagramActivated;
 
@@ -274,6 +303,35 @@ public interface IPreviewHost
     /// crosses the bridge is the domain type rather than a marker.
     /// </summary>
     Task SetSpellingAsync(Guid documentId, IReadOnlyList<SpellingIssue> misspellings);
+
+    /// <summary>
+    /// Replaces the dead links shown against one document; an empty list clears them.
+    ///
+    /// A decoration rather than a marker, for the same reasons as
+    /// <see cref="SetSpellingAsync"/>: a marker's hover repeats what the squiggle already said
+    /// and carries an untrue "No quick fixes available" line, while the fixes worth offering -
+    /// which heading was meant, which file was meant - only make sense one link at a time and
+    /// belong on the menu. The message travels with the finding and is shown on hover.
+    /// </summary>
+    Task SetLinkFindingsAsync(Guid documentId, IReadOnlyList<LinkFinding> findings);
+
+    /// <summary>
+    /// Clears dead links from every open document. Goes with
+    /// <see cref="ClearDiagnosticsAsync"/>: one switch turns both off, because underlining
+    /// problems is one feature to the person reading the screen.
+    /// </summary>
+    Task ClearLinkFindingsAsync();
+
+    /// <summary>
+    /// The files a relative link or image in this document could point at, for completion.
+    ///
+    /// Pushed rather than pulled. The page cannot read a disk, so the list has to come from
+    /// here either way, and pushing keeps the completion popup instant instead of making it wait
+    /// on a round trip - and avoids being the first thing on the bridge to need a reply.
+    ///
+    /// Paths are relative to the document's own folder and already use forward slashes.
+    /// </summary>
+    Task SetLinkTargetsAsync(Guid documentId, IReadOnlyList<string> paths);
 
     /// <summary>Clears misspellings from every open document, for when spell check is switched off.</summary>
     Task ClearSpellingAsync();

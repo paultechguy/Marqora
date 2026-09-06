@@ -131,7 +131,7 @@ public sealed class CheatsheetService(
             // Taking focus here was the cause of the menu item appearing to need two clicks:
             // showing the cheatsheet moved focus off the main window, so the user's next
             // click on the Tools menu was consumed re-activating the editor and never
-            // reached the item. It is also simply the right behaviour — this is a reference
+            // reached the item. It is also simply the right behavior — this is a reference
             // you glance at while typing, and typing should carry on into the document.
             //
             // The window is owned by the main window, so it comes up above the editor

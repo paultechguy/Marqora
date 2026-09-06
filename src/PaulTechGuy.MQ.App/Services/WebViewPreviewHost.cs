@@ -131,6 +131,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler<PaneContextMenuEventArgs>? ContextMenuRequested;
 
+    /// <summary>
+    /// Ctrl+V arrived with an image on the clipboard and the shell stood down for it.
+    ///
+    /// Carries nothing. The bytes are read from the Windows clipboard on the host side, where
+    /// the original file and the raw PNG flavor are both reachable and where a multi-megabyte
+    /// screenshot does not have to be base64-encoded across the bridge to be seen.
+    /// </summary>
+    public event EventHandler? ImagePasteRequested;
+
     public event EventHandler<DiagramActivatedEventArgs>? DiagramActivated;
 
     public event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
@@ -538,6 +547,35 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     }
 
     public Task ClearSpellingAsync() => SendAsync("clearSpelling", new { });
+
+    public Task ClearLinkFindingsAsync() => SendAsync("clearLinkFindings", new { });
+
+    public Task SetLinkTargetsAsync(Guid documentId, IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        return SendAsync("setLinkTargets", new { id = documentId, paths });
+    }
+
+    public Task SetLinkFindingsAsync(Guid documentId, IReadOnlyList<LinkFinding> findings)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+
+        // The domain type again rather than a marker, for the reasons on the interface. The
+        // kind travels as its name so the shell can put it straight back on the context-menu
+        // message without either side keeping a table of numbers in step.
+        var links = findings.Select(finding => new
+        {
+            line = finding.Line,
+            start = finding.Start,
+            length = finding.Length,
+            url = finding.Url,
+            kind = finding.Kind.ToString(),
+            message = finding.Message,
+        });
+
+        return SendAsync("setLinkFindings", new { id = documentId, links });
+    }
 
     /// <summary>
     /// Turns diagnostics into Monaco's own IMarkerData shape.
@@ -1193,6 +1231,19 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                             ReadInt(payload, "wordEnd", -1),
                             ReadBool(payload, "wordRepeated", false));
 
+                    // Same convention as the misspelling above: an empty kind means the pointer
+                    // was not on a dead link, which is how the menu decides whether to offer
+                    // anything about one.
+                    LinkFindingHit? linkFinding =
+                        Enum.TryParse(ReadString(payload, "linkKind"), out LinkFindingKind linkKind)
+                            ? new LinkFindingHit(
+                                ReadString(payload, "linkTarget") ?? string.Empty,
+                                linkKind,
+                                ReadInt(payload, "linkLine", -1),
+                                ReadInt(payload, "linkStart", -1),
+                                ReadInt(payload, "linkEnd", -1))
+                            : null;
+
                     ContextMenuRequested?.Invoke(this, new PaneContextMenuEventArgs(
                         clicked,
                         ReadDouble(payload, "x", 0),
@@ -1200,8 +1251,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                         ReadBool(payload, "hasSelection", false),
                         Localize(ReadString(payload, "linkUrl")),
                         Localize(ReadString(payload, "imageUrl")),
-                        spelling));
+                        spelling,
+                        linkFinding));
                 }
+                break;
+
+            // The shell saw a paste it decided was an image and stood down so the host could
+            // take it. No payload: the bytes are read from the Windows clipboard on this side,
+            // which is the whole reason the message carries nothing.
+            case "imagePaste":
+                ImagePasteRequested?.Invoke(this, EventArgs.Empty);
                 break;
 
             case "paneFocused":

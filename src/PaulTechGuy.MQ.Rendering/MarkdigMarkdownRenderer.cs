@@ -113,6 +113,15 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
                 SourceLine = link.Line,
                 SourceColumn = link.Column,
                 Length = link.Span.Length,
+
+                // The label is the LinkInline's own children, so this reads what the parse
+                // already built rather than going back to the text. Concatenated because the
+                // label can be several inlines - "![the **new** logo](x.png)" is three.
+                Text = string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString())),
+
+                // A badge is an image inside a link, and Markdig models exactly that: the image
+                // is a child of the link inline that wraps it.
+                IsInsideLink = link.Parent is LinkInline { IsImage: false },
             })];
 
     private static bool ContainsDiagram(MarkdigDocument document) =>

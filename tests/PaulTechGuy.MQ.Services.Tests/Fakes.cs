@@ -143,6 +143,8 @@ internal sealed class FakeAppPaths(string root) : IAppPaths
 
     public string SnippetsDirectory => System.IO.Path.Combine(DataDirectory, "snippets");
 
+    public string RecycleDirectory => System.IO.Path.Combine(DataDirectory, "recycle");
+
     public string WebAssetsDirectory => System.IO.Path.Combine(InstallDirectory, "Assets", "web");
 
     public string WelcomeTemplatePath =>

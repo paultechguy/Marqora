@@ -23,7 +23,7 @@ Repositories Rendering Analysis Spelling Services   App
 |---------|-------|-----------------------|
 | `Domain` | `AppSettings`, `MarkdownDocument`, `ZoomLevel`, enums | reference anything, including the BCL beyond primitives |
 | `Markdown` | `MarkdownRegionScanner`, `LineMasker` — which lines a rule must keep out of, and how to blank the parts of a line that are not prose | hold state, touch the file system, or reference anything at all |
-| `Abstractions` | every interface, plus event argument types | contain behaviour |
+| `Abstractions` | every interface, plus event argument types | contain behavior |
 | `Repositories` | atomic reads and writes, JSON and text | know about markdown or UI |
 | `Rendering` | the Markdig pipeline and the source-line extension | touch the file system or UI |
 | `Analysis` | dead links, missing images, the style rules | rewrite anything |
@@ -104,10 +104,36 @@ are JSON envelopes, `{ type, payload }`, in both directions.
 host -> shell   openTab, activateTab, closeTab, updatePreview, setTabText, clearSurface,
                 setViewMode, setTheme, setZoom, setScrollSync, setWordWrap,
                 setLineNumbers, setShowWhitespace, setWrapGlyph, setSplitterPosition,
-                scrollToLine, focusPane, editorCommand, requestSelection, insertText
+                scrollToLine, focusPane, editorCommand, requestSelection, insertText,
+                setDiagnostics, clearDiagnostics, setSpelling, clearSpelling,
+                setLinkFindings, clearLinkFindings, setLinkTargets
 shell -> host   ready, editorTextChanged, zoomChanged, splitterMoved, linkActivated,
-                command, paneFocused, stats, selectionCopied, log
+                command, paneFocused, stats, selectionCopied, contextMenu, imagePaste, log
 ```
+
+`imagePaste` is the odd one: it carries no payload at all. The shell sees a paste it decides is
+an image, stands down, and says so; the host then reads the Windows clipboard itself. What the
+page can see is the browser's own re-encode of a bitmap, and a copied file's path it cannot see
+at all - so reading it on the host side is what keeps an Explorer copy byte-exact and keeps
+several megabytes of screenshot off the bridge.
+
+The last six of those draw what is wrong with a document, and they are three messages rather
+than one because the editor draws them two different ways. `setDiagnostics` carries Monaco
+markers, which is right for the style rules: they are advisory, the formatter fixes all of them
+at once, and there is nothing to offer per occurrence. `setSpelling` and `setLinkFindings` carry
+decorations, because a misspelling and a dead link each have a repair that only makes sense one
+at a time — which word was meant, which heading or file was meant — and a repair belongs on the
+right-click menu. Both report what the pointer is over through `contextMenu`, and the host
+builds one WinUI menu from the answer. A marker's own hover was rejected for both: it repeats
+what the squiggle already said and carries a "No quick fixes available" line that is untrue in
+an app that registers no code action provider.
+
+`setLinkTargets` is the other push of the group and exists for a plainer reason: the page cannot
+read a disk, and completing a relative path means knowing what is on one. The host lists the
+document's folder and one level below it - capped, off the UI thread - on tab activation, after
+writing an image, and when a save moves the document. Pushing rather than answering a request
+keeps the completion popup instant and avoids making this the first thing on the bridge that
+needs a reply.
 
 Tab-scoped messages carry the document id, and `editorTextChanged` reports which tab was
 edited, so a slow render arriving after a tab switch updates the right document.
@@ -612,7 +638,7 @@ allowed to see. A second path to the editor would be a second thing to keep in s
 
 Two consequences follow from it being exactly a click rather than something gentler. A search
 scoped to all open tabs **can change which tab you are on**, because the first match is
-usually not in the document you were reading; that is the behaviour, not a rough edge. And
+usually not in the document you were reading; that is the behavior, not a rough edge. And
 focus lands on the row rather than on the list, so the arrow keys walk on from that match
 rather than from wherever the list last had focus - `ContainerFromItem` returns null until the
 list has been laid out, hence the `UpdateLayout` before it and the list itself as a fallback.
@@ -746,7 +772,7 @@ a reference to the project it exercises.
 
 **Fakes are hand-written.** `NSubstitute` is pinned in `Directory.Packages.props` and used by
 nothing: a fake with a name and a doc comment saying what it stands in for reads better than a
-mock built line by line at the top of each test, and it can carry the small amount of behaviour a
+mock built line by line at the top of each test, and it can carry the small amount of behavior a
 test actually needs. `tests/PaulTechGuy.MQ.Services.Tests/Fakes.cs` is the pattern, and the fake
 spelling engine is the clearest example — it doubles as the second implementation of
 `ISpellingEngine`, which is the cheapest proof that the seam is real.

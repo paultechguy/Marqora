@@ -223,7 +223,7 @@ second path harmless: if nothing actually changed, nothing is shown.
 The watcher's debounce timer fires on a thread-pool thread, and the file read and comparison
 run there. Everything that touches the UI goes through `IUiDispatcher.Post`, as it did before.
 Workspace mutation still happens on the watcher thread for the reload path, which is
-pre-existing behaviour and unchanged here.
+pre-existing behavior and unchanged here.
 
 ---
 

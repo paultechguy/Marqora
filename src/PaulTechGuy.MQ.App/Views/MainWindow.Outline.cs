@@ -9,7 +9,7 @@ using Windows.System;
 namespace PaulTechGuy.MQ.App.Views;
 
 /// <summary>
-/// The outline panel's behaviour.
+/// The outline panel's behavior.
 ///
 /// Split out for the same reason the context menus are: it is a self-contained piece of the
 /// window with a story of its own, and MainWindow.xaml.cs is long enough already.
@@ -90,7 +90,7 @@ public sealed partial class MainWindow
             : OutlineList.Focus(FocusState.Programmatic);
 
         // Said rather than waited for. GotFocus reports the same thing a moment later and
-        // the flag is idempotent, but the whole of the panel's behaviour hangs off it - what
+        // the flag is idempotent, but the whole of the panel's behavior hangs off it - what
         // Escape does, and whether the Format menu is available - so it is not left resting
         // on a routed event arriving from a control that has only just been shown.
         if (focused)

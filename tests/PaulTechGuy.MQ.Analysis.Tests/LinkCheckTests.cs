@@ -14,7 +14,7 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder().With("README.md");
 
-        folder.Check("See [the readme](./README.md).").ShouldBeEmpty();
+        folder.Links("See [the readme](./README.md).").ShouldBeEmpty();
     }
 
     [Fact]
@@ -22,11 +22,15 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder();
 
-        Diagnostic found = folder.Check("See [the readme](./nope.md).").ShouldHaveSingleItem();
+        LinkFinding found = folder.Links("See [the readme](./nope.md).").ShouldHaveSingleItem();
 
-        found.Rule.ShouldBe("broken-link");
-        found.Severity.ShouldBe(DiagnosticSeverity.Warning);
+        found.Kind.ShouldBe(LinkFindingKind.BrokenLink);
         found.Line.ShouldBe(0);
+
+        // The target travels with the finding, because the menu that offers a replacement has
+        // the finding and not the line it came from.
+        found.Url.ShouldBe("./nope.md");
+        found.Message.ShouldBe("Nothing at \"./nope.md\".");
     }
 
     [Fact]
@@ -34,8 +38,8 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder();
 
-        folder.Check("![a diagram](missing.png)").ShouldHaveSingleItem()
-            .Rule.ShouldBe("missing-image");
+        folder.Links("![a diagram](missing.png)").ShouldHaveSingleItem()
+            .Kind.ShouldBe(LinkFindingKind.MissingImage);
     }
 
     [Fact]
@@ -43,7 +47,31 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder().With("art/logo.png");
 
-        folder.Check("![logo](art/logo.png)").ShouldBeEmpty();
+        folder.Links("![logo](art/logo.png)").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void An_image_in_a_folder_that_merely_starts_with_this_ones_name_is_still_outside_it()
+    {
+        using var folder = new DocumentFolder();
+        string link = folder.WithPrefixedSibling("logo.png");
+
+        // The file really is on disk, and it is still outside the document's folder, which is
+        // what the check refuses - the preview cannot serve it either. Comparing the paths as
+        // bare strings said otherwise, because "...\abc2\logo.png" starts with "...\abc".
+        folder.Links($"![logo]({link})").ShouldHaveSingleItem()
+            .Kind.ShouldBe(LinkFindingKind.MissingImage);
+    }
+
+    [Fact]
+    public void A_link_to_the_documents_own_folder_is_not_reported()
+    {
+        using var folder = new DocumentFolder();
+
+        // "." resolves to the folder itself. Refusing anything outside the folder must not
+        // start refusing the folder, which is what a trailing separator on the root alone
+        // would do.
+        folder.Links("[here](.)").ShouldBeEmpty();
     }
 
     [Theory]
@@ -56,7 +84,7 @@ public class LinkCheckTests
         using var folder = new DocumentFolder();
 
         // Checking these would mean going to the network, which the app never does.
-        folder.Check($"[out]({url})").ShouldBeEmpty();
+        folder.Links($"[out]({url})").ShouldBeEmpty();
     }
 
     [Fact]
@@ -64,7 +92,7 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder().With("guide.md");
 
-        folder.Check("[a](guide.md#setup) and [b](guide.md?v=2)").ShouldBeEmpty();
+        folder.Links("[a](guide.md#setup) and [b](guide.md?v=2)").ShouldBeEmpty();
     }
 
     [Fact]
@@ -72,7 +100,7 @@ public class LinkCheckTests
     {
         // There is no folder for "./anything.md" to be relative to, so every link would
         // look broken. Saying nothing beats saying everything.
-        DocumentFolder.CheckUnsaved("[nowhere](./anything.md)").ShouldBeEmpty();
+        DocumentFolder.LinksUnsaved("[nowhere](./anything.md)").ShouldBeEmpty();
     }
 
     [Fact]
@@ -80,10 +108,10 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder();
 
-        folder.Check("# Getting Started\n\n[jump](#getting-started)").ShouldBeEmpty();
+        folder.Links("# Getting Started\n\n[jump](#getting-started)").ShouldBeEmpty();
 
-        folder.Check("# Getting Started\n\n[jump](#getting-stated)").ShouldHaveSingleItem()
-            .Rule.ShouldBe("dead-anchor");
+        folder.Links("# Getting Started\n\n[jump](#getting-stated)").ShouldHaveSingleItem()
+            .Kind.ShouldBe(LinkFindingKind.DeadAnchor);
     }
 
     [Fact]
@@ -91,8 +119,8 @@ public class LinkCheckTests
     {
         // Unlike a file path, an anchor can be resolved without knowing where the document
         // lives, so there is no reason to skip it.
-        DocumentFolder.CheckUnsaved("# Title\n\n[jump](#nowhere)").ShouldHaveSingleItem()
-            .Rule.ShouldBe("dead-anchor");
+        DocumentFolder.LinksUnsaved("# Title\n\n[jump](#nowhere)").ShouldHaveSingleItem()
+            .Kind.ShouldBe(LinkFindingKind.DeadAnchor);
     }
 
     [Fact]
@@ -101,7 +129,7 @@ public class LinkCheckTests
         using var folder = new DocumentFolder();
 
         // Never parsed as a link in the first place, so nothing has to filter it out.
-        folder.Check("```\n[example](./nope.md)\n```").ShouldBeEmpty();
+        folder.Links("```\n[example](./nope.md)\n```").ShouldBeEmpty();
     }
 
     [Fact]
@@ -109,8 +137,8 @@ public class LinkCheckTests
     {
         using var folder = new DocumentFolder();
 
-        folder.Check("[escape](../../../windows/system32/drivers/etc/hosts)").ShouldHaveSingleItem()
-            .Rule.ShouldBe("broken-link");
+        folder.Links("[escape](../../../windows/system32/drivers/etc/hosts)").ShouldHaveSingleItem()
+            .Kind.ShouldBe(LinkFindingKind.BrokenLink);
     }
 
     [Fact]
@@ -118,7 +146,7 @@ public class LinkCheckTests
     {
         // The long-standing way to give something that is not a heading a link target. The
         // preview honours it, so reporting it as dead would be reporting a working link.
-        DocumentFolder.CheckUnsaved(
+        DocumentFolder.LinksUnsaved(
             "<a id=\"notes\"></a>\n\nSome notes.\n\n[jump](#notes)").ShouldBeEmpty();
     }
 
@@ -127,7 +155,7 @@ public class LinkCheckTests
     {
         // How a glossary is usually written: the anchor sits inline, immediately before the
         // term it names, rather than on a line of its own.
-        DocumentFolder.CheckUnsaved(
+        DocumentFolder.LinksUnsaved(
             "See [tenant](#g-tenant).\n\n<a id=\"g-tenant\"></a>**Tenant** - one customer.")
             .ShouldBeEmpty();
     }
@@ -135,31 +163,31 @@ public class LinkCheckTests
     [Fact]
     public void The_older_name_attribute_counts_on_an_anchor()
     {
-        DocumentFolder.CheckUnsaved("<a name=\"top\"></a>\n\n[back](#top)").ShouldBeEmpty();
+        DocumentFolder.LinksUnsaved("<a name=\"top\"></a>\n\n[back](#top)").ShouldBeEmpty();
     }
 
     [Fact]
     public void An_id_on_any_element_counts_because_any_element_can_be_a_target()
     {
-        DocumentFolder.CheckUnsaved("<div id=\"panel\">text</div>\n\n[jump](#panel)").ShouldBeEmpty();
+        DocumentFolder.LinksUnsaved("<div id=\"panel\">text</div>\n\n[jump](#panel)").ShouldBeEmpty();
     }
 
     [Fact]
     public void An_anchor_only_shown_as_an_example_is_not_a_target()
     {
         // Inside a fence it is sample markup, not markup, and the parser has already said so.
-        DocumentFolder.CheckUnsaved("```html\n<a id=\"notes\"></a>\n```\n\n[jump](#notes)")
+        DocumentFolder.LinksUnsaved("```html\n<a id=\"notes\"></a>\n```\n\n[jump](#notes)")
             .ShouldHaveSingleItem()
-            .Rule.ShouldBe("dead-anchor");
+            .Kind.ShouldBe(LinkFindingKind.DeadAnchor);
     }
 
     [Fact]
     public void A_name_on_something_that_is_not_an_anchor_is_not_a_target()
     {
         // On an input it names a form field, which is nothing to do with linking.
-        DocumentFolder.CheckUnsaved("<input name=\"email\">\n\n[jump](#email)")
+        DocumentFolder.LinksUnsaved("<input name=\"email\">\n\n[jump](#email)")
             .ShouldHaveSingleItem()
-            .Rule.ShouldBe("dead-anchor");
+            .Kind.ShouldBe(LinkFindingKind.DeadAnchor);
     }
 
     [Fact]
@@ -168,10 +196,13 @@ public class LinkCheckTests
         using var folder = new DocumentFolder();
 
         // Proves the line and column come from Markdig's own span rather than a guess.
-        Diagnostic found = folder.Check("intro\n\nsee [here](./gone.md) please").ShouldHaveSingleItem();
+        LinkFinding found = folder.Links("intro\n\nsee [here](./gone.md) please").ShouldHaveSingleItem();
 
         found.Line.ShouldBe(2);
-        found.Column.ShouldBe(4);
-        found.EndColumn.ShouldBeGreaterThan(found.Column);
+        found.Start.ShouldBe(4);
+
+        // The whole reference is underlined, not just the target, so the squiggle covers what
+        // the menu will replace.
+        found.Length.ShouldBe("[here](./gone.md)".Length);
     }
 }

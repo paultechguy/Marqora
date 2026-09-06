@@ -14,8 +14,9 @@ namespace PaulTechGuy.MQ.Abstractions.Analysis;
 public interface IMarkdownAnalyzer
 {
     /// <summary>
-    /// Every problem found, in no particular order. An empty list means the document is
-    /// clean, which is the common case and must stay cheap.
+    /// Every problem found, in no particular order, in the two shapes the editor draws them:
+    /// style rules as markers, dead links as decorations with a menu behind them. Both lists
+    /// empty means the document is clean, which is the common case and must stay cheap.
     /// </summary>
-    IReadOnlyList<Diagnostic> Analyze(AnalysisRequest request);
+    AnalysisResult Analyze(AnalysisRequest request);
 }

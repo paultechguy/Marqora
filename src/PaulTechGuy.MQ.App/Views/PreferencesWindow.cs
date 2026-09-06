@@ -178,6 +178,11 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly NumberBox _tabSize;
     private readonly CheckBox _insertSpaces;
     private readonly CheckBox _minimap;
+
+    private readonly ComboBox _imageFolder;
+    private readonly CheckBox _limitImageWidth;
+    private readonly NumberBox _maxImageWidth;
+    private readonly CheckBox _downscaleImageFiles;
     private readonly CheckBox _highlightLine;
     private readonly CheckBox _continueLists;
     private readonly CheckBox _autoCloseBrackets;
@@ -187,6 +192,7 @@ internal sealed class PreferencesWindow : PaletteWindow
 
     private readonly CheckBox _scrollSync;
     private readonly CheckBox _diagnostics;
+    private readonly CheckBox _altTextCheck;
     private readonly CheckBox _spellCheck;
     private readonly ComboBox _headingNumbers;
 
@@ -318,6 +324,29 @@ internal sealed class PreferencesWindow : PaletteWindow
         _minimap = BuildCheck("Show minimap");
         Bind(_minimap, v => _vm.UpdateAsync(s => s with { ShowMinimap = v }));
 
+        // -------------------------------------------------------------------- images
+        _imageFolder = BuildCombo(
+            ["A folder named after the document", "A shared \"images\" folder", "Beside the document"]);
+        _imageFolder.SelectionChanged += (_, _) => ApplyAsync(() =>
+            _vm.UpdateAsync(s => s with
+            {
+                ImageFolder = (ImageFolderMode)Math.Max(0, _imageFolder.SelectedIndex),
+            }));
+
+        _limitImageWidth = BuildCheck("Limit the width of pasted images");
+        Bind(_limitImageWidth, v => _vm.UpdateAsync(s => s with { LimitPastedImageWidth = v }));
+
+        _maxImageWidth = BuildNumber(
+            AppSettings.MinimumPastedImageWidth, AppSettings.MaximumPastedImageWidth);
+        _maxImageWidth.ValueChanged += (_, _) => ApplyAsync(() =>
+            _vm.UpdateAsync(s => s with
+            {
+                MaxPastedImageWidth = ReadInt(_maxImageWidth, s.MaxPastedImageWidth),
+            }));
+
+        _downscaleImageFiles = BuildCheck("Apply that limit to image files as well");
+        Bind(_downscaleImageFiles, v => _vm.UpdateAsync(s => s with { DownscaleImageFiles = v }));
+
         _highlightLine = BuildCheck("Highlight the current line");
         Bind(_highlightLine, v => _vm.UpdateAsync(s => s with { HighlightCurrentLine = v }));
 
@@ -351,6 +380,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _diagnostics = BuildCheck("Underline problems in the source");
         Bind(_diagnostics, v => _vm.SetDiagnosticsAsync(v));
+
+        _altTextCheck = BuildCheck("Underline images with no alt text");
+        Bind(_altTextCheck, v => _vm.UpdateAsync(s => s with { CheckImageAltText = v }));
 
         _spellCheck = BuildCheck("Underline words that are not in the dictionary");
         Bind(_spellCheck, v => _vm.SetSpellCheckAsync(v));
@@ -724,7 +756,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// which passed "aaa" and the other of which rejected an untouched 18.
     ///
     /// Out-of-range numbers count as numbers. They are clamped rather than refused, which is
-    /// the behaviour the control already had and is clear enough: 500 in a field that stops
+    /// the behavior the control already had and is clear enough: 500 in a field that stops
     /// at 48 says what was wanted.
     /// </summary>
     private static bool ShowsANumber(NumberBox box)
@@ -989,6 +1021,22 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "which it is not by default: re-wrapping rewrites every line of a paragraph."));
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("IMAGES"));
+        panel.Children.Add(Field("Paste images into", _imageFolder));
+        panel.Children.Add(_limitImageWidth);
+        panel.Children.Add(NumberField("At most", _maxImageWidth, EditorPage, "pixels wide"));
+        panel.Children.Add(_downscaleImageFiles);
+
+        panel.Children.Add(Note(
+            "Ctrl+V with a picture on the clipboard writes it beside the document and links to "
+            + "it. Format > Image... does the same for a file you pick.\n\n"
+            + "The width limit applies to screenshots and anything else Marqora has to encode "
+            + "itself, where there is no original to preserve: a capture from a 4K monitor is "
+            + "several megabytes and wider than the preview will ever show it. An image file "
+            + "you copied or picked is left exactly as it is unless the last box is ticked, "
+            + "because a file you chose is a file you meant."));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("FINDING"));
         panel.Children.Add(_selectFirstResult);
 
@@ -1007,9 +1055,10 @@ internal sealed class PreferencesWindow : PaletteWindow
     {
         var panel = NewPage();
 
-        panel.Children.Add(Heading("BEHAVIOUR"));
+        panel.Children.Add(Heading("BEHAVIOR"));
         panel.Children.Add(_scrollSync);
         panel.Children.Add(_diagnostics);
+        panel.Children.Add(_altTextCheck);
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SPELLING"));
@@ -1579,6 +1628,11 @@ internal sealed class PreferencesWindow : PaletteWindow
             _tabSize.Value = s.TabSize;
             _insertSpaces.IsChecked = s.InsertSpaces;
             _minimap.IsChecked = s.ShowMinimap;
+
+            _imageFolder.SelectedIndex = (int)s.ImageFolder;
+            _limitImageWidth.IsChecked = s.LimitPastedImageWidth;
+            _maxImageWidth.Value = s.MaxPastedImageWidth;
+            _downscaleImageFiles.IsChecked = s.DownscaleImageFiles;
             _highlightLine.IsChecked = s.HighlightCurrentLine;
             _continueLists.IsChecked = s.ContinueLists;
             _autoCloseBrackets.IsChecked = s.AutoCloseBrackets;
@@ -1587,6 +1641,7 @@ internal sealed class PreferencesWindow : PaletteWindow
 
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;
+            _altTextCheck.IsChecked = s.CheckImageAltText;
             _spellCheck.IsChecked = s.SpellCheckEnabled;
 
             // Greyed out, with the reason, when Windows has no dictionary for this language.

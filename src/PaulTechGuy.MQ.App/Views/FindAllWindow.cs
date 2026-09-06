@@ -709,7 +709,7 @@ public sealed partial class FindAllWindow : PaletteWindow
     ///
     /// The selection is deliberately made outside <see cref="_isPopulating"/>: it is meant to
     /// be read as a pick, so <see cref="OnResultSelectionChanged"/> takes the editor there.
-    /// That carries the whole of the behaviour - activating the document the match is in,
+    /// That carries the whole of the behavior - activating the document the match is in,
     /// splitting the panes if the preview had them to itself, and selecting the match -
     /// rather than opening a second route to the same place that could drift from the first.
     ///

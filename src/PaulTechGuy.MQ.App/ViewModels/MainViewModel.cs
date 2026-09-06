@@ -57,6 +57,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
     private readonly IWelcomeDocumentService _welcome;
+    private readonly IDocumentAssetStore _assets;
+    private readonly IPastedImageTracker _pastedImages;
     private readonly ILogger<MainViewModel> _logger;
 
     private IPreviewHost? _host;
@@ -78,6 +80,37 @@ public sealed partial class MainViewModel : ObservableObject
     // having any caret left to say so from.
     private bool _shellCanUndo;
     private bool _shellCanRedo;
+
+    /// <summary>
+    /// How many replacements a dead link is offered. Three, because the menu also carries the
+    /// escape hatches and a list long enough to scan is a list nobody reads.
+    /// </summary>
+    private const int MaximumLinkSuggestions = 3;
+
+    /// <summary>
+    /// The most files a folder listing will consider when working out what a dead link meant.
+    ///
+    /// A document saved into a home directory or the root of a drive has a great many
+    /// neighbours, and this runs on the UI thread while a menu is opening.
+    /// </summary>
+    private const int MaximumLinkCandidates = 500;
+
+    /// <summary>
+    /// Every anchor the last render found - heading slugs and hand-written HTML ids alike.
+    ///
+    /// Kept because a dead anchor is answered from the document itself rather than from disk,
+    /// and the menu opens long after the check that knew them has finished.
+    /// </summary>
+    private IReadOnlyList<string> _lastAnchors = [];
+
+    /// <summary>
+    /// Which screen-clip wait is the current one. Bumped when a new clip starts, so an earlier
+    /// wait can see it has been retired and stand down.
+    ///
+    /// A counter rather than a CancellationTokenSource: it is only ever a flag, and a disposable
+    /// field would make this class owe a Dispose it has no other reason to have.
+    /// </summary>
+    private int _screenClipGeneration;
 
     // Partial properties rather than annotated fields: the generated WinRT marshalling is
     // correct for XAML binding, and it is the form the toolkit now expects. Partial
@@ -156,6 +189,26 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(NewFromClipboardCommand))]
     public partial bool ClipboardHasText { get; set; }
+
+    /// <summary>
+    /// Whether the clipboard is carrying a picture, so the source pane's menu can offer to paste
+    /// one. Refreshed alongside <see cref="ClipboardHasText"/> and by format only, for the same
+    /// reason.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ClipboardHasImage { get; set; }
+
+    /// <summary>
+    /// Whether Windows has a handler for screen clipping, which decides whether the menu item
+    /// appears at all.
+    ///
+    /// Asked once when the shell comes up - it is a package query and the answer cannot change
+    /// while the app runs - and observable only so the menu can be built before the answer
+    /// arrives rather than waiting on it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ScreenClipCommand))]
+    public partial bool ScreenClipAvailable { get; set; }
 
     /// <summary>The selected tab. TabView binds this two-way.</summary>
     [ObservableProperty]
@@ -420,6 +473,8 @@ public sealed partial class MainViewModel : ObservableObject
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
         IWelcomeDocumentService welcome,
+        IDocumentAssetStore assets,
+        IPastedImageTracker pastedImages,
         ILogger<MainViewModel> logger)
     {
         _workspace = workspace;
@@ -446,6 +501,8 @@ public sealed partial class MainViewModel : ObservableObject
         _diagramWindows = diagramWindows;
         _findAll = findAll;
         _welcome = welcome;
+        _assets = assets;
+        _pastedImages = pastedImages;
         _logger = logger;
 
         DocumentName = string.Empty;
@@ -631,14 +688,40 @@ public sealed partial class MainViewModel : ObservableObject
         host.ZoomChanged += OnHostZoomChanged;
         host.SplitterMoved += OnSplitterMoved;
         host.CommandInvoked += OnHostCommand;
+        host.ImagePasteRequested += OnImagePasteRequested;
         host.ExternalLinkActivated += OnExternalLinkActivated;
         host.SelectionCopied += OnSelectionCopied;
+    }
+
+    /// <summary>
+    /// Ctrl+V with a picture on the clipboard, forwarded by the shell.
+    ///
+    /// Falls through to the ordinary text paste when there turns out to be no image after all -
+    /// the shell decides from what the browser tells it, and a clipboard that advertises a
+    /// bitmap it cannot then produce is common enough to plan for.
+    /// </summary>
+    private async void OnImagePasteRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            await PasteFromClipboardAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Raised from an event the shell fired; nothing above this catches for it.
+            _logger.LogError(ex, "Could not paste an image.");
+        }
     }
 
     private async void OnHostReady(object? sender, EventArgs e)
     {
         try
         {
+            // Asked here rather than in the constructor: it is an async package query, and the
+            // menu item it gates is not reachable until there is a window anyway.
+            ScreenClipAvailable = await ScreenClipLauncher.IsAvailableAsync().ConfigureAwait(true);
+
+
             await PushAllStateAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -680,6 +763,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (_workspace.Active is { } active)
         {
             await _host.ActivateTabAsync(active.Id, active.Path).ConfigureAwait(true);
+            await PublishLinkTargetsAsync(active.Id, active.Path).ConfigureAwait(true);
         }
     }
 
@@ -1052,7 +1136,13 @@ public sealed partial class MainViewModel : ObservableObject
     {
         try
         {
-            ClipboardHasText = Clipboard.GetContent().Contains(StandardDataFormats.Text);
+            DataPackageView view = Clipboard.GetContent();
+
+            ClipboardHasText = view.Contains(StandardDataFormats.Text);
+
+            // Formats only, like the line above: asking what the image actually is would make
+            // whichever app owns the clipboard render it, and this runs on every alt-tab.
+            ClipboardHasImage = ClipboardImage.IsAvailable(view);
         }
         catch (Exception ex)
         {
@@ -1457,12 +1547,20 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Worked out before the save, while the document still knows where it lives. Asking
+        // afterwards would mean resolving its images against a folder they were never in.
+        IReadOnlyList<AssetMove> moves = document.Path is { } from
+            ? AssetRelocation.Plan(from, path, document.Text, _settings.Current.ImageFolder)
+            : [];
+
         try
         {
             await _workspace.SaveAsAsync(id, path).ConfigureAwait(true);
             await _recent.AddAsync(path).ConfigureAwait(true);
 
             StatusText = $"Saved as {Path.GetFileName(path)}";
+
+            await CarryAssetsAsync(id, moves).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -2181,6 +2279,9 @@ public sealed partial class MainViewModel : ObservableObject
                     break;
 
                 case WorkspaceChange.Closed:
+                    // Leaves every file the document wrote where it is, and puts back anything
+                    // currently recycled. Closing a tab is not a way to lose a picture.
+                    _pastedImages.Forget(e.DocumentId);
                     await RemoveTabAsync(e.DocumentId).ConfigureAwait(true);
                     RefreshExternalNotice();
                     break;
@@ -2210,11 +2311,43 @@ public sealed partial class MainViewModel : ObservableObject
                     break;
 
                 case WorkspaceChange.Saved when e.Document is { } saved:
-                    FindTab(saved.Id)?.Update(saved);
+                {
+                    // Read before Update, while the tab still holds the path the document had
+                    // a moment ago. Whether that folder moved is the whole question below.
+                    DocumentTabViewModel? tab = FindTab(saved.Id);
+                    string? wasFolder = FolderOf(tab?.Path);
+
+                    tab?.Update(saved);
                     UpdateActiveDocumentState();
                     RefreshExternalNotice();
                     PersistSession();
+
+                    // Save As moves a document to a different folder, and always does for an
+                    // untitled one, which had none. Relative images resolve against that
+                    // folder, so does link checking, and so does the name a print job is filed
+                    // under - and nothing else tells any of them.
+                    //
+                    // Activating cannot be left to the workspace: SaveDocumentAsAsync does call
+                    // Activate before the picker, but DocumentWorkspace.Activate returns early
+                    // for the document that is already active, which is exactly the one being
+                    // saved. So a Save As on the tab you are looking at re-pointed nothing.
+                    //
+                    // Gated on the folder rather than run on every save. Re-activating resets
+                    // lastHtml and redraws the whole preview - highlighting, math and diagrams
+                    // with it - and autosave runs on a timer, so an ungated version would pay
+                    // that continuously for a move that happens once.
+                    if (_host is not null
+                        && !string.Equals(wasFolder, FolderOf(saved.Path), StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _host.ActivateTabAsync(saved.Id, saved.Path).ConfigureAwait(true);
+                        await PublishLinkTargetsAsync(saved.Id, saved.Path).ConfigureAwait(true);
+
+                        RenderedMarkdown rendered = await RenderAsync(saved.Id, saved.Text).ConfigureAwait(true);
+                        await PublishChecksAsync(saved.Id, saved.Text, saved.Path, rendered).ConfigureAwait(true);
+                    }
+
                     break;
+                }
 
                 case WorkspaceChange.ExternalStateChanged when e.Document is { } stale:
                     FindTab(stale.Id)?.Update(stale);
@@ -2248,6 +2381,12 @@ public sealed partial class MainViewModel : ObservableObject
 
                     if (_host is not null)
                     {
+                        // Before the render, for the reason given in OnEditorTextChanged: the
+                        // text has just been replaced wholesale, so an image this session pasted
+                        // may have stopped being referenced, and the preview about to be drawn
+                        // will go looking for every image the new text does mention.
+                        await ReviewPastedImagesAsync(reloaded.Id, reloaded.Text).ConfigureAwait(true);
+
                         RenderedMarkdown rendered = await RenderAsync(reloaded.Id, reloaded.Text).ConfigureAwait(true);
 
                         // ReplaceTextAsync rather than SetTabTextAsync, which resets the Monaco
@@ -2353,6 +2492,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (_host is not null)
         {
             await _host.ActivateTabAsync(document.Id, document.Path).ConfigureAwait(true);
+            await PublishLinkTargetsAsync(document.Id, document.Path).ConfigureAwait(true);
         }
 
         PersistSession();
@@ -2437,6 +2577,18 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private DocumentTabViewModel? FindTab(Guid id) => Tabs.FirstOrDefault(t => t.Id == id);
+
+    /// <summary>
+    /// The folder a document lives in, or null for one that has never been saved.
+    ///
+    /// Comparing the folder before a save with the folder after it is how a Save As that
+    /// actually moved the file is told from an ordinary Ctrl+S, which is the difference
+    /// between needing to re-point the preview and having nothing to do.
+    /// </summary>
+    private static string? FolderOf(string? documentPath) =>
+        string.IsNullOrWhiteSpace(documentPath)
+            ? null
+            : Path.GetDirectoryName(Path.GetFullPath(documentPath));
 
     private void UpdateActiveDocumentState()
     {
@@ -2969,6 +3121,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (!DiagnosticsEnabled)
         {
             await _host.ClearDiagnosticsAsync().ConfigureAwait(true);
+            await _host.ClearLinkFindingsAsync().ConfigureAwait(true);
 
             return;
         }
@@ -3043,6 +3196,168 @@ public sealed partial class MainViewModel : ObservableObject
     {
         await PublishDiagnosticsAsync(documentId, text, path, rendered).ConfigureAwait(true);
         await PublishSpellingAsync(documentId, text).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Lets the tracker reconcile this session's pasted images with what the document now says.
+    ///
+    /// Rides the same debounce as the checks rather than running on every keystroke, which also
+    /// gives the grace period the feature needs: a reference being retyped a character at a time
+    /// should not recycle a file between two of them.
+    /// </summary>
+    /// <summary>
+    /// Empties the folder holding images whose pastes were undone. Clean shutdown only.
+    /// </summary>
+    public void DiscardRecycledImages() => _pastedImages.CleanUp();
+
+    /// <summary>
+    /// Offers to bring a document's images with it after a Save As, and repoints the references
+    /// if the answer is yes.
+    ///
+    /// This is the bill for keeping images in a folder named after the document, and it is
+    /// worth paying: a Save As to another folder otherwise leaves every picture behind with no
+    /// warning, which is the sort of thing found weeks later by a reader rather than the author.
+    ///
+    /// Asked rather than done. Copying files into a folder the user has just chosen is not
+    /// something to do on their behalf without saying so, and someone deliberately splitting a
+    /// document away from its images has a right to that answer.
+    ///
+    /// Copied rather than moved: the document that was there before may still be open, may still
+    /// be referenced by something else, and is not this operation's to empty.
+    /// </summary>
+    private async Task CarryAssetsAsync(Guid id, IReadOnlyList<AssetMove> moves)
+    {
+        if (moves.Count == 0)
+        {
+            return;
+        }
+
+        string question = moves.Count == 1
+            ? "This document has an image beside it. Copy it to the new location and point the "
+              + "document at the copy?"
+            : $"This document has {moves.Count} images beside it. Copy them to the new location "
+              + "and point the document at the copies?";
+
+        ConfirmResult answer = await _dialogs.ConfirmAsync(
+            "Bring the images along?",
+            question,
+            primaryText: "Copy Images",
+            secondaryText: "Leave Them").ConfigureAwait(true);
+
+        if (answer != ConfirmResult.Primary)
+        {
+            // The references are left exactly as they are, so the link check will underline the
+            // ones that no longer resolve. Saying nothing and leaving them silently broken is
+            // the outcome this whole feature exists to avoid.
+            StatusText = "Images left where they were";
+
+            return;
+        }
+
+        int copied = 0;
+
+        try
+        {
+            copied = await Task.Run(() => CopyAssets(moves)).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not copy images for {DocumentId}.", id);
+
+            await _dialogs.ShowMessageAsync("Could not copy the images", ex.Message).ConfigureAwait(true);
+
+            return;
+        }
+
+        if (copied == 0)
+        {
+            return;
+        }
+
+        // Only the references whose files actually arrived are repointed, so a partial copy
+        // leaves the rest pointing at files that are still really there.
+        IReadOnlyList<AssetMove> landed = [.. moves.Where(m => File.Exists(m.TargetPath))];
+
+        if (_workspace.Find(id) is { } document)
+        {
+            string rewritten = AssetRelocation.Rewrite(document.Text, landed);
+
+            if (!string.Equals(rewritten, document.Text, StringComparison.Ordinal)
+                && _host is not null)
+            {
+                RenderedMarkdown rendered = await RenderAsync(id, rewritten).ConfigureAwait(true);
+
+                // ReplaceTextAsync rather than a reset, so this lands as one undoable edit and
+                // Ctrl+Z takes the whole relocation back the way a reformat does.
+                await _host.ReplaceTextAsync(id, rewritten, rendered).ConfigureAwait(true);
+            }
+        }
+
+        StatusText = copied == 1 ? "Copied 1 image" : $"Copied {copied} images";
+    }
+
+    /// <summary>Copies each planned image, never overwriting anything already at the target.</summary>
+    private int CopyAssets(IReadOnlyList<AssetMove> moves)
+    {
+        int copied = 0;
+
+        foreach (AssetMove move in moves)
+        {
+            if (!File.Exists(move.SourcePath) || File.Exists(move.TargetPath))
+            {
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(move.TargetPath)!);
+            File.Copy(move.SourcePath, move.TargetPath);
+
+            copied++;
+        }
+
+        _logger.LogInformation("Copied {Copied} of {Planned} images with the document.", copied, moves.Count);
+
+        return copied;
+    }
+
+    private async Task ReviewPastedImagesAsync(Guid documentId, string text)
+    {
+        if (_workspace.Find(documentId) is not { } document)
+        {
+            return;
+        }
+
+        // Every other open document, because two documents in one folder can point at the same
+        // image and the second one's claim on it is as good as the first's.
+        IReadOnlyList<string> others =
+        [
+            .. _workspace.Documents
+                .Where(d => d.Id != documentId)
+                .Select(d => d.Text),
+        ];
+
+        PastedImageReview review = await _pastedImages
+            .ReviewAsync(documentId, text, document.SavedText, others)
+            .ConfigureAwait(true);
+
+        // Said out loud, because otherwise this feature is invisible in both directions: a file
+        // quietly taken away looks like nothing happened, and a file that should have gone and
+        // could not looks exactly the same. The undo is the moment to say which.
+        if (review.Failed > 0)
+        {
+            StatusText = "Could not remove the image the undo took out";
+        }
+        else if (review.Recycled > 0)
+        {
+            StatusText = review.Recycled == 1
+                ? "Removed the image that paste added"
+                : $"Removed {review.Recycled} images those pastes added";
+        }
+        else if (review.Restored > 0)
+        {
+            StatusText = review.Restored == 1
+                ? "Brought the image back"
+                : $"Brought {review.Restored} images back";
+        }
     }
 
     /// <summary>
@@ -3160,6 +3475,167 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// What the author probably meant by a link that leads nowhere.
+    ///
+    /// Worked out when the menu opens rather than when the document is checked, exactly as
+    /// spelling suggestions are and for the same reason: this costs a folder listing, and doing
+    /// it for every dead link on every keystroke would be hundreds of them to fill a menu that
+    /// is opened once.
+    ///
+    /// An anchor is answered from the headings already in hand. A file is answered from the
+    /// document's own folder, which is also the only place a relative link is allowed to point -
+    /// so a candidate that cannot be offered is a candidate that would not have worked.
+    /// </summary>
+    public IReadOnlyList<string> SuggestionsFor(LinkFindingHit hit)
+    {
+        try
+        {
+            IReadOnlyList<string> candidates = hit.Kind == LinkFindingKind.DeadAnchor
+                ? _lastAnchors
+                : NeighbouringFiles();
+
+            return LinkSuggestions.For(hit.Url, candidates, MaximumLinkSuggestions);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that cannot be listed is a menu with no suggestions in it, which is a
+            // perfectly good menu. It is not a reason to fail the click.
+            _logger.LogWarning(ex, "Could not gather suggestions for {Url}.", hit.Url);
+
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Puts a suggestion in place of the dead target, leaving the rest of the reference alone.
+    ///
+    /// Only the target is replaced, not the whole reference: the label an author wrote is theirs,
+    /// and "[the release notes](v3.md)" should not become "[v2.md](v2.md)" because the file was
+    /// renamed. The text is re-read from the document rather than rebuilt from the finding, so
+    /// whatever has been typed since the check ran survives.
+    /// </summary>
+    public async Task RepointLinkAsync(LinkFindingHit hit, string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (_host is null || _workspace.Active is not { Text: { } text })
+        {
+            return;
+        }
+
+        string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        if (hit.Line < 0 || hit.Line >= lines.Length)
+        {
+            return;
+        }
+
+        // Where the target sits inside the reference is worked out in Domain, where it can be
+        // tested. A null means the line no longer holds what the decoration says it does, which
+        // is a reason to do nothing rather than a reason to edit blindly.
+        if (LinkTargetSpan.Find(lines[hit.Line], hit.Start, hit.End) is not { } span)
+        {
+            return;
+        }
+
+        var range = new TextRange(
+            new TextPosition(hit.Line, span.Start),
+            new TextPosition(hit.Line, span.End));
+
+        await _host.ApplyEditsAsync(new EditResult([new TextEdit(range, target)], null))
+            .ConfigureAwait(true);
+
+        StatusText = $"Pointed at {target}";
+    }
+
+    /// <summary>
+    /// Takes the whole reference out - the label, the brackets and the target.
+    ///
+    /// The honest answer when the thing is simply gone. The range is the decoration's, so it is
+    /// exactly what was underlined however much the line has been edited since.
+    /// </summary>
+    public async Task RemoveLinkAsync(LinkFindingHit hit)
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        var range = new TextRange(
+            new TextPosition(hit.Line, hit.Start),
+            new TextPosition(hit.Line, hit.End));
+
+        await _host.ApplyEditsAsync(new EditResult([new TextEdit(range, string.Empty)], null))
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Pushes the completion candidates for one document, off the UI thread.
+    ///
+    /// Called when a tab is activated, after this app writes an asset - the file just created
+    /// has to be completable immediately - and when a save moves the document to a new folder.
+    /// Three cheap triggers and no watcher: a file another app drops into the folder while
+    /// Marqora sits idle leaves the list one entry stale until the next tab switch, which is a
+    /// smaller cost than watching a directory for the life of every open document.
+    /// </summary>
+    private async Task PublishLinkTargetsAsync(Guid documentId, string? documentPath)
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<string> paths = documentPath is null
+                ? []
+                : await Task.Run(() => FilesNear(documentPath)).ConfigureAwait(true);
+
+            await _host.SetLinkTargetsAsync(documentId, paths).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that cannot be listed means completion offers nothing, which is a
+            // working editor with one convenience missing. Not worth disturbing anyone over.
+            _logger.LogWarning(ex, "Could not list files near {Path}.", documentPath);
+        }
+    }
+
+    /// <summary>
+    /// Every file beside the active document that a relative link could point at, one level
+    /// down as well, because that is where an assets or images folder sits.
+    ///
+    /// Capped: a document saved straight into a home directory or the root of a drive must not
+    /// turn a right-click into a recursive walk.
+    /// </summary>
+    private IReadOnlyList<string> NeighbouringFiles() =>
+        _workspace.Active?.Path is { } path ? FilesNear(path) : [];
+
+    private static IReadOnlyList<string> FilesNear(string documentPath)
+    {
+        if (Path.GetDirectoryName(Path.GetFullPath(documentPath)) is not { } folder
+            || !Directory.Exists(folder))
+        {
+            return [];
+        }
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            MaxRecursionDepth = 1,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+        };
+
+        return
+        [
+            .. Directory.EnumerateFiles(folder, "*", options)
+                .Take(MaximumLinkCandidates)
+                .Select(file => Path.GetRelativePath(folder, file).Replace('\\', '/')),
+        ];
+    }
+
+    /// <summary>
     /// Puts the chosen word in place of the misspelled one.
     ///
     /// Goes through the same edit path as everything else the app writes, so it lands as a single
@@ -3202,16 +3678,31 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            IReadOnlyList<Diagnostic> found = await Task.Run(() => _analyzer.Analyze(new AnalysisRequest
+            // Kept for the menu, which opens long after this has finished and cannot ask the
+            // renderer again. Both kinds of target count, exactly as the check counts them.
+            _lastAnchors =
+            [
+                .. rendered.Outline.Select(h => "#" + h.Slug),
+                .. rendered.Anchors.Select(a => "#" + a),
+            ];
+
+            bool checkAltText = _settings.Current.CheckImageAltText;
+
+            AnalysisResult found = await Task.Run(() => _analyzer.Analyze(new AnalysisRequest
             {
                 Text = text,
                 DocumentPath = path,
                 Links = rendered.Links,
                 Outline = rendered.Outline,
                 Anchors = rendered.Anchors,
+                CheckImageAltText = checkAltText,
             })).ConfigureAwait(true);
 
-            await _host.SetDiagnosticsAsync(documentId, found).ConfigureAwait(true);
+            await _host.SetDiagnosticsAsync(documentId, found.Diagnostics).ConfigureAwait(true);
+
+            // Dead links go over as decorations with a menu behind them rather than as markers.
+            // Same switch turns both off: they are one feature to the person reading the screen.
+            await _host.SetLinkFindingsAsync(documentId, found.LinkFindings).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -3459,6 +3950,14 @@ public sealed partial class MainViewModel : ObservableObject
         {
             DataPackageView view = Clipboard.GetContent();
 
+            // Images first. A clipboard carrying a picture usually carries some text alongside
+            // it - a browser copy puts HTML and a URL there too - and pasting the URL of a
+            // screenshot instead of the screenshot is not what anyone meant.
+            if (ClipboardImage.IsAvailable(view) && await PasteImagesAsync(view).ConfigureAwait(true))
+            {
+                return;
+            }
+
             if (!view.Contains(StandardDataFormats.Text))
             {
                 return;
@@ -3475,6 +3974,289 @@ public sealed partial class MainViewModel : ObservableObject
         {
             // The clipboard is shared and can be held open by another process.
             _logger.LogWarning(ex, "Could not read the clipboard.");
+        }
+    }
+
+    /// <summary>
+    /// Writes whatever images are on the clipboard beside the document and links to them.
+    ///
+    /// Returns false when there was nothing to take, so the caller can fall through to a text
+    /// paste. A clipboard that advertises a bitmap it then cannot produce is the ordinary reason
+    /// - Excel and some remote-desktop clients both do it - and falling through means the user
+    /// gets the text rather than nothing at all.
+    /// </summary>
+    private async Task<bool> PasteImagesAsync(DataPackageView view)
+    {
+        AppSettings settings = _settings.Current;
+
+        // Read the bytes before anything else. From here on nothing the user does with the
+        // clipboard can change the outcome, which matters because the next step may put a save
+        // dialog on screen and leave the app for as long as they like.
+        IReadOnlyList<PastedImage> images = await ClipboardImage.ReadAsync(
+            view,
+            settings.LimitPastedImageWidth ? settings.MaxPastedImageWidth : null,
+            settings.DownscaleImageFiles,
+            _logger).ConfigureAwait(true);
+
+        if (images.Count == 0)
+        {
+            return false;
+        }
+
+        return await InsertImagesAsync(images).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The shared tail of every route an image arrives by: paste, the file picker, a screen clip.
+    ///
+    /// Saves the document first if it has never been saved, because "beside the document" has no
+    /// meaning until there is one, then writes each image and inserts the references as a single
+    /// undoable edit.
+    /// </summary>
+    private async Task<bool> InsertImagesAsync(IReadOnlyList<PastedImage> images)
+    {
+        if (_host is null || images.Count == 0)
+        {
+            return false;
+        }
+
+        if (await EnsureSavedForImagesAsync().ConfigureAwait(true) is not { } documentPath)
+        {
+            return false;
+        }
+
+        ImageFolderMode mode = _settings.Current.ImageFolder;
+        List<string> references = [];
+
+        try
+        {
+            foreach (PastedImage image in images)
+            {
+                // Already where it would be put. Reference it and copy nothing: duplicating a
+                // file into the folder it is already in leaves two identical pictures and points
+                // the document at the second one.
+                //
+                // Deliberately not tracked. The tracker's whole job is undoing files this app
+                // created, and this one was here first - recycling it on Ctrl+Z would take away
+                // something the user had before they pasted anything.
+                if (image.SourcePath is { } source
+                    && DocumentAssets.ExistingReferenceFor(documentPath, mode, source) is { } inPlace)
+                {
+                    references.Add(inPlace);
+
+                    continue;
+                }
+
+                // Off the UI thread: a document on a network share or in a synchronized folder
+                // can make creating a directory and writing a few megabytes take a visible
+                // moment, and the window should not stop repainting for it.
+                string? reference = await Task.Run(() =>
+                    _assets.SaveAsync(documentPath, image.Bytes, image.SuggestedName, mode))
+                    .ConfigureAwait(true);
+
+                if (reference is null)
+                {
+                    continue;
+                }
+
+                references.Add(reference);
+
+                // Recorded so undoing the paste can undo the file. Only until the document is
+                // saved with the reference in it - after that it belongs to a saved document
+                // and the tracker lets go of it for good.
+                if (_workspace.Active?.Id is { } id)
+                {
+                    _pastedImages.Track(
+                        id,
+                        reference,
+                        Path.Combine(
+                            Path.GetDirectoryName(documentPath)!,
+                            Uri.UnescapeDataString(reference).Replace('/', Path.DirectorySeparatorChar)));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not write a pasted image beside {Path}.", documentPath);
+
+            await _dialogs.ShowMessageAsync("Could not save the image", ex.Message).ConfigureAwait(true);
+
+            return false;
+        }
+
+        if (references.Count == 0)
+        {
+            StatusText = "That is not an image Marqora can use";
+
+            return false;
+        }
+
+        await RunEditAsync(context => _editor.InsertImages(references, context), "insert an image")
+            .ConfigureAwait(true);
+
+        // The files just written have to be completable straight away: the commonest thing after
+        // pasting one image is typing a reference to another beside it.
+        await PublishLinkTargetsAsync(_workspace.Active?.Id ?? Guid.Empty, documentPath)
+            .ConfigureAwait(true);
+
+        StatusText = references.Count == 1
+            ? $"Saved {Path.GetFileName(references[0])}"
+            : $"Saved {references.Count} images";
+
+        return true;
+    }
+
+    /// <summary>
+    /// The document's path, saving it first if it has never been saved, or null if the user
+    /// declined.
+    ///
+    /// Asking rather than inventing a location: images go beside the document, and an untitled
+    /// document is not anywhere yet. Writing them to a temp folder and moving them on the first
+    /// save was the alternative and it is worse - it leaves a document whose links are correct
+    /// only inside this session.
+    /// </summary>
+    private async Task<string?> EnsureSavedForImagesAsync()
+    {
+        if (_workspace.Active is not { } document)
+        {
+            return null;
+        }
+
+        if (document.Path is { } existing)
+        {
+            return existing;
+        }
+
+        ConfirmResult answer = await _dialogs.ConfirmAsync(
+            "Save the document first?",
+            "Marqora writes pasted images into a folder beside the document, so it needs to know "
+            + "where the document lives.",
+            primaryText: "Save As...").ConfigureAwait(true);
+
+        if (answer != ConfirmResult.Primary)
+        {
+            return null;
+        }
+
+        await SaveDocumentAsAsync(document.Id).ConfigureAwait(true);
+
+        // Drains the Saved change raised by the save above, which is what re-points the preview
+        // at the new folder. Without it the reference is inserted and rendered while the shell
+        // still has no document location, and the image shows as broken until the next render.
+        await _workspaceChain.ConfigureAwait(true);
+
+        return _workspace.Find(document.Id)?.Path;
+    }
+
+    /// <summary>
+    /// Capture part of the screen with Windows' own snipping overlay and put it in the document.
+    ///
+    /// The save prompt comes first, before the overlay opens. Asking "where does this document
+    /// live?" after somebody has framed and taken a capture is a worse moment for the question,
+    /// and it would mean holding a clip alive across a file dialog.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanScreenClip))]
+    private async Task ScreenClipAsync()
+    {
+        if (await EnsureSavedForImagesAsync().ConfigureAwait(true) is null)
+        {
+            return;
+        }
+
+        // A second clip retires the first rather than leaving two waits watching one counter.
+        int generation = ++_screenClipGeneration;
+
+        StatusText = "Waiting for a screen clip...";
+
+        if (!await ScreenClipLauncher
+            .CaptureAsync(_logger, () => _screenClipGeneration != generation)
+            .ConfigureAwait(true))
+        {
+            // Either nothing arrived, or a later clip took over. The later one owns the status
+            // line from here, so only the wait that is still current says anything.
+            if (_screenClipGeneration == generation)
+            {
+                StatusText = "No screen clip arrived on the clipboard";
+            }
+
+            return;
+        }
+
+        // Back through the ordinary paste path, so a capture is written, named and inserted by
+        // exactly the same code as a Ctrl+V - including falling through when what reached the
+        // clipboard was not a picture after all.
+        if (!await PasteFromClipboardImageAsync().ConfigureAwait(true))
+        {
+            StatusText = "No screen clip arrived on the clipboard";
+        }
+    }
+
+    /// <summary>
+    /// Gated on the Snipping Tool being installed as well as on there being a caret.
+    ///
+    /// Asked once and remembered: it is a package query, and the answer does not change while
+    /// the app is running.
+    /// </summary>
+    private bool CanScreenClip() => CanFormat && ScreenClipAvailable;
+
+    /// <summary>Reads the clipboard and inserts any images on it, without the text fallback.</summary>
+    private async Task<bool> PasteFromClipboardImageAsync()
+    {
+        try
+        {
+            DataPackageView view = Clipboard.GetContent();
+
+            return ClipboardImage.IsAvailable(view)
+                && await PasteImagesAsync(view).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not read the clipboard after a screen clip.");
+
+            return false;
+        }
+    }
+
+    /// <summary>Insert an image from a file the user picks.</summary>
+    [RelayCommand(CanExecute = nameof(CanFormat))]
+    private async Task InsertImageAsync()
+    {
+        string? picked = await _fileDialogs.PickImportFileAsync(
+            "Insert Image",
+            "Images",
+            [.. ImageFileTypes.AllowedExtensions]).ConfigureAwait(true);
+
+        if (picked is null)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] bytes = await File.ReadAllBytesAsync(picked).ConfigureAwait(true);
+
+            AppSettings settings = _settings.Current;
+
+            if (settings.DownscaleImageFiles && settings.LimitPastedImageWidth)
+            {
+                // The picked file goes through the same resize the clipboard path uses, so the
+                // preference means one thing wherever an image comes from.
+                bytes = await ClipboardImage.ResizeForFileAsync(
+                    bytes, settings.MaxPastedImageWidth, _logger).ConfigureAwait(true) ?? bytes;
+            }
+
+            await InsertImagesAsync([new PastedImage
+            {
+                Bytes = bytes,
+                Source = PastedImageSource.File,
+                SuggestedName = Path.GetFileName(picked),
+            }]).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not read {Path}.", picked);
+
+            await _dialogs.ShowMessageAsync("Could not read that image", ex.Message).ConfigureAwait(true);
         }
     }
 
@@ -4871,6 +5653,25 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _workspace.ApplyEdit(e.DocumentId, e.Text);
 
+            /*
+              Settle the disk before anything reads it.
+
+              Reconciling a pasted image can put a file back or take one away, and two things
+              downstream answer questions by going to the filesystem: the preview asks for every
+              image it draws, and the link check asks whether each one is there. Both were
+              running first.
+
+              Undoing the removal of an image showed it plainly - the tag came back, the preview
+              requested a file still sitting in the recycle folder and drew a broken image, the
+              check reported "No image at..." about the same file, and the restore happened a
+              moment later with nothing left to re-ask. The document was left underlining a
+              picture that was sitting right there.
+
+              It belongs here rather than inside PublishChecksAsync because the preview update
+              comes between the two, and the preview is the half a reader notices first.
+            */
+            await ReviewPastedImagesAsync(e.DocumentId, e.Text).ConfigureAwait(true);
+
             // Rendering a large document is measured in milliseconds but happens on every
             // keystroke burst, so it stays off the UI thread.
             RenderedMarkdown rendered = await RenderAsync(e.DocumentId, e.Text).ConfigureAwait(true);
@@ -5081,6 +5882,14 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 case "save" when SaveCommand.CanExecute(null):
                     await SaveCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                // Ctrl+V with a picture on the clipboard, pressed while the keyboard was in the
+                // preview. Said rather than done: an image has to go somewhere in the source,
+                // and moving the caret on the user's behalf to a place they cannot see is worse
+                // than telling them where the paste belongs.
+                case "imagePasteNeedsSource":
+                    StatusText = "Paste an image into the source pane";
                     break;
 
                 case "saveAll" when SaveAllCommand.CanExecute(null):

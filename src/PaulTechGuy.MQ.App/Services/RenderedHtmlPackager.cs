@@ -108,13 +108,17 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
             return html;
         }
 
+        // The trailing separator is what makes the prefix test below mean what it says: without
+        // it a sibling folder, "C:\docs2" beside "C:\docs", reads as being inside.
+        string root = Path.GetFullPath(folder + Path.DirectorySeparatorChar);
+
         return DocumentAssetReference().Replace(html, match =>
         {
             string relative = WebUtility.UrlDecode(match.Groups["path"].Value);
-            string full = Path.GetFullPath(Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar)));
+            string full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
 
             // Refuse to walk outside the document's folder.
-            if (!full.StartsWith(folder, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
             {
                 logger.LogDebug("Leaving {Reference} as-is; no readable file behind it.", match.Value);
                 return match.Value;

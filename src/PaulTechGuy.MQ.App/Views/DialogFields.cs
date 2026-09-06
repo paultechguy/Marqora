@@ -134,7 +134,7 @@ internal static class DialogFields
             IsTabStop = true,
             UseSystemFocusVisuals = true,
 
-            // A literal transparent - not a colour choice, and not a ThemeResource lookup,
+            // A literal transparent - not a color choice, and not a ThemeResource lookup,
             // which would resolve against the application's theme rather than this element's
             // and is the trap PrintDialog exists because of. An unset background is not
             // hit-tested at all, so without this the pointer has to find the glyph's own

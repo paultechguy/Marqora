@@ -287,6 +287,12 @@ public sealed class PreferencesTransferService(
             PreviewMaxWidth = Width(settings.PreviewMaxWidth),
             TabSize = Whole(
                 "tabSize", settings.TabSize, AppSettings.MinimumTabSize, AppSettings.MaximumTabSize),
+
+            MaxPastedImageWidth = Whole(
+                "maxPastedImageWidth",
+                settings.MaxPastedImageWidth,
+                AppSettings.MinimumPastedImageWidth,
+                AppSettings.MaximumPastedImageWidth),
             SpellSuggestionCount = Whole(
                 "spellSuggestionCount",
                 settings.SpellSuggestionCount,

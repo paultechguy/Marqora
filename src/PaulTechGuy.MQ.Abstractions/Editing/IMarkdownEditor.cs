@@ -39,4 +39,17 @@ public interface IMarkdownEditor
     /// caret lands after what was inserted.
     /// </summary>
     EditResult Insert(string snippetBody, EditContext context);
+
+    /// <summary>
+    /// Puts one or more image references in at the caret, replacing any selection.
+    ///
+    /// Its own method rather than a <see cref="MarkdownEditCommand"/>, because that enum names
+    /// intents that carry nothing with them and an image insert carries a path. Each reference
+    /// is already relative to the document and already encoded; nothing here decides where a
+    /// file lives.
+    ///
+    /// The caret comes back inside the first image's alt brackets, so the next keystroke is the
+    /// alt text.
+    /// </summary>
+    EditResult InsertImages(IReadOnlyList<string> references, EditContext context);
 }

@@ -85,4 +85,12 @@ public sealed class MarkdownEditor : IMarkdownEditor
 
         return context.Lines.Count == 0 ? EditResult.None : SnippetInsert.Apply(context, snippetBody);
     }
+
+    public EditResult InsertImages(IReadOnlyList<string> references, EditContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(references);
+
+        return context.Lines.Count == 0 ? EditResult.None : ImageInsert.Apply(context, references);
+    }
 }

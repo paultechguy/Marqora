@@ -294,7 +294,7 @@ seconds, anything still running is either waiting on a save prompt or wedged, an
 
 ---
 
-## Verified behaviour
+## Verified behavior
 
 The whole cycle was exercised against a real install on a real machine, not reasoned about:
 

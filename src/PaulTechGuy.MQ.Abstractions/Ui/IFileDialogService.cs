@@ -23,7 +23,7 @@ public interface IFileDialogService
     /// Open dialog for a file that is not a document: a preferences file to import.
     ///
     /// Separate from <see cref="PickOpenFileAsync"/> rather than a parameter on it, because
-    /// that one carries the markdown types and the recent-file behaviour that go with opening
+    /// that one carries the markdown types and the recent-file behavior that go with opening
     /// a document, and neither applies to a file the app reads once and forgets.
     /// </summary>
     Task<string?> PickImportFileAsync(

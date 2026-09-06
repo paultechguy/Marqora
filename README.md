@@ -383,28 +383,32 @@ The same commands sit on a toolbar under the menu bar, which is live: the button
 for whatever the caret is inside, and the heading control reads `H2` on an H2. Each says
 what it would *do* rather than what the text is, so a lit button always turns itself off.
 The bar runs **Open · Open Folder · Save · Save All | undo · redo | bold · italic ·
-strikethrough · code · link · rule | lists · blockquote | Heading ▾ | Diagram ▾ Insert ▾**,
-where **Insert** holds code block and table among the snippet catalogue in name order — one
-list of things to insert rather than banded by which of them happen to be commands, broken
-once under a **Your snippets** heading where your own files start. The diagram menu keeps a
-curated order instead, flowchart and sequence first, because those are the two anyone
-actually reaches for. Blockquote stays a
+strikethrough · code · link · code block · rule | lists · blockquote | Heading ▾ | Snippet ▾**,
+where **Snippet** holds the catalogue in name order, broken once under a **Your snippets**
+heading where your own files start. It is the one dropdown left on the bar, and it is here
+because snippets are the one thing on it you extend yourself — everything else the bar can do
+it does in a single click. Tables and diagrams are on the Insert menu, which is where you go
+for the things you reach for occasionally. Blockquote stays a
 button rather than a menu entry because it toggles — like the three list commands, it marks
 every line the selection touches and lights up when the caret is inside one, which is worth
-knowing without opening anything. Nothing in Insert toggles. The
+knowing without opening anything. The
 formatting half is disabled in Preview-only view, where there is no source pane to edit —
 the Format menu and the shortcuts go quiet with it — but the four file commands stay live,
 because opening and saving are as reasonable while reading as while writing.
 
 As the window narrows the bar hands whole groups to a `»` button rather than clipping: the
-two insert menus go first, then the file commands, the lists and the heading control. Undo,
-bold, italic, code and link never leave, the `»` appears only when something is actually
-hidden, and nothing becomes unreachable — the file commands have no `»` entry, because Open
-and Save don't belong under "More formatting", but the File menu and `Ctrl+O` / `Ctrl+S`
-still have them.
+snippet menu goes first, then the file commands, the lists and the heading control. Undo,
+bold, italic, code, link, code block and rule never leave, the `»` appears only when something
+is actually hidden, and nothing becomes unreachable — the file commands have no `»` entry,
+because Open and Save don't belong under "More formatting", but the File menu and `Ctrl+O` /
+`Ctrl+S` still have them.
 
-The menu-bar Format menu is deliberately *not* regrouped to match. It stays the complete
-flat inventory, which is what you want from the surface you go to when you can't find
+The menu bar splits the same commands a different way, along a line the bar does not draw:
+**Format** marks up text that is already there, and **Insert** (`Alt+I`) puts something new in
+at the caret — an image, a link, a table, a code block, a rule, a diagram or a snippet. Nothing
+in Insert needs a selection to mean something and everything in Format does, which is the
+difference the two menus are named for. Within each, the order is a flat inventory rather than
+the bar's grouping: that is what you want from the surface you go to when you cannot find
 something on the bar.
 
 **Formatting**

@@ -31,6 +31,7 @@ internal static class KeyboardShortcuts
             new("File menu", "Alt+F"),
             new("Edit menu", "Alt+E"),
             new("Format menu", "Alt+O"),
+            new("Insert menu", "Alt+I"),
             new("View menu", "Alt+V"),
             new("Tools menu", "Alt+T"),
             new("Help menu", "Alt+H"),
@@ -79,6 +80,7 @@ internal static class KeyboardShortcuts
             new("Select all", "Ctrl+A"),
             new("Format document", "Shift+Alt+F"),
             new("Correct the misspelling at the cursor", "Ctrl+."),
+            new("Suggest an image or file path", "Ctrl+Space"),
         ]),
 
         new("Formatting",

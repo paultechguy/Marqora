@@ -46,6 +46,8 @@ public sealed class AppPaths : IAppPaths
 
     public string SnippetsDirectory => Path.Combine(DataDirectory, "snippets");
 
+    public string RecycleDirectory => Path.Combine(DataDirectory, "recycle");
+
     public string WebAssetsDirectory { get; }
 
     public string WelcomeTemplatePath { get; }

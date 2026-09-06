@@ -16,18 +16,25 @@ namespace PaulTechGuy.MQ.Analysis;
 /// </summary>
 public sealed class MarkdownAnalyzer : IMarkdownAnalyzer
 {
-    public IReadOnlyList<Diagnostic> Analyze(AnalysisRequest request)
+    public AnalysisResult Analyze(AnalysisRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.Text.Length == 0)
         {
-            return [];
+            return AnalysisResult.Empty;
+        }
+
+        List<LinkFinding> links = [];
+
+        LinkChecks.Run(request, links);
+
+        if (request.CheckImageAltText)
+        {
+            ImageChecks.Run(request, links);
         }
 
         List<Diagnostic> found = [];
-
-        LinkChecks.Run(request, found);
 
         string[] lines = request.Text.Split('\n');
 
@@ -41,6 +48,6 @@ public sealed class MarkdownAnalyzer : IMarkdownAnalyzer
 
         StyleChecks.Run(lines, MarkdownRegionScanner.FindProtectedLines(lines), found);
 
-        return found;
+        return new AnalysisResult { Diagnostics = found, LinkFindings = links };
     }
 }

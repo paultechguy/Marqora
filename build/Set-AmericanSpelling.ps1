@@ -46,6 +46,7 @@ $ErrorActionPreference = 'Stop'
 # British stem on the left, American on the right. Both lower case; the case of what was
 # found is put back afterwards.
 $words = [ordered]@{
+    'behaviour' = 'behavior'
     'colour' = 'color'
 }
 

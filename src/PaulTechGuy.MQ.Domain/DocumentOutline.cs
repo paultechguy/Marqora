@@ -39,6 +39,25 @@ public sealed record LinkReference
 
     /// <summary>How many characters the whole link occupies, for underlining it.</summary>
     public required int Length { get; init; }
+
+    /// <summary>
+    /// The label between the brackets - an image's alt text. Empty when there is none.
+    ///
+    /// Not required, and defaulted, so every existing construction site still compiles. Note
+    /// this is the label's <em>text</em>: Markdig's own LinkInline.Label is the reference name in
+    /// "![alt][ref]", which is a different thing and the wrong property to read.
+    /// </summary>
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Whether this image sits inside a link, as a badge does: "[![](badge.svg)](https://ci)".
+    ///
+    /// The surrounding link carries the accessible name in that arrangement, so the image is
+    /// decorative and an empty alt text is correct rather than a defect. Without this, a README
+    /// full of shields would light up on every line, which is the fastest way to teach someone
+    /// to switch a check off.
+    /// </summary>
+    public bool IsInsideLink { get; init; }
 }
 
 /// <summary>The result of rendering markdown to a preview fragment.</summary>

@@ -85,7 +85,7 @@ public sealed class AppSettingsTests : IDisposable
     }
 
     [Fact]
-    public async Task Preferences_added_since_default_to_the_previous_behaviour()
+    public async Task Preferences_added_since_default_to_the_previous_behavior()
     {
         AppSettings settings = await LoadAsync(LegacySettings);
 
@@ -102,6 +102,18 @@ public sealed class AppSettingsTests : IDisposable
         settings.TabSize.ShouldBe(4);
         settings.InsertSpaces.ShouldBeTrue();
         settings.ShowMinimap.ShouldBeFalse();
+
+        // Images. A folder per document is what the feature shipped with; the width cap is on,
+        // because a 4K screenshot is several megabytes and wider than the preview shows it; and
+        // a file the user picked is copied as it is, so that one is off.
+        settings.ImageFolder.ShouldBe(ImageFolderMode.DocumentAssets);
+        settings.LimitPastedImageWidth.ShouldBeTrue();
+        settings.MaxPastedImageWidth.ShouldBe(1920);
+        settings.DownscaleImageFiles.ShouldBeFalse();
+
+        // The accessibility nudge arrives on, like spell checking did, and a file written
+        // before it existed must come up with it on rather than silently without.
+        settings.CheckImageAltText.ShouldBeTrue();
 
         // Spell checking arrived on by default, and a settings file written before it existed
         // must come back with it on rather than silently off.

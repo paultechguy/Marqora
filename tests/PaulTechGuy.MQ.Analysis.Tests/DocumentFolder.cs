@@ -27,6 +27,8 @@ internal sealed class DocumentFolder : IDisposable
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
 
+    private string? _sibling;
+
     public DocumentFolder() => Directory.CreateDirectory(_root);
 
     /// <summary>The document being analyzed. It does not have to exist on disk.</summary>
@@ -43,13 +45,41 @@ internal sealed class DocumentFolder : IDisposable
         return this;
     }
 
-    /// <summary>Analyzes markdown as a saved document in this folder.</summary>
-    public IReadOnlyList<Diagnostic> Check(string markdown) => Analyze(markdown, DocumentPath);
+    /// <summary>
+    /// Creates a file in a neighbouring folder whose name begins with this one's, and returns
+    /// the relative path a document here would write to reach it.
+    ///
+    /// The shared prefix is the whole point: a containment check that compares bare strings
+    /// reads "…\abc2\logo.png" as living inside "…\abc", so a link that leaves the document's
+    /// folder passes a test meant to refuse it.
+    /// </summary>
+    public string WithPrefixedSibling(string relativePath, string contents = "")
+    {
+        _sibling = _root + "2";
 
-    /// <summary>Analyzes markdown as a document that has never been saved anywhere.</summary>
-    public static IReadOnlyList<Diagnostic> CheckUnsaved(string markdown) => Analyze(markdown, null);
+        string full = Path.Combine(_sibling, relativePath);
 
-    private static IReadOnlyList<Diagnostic> Analyze(string markdown, string? path)
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, contents);
+
+        return $"../{Path.GetFileName(_sibling)}/{relativePath.Replace('\\', '/')}";
+    }
+
+    /// <summary>The style rules found in markdown treated as a saved document in this folder.</summary>
+    public IReadOnlyList<Diagnostic> Check(string markdown) => Analyze(markdown, DocumentPath).Diagnostics;
+
+    /// <summary>The style rules found in markdown that has never been saved anywhere.</summary>
+    public static IReadOnlyList<Diagnostic> CheckUnsaved(string markdown, bool altText = true) =>
+        Analyze(markdown, null, altText).Diagnostics;
+
+    /// <summary>The dead links found in markdown treated as a saved document in this folder.</summary>
+    public IReadOnlyList<LinkFinding> Links(string markdown) => Analyze(markdown, DocumentPath).LinkFindings;
+
+    /// <summary>The dead links found in markdown that has never been saved anywhere.</summary>
+    public static IReadOnlyList<LinkFinding> LinksUnsaved(string markdown, bool altText = true) =>
+        Analyze(markdown, null, altText).LinkFindings;
+
+    private static AnalysisResult Analyze(string markdown, string? path, bool altText = true)
     {
         RenderedMarkdown rendered = Renderer.Render(markdown);
 
@@ -60,14 +90,25 @@ internal sealed class DocumentFolder : IDisposable
             Links = rendered.Links,
             Outline = rendered.Outline,
             Anchors = rendered.Anchors,
+            CheckImageAltText = altText,
         });
     }
 
     public void Dispose()
     {
+        Remove(_root);
+
+        if (_sibling is not null)
+        {
+            Remove(_sibling);
+        }
+    }
+
+    private static void Remove(string folder)
+    {
         try
         {
-            Directory.Delete(_root, recursive: true);
+            Directory.Delete(folder, recursive: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

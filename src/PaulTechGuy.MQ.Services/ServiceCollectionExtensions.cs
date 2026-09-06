@@ -44,6 +44,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<UserDictionaryService>();
         services.TryAddSingleton<IUserDictionary>(p => p.GetRequiredService<UserDictionaryService>());
 
+        services.TryAddSingleton<IDocumentAssetStore, DocumentAssetStore>();
+        services.TryAddSingleton<IPastedImageTracker, PastedImageTracker>();
         services.TryAddSingleton<IFileWatcherFactory, FileWatcherFactory>();
         services.TryAddSingleton<IWorkspaceService, DocumentWorkspace>();
 

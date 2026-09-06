@@ -10,7 +10,7 @@ namespace PaulTechGuy.MQ.Markdown;
 /// Two callers, and they want different answers. The style checks in Analysis have always
 /// ignored indented blocks, because that is what the formatter protects and the two must agree.
 /// Spell checking cannot afford to: an indented code sample would be underlined end to end. So
-/// indented blocks are opt-in rather than a change of behaviour for the existing caller.
+/// indented blocks are opt-in rather than a change of behavior for the existing caller.
 ///
 /// The formatter carries the same knowledge in its own line classifier, but that one is
 /// internal to its assembly and welded to a mutable line type it needs for rewriting. This is a

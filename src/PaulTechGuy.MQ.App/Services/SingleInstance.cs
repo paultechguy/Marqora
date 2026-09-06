@@ -39,7 +39,7 @@ internal static class SingleInstance
     /// <summary>
     /// Long enough for a busy instance to answer, short enough that a wedged one does not
     /// leave the user looking at an empty desktop. On expiry this launch opens its own window,
-    /// which is the behaviour Marqora had before any of this existed.
+    /// which is the behavior Marqora had before any of this existed.
     /// </summary>
     private const uint RedirectTimeoutMs = 10_000;
 

@@ -458,6 +458,68 @@
     return isAbsolute(value) ? value : (state.documentBaseUrl + value.replace(/^\.\//, ''));
   }
 
+  /*
+    Ctrl+V with a picture on the clipboard.
+
+    Capture phase, on the document, and both halves of that are load-bearing. Monaco calls
+    preventDefault on paste but never stopPropagation, so a bubble listener would fire - but it
+    would fire after Monaco had already acted. Capture runs first, so when this claims the event
+    Monaco never sees it and a double paste is impossible by construction rather than by
+    sequencing. Listening on the document rather than the editor is what lets the preview pane be
+    answered at all, since it has no Monaco keybinding context.
+
+    The predicate is the dangerous part of this feature and is deliberately small enough to read
+    and believe. Swallowing an ordinary text paste would be a regression to the most-used
+    keystroke in the app, so the event is claimed only when there is no text to paste and there
+    is an image to paste instead. Everything else falls through untouched.
+
+    The bytes are not taken from here. clipboardData would give Chromium's re-encode of the DIB,
+    would need base64 and several copies of a multi-megabyte screenshot to cross the bridge, and
+    cannot see a copied file's path at all. The host re-reads the Windows clipboard instead,
+    which costs nothing and keeps an Explorer copy byte-exact.
+  */
+  function wireImagePaste() {
+    document.addEventListener('paste', function (e) {
+      var data = e.clipboardData;
+      if (!data) { return; }
+
+      // Monaco's own Find and Replace boxes are inputs, and pasting into one is about that box.
+      var target = e.target;
+      if (target && target.closest && target.closest('.monaco-inputbox, input, textarea')) { return; }
+
+      if (data.getData('text/plain')) { return; }
+
+      var items = data.items || [];
+      var hasImage = false;
+
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && /^image\//.test(items[i].type || '')) { hasImage = true; break; }
+      }
+
+      // A copied file arrives as Files with no items in some Chromium paths, so the coarser
+      // signal is the fallback rather than the primary test.
+      if (!hasImage && data.types && data.types.indexOf && data.types.indexOf('Files') >= 0) {
+        hasImage = true;
+      }
+
+      if (!hasImage) { return; }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Pasting over the preview does not silently switch what is on screen. The menu item
+      // still does, because there the user asked for a paste rather than pressing a key over a
+      // surface that only reads. Asking the editor whether it has the keyboard is the reliable
+      // test: view mode alone would miss a click into the preview while both panes are up.
+      if (!state.editor || !state.editor.hasTextFocus()) {
+        post('command', { name: 'imagePasteNeedsSource' });
+        return;
+      }
+
+      post('imagePaste', {});
+    }, true);
+  }
+
   function wirePaneContextMenus() {
     wireContextMenu(els.sourcePane, 'Source');
     wireContextMenu(els.previewPane, 'Preview');
@@ -473,6 +535,7 @@
         var href = anchor ? anchor.getAttribute('href') : '';
 
         var spelling = spellingAt(pane, e.clientX, e.clientY);
+        var deadLink = linkFindingAt(pane, e.clientX, e.clientY);
 
         post('contextMenu', {
           pane: pane,
@@ -491,7 +554,15 @@
           wordLine: spelling ? spelling.line : -1,
           wordStart: spelling ? spelling.start : -1,
           wordEnd: spelling ? spelling.end : -1,
-          wordRepeated: !!(spelling && spelling.repeated)
+          wordRepeated: !!(spelling && spelling.repeated),
+
+          // Empty kind when the pointer was not over a dead link, matching how an empty word
+          // says the same about a misspelling.
+          linkKind: deadLink ? deadLink.kind : '',
+          linkTarget: deadLink ? deadLink.url : '',
+          linkLine: deadLink ? deadLink.line : -1,
+          linkStart: deadLink ? deadLink.start : -1,
+          linkEnd: deadLink ? deadLink.end : -1
         });
       });
     }
@@ -525,6 +596,69 @@
     Shared by the two ways of asking: a right-click, which has a point on screen, and Ctrl+.,
     which has the caret. Both end up here so both offer exactly the same word.
   */
+  /*
+    The dead link under the pointer, or null. The pointer half; linkFindingAtPosition is shared.
+  */
+  function linkFindingAt(pane, clientX, clientY) {
+    if (pane !== 'Source' || !state.editor || !state.monaco) { return null; }
+
+    var model = state.editor.getModel();
+    if (!model) { return null; }
+
+    var target = state.editor.getTargetAtClientPoint(clientX, clientY);
+    if (!target || !target.position) { return null; }
+
+    return linkFindingAtPosition(model, target.position);
+  }
+
+  /*
+    The dead link covering one position, or null.
+
+    Two halves have to meet here. The decoration is authoritative about where the reference is,
+    because it has moved with every edit since the check ran. The finding is authoritative about
+    what is wrong and what the target was. They are matched by index: the ids in tab.linkInk came
+    back from deltaDecorations in the order tab.linkFindings went in.
+
+    Shared by the right-click, which has a point, and Ctrl+. which has the caret, so both offer
+    exactly the same repair.
+  */
+  function linkFindingAtPosition(model, position) {
+    var tab = state.tabs[state.activeTabId];
+    if (!tab || !tab.linkInk || !tab.linkFindings) { return null; }
+
+    var covering = model.getDecorationsInRange(new state.monaco.Range(
+      position.lineNumber, position.column, position.lineNumber, position.column));
+
+    for (var i = 0; i < covering.length; i++) {
+      var className = (covering[i].options || {}).inlineClassName;
+
+      if (className !== 'mq-dead-link' && className !== 'mq-missing-alt') { continue; }
+
+      var slot = tab.linkInk.indexOf(covering[i].id);
+      if (slot < 0 || slot >= tab.linkFindings.length) { continue; }
+
+      var finding = tab.linkFindings[slot];
+      var range = covering[i].range;
+
+      return {
+        url: finding.url,
+        kind: finding.kind,
+
+        // Carried so the hover can say it. The decoration used to hold its own hoverMessage,
+        // but Monaco merges every source's contribution at a position in an order nothing here
+        // controls - and a one-line message merged with a 320px thumbnail lands underneath it,
+        // out of sight. One provider composing the whole hover is the only way to fix the order.
+        message: finding.message || '',
+        line: range.startLineNumber - 1,
+        start: range.startColumn - 1,
+        end: range.endColumn - 1,
+        range: range
+      };
+    }
+
+    return null;
+  }
+
   function spellingAtPosition(model, position) {
     // An empty range at the position: what comes back is every decoration covering that spot.
     var covering = model.getDecorationsInRange(new state.monaco.Range(
@@ -562,10 +696,14 @@
     instead of drawing a menu of their own. It also keeps the lightbulb and the "no quick fixes"
     line out of the editor, neither of which was wanted.
 
-    Silent when the caret is not on a misspelling. There is nothing to offer, and a menu saying
-    so is the sort of box that has to be dismissed for no reason.
+    Two kinds of thing can be under the caret and both are answered here: a misspelling, and a
+    link that leads nowhere. They are drawn the same way, for the same reasons, and a reader who
+    has learned that Ctrl+. fixes the squiggle should not have to know which sort it is.
+
+    Silent when the caret is on neither. There is nothing to offer, and a menu saying so is the
+    sort of box that has to be dismissed for no reason.
   */
-  function openSpellingMenuAtCaret() {
+  function openFixMenuAtCaret() {
     var editor = state.editor;
     var model = editor && editor.getModel();
 
@@ -576,8 +714,15 @@
     if (!position) { return; }
 
     var spelling = spellingAtPosition(model, position);
+    var deadLink = linkFindingAtPosition(model, position);
 
-    if (!spelling) { return; }
+    // Missing alt text is marked but has nothing to offer: no other file it might have meant,
+    // and no command that writes a description. It does not count towards opening the menu.
+    var repairable = deadLink && deadLink.kind !== 'MissingAltText';
+
+    // Silent unless the caret is actually on something with a repair to offer. A menu that
+    // opens to say it has nothing is a box to dismiss for no reason.
+    if (!spelling && !repairable) { return; }
 
     // Where that character actually is on screen. The menu wants the WebView's own coordinates,
     // which is what a pointer event would have given it, so the editor's own offset goes back on.
@@ -596,11 +741,16 @@
       hasSelection: paneHasSelection('Source'),
       linkUrl: '',
       imageUrl: '',
-      word: spelling.word,
-      wordLine: spelling.line,
-      wordStart: spelling.start,
-      wordEnd: spelling.end,
-      wordRepeated: spelling.repeated
+      word: spelling ? spelling.word : '',
+      wordLine: spelling ? spelling.line : -1,
+      wordStart: spelling ? spelling.start : -1,
+      wordEnd: spelling ? spelling.end : -1,
+      wordRepeated: !!(spelling && spelling.repeated),
+      linkKind: deadLink ? deadLink.kind : '',
+      linkTarget: deadLink ? deadLink.url : '',
+      linkLine: deadLink ? deadLink.line : -1,
+      linkStart: deadLink ? deadLink.start : -1,
+      linkEnd: deadLink ? deadLink.end : -1
     });
   }
 
@@ -1177,7 +1327,7 @@
     Rendering replaces the node's text with SVG, so the definition is gone by the time
     anyone double-clicks; this is stamped on the node while it is still available. Hashing
     rather than storing the source keeps the attribute short, and makes the same diagram in
-    two tabs resolve to the same window, which is the behaviour one expects.
+    two tabs resolve to the same window, which is the behavior one expects.
 
     djb2. A hash collision would only ever raise the wrong pop-out.
   */
@@ -1330,16 +1480,42 @@
 
   // Relative paths in a document resolve against the file's own folder, which the
   // host maps to the marqora.document virtual origin.
+  /*
+    Points every relative media reference at the virtual host that serves the document's folder.
+
+    "poster" is here as well as "src": a video's poster frame is a relative reference like any
+    other and used to be left behind, so it silently never loaded.
+
+    The ".." guard is the subtle half. Concatenating the base and the path let the URL parser
+    resolve the result, so "../secrets.png" became "https://marqora.document/secrets.png" - a
+    path that looks like it is inside the folder and is then served from inside it. That is not
+    a broken image, which is what it was mistaken for; it is the wrong image, or a 404 for a file
+    the author never named. The host refuses to leave the folder anyway, so nothing could escape,
+    but the reference has to be left alone rather than quietly rewritten into a different one.
+  */
   function rewriteRelativeUrls() {
     if (!state.documentBaseUrl) { return; }
 
-    var media = els.preview.querySelectorAll('img[src], video[src], source[src], audio[src]');
+    var media = els.preview.querySelectorAll(
+      'img[src], video[src], source[src], audio[src], video[poster]');
 
     for (var i = 0; i < media.length; i++) {
-      var src = media[i].getAttribute('src');
-      if (src && !isAbsolute(src) && src.charAt(0) !== '#') {
-        media[i].setAttribute('src', state.documentBaseUrl + src.replace(/^\.\//, ''));
-      }
+      rewriteAttribute(media[i], 'src');
+      rewriteAttribute(media[i], 'poster');
+    }
+
+    function rewriteAttribute(element, name) {
+      var value = element.getAttribute(name);
+
+      if (!value || isAbsolute(value) || value.charAt(0) === '#') { return; }
+
+      var path = value.replace(/^\.\//, '');
+
+      // Left exactly as written, so it fails as the dead reference it is rather than resolving
+      // to a neighbour. The link check reports it in the source, which is where the fix goes.
+      if (/(^|\/)\.\.(\/|$)/.test(path)) { return; }
+
+      element.setAttribute(name, state.documentBaseUrl + path);
     }
   }
 
@@ -1716,6 +1892,23 @@
         'editorInfo.foreground': token('--mq-danger'),
 
         /*
+          The dead-link squiggle's tick in the overview ruler, borrowing --mq-warning the way
+          the line above borrows --mq-danger. Monaco has a default for this and it is not the
+          app's amber and does not follow a theme change, so it is named here rather than left
+          to be inherited. app.css draws the underline from the same token, which is what keeps
+          the ruler and the squiggle the same color.
+        */
+        'editorWarning.foreground': token('--mq-warning'),
+
+        /*
+          The missing-alt-text tick, borrowing --mq-text-tertiary the way the two lines above
+          borrow their colors. Quieter than either on purpose: this one reports a description
+          nobody has written yet, not a link that leads nowhere, and the ruler should say which
+          is which at a glance. app.css draws its dotted underline from the same token.
+        */
+        'editorHint.foreground': token('--mq-text-tertiary'),
+
+        /*
           One color for both, so a selection does not change color when the keyboard
           leaves the editor.
 
@@ -1749,7 +1942,13 @@
 
       // The spelling squiggle. See the light theme above for why info means misspelling and
       // why it borrows --mq-danger rather than carrying a color of its own.
-      'editorInfo.foreground': token('--mq-danger')
+      'editorInfo.foreground': token('--mq-danger'),
+
+      // The dead-link squiggle's ruler tick. See the light theme above.
+      'editorWarning.foreground': token('--mq-warning'),
+
+      // The missing-alt-text tick, quieter than either. See the light theme above.
+      'editorHint.foreground': token('--mq-text-tertiary')
     };
 
     /*
@@ -2058,7 +2257,7 @@
 
     // The corrections for the word at the caret. Answered here rather than by the host: only
     // this side knows where the caret is or what is underlined beneath it.
-    { ctrl: true, code: 'Period', run: openSpellingMenuAtCaret },
+    { ctrl: true, code: 'Period', run: openFixMenuAtCaret },
 
     /*
       Zoom, answered here rather than by the host: the panes are this file's to scale, and
@@ -2107,6 +2306,7 @@
     { alt: true, code: 'KeyF', run: 'menu.file' },
     { alt: true, code: 'KeyE', run: 'menu.edit' },
     { alt: true, code: 'KeyO', run: 'menu.format' },
+    { alt: true, code: 'KeyI', run: 'menu.insert' },
     { alt: true, code: 'KeyV', run: 'menu.view' },
     { alt: true, code: 'KeyT', run: 'menu.tools' },
     { alt: true, code: 'KeyH', run: 'menu.help' }
@@ -2117,6 +2317,264 @@
   }
 
   /// Binds the table to both keyboards. Called once, as the editor is created.
+  // The whole of a markdown image on one line, with the alt text and the target apart.
+  var IMAGE_REFERENCE = /!\[([^\]]*)\]\(\s*([^()\s]+?)(?:\s+"[^"]*")?\s*\)/g;
+
+  /*
+    A thumbnail when the pointer rests on an image reference in the source.
+
+    This is the payoff for keeping the source pane visible. Every other editor in the category
+    either hides the markdown or shows you a path; hovering the path and getting the picture is
+    something only a source-first editor can offer, and it costs one provider.
+
+    Monaco renders hover markdown through the same pipeline VS Code uses, so plain image syntax
+    is enough and supportHtml is never needed. Sizing is left entirely to app.css rather than to
+    the "|width=" suffix that pipeline also honours: that suffix works by putting a width
+    attribute on the element, which pins one axis and leaves the stylesheet's cap on the other
+    axis cropping the aspect ratio - a portrait screenshot came out squashed. Capping both axes
+    in CSS with the dimensions left auto scales proportionally instead, and shows a small image
+    at its own size rather than stretching it up to fill a number.
+
+    Some cap is still required, wherever it lives: editor.main.css has no img rules at all, so an
+    unsized 4K screenshot would open a hover several screens wide.
+
+    Registered once, here, rather than per tab. Registering per document would stack providers
+    and show the same thumbnail as many times as the file had been opened.
+  */
+  function registerImageHover(monaco) {
+    monaco.languages.registerHoverProvider('markdown', {
+      provideHover: function (model, position) {
+        // What the checks found here, if anything. Taken first because it is the thing the
+        // reader needs and the thumbnail is the thing they can already see: a squiggle whose
+        // explanation is hidden below a picture explains nothing.
+        var finding = linkFindingAtPosition(model, position);
+        var notes = finding && finding.message ? [{ value: finding.message }] : [];
+
+        // The check has already been to the disk and found nothing there. Asking the page to
+        // load it anyway just puts a broken-image glyph under a sentence that has explained the
+        // problem - two ways of saying the same thing, one of them ugly. The thumbnail is only
+        // ever offered when there is reason to believe there is a picture to show.
+        var missing = finding && finding.kind === 'MissingImage';
+
+        if (!state.documentBaseUrl || missing) {
+          return notes.length
+            ? { range: finding.range, contents: notes }
+            : null;
+        }
+
+        var line = model.getLineContent(position.lineNumber);
+        var column = position.column - 1;
+
+        IMAGE_REFERENCE.lastIndex = 0;
+
+        for (var match = IMAGE_REFERENCE.exec(line); match; match = IMAGE_REFERENCE.exec(line)) {
+          var start = match.index;
+          var end = start + match[0].length;
+
+          if (column < start || column > end) { continue; }
+
+          var target = match[2];
+
+          /*
+            Anything with a scheme is refused, and so is a protocol-relative URL.
+
+            The page's own policy would block the fetch anyway, but relying on that alone is
+            below this app's standard: the claim Marqora makes is that it never goes to the
+            network, and a hover that would try is not made harmless by being stopped. This way
+            it provably cannot, for the same reason the link checker refuses to verify an
+            external URL.
+          */
+          var range = new state.monaco.Range(
+            position.lineNumber, start + 1, position.lineNumber, end + 1);
+
+          // Anything with a scheme is refused, and so is a protocol-relative URL or one climbing
+          // out of the folder - see the note above. There is still a message to show if a check
+          // found something, so the note is returned rather than the whole hover abandoned.
+          var external = /^[a-z][a-z0-9+.-]*:/i.test(target)
+            || target.indexOf('//') === 0
+            || /(^|\/)\.\.(\/|$)/.test(target);
+
+          if (external) {
+            return notes.length ? { range: range, contents: notes } : null;
+          }
+
+          var absolute = state.documentBaseUrl + target.replace(/^\.\//, '');
+
+          return {
+            range: range,
+
+            /*
+              Message first, picture second, and nothing after them. Monaco renders these in
+              order, so this is the one place deciding what a reader sees first - and it has to
+              be the thing they cannot work out for themselves.
+
+              The path used to be a third row and is gone. It was never worth its height: the
+              pointer is resting on the text that contains it. And height is the scarce thing
+              here, because .monaco-hover is overflow:hidden with a max-height the widget sets
+              from whatever room is left in the pane - so anything that does not fit is not
+              scrolled to, it is simply cut off. That is what took the bottom off the box.
+
+              No "|width=" suffix on the image either. It sizes the element by putting a width
+              attribute on it, which pins one axis and leaves app.css cropping the other - a
+              portrait screenshot came out squashed. The stylesheet caps both axes with the
+              dimensions left auto, which scales proportionally, and a small image is shown at
+              its own size rather than stretched up to fill a number.
+            */
+            contents: notes.concat([{ value: '![](' + absolute + ')' }])
+          };
+        }
+
+        // Not a reference this can preview - a reference-style link, or a target with a space in
+        // it - but a check may still have something to say about it.
+        return notes.length ? { range: finding.range, contents: notes } : null;
+      }
+    });
+  }
+
+  // An unclosed "](" or "!](" run at the caret: the opener, then whatever has been typed of the
+  // path. The "!" is captured because it decides whether images alone are worth offering.
+  var LINK_OPENER = /(!?)\[[^\]]*\]\(([^()\s]*)$/;
+
+  var IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+
+  /*
+    Completion for the path half of a link or an image.
+
+    Trigger characters rather than quick suggestions, and that is forced rather than chosen:
+    quickSuggestions is off in this editor, deliberately, because a popup that opens while
+    someone is writing prose is an interruption. suggestOnTriggerCharacters is a separate option
+    and defaults on, so the list opens on the "(" that starts a path and on each "/" that walks
+    into a folder, and stays quiet everywhere else.
+
+    Candidates come from the host - the page cannot read a disk - and are already relative to the
+    document, so what gets inserted resolves without anything here knowing where the file is.
+  */
+  function registerLinkCompletion(monaco) {
+    monaco.languages.registerCompletionItemProvider('markdown', {
+      /*
+        The "(" opens the list and the "/" reopens it on the way into a folder.
+
+        Those two are not enough on their own, and this used to rely on them. quickSuggestions is
+        off in this editor - a popup that arrives while someone is writing prose is an
+        interruption - so nothing reopens the list once it has been dismissed, and nothing offers
+        it to a reader who arrived at the parentheses by any route other than typing the bracket
+        just now. The list was there and almost nobody would meet it. wireLinkCompletionTriggers
+        below is the other half.
+      */
+      triggerCharacters: ['(', '/'],
+
+      provideCompletionItems: function (model, position) {
+        var tab = state.tabs[state.activeTabId];
+        if (!tab || !tab.linkTargets || !tab.linkTargets.length) { return { suggestions: [] }; }
+
+        var upToCaret = model.getValueInRange(new state.monaco.Range(
+          position.lineNumber, 1, position.lineNumber, position.column));
+
+        var opener = LINK_OPENER.exec(upToCaret);
+        if (!opener) { return { suggestions: [] }; }
+
+        var imagesOnly = opener[1] === '!';
+        var typed = opener[2];
+
+        // Replace what has been typed of the path rather than appending to it, so Monaco can
+        // filter as usual and picking an item cannot leave half of an old path behind.
+        var range = new state.monaco.Range(
+          position.lineNumber,
+          position.column - typed.length,
+          position.lineNumber,
+          position.column);
+
+        var suggestions = [];
+
+        for (var i = 0; i < tab.linkTargets.length; i++) {
+          var path = tab.linkTargets[i];
+          var isImage = IMAGE_EXTENSION.test(path);
+
+          // A link can point at anything; an image reference can only sensibly point at one.
+          if (imagesOnly && !isImage) { continue; }
+
+          var slash = path.lastIndexOf('/');
+
+          suggestions.push({
+            label: path,
+            kind: monaco.languages.CompletionItemKind.File,
+            insertText: path,
+            range: range,
+            detail: slash < 0 ? '' : path.slice(0, slash),
+
+            // The document's own asset folder first: it is where anything this app wrote went,
+            // so it is the likeliest answer and should not be sorted in among the rest.
+            sortText: (path.indexOf('.assets/') >= 0 || path.indexOf('images/') === 0 ? '0' : '1') + path,
+
+            // A thumbnail in the details pane, from the same machinery as the hover. The suggest
+            // widget renders markdown through the same path, so this costs one more string.
+            // Sized by app.css, not by a width attribute - see the hover above for why.
+            documentation: isImage && state.documentBaseUrl
+              ? { value: '![](' + state.documentBaseUrl + path + ')' }
+              : undefined
+          });
+        }
+
+        return { suggestions: suggestions };
+      }
+    });
+  }
+
+  /*
+    The two ways the path list opens that its trigger characters cannot cover.
+
+    Ctrl+Space is the gesture every editor uses for "complete this", and in a markdown document
+    it had nothing to do at all - word-based suggestions are off, deliberately, because
+    completing prose from the words already in the document is noise. Inside a link's parentheses
+    there is now a real answer, so the key is worth having: it is the only way back once the list
+    has been dismissed, and the only way in for someone who did not type the bracket a moment ago.
+
+    Typing inside the parentheses reopens it too. Monaco fires a trigger character once, on the
+    character itself, and never again - so a list dismissed with Escape, or one that closed
+    because the caret moved, stayed closed however much more of the path got typed. Watching the
+    content is what makes it behave like completion rather than like a one-shot popup.
+
+    Both are narrow on purpose. The check is the same LINK_OPENER the provider uses, so the
+    suggestion widget can only appear where the provider would have something to say; anywhere
+    else in the document, typing does exactly what it did before.
+  */
+  function wireLinkCompletionTriggers(monaco) {
+    var editor = state.editor;
+
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space,
+      function () {
+        // Silent outside a link target. A list of file names offered in the middle of a sentence
+        // is worse than no list, and Ctrl+Space having no effect there is what it already did.
+        if (atLinkTarget()) { editor.trigger('marqora', 'editor.action.triggerSuggest', {}); }
+      });
+
+    editor.onDidChangeModelContent(function () {
+      // Only while typing at the caret with nothing selected: a paste, an undo or a replace-all
+      // is not somebody working their way along a path.
+      if (state.suppressEditorEvents || !editor.hasTextFocus()) { return; }
+
+      var selection = editor.getSelection();
+      if (!selection || !selection.isEmpty()) { return; }
+
+      if (atLinkTarget()) { editor.trigger('marqora', 'editor.action.triggerSuggest', {}); }
+    });
+
+    /// Whether the caret is inside the target half of a link or image reference.
+    function atLinkTarget() {
+      var model = editor.getModel();
+      var position = editor.getPosition();
+
+      if (!model || !position) { return false; }
+
+      var tab = state.tabs[state.activeTabId];
+      if (!tab || !tab.linkTargets || !tab.linkTargets.length) { return false; }
+
+      return LINK_OPENER.test(model.getValueInRange(new state.monaco.Range(
+        position.lineNumber, 1, position.lineNumber, position.column)));
+    }
+  }
+
   function registerHostShortcuts() {
     var monaco = state.monaco;
 
@@ -2202,6 +2660,19 @@
       bracketPairColorization: { enabled: false },
       guides: { indentation: false },
       quickSuggestions: false,
+
+      /*
+        No word-based completion.
+
+        Monaco offers every word in every open document as a suggestion by default, and the path
+        completion asks for suggestions inside "](" - where Monaco would merge the file names
+        with every word in the document. The one place this editor completes anything is a path,
+        and a path list with the document's vocabulary stirred into it is worse than no list.
+
+        It is also what makes Ctrl+Space worth binding: with this off, that key has exactly one
+        answer, and it is the right one.
+      */
+      wordBasedSuggestions: 'off',
       /*
         Let a hover escape the pane it is in.
 
@@ -2262,6 +2733,9 @@
     // Ctrl+S and friends belong to the host so they hit the same command pipeline as the
     // toolbar buttons. One table, bound to Monaco and to the page: see HOST_SHORTCUTS.
     registerHostShortcuts();
+    registerImageHover(monaco);
+    registerLinkCompletion(monaco);
+    wireLinkCompletionTriggers(monaco);
 
     // The precondition leaves Enter alone wherever a widget owns it, so accepting a find
     // result or a suggestion still works.
@@ -2340,6 +2814,7 @@
     wireCtrlWheelZoom(els.monacoHost, 'Source');
     wireCtrlWheelZoom(els.previewPane, 'Preview');
 
+    wireImagePaste();
     wirePaneContextMenus();
 
     // Pulls the markdown grammar before the shell reports ready, so the first paint of a
@@ -2407,14 +2882,31 @@
     editor.executeEdits('marqora-cut', [{ range: selection, text: '', forceMoveMarkers: true }]);
   }
 
+  /*
+    Puts text in at the caret as one undoable edit, in this file's line endings.
+
+    Both halves of that matter and neither used to happen. Without the undo stops Monaco
+    coalesces the insert with whatever is typed next, so Ctrl+Z after a paste takes back the
+    typing and leaves the pasted text sitting there. And the text arrives from the Windows
+    clipboard, which nearly always carries CRLF, so it has to be brought back to plain
+    newlines before being put into the model's endings - replacing \n directly would turn
+    every CRLF into \r\r\n on a CRLF file.
+  */
   function insertAtCursor(text) {
     var editor = state.editor;
     if (!editor) { return; }
 
+    var model = editor.getModel();
     var selection = editor.getSelection();
-    if (!selection) { return; }
+    if (!model || !selection) { return; }
 
-    editor.executeEdits('marqora-paste', [{ range: selection, text: text, forceMoveMarkers: true }]);
+    var eol = model.getEOL();
+    var body = String(text).replace(/\r\n?/g, '\n').replace(/\n/g, eol);
+
+    editor.pushUndoStop();
+    editor.executeEdits('marqora-paste', [{ range: selection, text: body, forceMoveMarkers: true }]);
+    editor.pushUndoStop();
+
     editor.focus();
   }
 
@@ -2562,7 +3054,7 @@
   /*
     Carries a list on to the next line when Enter is pressed inside one.
 
-    This is the one authoring behaviour the host cannot own. The decision depends on the
+    This is the one authoring behavior the host cannot own. The decision depends on the
     line the caret is on at the instant the key goes down, and a round trip to the host
     would arrive after the newline had already been typed.
   */
@@ -2936,7 +3428,17 @@
       selectionInk: [],
 
       // Decoration ids for this tab's misspellings. See setSpelling.
-      spellInk: []
+      spellInk: [],
+
+      // Decoration ids for this tab's dead links, and the findings they were drawn from, held
+      // in step by index. See setLinkFindings: the decoration knows where the reference is now,
+      // the finding knows what is wrong with it, and neither can answer on its own.
+      linkInk: [],
+      linkFindings: [],
+
+      // Files a relative reference in this document could point at, pushed by the host because
+      // the page cannot read a disk. See setLinkTargets.
+      linkTargets: []
     };
   }
 
@@ -3300,7 +3802,7 @@
         root.style.setProperty('--mq-preview-base', String(p.previewFontSize) + 'px');
       }
 
-      // Zero means no limit, which is the shipped behaviour: the preview fills its pane.
+      // Zero means no limit, which is the shipped behavior: the preview fills its pane.
       if (p.previewMaxWidth > 0) {
         root.style.setProperty('--mq-preview-measure', String(p.previewMaxWidth) + 'px');
       } else {
@@ -3446,6 +3948,102 @@
           if (tab.model && tab.spellInk && tab.spellInk.length) {
             tab.spellInk = tab.model.deltaDecorations(tab.spellInk, []);
           }
+        }
+      }
+    },
+
+    /*
+      Dead links, images and anchors.
+
+      Decorations rather than markers, and for once that is not only about chrome. A marker's
+      hover carries a "View Problem" row and a "No quick fixes available" line, both of which
+      are noise here - but the deciding reason is that each of these has a specific repair, and
+      Marqora offers it on the right-click menu the way it offers spelling corrections. See
+      setSpelling above for the same argument about the same kind of hover.
+
+      The message does not ride along as a hoverMessage, though it did at first. Monaco merges
+      every contribution at a position in an order nothing here controls, so a one-line message
+      and a 320px image thumbnail came out in whichever order it chose - and the message lost,
+      landing below the fold where nobody found it. Hovering a squiggle and being shown only the
+      picture explains nothing about why the squiggle is there. registerImageHover reads these
+      findings itself and composes the whole hover, message first.
+
+      Ids and findings are kept parallel: deltaDecorations returns them in the order they went
+      in, so linkInk[i] is the decoration for linkFindings[i]. The decoration is what knows where
+      the reference is after an edit; the finding is what knows the target and the kind.
+    */
+    setLinkFindings: function (p) {
+      var tab = state.tabs[p.id];
+      if (!tab || !tab.model || !state.monaco) { return; }
+
+      var links = p.links || [];
+      var ink = [];
+
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+
+        // Alt text is the odd kind: nothing is broken, so it wears a quieter mark and earns no
+        // tick in the scrollbar. A document of illustrations would otherwise stripe the ruler
+        // with something that is a suggestion rather than a fault.
+        var isHint = link.kind === 'MissingAltText';
+
+        var options = {
+          inlineClassName: isHint ? 'mq-missing-alt' : 'mq-dead-link',
+          description: 'marqora-link',
+
+          // No hoverMessage. Monaco merges every contribution at a position in an order nothing
+          // here controls, so this message and the image thumbnail from the hover provider came
+          // out in whichever order Monaco felt like - and the message, being one line against a
+          // 320px picture, ended up below the fold where nobody found it. The provider reads
+          // these findings itself and composes the whole hover, message first.
+
+          // Typing at either edge must not drag the mark along with the text; the next check
+          // will say where the reference now ends.
+          stickiness: state.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+
+          // A tick in the scrollbar for every finding, so a long document can be scanned without
+          // being scrolled. Missing alt text gets one too - an accessibility pass is exactly the
+          // job of "find all of them", and a mark you cannot locate is a mark you ignore - but in
+          // a quieter color, because it reports something incomplete rather than something
+          // broken. Named as theme colors so both follow a theme change with nothing re-checked.
+          overviewRuler: {
+            color: { id: isHint ? 'editorHint.foreground' : 'editorWarning.foreground' },
+            position: state.monaco.editor.OverviewRulerLane.Right
+          }
+        };
+
+        ink.push({
+          // The host counts from zero; Monaco counts from one.
+          range: new state.monaco.Range(
+            link.line + 1,
+            link.start + 1,
+            link.line + 1,
+            link.start + link.length + 1),
+          options: options
+        });
+      }
+
+      tab.linkInk = tab.model.deltaDecorations(tab.linkInk || [], ink);
+      tab.linkFindings = links;
+    },
+
+    setLinkTargets: function (p) {
+      var tab = state.tabs[p.id];
+      if (!tab) { return; }
+
+      tab.linkTargets = p.paths || [];
+    },
+
+    clearLinkFindings: function () {
+      for (var id in state.tabs) {
+        if (Object.prototype.hasOwnProperty.call(state.tabs, id)) {
+          var tab = state.tabs[id];
+
+          if (tab.model && tab.linkInk && tab.linkInk.length) {
+            tab.linkInk = tab.model.deltaDecorations(tab.linkInk, []);
+          }
+
+          tab.linkFindings = [];
         }
       }
     },

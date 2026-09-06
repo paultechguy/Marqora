@@ -310,6 +310,52 @@ public sealed record AppSettings
     /// <summary>Off by default: the source pane is narrow in split view, and a minimap costs width.</summary>
     public bool ShowMinimap { get; set; }
 
+    // ---------------------------------------------------------------------- images
+
+    /// <summary>Where a pasted image is written. Member zero is the default; see the enum.</summary>
+    public ImageFolderMode ImageFolder { get; set; } = ImageFolderMode.DocumentAssets;
+
+    /// <summary>
+    /// Cap the width of an image Marqora encodes from the clipboard.
+    ///
+    /// On by default. A screenshot from a 4K monitor is several megabytes of PNG, which bloats
+    /// the folder beside the document and is too large for the HTML export to embed - and it is
+    /// wider than the preview will ever show it at, so the pixels are not doing anything.
+    /// </summary>
+    public bool LimitPastedImageWidth { get; set; } = true;
+
+    public int MaxPastedImageWidth { get; set; } = 1920;
+
+    /// <summary>
+    /// The range the width box accepts, and the range an imported file is held to. Stated here
+    /// for the same reason as <see cref="MinimumTabSize"/>: import clamps to these numbers and a
+    /// second copy of them would be free to disagree.
+    /// </summary>
+    public const int MinimumPastedImageWidth = 320;
+
+    public const int MaximumPastedImageWidth = 7680;
+
+    /// <summary>
+    /// Whether the cap above also applies to an image file copied in or picked, rather than only
+    /// to a bitmap off the clipboard.
+    ///
+    /// Off, deliberately. A file the user chose is a file they meant, and it is copied byte for
+    /// byte; re-encoding it would throw away the original to save space they did not ask to
+    /// save. The clipboard case is different because there is no original to preserve - the
+    /// bytes are being created here either way.
+    /// </summary>
+    public bool DownscaleImageFiles { get; set; }
+
+    /// <summary>
+    /// Underline images that carry no alt text.
+    ///
+    /// On by default, and subordinate to <see cref="ShowDiagnostics"/> - with underlining off
+    /// nothing is drawn regardless. Its own switch rather than riding that one, because a reader
+    /// who finds the accessibility nudge noisy should not have to give up dead-link checking to
+    /// silence it.
+    /// </summary>
+    public bool CheckImageAltText { get; set; } = true;
+
     public bool HighlightCurrentLine { get; set; } = true;
 
     /// <summary>Carry a list marker onto the next line when Enter is pressed.</summary>

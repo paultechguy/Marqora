@@ -41,7 +41,7 @@ as applied. **It changed nothing.** On Windows 11 build 26200, with both calls i
 
 Every dialog followed Windows, in both directions. The code was reverted rather than shipped:
 two calls into an undocumented private API that demonstrably change nothing are a maintenance
-liability with no observable behaviour to justify them.
+liability with no observable behavior to justify them.
 
 Should a future Windows honour it again, the mechanism is above and the gate to remember is
 that `TargetPlatformMinVersion` is `10.0.17763.0` — on 1809 ordinal 135 is
@@ -145,7 +145,7 @@ immediately before showing a dialog and log what comes back.
 Replacing the dialogs is not on the table. A hand-built file browser would lose the places
 list, the search, the network browsing and every shell integration the real one has.
 
-A mismatched Open dialog is ordinary Windows behaviour. A print dialog that drops your
+A mismatched Open dialog is ordinary Windows behavior. A print dialog that drops your
 grayscale choice was not - which is the whole difference between accepting one and replacing
 the other.
 

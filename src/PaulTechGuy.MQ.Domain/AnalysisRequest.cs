@@ -31,4 +31,14 @@ public sealed record AnalysisRequest
     /// anchors do and are the other half of what a "#" link can be pointing at.
     /// </summary>
     public IReadOnlyList<string> Anchors { get; init; } = [];
+
+    /// <summary>
+    /// Whether to report images with no alt text.
+    ///
+    /// A request field rather than something the analyzer reads for itself, because the analyzer
+    /// has no settings and should not grow any: it is handed a document and says what is wrong
+    /// with it. Defaulted true so a caller that has not heard of the rule still gets it, which
+    /// matches how it ships.
+    /// </summary>
+    public bool CheckImageAltText { get; init; } = true;
 }
