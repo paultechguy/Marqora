@@ -1,4 +1,4 @@
-# Welcome to Marqora
+﻿# Welcome to Marqora
 
 **A modern Markdown workspace for Windows 11 — a real editor, a live preview, and
 everything in between.**
@@ -42,11 +42,11 @@ that the preview is simply what your document looks like. The panes scroll toget
 through source line numbers rather than scroll percentage, so a tall diagram never throws the
 alignment off.
 
-| View | Shortcut | For |
-|------|----------|-----|
-| Source only | `Alt+1` | Writing at speed |
-| Split | `Alt+2` | Writing and watching |
-| Preview only | `Alt+3` | Reading and reviewing |
+| View         | Shortcut | For                   |
+| ------------ | -------- | --------------------- |
+| Source only  | `Alt+1`  | Writing at speed      |
+| Split        | `Alt+2`  | Writing and watching  |
+| Preview only | `Alt+3`  | Reading and reviewing |
 
 ---
 
@@ -131,11 +131,11 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 
 ## Taking it elsewhere
 
-| Export | What you get |
-|--------|--------------|
-| `Ctrl+Shift+C` — Copy as Rich Text | The formatted page on the clipboard, ready for Word, Outlook or Confluence |
-| `Tools > Export to PDF...` | A printed copy, with paper size, orientation and margins of your choosing |
-| `Tools > Export to HTML...` | One self-contained `.html` file — styles inlined, images embedded, fonts included |
+| Export                             | What you get                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `Ctrl+Shift+C` — Copy as Rich Text | The formatted page on the clipboard, ready for Word, Outlook or Confluence        |
+| `Tools > Export to PDF...`         | A printed copy, with paper size, orientation and margins of your choosing         |
+| `Tools > Export to HTML...`        | One self-contained `.html` file — styles inlined, images embedded, fonts included |
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
@@ -148,13 +148,13 @@ leaves the building.
 Marqora is local software. It opens files from your disk, renders them in its own process, and
 writes them back where you put them. There is nothing to sign in to and nothing to opt out of.
 
-| Where | What |
-|-------|------|
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\settings.json` | Preferences and window placement |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\recent-files.json` | Recent and pinned files |
+| Where                                                    | What                                    |
+| -------------------------------------------------------- | --------------------------------------- |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\settings.json`       | Preferences and window placement        |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\recent-files.json`   | Recent and pinned files                 |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\user-dictionary.txt` | Words you have taught the spell checker |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\snippets\` | Your own snippets, one per file |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\logs\` | Rolling logs, kept 14 days |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\snippets\`           | Your own snippets, one per file         |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\logs\`               | Rolling logs, kept 14 days              |
 
 Deleting any of it is safe. Marqora writes it again.
 
@@ -182,16 +182,16 @@ common; Marqora is not one of them.
 
 ## The shortcuts worth memorizing
 
-| Command | Keys | Command | Keys |
-|---------|------|---------|------|
-| Open | `Ctrl+O` | Bold / italic | `Ctrl+B` / `Ctrl+I` |
-| Open folder | `Ctrl+Shift+O` | Link | `Ctrl+K` |
-| Save / Save all | `Ctrl+S` / `Ctrl+Shift+S` | Format document | `Shift+Alt+F` |
-| New tab / close tab | `Ctrl+N` / `Ctrl+W` | Find All | `Ctrl+Shift+F` |
-| Source / split / preview | `Alt+1` `Alt+2` `Alt+3` | Cheatsheet | `Ctrl+F1` |
-| Show / hide the outline | `Alt+4` | Go to the outline, and back | `Alt+Shift+4` |
-| Spell check on / off | `F7` | Correct the word at the cursor | `Ctrl+.` |
-| Zoom the active pane | `Ctrl` `+` `-` `0` | Word wrap | `Alt+Z` |
+| Command                  | Keys                      | Command                        | Keys                |
+| ------------------------ | ------------------------- | ------------------------------ | ------------------- |
+| Open                     | `Ctrl+O`                  | Bold / italic                  | `Ctrl+B` / `Ctrl+I` |
+| Open folder              | `Ctrl+Shift+O`            | Link                           | `Ctrl+K`            |
+| Save / Save all          | `Ctrl+S` / `Ctrl+Shift+S` | Format document                | `Shift+Alt+F`       |
+| New tab / close tab      | `Ctrl+N` / `Ctrl+W`       | Find All                       | `Ctrl+Shift+F`      |
+| Source / split / preview | `Alt+1` `Alt+2` `Alt+3`   | Cheatsheet                     | `Ctrl+F1`           |
+| Show / hide the outline  | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`       |
+| Spell check on / off     | `F7`                      | Correct the word at the cursor | `Ctrl+.`            |
+| Zoom the active pane     | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`             |
 
 ---
 
