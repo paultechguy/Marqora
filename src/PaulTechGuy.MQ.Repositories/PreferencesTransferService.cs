@@ -310,6 +310,11 @@ public sealed class PreferencesTransferService(
                 AppSettings.MaximumAutoSaveDelaySeconds),
             LogRetentionDays = Whole(
                 "logRetentionDays", settings.LogRetentionDays, 0, AppSettings.MaximumLogRetentionDays),
+            UpdateReminderDays = Whole(
+                "updateReminderDays",
+                settings.UpdateReminderDays,
+                0,
+                AppSettings.MaximumUpdateReminderDays),
             FormatRules = WrapWidth(settings.FormatRules),
         };
 

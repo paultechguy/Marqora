@@ -214,6 +214,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _backgrounds;
 
     private readonly NumberBox _logRetention;
+    private readonly NumberBox _updateReminder;
 
     private readonly ContentControl _pageHost;
     private readonly ListView _categories;
@@ -480,6 +481,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         // Deferred with the other two, though this one only ever takes effect at the next
         // launch anyway: logging is configured before the settings service exists.
         _logRetention = BuildNumber(0, AppSettings.MaximumLogRetentionDays);
+        _updateReminder = BuildNumber(0, AppSettings.MaximumUpdateReminderDays);
 
         _pageHost = new ContentControl
         {
@@ -928,6 +930,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         AutoSave = (AutoSaveMode)Math.Max(0, _autoSave.SelectedIndex),
         AutoSaveDelaySeconds = ReadInt(_autoSaveDelay, settings.AutoSaveDelaySeconds),
         LogRetentionDays = ReadInt(_logRetention, settings.LogRetentionDays),
+        UpdateReminderDays = ReadInt(_updateReminder, settings.UpdateReminderDays),
     };
 
     private Grid BuildShell()
@@ -1140,6 +1143,19 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Heading("LOGS"));
         panel.Children.Add(NumberField("Keep logs for", _logRetention, AdvancedPage, "days"));
         panel.Children.Add(Note("Zero keeps every log. Takes effect the next time Marqora starts."));
+
+        panel.Children.Add(Divider());
+        panel.Children.Add(Heading("UPDATES"));
+        panel.Children.Add(NumberField(
+            "Remind me every", _updateReminder, AdvancedPage, "days", name: "The update reminder"));
+        panel.Children.Add(Note(
+            "Marqora never checks for updates, and this does not change that. It is a clock: "
+            + "when this many days have passed, a line appears in the status bar suggesting you "
+            + "look, and opening it hands the releases page to your browser. Nothing is "
+            + "fetched, nothing is sent, and Marqora never learns which version is current.\n\n"
+            + "The reminder waits for a pause in your typing, and appearing is what resets the "
+            + "clock - it will not come back sooner because you ignored it. Zero never reminds "
+            + "you. Help, Check for Updates opens the same page at any time."));
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SETTINGS FILE"));
@@ -1709,6 +1725,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         _autoSave.SelectedIndex = (int)s.AutoSave;
         _autoSaveDelay.Value = s.AutoSaveDelaySeconds;
         _logRetention.Value = s.LogRetentionDays;
+        _updateReminder.Value = s.UpdateReminderDays;
     }
 
     /// <summary>A sensible measure for someone switching the width limit on for the first time.</summary>

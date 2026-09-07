@@ -163,6 +163,15 @@ dictionary Windows already has on this machine, so nothing you type is sent anyw
 checked and there is nothing to download. Editors that lean on a web service for this are
 common; Marqora is not one of them.
 
+Checking for updates is the same kind of thing. Marqora never asks GitHub — or anyone else —
+whether a newer version exists, which is precisely why it cannot tell you. What it keeps
+instead is a clock: every thirty days a line appears in the status bar suggesting you look,
+and clicking it hands the releases page to your browser. Nothing is fetched and nothing is
+sent. The reminder waits for a pause in your typing, and appearing is what resets it, so it
+will not come back sooner because you ignored it. Change the interval on the Advanced page of
+Preferences, or set it to zero and never see it. `Help > Check for Updates` opens the same
+page whenever you want it.
+
 ---
 
 ## Worth knowing

@@ -51,6 +51,20 @@ public sealed class ProjectLinksTests
         ProjectLinks.LicenceUrl.ShouldEndWith("/LICENSE");
     }
 
+    /// <summary>
+    /// Built from the repository URL for the same reason, and ending at GitHub's own alias for
+    /// the newest release - which is what lets the update reminder point at the current version
+    /// without Marqora ever asking what it is.
+    /// </summary>
+    [Fact]
+    public void LatestReleaseUrl_LivesUnderTheRepository()
+    {
+        ProjectLinks.IsUsable(ProjectLinks.LatestReleaseUrl).ShouldBeTrue();
+
+        ProjectLinks.LatestReleaseUrl.ShouldStartWith(ProjectLinks.RepositoryUrl);
+        ProjectLinks.LatestReleaseUrl.ShouldEndWith("/releases/latest");
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

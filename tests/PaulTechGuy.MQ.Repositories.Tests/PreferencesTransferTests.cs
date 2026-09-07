@@ -64,6 +64,7 @@ public sealed class PreferencesTransferTests : IDisposable
         NewFileLineEnding = LineEndingStyle.Lf,
         WriteUtf8Bom = true,
         LogRetentionDays = 90,
+        UpdateReminderDays = 60,
         ShowOutline = true,
         OutlineMaxDepth = 3,
         SpellCheckEnabled = false,
@@ -79,6 +80,8 @@ public sealed class PreferencesTransferTests : IDisposable
         SplitterPosition = 0.31,
         OutlineWidth = 287,
         LastWelcomeVersion = "0.1.0",
+        LastUpdateReminderUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
+        LastUpdateReminderVersion = "0.1.0",
     };
 
     // ------------------------------------------------------------------ round trip

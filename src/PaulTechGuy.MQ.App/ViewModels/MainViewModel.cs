@@ -57,6 +57,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
     private readonly IWelcomeDocumentService _welcome;
+    private readonly IUpdateReminderService _updates;
     private readonly IDocumentAssetStore _assets;
     private readonly IPastedImageTracker _pastedImages;
     private readonly ILogger<MainViewModel> _logger;
@@ -398,9 +399,31 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasExternalPending))]
+    [NotifyPropertyChangedFor(nameof(ShowUpdateReminder))]
     public partial string ExternalPendingSummary { get; set; }
 
     public bool HasExternalPending => !string.IsNullOrEmpty(ExternalPendingSummary);
+
+    /// <summary>
+    /// The update reminder's text while it is standing, or empty.
+    ///
+    /// Set once when the reminder comes due and cleared when it is acted on, so it is a piece
+    /// of standing state rather than a message - <see cref="StatusText"/> is overwritten by
+    /// whatever the reader did a moment ago, and this must not be.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUpdateReminder))]
+    public partial string UpdateReminderText { get; set; }
+
+    /// <summary>
+    /// Whether the reminder has the status bar's middle to itself.
+    ///
+    /// The changed-on-disk summary shares that slot and outranks it, for the same reason the
+    /// change banner outranks everything else: one is about the reader's own documents and the
+    /// other is about the app. Suppressed rather than dropped - the reminder is still standing
+    /// and reappears once those tabs have been visited.
+    /// </summary>
+    public bool ShowUpdateReminder => !string.IsNullOrEmpty(UpdateReminderText) && !HasExternalPending;
 
     /// <summary>
     /// Documents whose files changed underneath them, in the order the changes arrived.
@@ -473,6 +496,7 @@ public sealed partial class MainViewModel : ObservableObject
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
         IWelcomeDocumentService welcome,
+        IUpdateReminderService updates,
         IDocumentAssetStore assets,
         IPastedImageTracker pastedImages,
         ILogger<MainViewModel> logger)
@@ -501,6 +525,7 @@ public sealed partial class MainViewModel : ObservableObject
         _diagramWindows = diagramWindows;
         _findAll = findAll;
         _welcome = welcome;
+        _updates = updates;
         _assets = assets;
         _pastedImages = pastedImages;
         _logger = logger;
@@ -515,6 +540,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         ExternalNotice = ExternalChangeNotice.None;
         ExternalPendingSummary = string.Empty;
+        UpdateReminderText = string.Empty;
         StatusText = "Ready";
         StatusDetail = string.Empty;
         StatusIconGlyph = string.Empty;
@@ -672,6 +698,14 @@ public sealed partial class MainViewModel : ObservableObject
         // had just loaded the previous release's copy would either flash a reload past the
         // user or, with unsaved edits in it, stop to ask about a document they did not write.
         _welcomePath = await _welcome.PrepareAsync().ConfigureAwait(true);
+
+        // The clock is started before the heartbeat that reads it, so a fresh install records
+        // today rather than being found a month overdue by the first tick a minute from now.
+        _updates.Start(DateTimeOffset.UtcNow);
+
+        // Deliberately not awaited: it runs for the life of the session. See the heartbeat
+        // itself for why this is a loop rather than a timer set for the interval.
+        _ = RunUpdateReminderAsync();
     }
 
     /// <summary>
@@ -5192,6 +5226,157 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void Support() => SupportRequested?.Invoke(this, EventArgs.Empty);
 
+    // -------------------------------------------------------- update reminder
+
+    /// <summary>
+    /// How often the reminder's clock is consulted.
+    ///
+    /// A heartbeat rather than a countdown, and that is the whole design. A timer set for the
+    /// interval is wrong the moment the machine sleeps - it does not fire while suspended, so
+    /// a laptop shut for a fortnight comes back a fortnight late - and wrong again for the
+    /// session somebody leaves open for six weeks, which is the case this feature exists for.
+    /// Comparing two dates on a slow tick is right whatever the machine did in between.
+    ///
+    /// An hour is far finer than it needs to be against an interval measured in days. It is
+    /// chosen so that being late is invisible, not so that being on time is exact.
+    /// </summary>
+    private static readonly TimeSpan UpdateHeartbeat = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long after launch the first check runs.
+    ///
+    /// Shorter than the heartbeat, because a reminder that came due while the app was closed
+    /// should not have to wait an hour into the session - and longer than nothing, because
+    /// launching is busy enough without a notice arriving in the middle of it.
+    /// </summary>
+    private static readonly TimeSpan UpdateReminderSettle = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Quiet typing required before the reminder is allowed to appear.
+    ///
+    /// Nothing about it is urgent, and the one thing it must not do is arrive under somebody's
+    /// hands mid-paragraph. It waits for a pause instead; there is always another heartbeat,
+    /// and it has waited a month already.
+    /// </summary>
+    private static readonly TimeSpan UpdateReminderIdle = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// When the document was last edited, for the idle test above.
+    ///
+    /// Starts at the beginning of time so that a reminder which is already due appears at the
+    /// first check, rather than waiting for somebody to type once and then stop.
+    /// </summary>
+    private DateTimeOffset _lastEditUtc = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// Watches the reminder's clock for the life of the session.
+    ///
+    /// ConfigureAwait(true) throughout, so every resumption is back on the UI thread and the
+    /// property this eventually sets is assigned from the same thread as every other one.
+    /// </summary>
+    private async Task RunUpdateReminderAsync()
+    {
+        TimeSpan wait = UpdateReminderSettle;
+
+        while (!_isShuttingDown)
+        {
+            await Task.Delay(wait).ConfigureAwait(true);
+
+            wait = UpdateHeartbeat;
+
+            try
+            {
+                ShowUpdateReminderIfDue(DateTimeOffset.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                // One failed check is not worth ending the session's heartbeat over.
+                _logger.LogWarning(ex, "The update reminder check failed.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts the reminder up when the interval has run out and the reader is not mid-sentence.
+    ///
+    /// Showing it is what spends it, whether or not it is acted on: a reminder that stayed due
+    /// because it was ignored would be back again tomorrow, and somebody who ignored it was
+    /// answering the question. The clock restarts here, so the next one is a full interval
+    /// away however this one is treated.
+    /// </summary>
+    private void ShowUpdateReminderIfDue(DateTimeOffset now)
+    {
+        if (UpdateReminderText.Length > 0
+            || !_updates.IsDue(now)
+            || now - _lastEditUtc < UpdateReminderIdle)
+        {
+            return;
+        }
+
+        _updates.MarkReminded(now);
+
+        UpdateReminderText = "Time to check for updates";
+    }
+
+    /// <summary>
+    /// How the reminder is set and when it next comes round, for the About box.
+    ///
+    /// It reports the interval and the time left rather than "you last checked N days ago",
+    /// which would be a small lie: the stored date is when Marqora last pointed at the
+    /// releases page, and it is written on a fresh install and after an update as well as
+    /// when a reminder appears. What it can say honestly is when the next one is due.
+    ///
+    /// A plain property rather than an observable one - the About box reads it once, as it
+    /// reads the runtime and the folder paths beside it.
+    /// </summary>
+    public string UpdateSummary
+    {
+        get
+        {
+            int days = _settings.Current.UpdateReminderDays;
+
+            if (days <= 0)
+            {
+                return "Reminders are off";
+            }
+
+            if (_updates.Elapsed(DateTimeOffset.UtcNow) is not { } since)
+            {
+                return $"Every {days} days";
+            }
+
+            int remaining = days - (int)since.TotalDays;
+
+            return remaining <= 0
+                ? $"Every {days} days, and one is due"
+                : $"Every {days} days, next in {Plural(remaining, "day")}";
+        }
+    }
+
+    /// <summary>A count with its noun, singular when it has to be.</summary>
+    private static string Plural(int count, string noun) =>
+        count == 1 ? $"{count} {noun}" : $"{count} {noun}s";
+
+    /// <summary>
+    /// Help, Check for Updates - and the status bar reminder, which is the same action.
+    ///
+    /// Marqora does not know whether there is anything to update to. It opens the releases
+    /// page and the reader reads it, which is the whole of the feature. Using it restarts the
+    /// interval, so somebody who checks of their own accord is not reminded a week later.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        UpdateReminderText = string.Empty;
+
+        _updates.MarkReminded(DateTimeOffset.UtcNow);
+
+        if (!await ExternalLink.OpenAsync(_updates.ReleasesUrl, _logger).ConfigureAwait(true))
+        {
+            StatusText = "Could not open the releases page in your browser";
+        }
+    }
+
     // ----------------------------------------------------------------- outline
 
     /// <summary>
@@ -5651,6 +5836,12 @@ public sealed partial class MainViewModel : ObservableObject
     {
         try
         {
+            // Recorded here, at the top of the edit path, rather than beside
+            // RestartAutoSaveTimer at the foot of it: this is the moment typing happened, and
+            // the render in between can take long enough on a large document to make the two
+            // meaningfully different. The update reminder waits on it - see UpdateReminderIdle.
+            _lastEditUtc = DateTimeOffset.UtcNow;
+
             _workspace.ApplyEdit(e.DocumentId, e.Text);
 
             /*

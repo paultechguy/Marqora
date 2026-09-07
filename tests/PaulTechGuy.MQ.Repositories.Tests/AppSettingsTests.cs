@@ -170,6 +170,14 @@ public sealed class AppSettingsTests : IDisposable
             LogRetentionDays = 30,
             SpellCheckEnabled = false,
             FindSelectFirstResult = true,
+            UpdateReminderDays = 60,
+
+            // The reminder's own record, which is state rather than a preference but is written
+            // to the same file. A DateTimeOffset is the only one of its kind in here, and if the
+            // source-generated context could not carry it the clock would silently reset on every
+            // launch - which looks exactly like a reminder that simply never comes due.
+            LastUpdateReminderUtc = new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero),
+            LastUpdateReminderVersion = "0.2.2",
         };
 
         var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);

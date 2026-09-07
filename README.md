@@ -25,6 +25,14 @@ your own profile. The .NET runtime and the Windows App SDK travel inside the zip
 machine needs neither, and Marqora makes no network calls at runtime. It is not code-signed,
 so Windows warns the first time; the release page says what you will see and why.
 
+**Staying current.** Marqora does not check for updates, because checking would be a network
+call. What it keeps is a clock: every thirty days it puts a line in the status bar suggesting
+you look, and clicking it opens this page in your browser. `Help > Check for Updates` does the
+same thing whenever you want it, and the interval is a preference you can change or switch
+off. To hear about a release the moment it ships, watch the repository on GitHub — **Watch >
+Custom > Releases** — or subscribe to
+[the releases feed](https://github.com/paultechguy/Marqora/releases.atom) in any feed reader.
+
 ---
 
 ## Getting started
@@ -607,10 +615,11 @@ unsaved edits in it, that tab reloads silently; if you do, Marqora asks first.
 
 `File > Preferences...` gathers every setting in the app onto six pages — Appearance, Editor,
 Preview, Files, Export & Print and Advanced. Changes apply as you make them, so you can see a
-font or a theme before committing to it, and **Cancel** puts all of them back. Four settings
-wait for **OK** instead: the recent-files limit, autosave and its delay, and log retention.
-Those act on your disk rather than only describing how things look, so Cancel could not undo
-them after the fact.
+font or a theme before committing to it, and **Cancel** puts all of them back. Five settings
+wait for **OK** instead: the recent-files limit, autosave and its delay, log retention, and
+the update reminder. The first four act on your disk rather than only describing how things
+look, so Cancel could not undo them after the fact; the last has nothing to show until its
+clock runs out.
 
 **Carrying preferences to another machine**
 
@@ -632,6 +641,26 @@ this one does not, a setting this one has that the file predates, a value outsid
 Marqora allows. A `settings.json` copied straight off the other machine is accepted too.
 
 Like every other change in the dialog, an import is undone by **Cancel**.
+
+**The update reminder**
+
+Marqora never asks GitHub whether a newer release exists, so it cannot tell you — and saying
+otherwise would make "no network calls" a claim with an asterisk on it. What it has instead is
+a clock, set on the Advanced page: after this many days a line appears in the status bar
+suggesting you look, and clicking it hands the releases page to your browser. Zero never
+reminds you.
+
+It is a live reminder rather than a check at startup, because Marqora is the kind of program
+people leave open for weeks. Two dates are compared on a slow tick rather than a countdown
+being run, which is what makes it survive sleep, hibernation and a session left open across a
+month — a timer set for the interval does not fire while the machine is suspended, so a laptop
+shut for a fortnight would come back a fortnight late.
+
+It waits for a pause in your typing before it appears, it gives way to the changed-on-disk
+notice when both have something to say, and appearing is what resets the clock — ignoring it
+does not bring it back tomorrow. Installing a new version resets it too. `Help > Check for
+Updates` opens the same page at any time and resets it the same way, and **About Marqora**
+says when the next reminder is due.
 
 ---
 

@@ -51,7 +51,17 @@ internal sealed class AboutDialog : ContentDialog
         ("Serilog", "4.4.0", "Apache-2.0"),
     ];
 
-    public AboutDialog(IAppPaths paths, ILogger logger)
+    /// <param name="updateSummary">
+    /// How the update reminder is set and when it next comes round, worked out by the view
+    /// model. A sentence rather than the numbers behind it, because this dialog reports what
+    /// the app is doing and has no business recomputing it.
+    /// </param>
+    /// <param name="checkForUpdates">
+    /// Runs the same command as Help, Check for Updates, so opening the releases page from
+    /// here restarts the reminder's clock exactly as it does from the menu. Passed in rather
+    /// than reached for, because this dialog is built with no view model of its own.
+    /// </param>
+    public AboutDialog(IAppPaths paths, ILogger logger, string updateSummary, Action checkForUpdates)
     {
         Title = "About Marqora";
         PrimaryButtonText = "Copy details";
@@ -68,14 +78,16 @@ internal sealed class AboutDialog : ContentDialog
             CopyDetails(version, runtime, paths);
         };
 
-        Content = BuildContent(version, runtime, paths, logger);
+        Content = BuildContent(version, runtime, paths, logger, updateSummary, checkForUpdates);
     }
 
     private static ScrollViewer BuildContent(
         string version,
         string runtime,
         IAppPaths paths,
-        ILogger logger)
+        ILogger logger,
+        string updateSummary,
+        Action checkForUpdates)
     {
         var panel = new StackPanel { Spacing = 16, Width = 420 };
 
@@ -95,7 +107,7 @@ internal sealed class AboutDialog : ContentDialog
             Opacity = 0.8,
         });
 
-        panel.Children.Add(BuildFacts(runtime, paths, logger));
+        panel.Children.Add(BuildFacts(runtime, paths, logger, updateSummary, checkForUpdates));
         panel.Children.Add(BuildThirdParty());
 
         return new ScrollViewer
@@ -145,18 +157,42 @@ internal sealed class AboutDialog : ContentDialog
         return row;
     }
 
-    private static Grid BuildFacts(string runtime, IAppPaths paths, ILogger logger)
+    private static Grid BuildFacts(
+        string runtime,
+        IAppPaths paths,
+        ILogger logger,
+        string updateSummary,
+        Action checkForUpdates)
     {
         var grid = new Grid { ColumnSpacing = 14, RowSpacing = 6 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         AddRow(grid, 0, "Author", "Paul Carver");
-        AddLinkRow(grid, 1, "License", Licence, ProjectLinks.LicenceUrl, logger);
-        AddRow(grid, 2, "Runtime", runtime);
-        AddPathRow(grid, 3, "Data folder", paths.DataDirectory);
-        AddPathRow(grid, 4, "Logs", paths.LogDirectory);
-        AddPathRow(grid, 5, "Snippets", paths.SnippetsDirectory);
+        AddLinkRow(
+            grid,
+            1,
+            "License",
+            Licence,
+            () => _ = ExternalLink.OpenAsync(ProjectLinks.LicenceUrl, logger),
+            $"Open {ProjectLinks.LicenceUrl}");
+
+        // The one row that reports a moving fact rather than a fixed one. It answers "when
+        // will it nag me?" without the reader having to open Preferences to find out, and the
+        // link is the same action the menu item runs - Marqora asks GitHub nothing either way.
+        AddLinkRow(
+            grid,
+            2,
+            "Updates",
+            "Releases page",
+            checkForUpdates,
+            $"Open {ProjectLinks.LatestReleaseUrl}",
+            updateSummary);
+
+        AddRow(grid, 3, "Runtime", runtime);
+        AddPathRow(grid, 4, "Data folder", paths.DataDirectory);
+        AddPathRow(grid, 5, "Logs", paths.LogDirectory);
+        AddPathRow(grid, 6, "Snippets", paths.SnippetsDirectory);
 
         return grid;
     }
@@ -225,19 +261,28 @@ internal sealed class AboutDialog : ContentDialog
     /// <summary>
     /// A row whose value opens a web page in the default browser.
     ///
-    /// The app itself still makes no network calls: this hands a URL to the shell, the same
-    /// way the folder rows hand it a path, and nothing is fetched unless the reader asks for
-    /// it. Only the short licence name is shown; the URL lives in
-    /// <see cref="ProjectLinks.LicenceUrl"/> and in the tooltip, so the row stays narrow
-    /// next to the labels around it.
+    /// The app itself still makes no network calls: <paramref name="onClick"/> hands a URL to
+    /// the shell, the same way the folder rows hand it a path, and nothing is fetched unless
+    /// the reader asks for it. Only a short word is shown; the address lives in
+    /// <see cref="ProjectLinks"/> and in the tooltip, so the row stays narrow next to the
+    /// labels around it.
+    ///
+    /// The click is an action rather than a URL because not every one of these rows only
+    /// opens a page - the updates row also restarts the reminder's clock, and that decision
+    /// belongs to the view model rather than to a dialog.
     /// </summary>
+    /// <param name="note">
+    /// Plain text after the link, for a row that reports something as well as offering
+    /// somewhere to go. Omitted on the rows that are only a link.
+    /// </param>
     private static void AddLinkRow(
         Grid grid,
         int row,
         string label,
         string text,
-        string url,
-        ILogger logger)
+        Action onClick,
+        string tooltip,
+        string? note = null)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -248,11 +293,20 @@ internal sealed class AboutDialog : ContentDialog
 
         var link = new Hyperlink();
         link.Inlines.Add(new Run { Text = text });
-        link.Click += (_, _) => _ = ExternalLink.OpenAsync(url, logger);
+        link.Click += (_, _) => onClick();
 
         var content = new TextBlock { FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
         content.Inlines.Add(link);
-        ToolTipService.SetToolTip(content, $"Open {url}");
+
+        if (!string.IsNullOrEmpty(note))
+        {
+            // A separate Run rather than text appended to the link's own: everything inside a
+            // Hyperlink is part of its hit area, and a note that opened the page when clicked
+            // would be a link wearing plain text.
+            content.Inlines.Add(new Run { Text = $"  {note}" });
+        }
+
+        ToolTipService.SetToolTip(content, tooltip);
 
         Grid.SetRow(content, row);
         Grid.SetColumn(content, 1);

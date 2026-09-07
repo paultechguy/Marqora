@@ -14,8 +14,9 @@ namespace PaulTechGuy.MQ.Services;
 public static class ServiceCollectionExtensions
 {
     /// <param name="appVersion">
-    /// The running build's version, which the welcome document compares against the last one
-    /// it introduced. It is passed in rather than read here because the version belongs to
+    /// The running build's version. The welcome document compares it against the last one it
+    /// introduced, and the update reminder against the build that was running when its clock
+    /// was last touched. It is passed in rather than read here because the version belongs to
     /// the executable, and this layer is a library that a test host also loads.
     /// </param>
     /// <param name="welcomeRequested">
@@ -37,6 +38,14 @@ public static class ServiceCollectionExtensions
             appVersion,
             welcomeRequested,
             provider.GetRequiredService<ILogger<WelcomeDocumentService>>()));
+
+        // Takes the version for the same reason the welcome document does: installing an
+        // update restarts the reminder's clock, so the service has to know which build it is
+        // running in.
+        services.TryAddSingleton<IUpdateReminderService>(provider => new UpdateReminderService(
+            provider.GetRequiredService<ISettingsService>(),
+            appVersion,
+            provider.GetRequiredService<ILogger<UpdateReminderService>>()));
 
         // One watcher per open document, so the factory is the singleton, not the watcher.
         // Registered under both: the analyzer talks to IUserDictionary, and startup needs the

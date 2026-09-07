@@ -437,6 +437,51 @@ public sealed record AppSettings
 
     public const int MaximumLogRetentionDays = 365;
 
+    // ---------------------------------------------------------------- updates
+
+    /// <summary>
+    /// Days between reminders to go and look for a new release. Zero never reminds.
+    ///
+    /// This is a clock, not a check. Marqora asks GitHub nothing and so cannot tell you
+    /// whether a newer version exists - only how long it has been since it last suggested you
+    /// look. The reminder hands the releases page to your browser and that is the whole of it,
+    /// which is what keeps "no network calls" literally true rather than nearly true.
+    ///
+    /// Thirty days by default: roughly a release cycle, and a dozen quiet mentions a year for
+    /// someone who ignores every one of them. Zero switches it off, matching
+    /// <see cref="LogRetentionDays"/>, where zero also means "never do the thing".
+    /// </summary>
+    public int UpdateReminderDays { get; set; } = DefaultUpdateReminderDays;
+
+    public const int DefaultUpdateReminderDays = 30;
+
+    /// <summary>A year, matching <see cref="MaximumLogRetentionDays"/>. Past that, zero says it better.</summary>
+    public const int MaximumUpdateReminderDays = 365;
+
+    /// <summary>
+    /// When the reader was last pointed at the releases page, either by the reminder appearing
+    /// or by Help, Check for Updates. State rather than a preference, and listed as such in
+    /// <see cref="SessionKeys"/>.
+    ///
+    /// It records what this installation has done, so carrying it to another machine would
+    /// import a countdown that machine never started. Null means it has never happened, which
+    /// the reminder service reads as "start the clock now" rather than "you are overdue" - a
+    /// fresh install is already running the newest release there is.
+    /// </summary>
+    public DateTimeOffset? LastUpdateReminderUtc { get; set; }
+
+    /// <summary>
+    /// The version that was running when <see cref="LastUpdateReminderUtc"/> was last written.
+    /// State, for the same reason as the date beside it.
+    ///
+    /// Compared against the running build so that installing an update restarts the clock:
+    /// someone who upgraded last week does not need reminding this week. Kept apart from
+    /// <see cref="LastWelcomeVersion"/> deliberately, even though both change on the same
+    /// launch - the welcome document and the reminder answer different questions, and letting
+    /// one borrow the other's record would tie them together for no gain.
+    /// </summary>
+    public string? LastUpdateReminderVersion { get; set; }
+
     public static AppSettings Default => new();
 
     /// <summary>
@@ -490,6 +535,8 @@ public sealed record AppSettings
             "splitterPosition",
             "outlineWidth",
             "lastWelcomeVersion",
+            "lastUpdateReminderUtc",
+            "lastUpdateReminderVersion",
         };
 
     /// <summary>
@@ -527,6 +574,8 @@ public sealed record AppSettings
             SplitterPosition = current.SplitterPosition,
             OutlineWidth = current.OutlineWidth,
             LastWelcomeVersion = current.LastWelcomeVersion,
+            LastUpdateReminderUtc = current.LastUpdateReminderUtc,
+            LastUpdateReminderVersion = current.LastUpdateReminderVersion,
         };
     }
 }

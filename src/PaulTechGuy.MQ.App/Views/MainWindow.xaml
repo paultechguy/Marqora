@@ -874,6 +874,16 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
 
+                        <!--
+                            No ellipsis: it opens a page in the browser rather than a dialog,
+                            the same as Open Log Folder above. Marqora cannot say whether an
+                            update exists - it never asks - so the item offers to take you
+                            where the answer is rather than claiming to have it.
+                        -->
+                        <MenuFlyoutItem Text="Check for Updates"
+                                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                        ToolTipService.ToolTip="Open the Marqora releases page in your browser" />
+
                         <MenuFlyoutItem Text="About Marqora"
                                         Command="{x:Bind ViewModel.AboutCommand}" />
                     </MenuBarItem>
@@ -2007,6 +2017,56 @@
                            HorizontalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
                            Visibility="{x:Bind VisibleWhen(ViewModel.HasExternalPending), Mode=OneWay}" />
+
+                <!--
+                    Time to go and look for a new release.
+
+                    A standing indicator for the same reason as the line above, and in the same
+                    slot: the two never show together, because ShowUpdateReminder gives way to
+                    the changed-on-disk summary. One is about the reader's own documents and the
+                    other is about the app, so the documents win.
+
+                    The Link tier rather than a message, because this one is clickable - it opens
+                    the releases page in the browser, which is the only thing the whole feature
+                    does. Marqora never asks GitHub anything; it only knows how long it has been
+                    since it last suggested you look. See AppSettings.UpdateReminderDays.
+
+                    It wears the same amber pill as a highlighted status message, and for the
+                    same reason: quiet grey text in a status bar is missable, and a reminder
+                    nobody notices is a reminder that did not happen. The difference is that
+                    this one does not time out after eight seconds - it stands until it is
+                    clicked or the session ends.
+
+                    The pill is a Border inside the button rather than a Background on the
+                    button itself. That keeps the standard's rule about never coloring a button
+                    - see docs/Button-App-Standards.md - and it is the robust way besides: a
+                    Background set on a Button is swapped out by the template's own pointer-over
+                    state, so the color would drop away under the pointer, which is precisely
+                    when someone is about to click it.
+                -->
+                <controls:HandCursorButton Style="{StaticResource MqPathLinkStyle}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Margin="0"
+                                           Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                           Visibility="{x:Bind VisibleWhen(ViewModel.ShowUpdateReminder), Mode=OneWay}"
+                                           ToolTipService.ToolTip="Open the Marqora releases page in your browser">
+                    <Border Padding="8,2"
+                            Background="{ThemeResource MqWarnBrush}"
+                            CornerRadius="{StaticResource MqPillRadius}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE946;"
+                                      FontSize="12"
+                                      FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                      Foreground="{ThemeResource MqOnWarnBrush}"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind ViewModel.UpdateReminderText, Mode=OneWay}"
+                                       Style="{StaticResource MqCaptionTextStyle}"
+                                       Foreground="{ThemeResource MqOnWarnBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </controls:HandCursorButton>
 
                 <StackPanel Orientation="Horizontal"
                             Spacing="16"

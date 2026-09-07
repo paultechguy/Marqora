@@ -23,6 +23,17 @@ public static class ProjectLinks
     public const string LicenceUrl = RepositoryUrl + "/blob/master/LICENSE";
 
     /// <summary>
+    /// The releases page, which is where the update reminder and Help, Check for Updates send
+    /// the reader.
+    ///
+    /// Built from the repository URL for the same reason as <see cref="LicenceUrl"/>. GitHub
+    /// resolves this to whichever release is newest, which is what lets Marqora point at the
+    /// current version without ever learning what it is - the app knows where to send someone
+    /// who wants to find out, and nothing more than that.
+    /// </summary>
+    public const string LatestReleaseUrl = RepositoryUrl + "/releases/latest";
+
+    /// <summary>
     /// True when the string is an absolute http(s) address the shell can be handed.
     ///
     /// Two jobs. It guards the case where one of the constants above is emptied - say the

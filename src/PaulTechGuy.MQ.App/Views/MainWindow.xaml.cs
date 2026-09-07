@@ -1809,7 +1809,14 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var dialog = new AboutDialog(_paths, _logger).AnchorTo(RootGrid);
+            // The updates row is handed the view model's own summary and its own command, so
+            // opening the releases page from the About box counts exactly as it does from the
+            // menu - the reminder's clock restarts either way.
+            var dialog = new AboutDialog(
+                _paths,
+                _logger,
+                ViewModel.UpdateSummary,
+                () => ViewModel.CheckForUpdatesCommand.Execute(null)).AnchorTo(RootGrid);
             await dialog.ShowAsync();
         }
         catch (Exception ex)
