@@ -107,96 +107,7 @@ $runtimeIdentifier = 'win-x64'
 
 Initialize-TaskList -Total $(if ($Test) { 5 } else { 4 })
 
-function Get-PublishedVersion {
-    param([string] $Exe)
-
-    $productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Exe).ProductVersion
-
-    if ($productVersion) {
-        # Build metadata after a '+' is for diagnostics, not for a file name.
-        $clean = $productVersion.Split('+')[0].Trim()
-
-        if ($clean) {
-            return $clean
-        }
-    }
-
-    # The executable is the ground truth for what was actually built, but if it carries no
-    # version at all the props file is a reasonable second opinion.
-    if (Test-Path -LiteralPath $buildProps) {
-        $node = ([xml] (Get-Content -LiteralPath $buildProps -Raw)).SelectSingleNode('//Version')
-
-        if ($node -and $node.InnerText) {
-            return $node.InnerText.Trim()
-        }
-    }
-
-    throw 'Could not determine the version to name the release after.'
-}
-
-function New-StagedRelease {
-    param(
-        [string] $PublishDir,
-        [string] $Version
-    )
-
-    $name = "Marqora-$Version-$runtimeIdentifier"
-    $root = Join-Path $staging $name
-
-    New-Item -ItemType Directory -Path $root -Force | Out-Null
-
-    # A move rather than a copy: same volume, so this is a rename, and copying 180 MB twice
-    # to produce one zip is time spent for nothing.
-    Move-Item -LiteralPath $PublishDir -Destination (Join-Path $root 'app')
-
-    $installDir = Join-Path $root 'install'
-    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-
-    foreach ($file in @('Install.ps1', 'Uninstall.ps1')) {
-        Copy-Item -LiteralPath (Join-Path $installerSource $file) -Destination $installDir -Force
-    }
-
-    # The association script lives in build\ because it is useful on its own during
-    # development. The installer needs its own copy, so there is exactly one source for it
-    # and no chance of the shipped copy drifting from the one that gets tested by hand.
-    Copy-Item -LiteralPath $associationScript -Destination $installDir -Force
-
-    foreach ($file in @('Install.cmd', 'Uninstall.cmd')) {
-        Copy-Item -LiteralPath (Join-Path $installerSource $file) -Destination $root -Force
-    }
-
-    # The readme carries the version so a zip that has been sitting in a downloads folder
-    # for six months still says which one it is.
-    $readme = Get-Content -LiteralPath (Join-Path $installerSource 'README.txt') -Raw
-    $readme.Replace('{{VERSION}}', $Version) |
-        Set-Content -LiteralPath (Join-Path $root 'README.txt') -Encoding UTF8 -NoNewline
-
-    return $root
-}
-
-function New-ReleaseArchive {
-    param(
-        [string] $StagedRoot,
-        [string] $ZipPath
-    )
-
-    if (Test-Path -LiteralPath $ZipPath) {
-        Remove-Item -LiteralPath $ZipPath -Force
-    }
-
-    # No base directory: what comes out of the zip is the release itself, not a folder
-    # containing it. Explorer's Extract All already proposes a destination named after the
-    # zip, so the double-click path still lands in a folder of its own.
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $StagedRoot,
-        $ZipPath,
-        [System.IO.Compression.CompressionLevel]::Optimal,
-        $false)
-}
-
 try {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-
     Write-Host ''
     Write-Host 'Marqora release' -ForegroundColor White
     Write-Host ''
@@ -280,8 +191,14 @@ try {
 
     # ---- stage
     Write-Task 'stage installer'
-    $version = Get-PublishedVersion -Exe $publishedExe
-    $stagedRoot = New-StagedRelease -PublishDir $publishDir -Version $version
+    $version = Get-PublishedVersion -Exe $publishedExe -PropsPath $buildProps
+    $stagedRoot = New-StagedRelease `
+        -PublishDir $publishDir `
+        -Version $version `
+        -StagingRoot $staging `
+        -InstallerSource $installerSource `
+        -AssociationScript $associationScript `
+        -RuntimeIdentifier $runtimeIdentifier
     Write-Done "v$version"
 
     # ---- zip

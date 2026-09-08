@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 <img src="src/PaulTechGuy.MQ.App/Assets/MarqoraLogo.png" alt="Marqora logo" width="144" height="144">
 
@@ -114,6 +114,32 @@ and needing to install a shell before you can install the app defeats the point.
 
 `docs/Installer.md` records the design: what each script does, the constraints that are
 easy to break by accident, and what was deliberately left out.
+
+**Build a test copy for another machine**
+
+```powershell
+pwsh .\build\New-DevBuild.ps1 -Version 0.3.0-test4
+```
+
+The same zip and the same installer as above, built from the working tree as it stands and
+labeled with a version you choose rather than the one in `Directory.Build.props`. It lands in
+`build\artifacts\dev\`, a floor below the release artifacts so a test build is never picked up
+by hand in mistake for one the pipeline produced.
+
+`-Version` is required, and a suffix is worth using. Without one the build inherits the
+repository's number, and what arrives on the far machine is an identically named zip reporting
+an identical version in **Help > About** — different bytes, no way to tell the two apart. The
+version you pass is stamped into the executable and written into the zip's `README.txt`
+alongside the branch and commit it came from.
+
+Nothing else moves: no commit, no tag, no upload, and `Directory.Build.props` is left alone,
+so `Publish-Release.ps1`'s version gate still means what it says. `-Test` runs the suite
+first, which is worth the wait for something another person is going to install.
+
+One thing to know before installing one. It is the release installer, so it takes over the same
+install directory, shortcuts and file associations as a real Marqora on that machine — settings
+and snippets are kept, as across any upgrade, but the installed copy is replaced. The zip's
+`README.txt` leads with that warning.
 
 **Associate markdown files with Marqora**
 

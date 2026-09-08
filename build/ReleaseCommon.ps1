@@ -692,3 +692,113 @@ function Get-RepoSlug {
 
     throw "Could not work out the GitHub repository from the origin remote: '$url'"
 }
+
+# ---------------------------------------------------------------------------------------------
+#  Packaging
+#
+#  Shared by New-Release.ps1 and New-DevBuild.ps1. Both produce the same shape of zip, and
+#  differ only in where the version comes from and whether anything downstream is entitled to
+#  trust it. Everything a caller might want to vary is a parameter, so neither script reaches
+#  into the other's variables.
+# ---------------------------------------------------------------------------------------------
+
+# The version to name the archive after. The executable is the ground truth for what was
+# actually built; PropsPath is a second opinion for the case where it carries no version at all.
+function Get-PublishedVersion {
+    param(
+        [Parameter(Mandatory)][string] $Exe,
+        [string] $PropsPath
+    )
+
+    $productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($Exe).ProductVersion
+
+    if ($productVersion) {
+        # Build metadata after a '+' is for diagnostics, not for a file name.
+        $clean = $productVersion.Split('+')[0].Trim()
+
+        if ($clean) {
+            return $clean
+        }
+    }
+
+    if ($PropsPath -and (Test-Path -LiteralPath $PropsPath)) {
+        $node = ([xml] (Get-Content -LiteralPath $PropsPath -Raw)).SelectSingleNode('//Version')
+
+        if ($node -and $node.InnerText) {
+            return $node.InnerText.Trim()
+        }
+    }
+
+    throw 'Could not determine the version to name the release after.'
+}
+
+# Lays the published app out next to the installer scripts, in the shape the zip ships:
+#
+#     README.txt  Install.cmd  Uninstall.cmd  install\  app\
+#
+# Returns the staged root, which is what New-ReleaseArchive compresses.
+function New-StagedRelease {
+    param(
+        [Parameter(Mandatory)][string] $PublishDir,
+        [Parameter(Mandatory)][string] $Version,
+        [Parameter(Mandatory)][string] $StagingRoot,
+        [Parameter(Mandatory)][string] $InstallerSource,
+        [Parameter(Mandatory)][string] $AssociationScript,
+        [string] $RuntimeIdentifier = 'win-x64'
+    )
+
+    $name = "Marqora-$Version-$RuntimeIdentifier"
+    $root = Join-Path $StagingRoot $name
+
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+    # A move rather than a copy: same volume, so this is a rename, and copying 180 MB twice
+    # to produce one zip is time spent for nothing.
+    Move-Item -LiteralPath $PublishDir -Destination (Join-Path $root 'app')
+
+    $installDir = Join-Path $root 'install'
+    New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+
+    foreach ($file in @('Install.ps1', 'Uninstall.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $InstallerSource $file) -Destination $installDir -Force
+    }
+
+    # The association script lives in build\ because it is useful on its own during
+    # development. The installer needs its own copy, so there is exactly one source for it
+    # and no chance of the shipped copy drifting from the one that gets tested by hand.
+    Copy-Item -LiteralPath $AssociationScript -Destination $installDir -Force
+
+    foreach ($file in @('Install.cmd', 'Uninstall.cmd')) {
+        Copy-Item -LiteralPath (Join-Path $InstallerSource $file) -Destination $root -Force
+    }
+
+    # The readme carries the version so a zip that has been sitting in a downloads folder
+    # for six months still says which one it is.
+    $readme = Get-Content -LiteralPath (Join-Path $InstallerSource 'README.txt') -Raw
+    $readme.Replace('{{VERSION}}', $Version) |
+        Set-Content -LiteralPath (Join-Path $root 'README.txt') -Encoding UTF8 -NoNewline
+
+    return $root
+}
+
+function New-ReleaseArchive {
+    param(
+        [Parameter(Mandatory)][string] $StagedRoot,
+        [Parameter(Mandatory)][string] $ZipPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    if (Test-Path -LiteralPath $ZipPath) {
+        Remove-Item -LiteralPath $ZipPath -Force
+    }
+
+    # No base directory: what comes out of the zip is the release itself, not a folder
+    # containing it. Explorer's Extract All already proposes a destination named after the
+    # zip, so the double-click path still lands in a folder of its own.
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $StagedRoot,
+        $ZipPath,
+        [System.IO.Compression.CompressionLevel]::Optimal,
+        $false)
+}
