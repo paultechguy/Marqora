@@ -4613,7 +4613,7 @@ public sealed partial class MainViewModel : ObservableObject
                     _settings.Current.PreviewMaxWidth)
                 .ConfigureAwait(true);
 
-            await AnnounceExportAsync(path).ConfigureAwait(true);
+            AnnounceExport(path);
 
             if (skipped.Count > 0)
             {
@@ -4796,10 +4796,10 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             // Announcing a file that was never written would put "Exported ..." on the status
-            // line and then fail to open something that is not there.
+            // line for a file that is not there.
             if (written)
             {
-                await AnnounceExportAsync(destination).ConfigureAwait(true);
+                AnnounceExport(destination);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -5080,7 +5080,7 @@ public sealed partial class MainViewModel : ObservableObject
             StatusText = "Exporting PDF...";
 
             await _host.ExportPdfAsync(path, setup).ConfigureAwait(true);
-            await AnnounceExportAsync(path).ConfigureAwait(true);
+            AnnounceExport(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -5157,29 +5157,14 @@ public sealed partial class MainViewModel : ObservableObject
             ? Path.GetFileNameWithoutExtension(path) + extension
             : "Untitled" + extension;
 
-    private async Task AnnounceExportAsync(string path)
-    {
+    /// <summary>
+    /// Puts an export on the status line, and stops there. What was written is deliberately
+    /// not opened: the file is the point, and a reader or a browser arriving in front of the
+    /// window is the export interrupting the work that asked for it. The picker already chose
+    /// the location and this names the file, which is all that is needed to go and find it.
+    /// </summary>
+    private void AnnounceExport(string path) =>
         StatusText = $"Exported {Path.GetFileName(path)}";
-
-        try
-        {
-            // Opening the result is the usual next step, and it doubles as confirmation
-            // that the file is readable by whatever handles that type.
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            // No handler registered for the type, or the shell refused. The file is still
-            // written, so this is worth a line in the log and nothing more.
-            _logger.LogInformation(ex, "Exported {Path} but could not open it.", path);
-        }
-
-        await Task.CompletedTask.ConfigureAwait(true);
-    }
 
     // ------------------------------------------------------------------ scrolling
 

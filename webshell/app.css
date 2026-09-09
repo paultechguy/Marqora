@@ -889,6 +889,15 @@ body {
   clipped to one viewport. And the palette is forced back to light, because a dark PDF is
   never what anyone wants to print; the dark selector is re-stated so it loses to these
   rules regardless of the theme on screen.
+
+  The colors a callout or a link reads - the accent, the four other alert hues, and the soft
+  fill that goes with each - are the light :root values exactly. The greys are not: text,
+  borders and insets sit a shade darker here than they do on screen. That split is the point.
+  An alert reads two tokens, its line color and its fill, and a print block that re-stated
+  only the first drew a blue bar against a teal wash. Holding the hues to :root also keeps
+  the outputs in step, because HTML export never reaches this block - RenderedHtmlPackager
+  resolves the variables from the light :root itself - so a color invented here would show up
+  in the PDF and nowhere else.
 */
 @media print {
   :root,
@@ -901,7 +910,16 @@ body {
     --mq-text-tertiary: #6b6b6b;
     --mq-border: #d8d8d8;
     --mq-border-strong: #bcbcbc;
-    --mq-accent: #0f6cbd;
+    --mq-accent: #3f8f98;
+    --mq-accent-soft: rgba(81, 168, 177, 0.14);
+    --mq-danger: #b3261e;
+    --mq-danger-soft: rgba(179, 38, 30, 0.08);
+    --mq-tip: #1a7f37;
+    --mq-tip-soft: rgba(26, 127, 55, 0.08);
+    --mq-important: #8250df;
+    --mq-important-soft: rgba(130, 80, 223, 0.08);
+    --mq-warning: #9a6700;
+    --mq-warning-soft: rgba(154, 103, 0, 0.10);
     --mq-quote-bar: #c9c9c9;
     --mq-mark: #fff3a3;
 
