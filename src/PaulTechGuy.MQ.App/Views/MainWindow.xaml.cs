@@ -1553,7 +1553,13 @@ public sealed partial class MainWindow : Window
 
         // The document list sits in the strip's footer, which is caption area: without a
         // region of its own the click is taken as a window drag and the menu never opens.
-        if (TabListButton.ActualWidth > 0 && TabListButton.ActualHeight > 0)
+        //
+        // Visibility is asked as well as size, because a button collapsed on this pass still
+        // reports the width it had on the last one. Without it the strip would keep a hole in
+        // the caption where a hidden button used to be, until a later pass measured it away.
+        if (TabListButton.Visibility == Visibility.Visible
+            && TabListButton.ActualWidth > 0
+            && TabListButton.ActualHeight > 0)
         {
             Windows.Foundation.Point listOrigin = TabListButton
                 .TransformToVisual(RootGrid)

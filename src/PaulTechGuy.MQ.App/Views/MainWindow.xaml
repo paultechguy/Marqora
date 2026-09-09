@@ -115,14 +115,18 @@
                       DoubleTapped="OnTitleBarDragDoubleTapped">
 
                     <!--
-                        Every open document, however many tabs happen to be on screen. It is
-                        pinned at the far right of the strip, just before the caption
-                        buttons, so it never moves as tabs come and go; the right margin
-                        that keeps it clear of those buttons is set in code, because the
-                        caption inset is only known at runtime and changes with display
-                        scale. It is filled as it opens rather than kept in step with the
-                        tab list. Its bounds are added to the title bar's passthrough
-                        regions, or the caption would swallow the click as a window drag.
+                        Every open document, however many tabs happen to be on screen, and
+                        shown only once a second document is open: with one tab the list can
+                        name nothing but the tab already in front of you, so it collapses
+                        rather than stand there leading nowhere.
+
+                        It is pinned at the far right of the strip, just before the caption
+                        buttons, so it never moves as tabs come and go; the right margin that
+                        keeps it clear of those buttons is set in code, because the caption
+                        inset is only known at runtime and changes with display scale. It is
+                        filled as it opens rather than kept in step with the tab list. Its
+                        bounds are added to the title bar's passthrough regions, or the
+                        caption would swallow the click as a window drag.
                     -->
                     <!--
                         A plain Button rather than a DropDownButton: a button opens its
@@ -134,6 +138,7 @@
                             Style="{StaticResource MqToolButtonStyle}"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.HasMultipleTabs), Mode=OneWay}"
                             ToolTipService.ToolTip="All open documents"
                             AutomationProperties.Name="All open documents">
                         <FontIcon Glyph="&#xE712;" Style="{StaticResource MqIconStyle}" />

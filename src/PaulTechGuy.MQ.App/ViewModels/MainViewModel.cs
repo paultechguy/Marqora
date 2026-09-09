@@ -164,6 +164,17 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SaveAllCommand))]
     public partial bool HasDirtyTabs { get; set; }
 
+    /// <summary>
+    /// Whether more than one document is open, which is what decides whether the strip's
+    /// document list button is shown at all. With one tab - or none - the list can only name
+    /// the tab already in front of you, and the button is a control that leads nowhere.
+    ///
+    /// Every tab counts, an untitled one included: a blank new document is still somewhere the
+    /// list can take you, and it is already what the menu itself lists.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasMultipleTabs { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     public partial string DocumentName { get; set; }
@@ -2715,6 +2726,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void NotifyTabCountChanged()
     {
+        HasMultipleTabs = Tabs.Count > 1;
+
         CloseOtherTabsCommand.NotifyCanExecuteChanged();
         NextTabCommand.NotifyCanExecuteChanged();
         PreviousTabCommand.NotifyCanExecuteChanged();
