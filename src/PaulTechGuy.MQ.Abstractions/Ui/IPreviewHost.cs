@@ -465,6 +465,19 @@ public interface IPreviewHost
     Task<string> GetRenderedHtmlAsync();
 
     /// <summary>
+    /// Finishes markup for a document that is not on screen: mermaid, KaTeX and highlighting
+    /// applied to a fragment Markdig has already produced, returned rather than displayed.
+    ///
+    /// <see cref="GetRenderedHtmlAsync"/> can only answer for the document in front, which is
+    /// one of the twelve a Folio is made of. The work happens in a container of the shell's
+    /// own, so the preview the reader is looking at is not disturbed.
+    ///
+    /// Returns the markup it was given if the shell is not ready or does not answer: a Folio
+    /// with one document's diagrams undrawn beats a Folio with the document missing.
+    /// </summary>
+    Task<string> RenderForExportAsync(string html);
+
+    /// <summary>
     /// The preview's markup for whatever is selected there, or for the whole document when
     /// nothing is, together with the plain text of that same range.
     ///

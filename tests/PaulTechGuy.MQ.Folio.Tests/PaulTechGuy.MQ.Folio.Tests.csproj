@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    References the real renderer, so the line and column every rewrite is aimed at is the one
+    Markdig actually reports rather than one the test invented. That assumption is the whole
+    basis for repointing by position, so trusting it here would leave the interesting half
+    untested.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Folio.Tests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
+  </ItemGroup>
+
+</Project>

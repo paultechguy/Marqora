@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Folio engine: a set of open documents in, a plan for one shareable artifact out.
+
+    It works out which images have to travel, which of them can keep the path they already
+    have, and which must be relocated because they live outside the document's folder and
+    would break the moment the file was sent anywhere. Like the analyzer next door it touches
+    the filesystem only to read what is there - existence, size, bytes - so it tests cleanly
+    against a temporary folder, which is the only way to test a feature whose entire job is
+    whether a path resolves.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Folio</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

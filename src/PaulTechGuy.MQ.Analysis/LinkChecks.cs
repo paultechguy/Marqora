@@ -103,29 +103,15 @@ internal static partial class LinkChecks
     /// </summary>
     private static bool Exists(string folder, string relative)
     {
-        try
+        // Null when it does not stay inside the document's folder, or is not a path this
+        // filesystem can express - which is itself a broken link, but saying so precisely is
+        // more use than crashing over it. See PathContainment for why the test is shaped as it is.
+        if (PathContainment.ResolveWithin(folder, WebUtility.UrlDecode(relative)) is not { } full)
         {
-            string decoded = WebUtility.UrlDecode(relative).Replace('/', Path.DirectorySeparatorChar);
-            string root = Path.GetFullPath(folder + Path.DirectorySeparatorChar);
-            string full = Path.GetFullPath(Path.Combine(root, decoded));
-
-            // The trailing separator on the root is what stops a sibling folder passing the
-            // prefix test: without it "C:\docs2\logo.png" starts with "C:\docs" and is read as
-            // being inside it. Comparing the target with a separator appended keeps the folder
-            // itself contained, which is what a link written as "." resolves to.
-            if (!(full + Path.DirectorySeparatorChar).StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return File.Exists(full) || Directory.Exists(full);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // Not a path this filesystem can express, which is itself a broken link, but
-            // saying so precisely is more use than crashing over it.
             return false;
         }
+
+        return File.Exists(full) || Directory.Exists(full);
     }
 
     /// <summary>Drops any query string or fragment, which are not part of the file name.</summary>

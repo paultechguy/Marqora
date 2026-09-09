@@ -353,8 +353,10 @@
 
     The markdown source is still never touched. This runs on the rendered copy only.
   */
-  function numberHeadings() {
-    var previous = els.preview.querySelectorAll('.' + HEADING_NUMBER_CLASS);
+  function numberHeadings(root) {
+    root = root || els.preview;
+
+    var previous = root.querySelectorAll('.' + HEADING_NUMBER_CLASS);
     for (var p = 0; p < previous.length; p++) {
       previous[p].remove();
     }
@@ -364,7 +366,7 @@
 
     // One counter per level, so a heading only ever has to look at its own and its parents'.
     var counters = [0, 0, 0, 0, 0, 0];
-    var headings = els.preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    var headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6');
 
     for (var i = 0; i < headings.length; i++) {
       var heading = headings[i];
@@ -1289,18 +1291,31 @@
     delete diagramCounts[documentId];
   }
 
-  function renderDiagrams() {
-    var nodes = els.preview.querySelectorAll('pre.mermaid:not([data-processed])');
+  /*
+    Draws every diagram under `root`, which is the preview unless an export says otherwise.
+
+    `silent` is what an export passes. The numbering and the report tell the host which
+    diagrams the *reader* is looking at, so that double-clicking one raises the right pop-out
+    window - and a document being rendered off-screen for a Folio is not what anyone is
+    looking at. Reporting from there would renumber the diagrams under the reader's pointer
+    and hand the pop-out windows a document nobody opened.
+  */
+  function renderDiagrams(root, silent) {
+    var nodes = (root || els.preview).querySelectorAll('pre.mermaid:not([data-processed])');
 
     if (nodes.length === 0) {
-      // Still renumber: an edit elsewhere in the document can move a cached diagram.
-      numberDiagrams();
-      reportDiagrams();
+      if (!silent) {
+        // Still renumber: an edit elsewhere in the document can move a cached diagram.
+        numberDiagrams();
+        reportDiagrams();
+      }
+
       return Promise.resolve();
     }
 
     // Rendered one at a time: mermaid keeps a single working area per document, so
-    // concurrent renders in the same frame interfere with each other.
+    // concurrent renders in the same frame interfere with each other. That holds across an
+    // export too - the off-screen pass shares the one frame with the preview.
     return ensureMermaid().then(function (mermaid) {
       var chain = Promise.resolve();
 
@@ -1310,6 +1325,8 @@
 
       return chain;
     }).then(function () {
+      if (silent) { return; }
+
       numberDiagrams();
       reportDiagrams();
     }).catch(function (err) {
@@ -1388,11 +1405,13 @@
     return katexReady;
   }
 
-  function renderMath() {
-    if (els.preview.querySelector('.math') === null) { return Promise.resolve(); }
+  function renderMath(root) {
+    root = root || els.preview;
+
+    if (root.querySelector('.math') === null) { return Promise.resolve(); }
 
     return ensureKatex().then(function (renderMathInElement) {
-      renderMathInElement(els.preview, {
+      renderMathInElement(root, {
         delimiters: [
           { left: '\\[', right: '\\]', display: true },
           { left: '\\(', right: '\\)', display: false }
@@ -1439,8 +1458,8 @@
     return highlightReady;
   }
 
-  function highlightCode() {
-    var blocks = els.preview.querySelectorAll('pre > code[class*="language-"]');
+  function highlightCode(root) {
+    var blocks = (root || els.preview).querySelectorAll('pre > code[class*="language-"]');
     if (blocks.length === 0) { return Promise.resolve(); }
 
     return ensureHighlighter().then(function (hljs) {
@@ -1519,8 +1538,8 @@
     }
   }
 
-  function wrapWideTables() {
-    var tables = els.preview.querySelectorAll('table');
+  function wrapWideTables(root) {
+    var tables = (root || els.preview).querySelectorAll('table');
 
     for (var i = 0; i < tables.length; i++) {
       var table = tables[i];
@@ -3847,12 +3866,62 @@
     },
 
     /*
-      The only request-and-reply message in the bridge. Export needs the preview exactly as
-      rendered, diagrams and maths included, so the host asks for it and matches the reply
-      by request id rather than assuming the next message back is the answer.
+      The first of the request-and-reply messages in the bridge. Export needs the preview
+      exactly as rendered, diagrams and maths included, so the host asks for it and matches
+      the reply by request id rather than assuming the next message back is the answer.
     */
     requestRenderedHtml: function (p) {
       post('renderedHtml', { requestId: p.requestId, html: els.preview.innerHTML });
+    },
+
+    /*
+      The same treatment for a document that is not on screen, which is what a Folio of a
+      dozen tabs needs eleven times over.
+
+      The markup arrives already through Markdig; what it still lacks is everything the page
+      does afterwards - mermaid, KaTeX and highlight.js - and those run here or not at all.
+      The work happens in a container of its own, so the preview the reader is looking at is
+      never touched and its scroll position, line map and diagram numbering all survive.
+
+      Deliberately not `rewriteRelativeUrls`: that resolves against whichever document the
+      preview is showing, and this is some other document's markup. Its images are embedded
+      by the host, which knows where each one came from because it planned the Folio.
+    */
+    requestExportHtml: function (p) {
+      var host = document.createElement('div');
+
+      host.className = 'mq-preview';
+      host.innerHTML = p.html || '';
+
+      /*
+        Off-screen rather than detached, and rather than display:none.
+
+        Mermaid draws inside its own frame and is indifferent, but KaTeX and any future
+        pass are not promised to be, and a node with no layout has no measurements to take.
+        This is the same trade mermaid-frame.html makes, for the same reason.
+      */
+      host.style.position = 'absolute';
+      host.style.left = '-10000px';
+      host.style.top = '0';
+      host.style.width = '48em';
+      document.body.appendChild(host);
+
+      function finish() {
+        var html = host.innerHTML;
+
+        host.remove();
+        post('exportHtml', { requestId: p.requestId, html: html });
+      }
+
+      wrapWideTables(host);
+      numberHeadings(host);
+
+      Promise.all([renderDiagrams(host, true), renderMath(host), highlightCode(host)])
+        .then(finish)
+        .catch(function (err) {
+          report('warning', 'A document could not be fully rendered for export', err && err.message);
+          finish();
+        });
     },
 
     requestSelectionRange: function (p) {

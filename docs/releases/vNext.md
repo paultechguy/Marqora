@@ -1,5 +1,25 @@
 # Marqora vNext - What's New
 
+## Share a Folio
+
+A Markdown file is not self-contained: the text goes in the email and the pictures do not.
+`Tools > Share as Folio...` takes the documents you have open, gathers every image they
+reference — including the ones sitting somewhere else entirely on your disk — and repoints the
+paths so the copy still works on somebody else's machine. It offers three shapes. **One file
+others can read without Marqora** is a single `.html`: every document rendered into one page
+with a contents list, images inlined, diagrams and equations already drawn, and no script in it
+at all, so it opens by double-click in any browser, offline, forever. **A folder** or **a zip**
+is the same set as plain Markdown and images, for someone who is going to keep editing, or for
+a backup. Before anything is written a preflight window shows exactly what will travel — how
+many documents, how many images, how much it weighs, which images are missing and which links
+point out of the set — and you tick, drag and reorder there, because the order of that list is
+the order the documents appear in. It is resizable and remembers its size. If the one file is
+getting unwieldy it says so and offers the zip; if some pictures are far wider than any screen
+it says that too, and can send them smaller. The single file carries its own sources, so
+`Tools > Open Folio...` — or dropping one on the window — unpacks it back into the documents
+and images it was made from. Nothing goes near the network at any point: a Folio is a file, and
+sharing it is whatever you already do with files.
+
 ## Paste an Image
 
 Take a screenshot, press `Ctrl+V` in a document, and it is there: Marqora writes the picture
@@ -34,6 +54,16 @@ Updates` opens the same page whenever you want it, and **About Marqora** says wh
 reminder is due.
 
 ## Fixes
+
+**An HTML export says when an image was too large to embed.** Anything past 8 MB was left as a
+link to where it sits on this machine, which meant the exported file had a hole in it for
+everyone else — and nothing said so. It now names them, and points at sharing as a Folio, which
+embeds an image whatever its size.
+
+**Exports follow your reading width.** `Tools > Export to HTML...` capped the text at a fixed
+measure of its own, leaving a band of empty background down both sides of a file opened on a
+wide screen. It now uses the **Maximum width** setting on the Appearance page, the same one the
+preview answers to — unset, which is how Marqora ships, means the page fills the window.
 
 **Save As now re-points the document.** After saving to a new folder the preview kept serving
 images from the old one, the link checks kept reporting against it, and a printed page was still

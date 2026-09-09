@@ -48,7 +48,11 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         builder.AppendLine(FragmentOverrides);
         builder.AppendLine("</style>");
         builder.AppendLine("<article class=\"mq-preview\">");
-        builder.AppendLine(EmbedLocalImages(renderedHtml, sourceDocumentPath));
+
+        // The clipboard has nowhere to report a skipped image and no second chance to ask, so
+        // this is the one caller that discards the list rather than showing it.
+        builder.AppendLine(EmbedLocalImages(renderedHtml, sourceDocumentPath, out _));
+
         builder.AppendLine("</article>");
 
         return builder.ToString();
@@ -95,9 +99,25 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// content-security policy and the cross-origin rules entirely: the host already knows
     /// where the document lives and can simply open the file.
     /// </summary>
-    public string EmbedLocalImages(string html, string? sourceDocumentPath)
+    /// <param name="skipped">
+    /// Images that were left as links because they are past <see cref="MaxEmbeddedImageBytes"/>,
+    /// so the caller can say so.
+    ///
+    /// Only the size skips. A reference with no file behind it is a dead link, which the
+    /// analyzer already underlines in the source as you write - but a picture that is simply too
+    /// big is invisible until somebody opens the exported file somewhere else and finds a hole
+    /// in it, and nothing else in the app will ever mention it.
+    /// </param>
+    public string EmbedLocalImages(
+        string html,
+        string? sourceDocumentPath,
+        out IReadOnlyList<string> skipped)
     {
         ArgumentNullException.ThrowIfNull(html);
+
+        List<string> tooLarge = [];
+
+        skipped = tooLarge;
 
         string? folder = string.IsNullOrWhiteSpace(sourceDocumentPath)
             ? null
@@ -108,17 +128,13 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
             return html;
         }
 
-        // The trailing separator is what makes the prefix test below mean what it says: without
-        // it a sibling folder, "C:\docs2" beside "C:\docs", reads as being inside.
-        string root = Path.GetFullPath(folder + Path.DirectorySeparatorChar);
-
         return DocumentAssetReference().Replace(html, match =>
         {
             string relative = WebUtility.UrlDecode(match.Groups["path"].Value);
-            string full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
 
-            // Refuse to walk outside the document's folder.
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+            // Refuses to walk outside the document's folder. See PathContainment for why the
+            // test is on where the path resolves rather than on how it is spelled.
+            if (PathContainment.ResolveWithin(folder, relative) is not { } full || !File.Exists(full))
             {
                 logger.LogDebug("Leaving {Reference} as-is; no readable file behind it.", match.Value);
                 return match.Value;
@@ -132,6 +148,10 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
                 {
                     logger.LogInformation(
                         "{Path} is {Size:N0} bytes, too large to embed; left as a link.", full, info.Length);
+
+                    tooLarge.Add(
+                        $"{relative} ({info.Length / (1024.0 * 1024.0):0.0} MB)");
+
                     return match.Value;
                 }
 
@@ -145,6 +165,82 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
                 return match.Value;
             }
         });
+    }
+
+    /// <summary>
+    /// Rewrites images into data URIs from a Folio's own plan, rather than from the preview's
+    /// virtual origin.
+    ///
+    /// <see cref="EmbedLocalImages"/> cannot do this job. It matches the marqora.document origin,
+    /// which exists only for whichever document the preview is showing, and it refuses to leave
+    /// that document's folder - so a Folio, whose whole point is gathering images from wherever
+    /// they were, would lose every one it had just collected.
+    ///
+    /// The plan already knows the answer: it decided what each image would be called inside the
+    /// Folio and where the bytes are now. This looks each reference up in that, which is why it
+    /// needs no origin, no containment test and no folder at all.
+    ///
+    /// <b>No size ceiling here, unlike its neighbour, and deliberately.</b> The Folio's preflight
+    /// has already shown the author the total and asked; leaving a picture out at that point
+    /// would break a file they had just agreed to the size of, and break the round trip with it,
+    /// since an image with no bytes in the page has nothing to unpack. What guards against an
+    /// absurd total is the preflight steering to the zip, not this quietly dropping things.
+    /// </summary>
+    /// <param name="entryToSource">Entry name inside the Folio, to the file it was collected from.</param>
+    /// <param name="unresolved">Entry names that were referenced but had no file behind them.</param>
+    public string EmbedFolioAssets(
+        string html,
+        IReadOnlyDictionary<string, string> entryToSource,
+        out IReadOnlyList<string> unresolved)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        ArgumentNullException.ThrowIfNull(entryToSource);
+
+        List<string> missing = [];
+
+        string result = MediaReference().Replace(html, match =>
+        {
+            string reference = match.Groups["path"].Value;
+
+            // Already inline, or someone else's server. Neither is ours to touch.
+            if (reference.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                || reference.Contains("://", StringComparison.Ordinal))
+            {
+                return match.Value;
+            }
+
+            // The written reference can be percent-encoded - a folder named after a document
+            // with a space in it - while the plan holds the decoded path it resolved to.
+            string entry = WebUtility.UrlDecode(reference).Replace('\\', '/');
+
+            if (!entryToSource.TryGetValue(entry, out string? source))
+            {
+                missing.Add(entry);
+                return match.Value;
+            }
+
+            try
+            {
+                string data = Convert.ToBase64String(File.ReadAllBytes(source));
+
+                // The attribute rides alongside the bytes rather than in the payload, and is
+                // what lets a Folio be taken apart again: it names where this picture belongs
+                // without the file having to carry it twice.
+                return $"data-mq-asset=\"{WebUtility.HtmlEncode(entry)}\" "
+                    + $"{match.Groups["attr"].Value}=\"data:{MediaTypeFor(source)};base64,{data}\"";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Could not embed {Path} in the Folio.", source);
+                missing.Add(entry);
+
+                return match.Value;
+            }
+        });
+
+        unresolved = missing;
+
+        return result;
     }
 
     /// <summary>
@@ -286,6 +382,16 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         @"(?<attr>src|poster)\s*=\s*\x22https://marqora\.document/(?<path>[^\x22]*)\x22",
         RegexOptions.IgnoreCase)]
     private static partial Regex DocumentAssetReference();
+
+    /// <summary>
+    /// Any src or poster attribute, whatever it points at. Unlike its neighbour above this is
+    /// not anchored to an origin, because a Folio's references are plain relative paths; the
+    /// deciding is done by the lookup rather than by the pattern.
+    /// </summary>
+    [GeneratedRegex(
+        @"(?<attr>src|poster)\s*=\s*\x22(?<path>[^\x22]*)\x22",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex MediaReference();
 
     /// <summary>The light :root block, and nothing indented or qualified.</summary>
     [GeneratedRegex(@"^:root[ \t]*\{(?<body>[^}]*)\}", RegexOptions.Multiline)]

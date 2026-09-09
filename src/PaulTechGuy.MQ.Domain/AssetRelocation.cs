@@ -161,9 +161,7 @@ public static partial class AssetRelocation
         && !reference.StartsWith("//", StringComparison.Ordinal)
         && !Scheme().IsMatch(reference);
 
-    private static bool Contained(string path, string folder) =>
-        (path + Path.DirectorySeparatorChar).StartsWith(
-            Path.GetFullPath(folder + Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+    private static bool Contained(string path, string folder) => PathContainment.Contains(folder, path);
 
     /// <summary>An image reference, capturing just the target.</summary>
     [GeneratedRegex(@"!\[[^\]]*\]\(\s*(?<target>[^()\s]+)", RegexOptions.CultureInvariant)]

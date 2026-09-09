@@ -294,6 +294,8 @@ public sealed class PreferencesTransferTests : IDisposable
             CheatsheetWindow = new WindowPlacement { Width = 111, Height = 222 },
             CheatsheetScrollTop = 42,
             FindAllWindow = new WindowPlacement { Width = 333, Height = 444 },
+            FolioWindow = new WindowPlacement { Width = 777, Height = 888 },
+            FolioProblemsHeight = 123,
             PreferencesWindow = new WindowPlacement { Width = 555, Height = 666 },
         };
 

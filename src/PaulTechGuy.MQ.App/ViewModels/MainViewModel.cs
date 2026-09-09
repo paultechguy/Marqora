@@ -17,6 +17,7 @@ using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Finding;
+using PaulTechGuy.MQ.Folio;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -44,6 +45,10 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IHtmlExporter _exporter;
     private readonly RenderedHtmlPackager _packager;
     private readonly IExportDialogService _exportDialogs;
+    private readonly IFolioDialogService _folioDialogs;
+    private readonly FolioWriter _folioWriter;
+    private readonly FolioHtmlWriter _folioHtml;
+    private readonly FolioShrinker _folioShrinker;
     private readonly IPrintDialogService _printDialogs;
     private readonly IMarkdownFormatter _formatter;
     private readonly IMarkdownEditor _editor;
@@ -483,6 +488,10 @@ public sealed partial class MainViewModel : ObservableObject
         IHtmlExporter exporter,
         RenderedHtmlPackager packager,
         IExportDialogService exportDialogs,
+        IFolioDialogService folioDialogs,
+        FolioWriter folioWriter,
+        FolioHtmlWriter folioHtml,
+        FolioShrinker folioShrinker,
         IPrintDialogService printDialogs,
         IMarkdownFormatter formatter,
         IMarkdownEditor editor,
@@ -512,6 +521,10 @@ public sealed partial class MainViewModel : ObservableObject
         _exporter = exporter;
         _packager = packager;
         _exportDialogs = exportDialogs;
+        _folioDialogs = folioDialogs;
+        _folioWriter = folioWriter;
+        _folioHtml = folioHtml;
+        _folioShrinker = folioShrinker;
         _printDialogs = printDialogs;
         _formatter = formatter;
         _editor = editor;
@@ -1192,6 +1205,15 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public async Task OpenPathAsync(string path)
     {
+        // Ahead of anything that asks what the extension is, because a Folio is an .html file
+        // and the answer would be "not a markdown document". What it is is a bag of them.
+        if (File.Exists(path) && LooksLikeFolio(path))
+        {
+            await UnpackFolioAsync(path).ConfigureAwait(true);
+
+            return;
+        }
+
         if (!File.Exists(path))
         {
             await _dialogs.ShowMessageAsync(
@@ -1272,6 +1294,14 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     _logger.LogWarning(ex, "Could not read the dropped folder {Folder}.", path);
                 }
+            }
+            else if (LooksLikeFolio(path))
+            {
+                // A dropped Folio is unpacked rather than opened. It is the one .html the app
+                // has anything to say about, and it is several documents rather than one.
+                await UnpackFolioAsync(path).ConfigureAwait(true);
+
+                return;
             }
             else if (MarkdownFileTypes.IsSupported(path))
             {
@@ -4572,11 +4602,31 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
             }
 
-            await _exporter
-                .WriteAsync(path, document.DisplayName, rendered, document.Path)
+            // The reader's own width preference, the one the preview answers to, rather than a
+            // measure the export decides for them.
+            IReadOnlyList<string> skipped = await _exporter
+                .WriteAsync(
+                    path,
+                    document.DisplayName,
+                    rendered,
+                    document.Path,
+                    _settings.Current.PreviewMaxWidth)
                 .ConfigureAwait(true);
 
             await AnnounceExportAsync(path).ConfigureAwait(true);
+
+            if (skipped.Count > 0)
+            {
+                // The file is written and openable; what it has is a hole where a picture was.
+                // Better said now than found by whoever it was sent to.
+                await _dialogs.ShowMessageAsync(
+                    "Some images were too large to embed",
+                    "These are still linked to where they are on this machine, so they will not "
+                    + "appear for anyone else:\n\n"
+                    + string.Join(Environment.NewLine, skipped.Take(10))
+                    + "\n\nSharing the document as a Folio embeds them whatever their size.")
+                    .ConfigureAwait(true);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -4587,6 +4637,403 @@ public sealed partial class MainViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// Shares the open documents as a Folio: the markdown, every image it references, and the
+    /// paths repointed so the copy resolves somewhere other than this machine.
+    ///
+    /// Unlike the other two exports this is not about the active tab. Opening a folder makes
+    /// twelve tabs, and a handbook is those twelve documents rather than whichever one is in
+    /// front, so every saved tab is offered and all of them start ticked.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    private async Task ShareFolioAsync()
+    {
+        await WriteFolioAsync().ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    private async Task WriteFolioAsync()
+    {
+        // A document that has never been saved has no folder for its relative references to
+        // resolve against, so there is nothing to collect for it. Same rule as image paste.
+        List<MarkdownDocument> saved = [.. _workspace.Documents.Where(d => d.Path is not null)];
+
+        if (saved.Count == 0)
+        {
+            await _dialogs.ShowMessageAsync(
+                "Nothing to share",
+                "A Folio is built from saved documents. Save this one first and try again.")
+                .ConfigureAwait(true);
+
+            return;
+        }
+
+        /*
+            Both of these are read again while the preflight is open, because it is a modeless
+            window and the workspace can move underneath it. Nothing is snapshotted here.
+
+            Rendering is what produces the link list, and it is pure, synchronous and off the
+            WebView entirely - so the whole preflight runs without asking the preview anything.
+            It is cached against the document text by reference: the workspace holds immutable
+            records whose edits allocate a new string, so reference equality is an exact and free
+            version stamp - the same trick Find All uses to know its results are stale. Without
+            it every tick and every drag would re-parse every document.
+        */
+        Dictionary<string, (string Text, IReadOnlyList<LinkReference> Links)> parsed =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        IReadOnlyList<string> Documents() =>
+            [.. _workspace.Documents.Where(d => d.Path is not null).Select(d => d.Path!)];
+
+        FolioPlan PlanFor(IReadOnlyList<string> chosen, int maxImageWidth)
+        {
+            Dictionary<string, MarkdownDocument> open = _workspace.Documents
+                .Where(d => d.Path is not null)
+                .ToDictionary(d => d.Path!, d => d, StringComparer.OrdinalIgnoreCase);
+
+            List<FolioSource> sources = [];
+
+            // In the order chosen, which is the order the list shows and the order the Folio
+            // will lay the documents out in.
+            foreach (string path in chosen)
+            {
+                if (!open.TryGetValue(path, out MarkdownDocument? document))
+                {
+                    continue;
+                }
+
+                if (!parsed.TryGetValue(path, out var cached)
+                    || !ReferenceEquals(cached.Text, document.Text))
+                {
+                    cached = (document.Text, _renderer.Render(document.Text).Links);
+                    parsed[path] = cached;
+                }
+
+                sources.Add(new FolioSource(document.Path!, cached.Text, cached.Links));
+            }
+
+            return FolioPlanner.Plan(sources, maxImageWidth);
+        }
+
+        FolioChoice? choice = await _folioDialogs
+            .RequestFolioAsync(Documents, PlanFor)
+            .ConfigureAwait(true);
+
+        if (choice is null || choice.DocumentPaths.Count == 0)
+        {
+            return;
+        }
+
+        FolioPlan plan = PlanFor(choice.DocumentPaths, choice.MaxImageWidth);
+        string suggested = FolioManifest.SuggestedName(plan, DateTimeOffset.Now);
+
+        string? destination = choice.Form switch
+        {
+            FolioForm.Zip => await _fileDialogs
+                .PickExportFileAsync(suggested + ".zip", "Folio", [".zip"])
+                .ConfigureAwait(true),
+            FolioForm.SingleFile => await _fileDialogs
+                .PickExportFileAsync(suggested + ".html", "Folio", [".html", ".htm"])
+                .ConfigureAwait(true),
+            _ => await _fileDialogs.PickFolderAsync().ConfigureAwait(true),
+        };
+
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            return;
+        }
+
+        // The folder picker names somewhere that already exists, and the writer refuses to
+        // write into anything that holds work - so the Folio gets a folder of its own inside it.
+        if (choice.Form == FolioForm.Folder)
+        {
+            destination = Path.Combine(destination, suggested);
+        }
+
+        // Reduced copies live here and nowhere else: a share must not edit what it is sharing.
+        string scratch = Path.Combine(Path.GetTempPath(), "marqora-folio", Guid.NewGuid().ToString("n"));
+
+        try
+        {
+            IsBusy = true;
+            StatusText = "Building the Folio...";
+
+            if (choice.MaxImageWidth > 0)
+            {
+                StatusText = "Reducing images...";
+
+                // Before anything is written, so every form - the page, the folder and the zip -
+                // takes its bytes from the same reduced copies and cannot disagree about them.
+                plan = await _folioShrinker
+                    .ShrinkAsync(plan, choice.MaxImageWidth, scratch)
+                    .ConfigureAwait(true);
+            }
+
+            FolioManifest manifest = FolioManifest.For(plan, AppVersion.Current, Environment.MachineName);
+
+            // Hashing and copying images is real work and none of it belongs on the UI thread.
+            bool written = true;
+
+            switch (choice.Form)
+            {
+                case FolioForm.Zip:
+                    await Task.Run(() => _folioWriter.WriteZipAsync(plan, manifest, destination))
+                        .ConfigureAwait(true);
+                    break;
+
+                case FolioForm.SingleFile:
+                    written = await WriteFolioPageAsync(plan, destination, suggested)
+                        .ConfigureAwait(true);
+                    break;
+
+                default:
+                    await Task.Run(() => _folioWriter.WriteFolderAsync(plan, manifest, destination))
+                        .ConfigureAwait(true);
+                    break;
+            }
+
+            // Announcing a file that was never written would put "Exported ..." on the status
+            // line and then fail to open something that is not there.
+            if (written)
+            {
+                await AnnounceExportAsync(destination).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not write a Folio to {Path}.", destination);
+
+            await _dialogs.ShowMessageAsync("Could not share", ex.Message).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+
+            try
+            {
+                if (Directory.Exists(scratch))
+                {
+                    Directory.Delete(scratch, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Temp files left behind are not worth troubling anyone about.
+                _logger.LogDebug(ex, "Could not clear the Folio scratch folder {Path}.", scratch);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the reading copy: every chosen document rendered into one page.
+    ///
+    /// Each document is rendered here rather than taken from the preview, because eleven of
+    /// twelve are not on screen. Markdig runs on the host and the shell finishes the job -
+    /// mermaid, KaTeX, highlighting - in a container of its own, so the preview the user is
+    /// looking at is never disturbed.
+    ///
+    /// One document at a time, deliberately. The shell has a single off-screen mermaid frame
+    /// and concurrent renders would race over it.
+    /// </summary>
+    /// <returns>
+    /// False when there was no shell to finish the documents with, in which case nothing was
+    /// written - and the caller must not announce a file that is not there.
+    /// </returns>
+    private async Task<bool> WriteFolioPageAsync(FolioPlan plan, string path, string title)
+    {
+        if (_host is null)
+        {
+            _logger.LogWarning("Cannot build a Folio page: the preview is not attached.");
+
+            return false;
+        }
+
+        List<FolioRenderedDocument> rendered = [];
+
+        for (int i = 0; i < plan.Documents.Count; i++)
+        {
+            FolioDocumentPlan document = plan.Documents[i];
+
+            StatusText = $"Rendering {document.EntryName} ({i + 1} of {plan.Documents.Count})...";
+
+            // The planned text, not the buffer: its references have already been repointed at
+            // what the Folio will actually contain.
+            RenderedMarkdown markdown = await Task.Run(() => _renderer.Render(document.Text))
+                .ConfigureAwait(true);
+
+            string html = await _host.RenderForExportAsync(markdown.Html).ConfigureAwait(true);
+
+            rendered.Add(new FolioRenderedDocument(
+                document,
+                markdown.Outline.FirstOrDefault(h => h.Level == 1)?.Text
+                    ?? Path.GetFileNameWithoutExtension(document.EntryName),
+                html,
+                [.. markdown.Outline.Select(h => h.Slug)]));
+        }
+
+        StatusText = "Writing the Folio...";
+
+        IReadOnlyList<string> unresolved = await _folioHtml
+            .WriteAsync(
+                plan,
+                rendered,
+                path,
+                title,
+                _settings.Current.PreviewMaxWidth,
+                AppVersion.Current,
+                Environment.MachineName)
+            .ConfigureAwait(true);
+
+        if (unresolved.Count > 0)
+        {
+            // Said rather than swallowed: a Folio with a broken picture in it should not be
+            // the first the author hears of the problem.
+            await _dialogs.ShowMessageAsync(
+                "Some images could not be included",
+                string.Join(
+                    Environment.NewLine,
+                    unresolved.Distinct(StringComparer.OrdinalIgnoreCase).Take(10)))
+                .ConfigureAwait(true);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Opens a Folio: picks one, unpacks it to a folder, and opens what came out.
+    ///
+    /// Its own command rather than a filter on <c>File, Open</c>, because that picker offers
+    /// markdown and a Folio is an .html file - and because unpacking writes a folder full of
+    /// documents, which is not what anyone means by opening a file.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenFolioAsync()
+    {
+        string? path = await _fileDialogs
+            .PickImportFileAsync("Open a Folio", "Folio", [".html", ".htm"])
+            .ConfigureAwait(true);
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            await UnpackFolioAsync(path).ConfigureAwait(true);
+        }
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Whether a file announces itself as a Folio, judged from its head.
+    ///
+    /// Cheap on purpose: the payload sits at the end of a file that can be twenty megabytes, and
+    /// this question is asked of every file dropped on the window. The marker is in the first
+    /// kilobyte, so a few of them is enough to answer it.
+    /// </summary>
+    private bool LooksLikeFolio(string path)
+    {
+        if (!".html".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)
+            && !".htm".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var reader = new StreamReader(path);
+
+            Span<char> head = stackalloc char[4096];
+
+            return FolioPayload.IsFolio(new string(head[..reader.Read(head)]));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "Could not look at {Path} to see whether it is a Folio.", path);
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Takes a Folio apart into a folder of its own and opens the documents that came out.
+    ///
+    /// The folder is named after the Folio and created beside wherever the user points, never
+    /// written into something that already holds work - a share that quietly overwrites a
+    /// document is the one failure this feature must not have.
+    /// </summary>
+    private async Task UnpackFolioAsync(string path)
+    {
+        string html;
+
+        try
+        {
+            html = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not read the Folio {Path}.", path);
+            await _dialogs.ShowMessageAsync("Could not open", ex.Message).ConfigureAwait(true);
+
+            return;
+        }
+
+        if (FolioPayload.TryDecode(html) is not { } payload)
+        {
+            await _dialogs.ShowMessageAsync(
+                "Nothing to unpack",
+                "This looks like a Folio but does not carry its documents, so there is nothing "
+                + "to take out of it. It can still be read in a browser.")
+                .ConfigureAwait(true);
+
+            return;
+        }
+
+        string? parent = await _fileDialogs.PickFolderAsync().ConfigureAwait(true);
+
+        if (string.IsNullOrWhiteSpace(parent))
+        {
+            return;
+        }
+
+        string target = Path.Combine(parent, DocumentAssets.Slug(Path.GetFileNameWithoutExtension(path)));
+
+        try
+        {
+            IsBusy = true;
+            StatusText = "Unpacking the Folio...";
+
+            FolioUnpackResult result = await Task
+                .Run(() => FolioUnpacker.Unpack(html, payload, target))
+                .ConfigureAwait(true);
+
+            await OpenManyAsync(
+                result.Documents,
+                $"Unpacked {Count(result.Documents.Count, "document")} and "
+                + $"{Count(result.Images, "image")}")
+                .ConfigureAwait(true);
+
+            if (result.Refused.Count > 0)
+            {
+                // Said rather than swallowed. A Folio that unpacks nine documents out of ten
+                // must not look like one that unpacked all ten.
+                await _dialogs.ShowMessageAsync(
+                    "Some of the Folio was left out",
+                    string.Join(Environment.NewLine, result.Refused.Take(10)))
+                    .ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not unpack the Folio {Path} into {Target}.", path, target);
+            await _dialogs.ShowMessageAsync("Could not unpack", ex.Message).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
     }
 
     /// <summary>Exports the active document as a PDF, after asking for page setup.</summary>
@@ -6236,7 +6683,7 @@ public sealed partial class MainViewModel : ObservableObject
             // dropped onto the preview, which the browser turns into a navigation.
             if (uri.IsFile && File.Exists(uri.LocalPath))
             {
-                if (MarkdownFileTypes.IsSupported(uri.LocalPath))
+                if (MarkdownFileTypes.IsSupported(uri.LocalPath) || LooksLikeFolio(uri.LocalPath))
                 {
                     await OpenPathAsync(uri.LocalPath).ConfigureAwait(true);
                 }

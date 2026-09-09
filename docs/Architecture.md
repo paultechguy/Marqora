@@ -464,6 +464,17 @@ the page, which sidesteps the CSP and the cross-origin rules entirely. KaTeX's w
 inlined too: the stylesheet refers to them by relative path, which resolves inside the app
 but not beside an exported file, and every equation would otherwise fall back to a serif face.
 
+The width is the reader's own `PreviewMaxWidth`, not a measure the export picks. Both exports
+answer to it through `ExportLayout`, which states the page rules once — they each used to carry
+a copy, and both capped the text at a 46em measure the preview itself had already dropped for
+the reason recorded beside `--mq-preview-measure` in `app.css`.
+
+**A Folio** is the third export and the one that takes more than one document: the whole set,
+every image it references, and the paths repointed so the copy resolves somewhere other than
+this machine. It is a feature rather than a variation, and `docs/Folio.md` covers it — what a
+Folio is, why it is an `.html` file that carries its own sources, how the off-screen render
+finishes documents that are not on screen, and why `AssetRelocation` could not be reused for it.
+
 ---
 
 ## The formatter
@@ -515,6 +526,52 @@ against the full model range, bracketed by undo stops. `setValue` would be simpl
 the undo stack away, and undo is the first thing anyone reaches for when a formatter surprises
 them. The cursor is restored to the same line with its column clamped, since that line may
 have grown or shrunk.
+
+---
+
+## Secondary windows
+
+Every window that is not `MainWindow` derives from `Views/PaletteWindow.cs`. It exists because
+three of them were about to carry the same code: the cheatsheet and Find All each had their own
+copy of all of it — including the caption color table, written out twice with the same hex
+values — and a preferences window would have made a third. What actually differed between them
+was a name for the log, a minimum size, and which settings property the placement lands in.
+
+What the base owns is the window itself: a resizable palette that floats above the editor, stays
+out of Alt+Tab and the taskbar, paints its caption to match the theme, and remembers where it was
+left. Subclasses keep what is genuinely theirs — their content, when they show and hide, and what
+they do about a theme change beyond the caption.
+
+**Placement is the base's job, not the subclass's.** `SavedPlacement` and `StorePlacement` are the
+two abstract members, and they are the whole of what a window has to say about where it lives;
+`RestorePlacement`, `CapturePlacement` and `TrackPlacementChanges` do the rest. The stored
+property follows the nullable-plus-`[JsonIgnore]`-companion pattern that `CheatsheetPlacement`
+and `FindAllPlacement` use, for the reason under *Persistence*: a property initializer does not
+run for a key absent from the file.
+
+`SurfaceBrush` and `ApplyTitleBarTheme` are how a code-built surface gets a color. That is not
+convenience — a theme resource looked up in code resolves against the *application's* theme,
+which is the operating system's rather than the one the user chose in Marqora, and Find All
+below records what that cost.
+
+### Nothing in the app is modal
+
+There is no `EnableWindow`, no owner-disabling and no modal helper anywhere in Marqora, and all
+three palette windows are modeless — Preferences included, which is the one most people assume
+blocks.
+
+`EnsureOwned` is not modality and should not be mistaken for it. It sets `GWLP_HWNDPARENT`, which
+keeps a window above the main one and minimizes it alongside; input still reaches the editor.
+
+So a window whose content can go stale says so rather than preventing it. Find All is the worked
+example: it watches `IWorkspaceService.Changed`, marks its results out of date and offers to run
+again, because reshuffling rows under the reader would be worse than letting them ask. Any later
+window built on a snapshot of the workspace — a share preflight, an export set — has the same
+problem and should take the same answer.
+
+Real modality would be a first for the app, and it is not free: the owner has to be disabled and
+re-enabled around the window's whole lifetime, and an exception escaping in between leaves the
+main window permanently dead with no way back but killing the process.
 
 ---
 

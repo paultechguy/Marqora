@@ -24,11 +24,12 @@ namespace PaulTechGuy.MQ.App.Services;
 /// </summary>
 public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExporter> logger) : IHtmlExporter
 {
-    public async Task WriteAsync(
+    public async Task<IReadOnlyList<string>> WriteAsync(
         string outputPath,
         string title,
         string renderedHtml,
         string? sourceDocumentPath,
+        int measurePixels = 0,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
@@ -36,7 +37,8 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         // A whole page can keep the custom properties: it has a root element to declare them
         // on, and any browser opening the file understands them.
         string styles = packager.ReadStyles(renderedHtml);
-        string body = packager.EmbedLocalImages(renderedHtml, sourceDocumentPath);
+        string body = packager.EmbedLocalImages(
+            renderedHtml, sourceDocumentPath, out IReadOnlyList<string> skipped);
 
         var builder = new StringBuilder();
 
@@ -49,7 +51,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         builder.AppendLine("<meta name=\"generator\" content=\"Marqora\" />");
         builder.AppendLine("<style>");
         builder.AppendLine(styles);
-        builder.AppendLine(ExportOverrides);
+        builder.AppendLine(ExportLayout.PageCss(measurePixels));
         builder.AppendLine("</style>");
         builder.AppendLine("</head>");
         builder.AppendLine("<body>");
@@ -63,30 +65,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
             .ConfigureAwait(false);
 
         logger.LogInformation("Exported HTML to {Path}.", outputPath);
+
+        return skipped;
     }
-
-    /// <summary>
-    /// Turns the app's layout rules back into a plain document: the preview is normally a
-    /// pane inside a split view, with a viewport-sized tail for scroll synchronization.
-    /// </summary>
-    private const string ExportOverrides = """
-        html, body {
-          height: auto;
-          overflow: visible;
-          background: var(--mq-bg);
-        }
-
-        body { padding: 2.5rem 1.5rem 4rem; }
-
-        .mq-preview {
-          max-width: 46em;
-          margin: 0 auto;
-          padding: 0;
-          font-size: 16px;
-        }
-
-        @media print {
-          body { padding: 0; }
-        }
-        """;
 }

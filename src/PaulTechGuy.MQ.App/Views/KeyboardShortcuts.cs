@@ -47,6 +47,7 @@ internal static class KeyboardShortcuts
             new("Save as...", "Ctrl+Alt+S"),
             new("Close tab", "Ctrl+W"),
             new("Close all tabs", "Ctrl+Shift+W"),
+            new("Move a document up or down in a Folio", "Alt+Up or Alt+Down"),
             new("Print...", "Ctrl+P"),
             new("Preferences...", "Ctrl+,"),
         ]),

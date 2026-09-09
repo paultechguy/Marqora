@@ -14,6 +14,7 @@ using PaulTechGuy.MQ.App.Views;
 using PaulTechGuy.MQ.Analysis;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
+using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
@@ -135,6 +136,7 @@ public static class Program
         builder.Services.AddMarqoraEditing();
         builder.Services.AddMarqoraAnalysis();
         builder.Services.AddMarqoraSpelling();
+        builder.Services.AddMarqoraFolio();
         builder.Services.AddMarqoraServices(AppVersion.Current, welcomeRequested);
 
         // UI-layer implementations of the shared abstractions.
@@ -144,7 +146,10 @@ public static class Program
         builder.Services.AddSingleton<IUiDispatcher, UiDispatcher>();
         builder.Services.AddSingleton<RenderedHtmlPackager>();
         builder.Services.AddSingleton<IHtmlExporter, HtmlExporter>();
+        builder.Services.AddSingleton<FolioHtmlWriter>();
+        builder.Services.AddSingleton<FolioShrinker>();
         builder.Services.AddSingleton<IExportDialogService, ExportDialogService>();
+        builder.Services.AddSingleton<IFolioDialogService, FolioDialogService>();
         builder.Services.AddSingleton<IPrintDialogService, PrintDialogService>();
         builder.Services.AddSingleton<IFormatDialogService, FormatDialogService>();
         builder.Services.AddSingleton<IPreferencesDialogService, PreferencesDialogService>();

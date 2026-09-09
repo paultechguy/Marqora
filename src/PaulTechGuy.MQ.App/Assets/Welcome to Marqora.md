@@ -136,10 +136,17 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 | `Ctrl+Shift+C` — Copy as Rich Text | The formatted page on the clipboard, ready for Word, Outlook or Confluence        |
 | `Tools > Export to PDF...`         | A printed copy, with paper size, orientation and margins of your choosing         |
 | `Tools > Export to HTML...`        | One self-contained `.html` file — styles inlined, images embedded, fonts included |
+| `Tools > Share as Folio...`        | Every open document *and* the images they use, gathered into one thing to send    |
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
 leaves the building.
+
+A **Folio** is the one that takes more than a single document. The others hand you the page in
+front of you; a Folio takes the whole set, collects every picture they point at — including the
+ones living somewhere else on your disk — and fixes the paths so none of it breaks on the way.
+Sent as one file, it opens in any browser without Marqora, and dropping that same file back on
+this window unpacks it into the documents it was made from.
 
 ---
 

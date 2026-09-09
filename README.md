@@ -190,6 +190,7 @@ would rather not reach for the mouse.
 | 🩺 | **Document problems** | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you |
 | 🔤 | **Spell check** | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤 | **Exports worth sending** | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, and rich text on the clipboard for Word, Outlook or Confluence |
+| 🧺 | **Folios** | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again |
 | 🧩 | **Snippets and diagram starters** | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them |
 | 📖 | **Cheatsheet at your elbow** | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor |
 | 🌗 | **Light, dark or system** | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included |
@@ -488,8 +489,10 @@ you did not edit.
 | `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence |
 | `Tools > Export to PDF...` | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
 | `Tools > Export to HTML...` | One self-contained `.html` file |
+| `Tools > Share as Folio...` | Every open document, and every image they use, as one thing to send |
+| `Tools > Open Folio...` | A Folio unpacked back into its documents and images |
 
-All three are enabled whenever a document is open, and the two file exports default the
+All three exports are enabled whenever a document is open, and the two file exports default the
 filename to the document's own name with the new extension.
 
 **Copy as Rich Text** takes whatever is selected in the preview, or the whole document when
@@ -502,9 +505,41 @@ never supported them.
 Exports come from the **live preview**, not from a fresh render, so diagrams are already
 inline SVG, math is already laid out and code is already highlighted — what you export is
 what you were looking at. The HTML export inlines the stylesheets, embeds local images as
-data URIs and embeds the KaTeX fonts, so the file survives being emailed on its own. Exports
+data URIs and embeds the KaTeX fonts, so the file survives being emailed on its own. An image
+too large to embed is named rather than quietly left as a link. Exports
 are always light-themed: a dark background is rarely wanted in something printed or pasted
-into someone else's document.
+into someone else's document. Their width follows **Maximum width** on the Appearance page —
+the same setting the preview uses, and unset by default, so an exported page fills the window.
+
+**Folios**
+
+A Markdown file is not self-contained, and a folder of them is worse: the text goes in the
+email and the pictures do not. `Tools > Share as Folio...` takes the documents you have open,
+collects every image they reference — including ones stored somewhere else entirely — and
+repoints the paths so the copy still resolves on somebody else's machine.
+
+| Form | For |
+|------|-----|
+| **One file others can read without Marqora** | A single `.html`: every document in one page with a contents list, images inlined, diagrams and math already drawn, and no script in it at all. Opens by double-click in any browser, offline |
+| **A folder of markdown and images** | Someone who is going to keep editing, or a copy that has to survive being moved |
+| **One zip of that folder** | The same, as one file to send |
+
+A preflight window shows what will travel before anything is written: how many documents and
+images, what it weighs, which images are missing, and which links point outside the set. Tick
+what goes in, and **drag the rows to set the order the documents appear in** — `Alt+Up` and
+`Alt+Down` do it from the keyboard. The window resizes and remembers its size.
+
+It also says when the shape is wrong. A single page carrying hundreds of pictures, or one past
+what mail will take, offers the zip instead; images far wider than any screen can be sent
+smaller, which is off by default and names every picture it would touch before touching one.
+
+**The single file carries its own sources.** They ride in a block browsers neither run nor
+display, so a reader sees an ordinary web page — but `Tools > Open Folio...`, or dropping that
+same file onto the window, unpacks it back into the documents and images it was made from. One
+artifact for both audiences: it does not matter which of the people you send it to have Marqora.
+
+None of this goes near the network. A Folio is a file, and sharing it is whatever you already
+do with files.
 
 **Markdown cheatsheet**
 

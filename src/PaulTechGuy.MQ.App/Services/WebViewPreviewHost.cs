@@ -375,23 +375,14 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             relative = relative[..cut];
         }
 
-        string root = Path.GetFullPath(directory + Path.DirectorySeparatorChar);
-
-        try
+        if (PathContainment.ResolveWithin(directory, Uri.UnescapeDataString(relative)) is not { } path)
         {
-            string path = Path.GetFullPath(Path.Combine(
-                root,
-                Uri.UnescapeDataString(relative).Replace('/', Path.DirectorySeparatorChar)));
+            _logger.LogDebug("{Url} does not resolve to a file inside the document folder.", url);
 
-            return path.StartsWith(root, StringComparison.OrdinalIgnoreCase) && File.Exists(path)
-                ? path
-                : null;
-        }
-        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            _logger.LogDebug(ex, "Could not resolve {Url} to a file in the document folder.", url);
             return null;
         }
+
+        return File.Exists(path) ? path : null;
     }
 
     private static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
@@ -672,6 +663,59 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         finally
         {
             _htmlRequests.Remove(id);
+        }
+    }
+
+    /// <summary>Outstanding off-screen render requests, keyed the same way as the HTML ones.</summary>
+    private readonly Dictionary<Guid, TaskCompletionSource<string>> _exportRequests = [];
+
+    /// <summary>
+    /// Finishes a document that is not on screen: mermaid, KaTeX and highlighting applied to
+    /// markup Markdig has already produced.
+    ///
+    /// A Folio of twelve tabs needs this eleven times, because <see cref="GetRenderedHtmlAsync"/>
+    /// can only ever answer for the document in front. The shell does the work in a container of
+    /// its own and never touches the preview, so the reader's scroll position and diagram
+    /// numbering survive being exported around.
+    ///
+    /// The timeout is longer than the preview's ten seconds: a document full of diagrams is
+    /// slower than anything the live preview is asked for, and a Folio is not a keystroke.
+    /// </summary>
+    public async Task<string> RenderForExportAsync(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+
+        if (!IsReady)
+        {
+            return html;
+        }
+
+        var id = Guid.NewGuid();
+        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _exportRequests[id] = completion;
+
+        try
+        {
+            await SendAsync("requestExportHtml", new { requestId = id, html }).ConfigureAwait(true);
+
+            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(30)))
+                .ConfigureAwait(true);
+
+            if (finished != completion.Task)
+            {
+                _logger.LogWarning("The preview did not finish a document for export within thirty seconds.");
+
+                // The Markdig markup, unfinished. A Folio missing one document's diagrams beats
+                // a Folio missing the document.
+                return html;
+            }
+
+            return await completion.Task.ConfigureAwait(true);
+        }
+        finally
+        {
+            _exportRequests.Remove(id);
         }
     }
 
@@ -1169,6 +1213,14 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     && _htmlRequests.TryGetValue(requestId, out TaskCompletionSource<string>? pending))
                 {
                     pending.TrySetResult(ReadString(payload, "html"));
+                }
+                break;
+
+            case "exportHtml":
+                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid exportId)
+                    && _exportRequests.TryGetValue(exportId, out TaskCompletionSource<string>? awaiting))
+                {
+                    awaiting.TrySetResult(ReadString(payload, "html"));
                 }
                 break;
 

@@ -834,6 +834,34 @@
                                 <FontIcon Glyph="&#xE943;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            Below the two exports rather than beside them: those take the
+                            document in front and turn it into one page, and this takes the
+                            whole set of open documents and everything they reference.
+                        -->
+                        <MenuFlyoutItem Text="Share as Folio..."
+                                        Command="{x:Bind ViewModel.ShareFolioCommand}"
+                                        ToolTipService.ToolTip="Gather the open documents and every image they use into one shareable copy">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE72D;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <!--
+                            The other direction, and beside the one it undoes. Not on the File
+                            menu with Open: that picker offers markdown, a Folio is an .html
+                            file, and unpacking writes a folder rather than opening a document.
+                        -->
+                        <MenuFlyoutItem Text="Open Folio..."
+                                        Command="{x:Bind ViewModel.OpenFolioCommand}"
+                                        ToolTipService.ToolTip="Unpack a Folio back into its documents and images">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DA;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                     </MenuBarItem>
 
                     <!--

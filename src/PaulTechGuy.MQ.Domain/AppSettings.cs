@@ -177,6 +177,31 @@ public sealed record AppSettings
     public static WindowPlacement DefaultFindAllWindow { get; } = new() { Width = 760, Height = 560 };
 
     /// <summary>
+    /// Geometry of the Folio preflight window. Nullable for the same reason as
+    /// <see cref="CheatsheetWindow"/>; read it through <see cref="FolioPlacement"/>.
+    /// </summary>
+    public WindowPlacement? FolioWindow { get; set; }
+
+    /// <summary>The Folio window's geometry, safe to use whatever the settings file held.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WindowPlacement FolioPlacement => FolioWindow ?? DefaultFolioWindow;
+
+    /// <summary>
+    /// Wide enough for a file name and the folder beside it without the folder giving up most
+    /// of its characters, and tall enough to arrange a set of documents rather than peer at one.
+    /// </summary>
+    public static WindowPlacement DefaultFolioWindow { get; } = new() { Width = 940, Height = 660 };
+
+    /// <summary>
+    /// How tall the Folio window's problems pane was left, in device-independent pixels.
+    ///
+    /// Zero means it was never dragged, so the pane opens at its own default. Stored beside the
+    /// window rather than inside <see cref="WindowPlacement"/> because it is a split within the
+    /// window, exactly as <see cref="SplitterPosition"/> is for the main one.
+    /// </summary>
+    public double FolioProblemsHeight { get; set; }
+
+    /// <summary>
     /// Geometry of the preferences window. Nullable for the same reason as
     /// <see cref="CheatsheetWindow"/>; read it through <see cref="PreferencesPlacement"/>.
     /// </summary>
@@ -528,6 +553,8 @@ public sealed record AppSettings
             "cheatsheetWindow",
             "cheatsheetScrollTop",
             "findAllWindow",
+            "folioWindow",
+            "folioProblemsHeight",
             "preferencesWindow",
             "findHistory",
             "openDocuments",
@@ -567,6 +594,8 @@ public sealed record AppSettings
             CheatsheetWindow = current.CheatsheetWindow,
             CheatsheetScrollTop = current.CheatsheetScrollTop,
             FindAllWindow = current.FindAllWindow,
+            FolioWindow = current.FolioWindow,
+            FolioProblemsHeight = current.FolioProblemsHeight,
             PreferencesWindow = current.PreferencesWindow,
             FindHistory = current.FindHistory,
             OpenDocuments = current.OpenDocuments,

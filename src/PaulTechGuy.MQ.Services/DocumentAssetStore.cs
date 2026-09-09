@@ -58,10 +58,7 @@ public sealed class DocumentAssetStore(ILogger<DocumentAssetStore> logger) : IDo
 
         // The slug should make this unreachable. It is asserted anyway, because the cost of
         // being wrong is a file written somewhere the user did not agree to.
-        string root = Path.GetFullPath(documentFolder + Path.DirectorySeparatorChar);
-
-        if (!(Path.GetFullPath(target) + Path.DirectorySeparatorChar)
-            .StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        if (!PathContainment.Contains(documentFolder, target))
         {
             logger.LogError("Refused to write outside {Folder}.", documentFolder);
 
