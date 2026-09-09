@@ -32,7 +32,7 @@ namespace PaulTechGuy.MQ.App.ViewModels;
 /// <see cref="Tabs"/> mirrors the workspace's document list. TabView both reads and writes
 /// that collection, because drag-reordering moves items in the bound source directly.
 /// </summary>
-public sealed partial class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly IWorkspaceService _workspace;
     private readonly ISettingsService _settings;
@@ -2746,6 +2746,23 @@ public sealed partial class MainViewModel : ObservableObject
     public void CancelShutdown() => _isShuttingDown = false;
 
     private bool _isShuttingDown;
+
+    /// <summary>
+    /// Called by the DI container at shutdown, since MainViewModel is registered a singleton.
+    ///
+    /// The autosave countdown and the status highlight's countdown are each cancelled and
+    /// disposed as they are superseded - see RestartAutoSaveTimer and PauseStatusHighlight -
+    /// but whichever one happens to be running when the window closes never is. Nothing else
+    /// on this type owns a handle worth closing.
+    /// </summary>
+    public void Dispose()
+    {
+        _autoSaveCountdown?.Cancel();
+        _autoSaveCountdown?.Dispose();
+
+        _highlightExpiry?.Cancel();
+        _highlightExpiry?.Dispose();
+    }
 
     /// <summary>Records the open documents so the next launch can restore them.</summary>
     private void PersistSession()
