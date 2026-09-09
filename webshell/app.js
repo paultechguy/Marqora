@@ -67,6 +67,14 @@
     it matches TypographyDefaults.SourceFontSize on the host side.
   */
   var SOURCE_BASE_FONT_PX = 14;
+
+  /*
+    The blank the source pane keeps below the last line: room to work on it without it sitting
+    on the bottom frame, and nothing beyond that. Roughly five lines at the default size. See
+    scrollBeyondLastLine where the editor is created for why this is a fixed cushion rather
+    than Monaco's own whole-viewport version of it.
+  */
+  var SOURCE_TRAILING_PADDING_PX = 96;
   var ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500];
 
   /* Marks the spans numberHeadings adds, so a re-number can find and remove its own work. */
@@ -109,6 +117,17 @@
     documentBaseUrl: '',
     lineMap: [],
     lineMapDirty: true,
+
+    /*
+      Bottom of the last rendered block, in preview scroller coordinates.
+
+      Not the scroller height. .mq-preview carries 60vh of bottom padding, and that is blank
+      space below the document rather than part of it, so treating the scroller maximum as the
+      end of a read would leave the last paragraph at the top of an otherwise empty pane.
+      Measured in buildLineMap, because everything that moves it - a re-render, a font
+      arriving, a splitter drag, a window resize - already invalidates the map.
+    */
+    previewContentBottom: 0,
     suppressEditorEvents: false,
     lastHtml: null,
     wordWrap: true,
@@ -795,6 +814,13 @@
       lastTop = top;
     }
 
+    /*
+      Measured here rather than on demand: it costs a layout read, and everything that can
+      move it has already been through this function by the time anything asks.
+    */
+    var padding = parseFloat(getComputedStyle(els.preview).paddingBottom) || 0;
+
+    state.previewContentBottom = Math.max(0, els.preview.offsetTop + els.preview.offsetHeight - padding);
     state.lineMap = map;
     state.lineMapDirty = false;
     return map;
@@ -855,14 +881,122 @@
     return (lo - 1) + clamp(fraction, 0, 1);
   }
 
+  /*
+    Where a pane sits when the document has been read to its end.
+
+    Not the pane's maximum scroll position, on either side. The editor keeps a cushion below its
+    last line and the preview has 60vh of bottom padding; both are empty space below the
+    document, reachable with a wheel but never with a caret, which cannot go past the end of the
+    model. The end that matters for synchronization is the last line resting on the bottom edge
+    of the viewport, because that is exactly where arrowing down to the last line leaves the
+    editor - and so where the preview has to be for the two to agree.
+  */
+  function editorEndScrollTop() {
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+    if (!model) { return 0; }
+
+    var height = editor.getLayoutInfo().height;
+
+    return Math.max(0, editor.getBottomForLineNumber(model.getLineCount()) - height);
+  }
+
+  function editorMaxScrollTop() {
+    var editor = state.editor;
+    if (!editor) { return 0; }
+
+    return Math.max(0, editor.getScrollHeight() - editor.getLayoutInfo().height);
+  }
+
+  function previewMaxScrollTop() {
+    var pane = els.previewPane;
+
+    return Math.max(0, pane.scrollHeight - pane.clientHeight);
+  }
+
+  function previewEndScrollTop() {
+    var max = previewMaxScrollTop();
+
+    // Before the first render there is no measurement; the scroller's own end is the only
+    // answer available and is never worse than refusing to move.
+    if (!(state.previewContentBottom > 0)) { return max; }
+
+    return clamp(state.previewContentBottom - els.previewPane.clientHeight, 0, max);
+  }
+
+  /*
+    Carries one pane's overscroll across to the other, as a fraction of it.
+
+    Past the end of the document both panes still have blank to offer, and nothing like the same
+    amount of it - a five-line cushion in the editor against 60vh of padding in the preview - so
+    there is no line and no pixel to map between them, only the proportion of the way through.
+    Enough to keep the wheel doing something rather than have the preview stand still while the
+    source is still moving.
+
+    The shorter of the two blanks is what gets spent, so this can never amplify: a nudge into a
+    small cushion at one end must not fling the other pane through a large one. Whatever is left
+    over on the longer side is blank, and still reachable by scrolling that pane directly.
+
+    Starts from wherever the easing left off rather than from the far side's own end, so the
+    join is continuous whatever the easing had reached. Weighted like everything else here, so
+    that wheeling the blank below a document that never scrolled in the first place does not
+    drag the other pane along - there the caret is the anchor, and it has not moved.
+
+    Null when the position is not past the end, or when there is nothing to carry it into.
+  */
+  function carryOverscroll(scrollTop, fromEnd, fromMax, toStart, toMax, weight) {
+    var from = fromMax - fromEnd;
+    var to = Math.min(from, toMax - toStart);
+
+    if (scrollTop <= fromEnd || from <= 0 || to <= 0 || weight <= 0) { return null; }
+
+    return toStart + to * weight * clamp((scrollTop - fromEnd) / from, 0, 1);
+  }
+
+  /*
+    How far a pane has come into its last screenful, 0 through 1. Called in either pane's own
+    coordinates: a position, the position that counts as the end of the document, and the
+    height of the viewport.
+
+    Line mapping is exact everywhere it has two entries to interpolate between, and in the final
+    viewport it has none: there is no line below the last one. Anchoring the top of one pane to
+    the top of the other is what leaves the tail of the document below the fold of the passive
+    pane, and the preview renders around a third taller than the source for prose and several
+    times taller across a heading, a table or a diagram - so that tail runs to more than one
+    screen of unread content, which is what the end of a document looks like when it will not
+    keep up.
+
+    Over the last screenful the target is eased across to the end of the document instead. Both
+    panes land on the last line together, the ramp keeps that continuous rather than a jump at
+    the end, and everything above the last screenful is left exactly as it was.
+
+    Zero whenever there is no last screenful to be in: a pane with nothing to scroll is already
+    showing its end.
+  */
+  function endBlend(scrollTop, endScrollTop, viewport) {
+    if (endScrollTop <= 0 || viewport <= 0) { return 0; }
+
+    var start = Math.max(0, endScrollTop - viewport);
+    if (scrollTop <= start) { return 0; }
+    if (scrollTop >= endScrollTop) { return 1; }
+
+    return (scrollTop - start) / (endScrollTop - start);
+  }
+
+  function setPreviewScrollTop(target) {
+    els.previewPane.scrollTop = clamp(target, 0, previewMaxScrollTop());
+  }
+
+  /*
+    A source line to the top of the preview, with no easing at all. What the callers that are
+    not following the source pane want: the outline puts a heading at the top wherever in the
+    document it is, and a re-render restores the line the preview was already showing.
+  */
   function scrollPreviewToLine(line) {
     var map = lineMap();
     if (map.length === 0) { return; }
 
-    var target = interpolate(map, line, 'line', 'top');
-    var max = els.previewPane.scrollHeight - els.previewPane.clientHeight;
-
-    els.previewPane.scrollTop = clamp(target, 0, Math.max(0, max));
+    setPreviewScrollTop(interpolate(map, line, 'line', 'top'));
   }
 
   function previewTopLine() {
@@ -871,10 +1005,73 @@
     return interpolate(map, els.previewPane.scrollTop, 'top', 'line');
   }
 
+  /*
+    The source line the preview is anchored to.
+
+    The editor's top line, wherever the editor has room to scroll. That is what keeps the two
+    panes showing the same thing while either one is moved, and for a document taller than its
+    pane it is the whole story.
+
+    A document shorter than its pane never scrolls, so its top line is always zero and carries
+    nothing - while its preview can still run to many screens, because eleven images are eleven
+    lines of markdown. There the caret is the only thing that moves, so the caret is what the
+    preview follows.
+
+    Weighted rather than switched, so a document a little taller than its pane is not on a cliff
+    between the two rules: the top line earns its say in proportion to the scroll range it
+    actually has, and by a pane and a half of scroll it has all of it. One expression, read by
+    both triggers - a separate caret rule and scroll rule would spend a long document taking
+    turns undoing each other.
+  */
+  function sourceAnchorLine(editor, weight) {
+    var topLine = editorTopLine();
+    if (weight >= 1) { return topLine; }
+
+    var position = editor.getPosition();
+    var caretLine = position ? position.lineNumber - 1 : 0;
+
+    return caretLine + (topLine - caretLine) * weight;
+  }
+
   function syncEditorToPreview() {
     if (!state.scrollSync || state.viewMode !== 'SideBySide') { return; }
+
     beginSync('source');
-    scrollPreviewToLine(editorTopLine());
+
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+
+    // Between closing the last tab and opening the next there is no model to ask.
+    if (!model) { scrollPreviewToLine(0); return; }
+
+    var map = lineMap();
+    if (map.length === 0) { return; }
+
+    var height = editor.getLayoutInfo().height;
+    var editorEnd = editorEndScrollTop();
+    var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
+
+    var target = interpolate(map, sourceAnchorLine(editor, weight), 'line', 'top');
+    var previewEnd = previewEndScrollTop();
+
+    /*
+      Progress into the last screenful, weighted exactly as the anchor is and for the same
+      reason. Read off the editor's own scroll alone it saturates the moment a barely
+      scrollable document reaches its stop, and everything the caret does after that collapses
+      onto the end of the preview; read off the preview alone it gives up the accuracy the
+      editor has in the documents that do scroll. Each pane is asked in the proportion it is
+      carrying the position.
+    */
+    var scrollTop = editor.getScrollTop();
+    var blend = endBlend(target, previewEnd, els.previewPane.clientHeight);
+
+    blend += (endBlend(scrollTop, editorEnd, height) - blend) * weight;
+
+    if (blend > 0) { target += (previewEnd - target) * blend; }
+
+    var carried = carryOverscroll(scrollTop, editorEnd, editorMaxScrollTop(), target, previewMaxScrollTop(), weight);
+
+    setPreviewScrollTop(carried === null ? target : carried);
   }
 
   function syncPreviewToEditor() {
@@ -892,8 +1089,25 @@
     var top = state.editor.getTopForLineNumber(lineNumber);
     var next = state.editor.getTopForLineNumber(Math.min(lineNumber + 1, lineCount));
     var fraction = line - Math.floor(line);
+    var target = top + (next - top) * fraction;
 
-    state.editor.setScrollTop(top + (next - top) * fraction);
+    // The mirror of the easing above. Without it the two sides disagree about where the end
+    // is: reading the preview to the last block would leave the editor a screenful short, and
+    // the next arrow key would haul the preview back up to meet it.
+    var scrollTop = els.previewPane.scrollTop;
+    var previewEnd = previewEndScrollTop();
+    var editorEnd = editorEndScrollTop();
+    var height = state.editor.getLayoutInfo().height;
+    var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
+    var blend = endBlend(scrollTop, previewEnd, els.previewPane.clientHeight);
+
+    if (blend > 0) { target += (editorEnd - target) * blend; }
+
+    // And the mirror of the overscroll carry, so wheeling the preview down through its own
+    // padding walks the editor through scrollBeyondLastLine rather than parking it.
+    var carried = carryOverscroll(scrollTop, previewEnd, previewMaxScrollTop(), target, editorMaxScrollTop(), weight);
+
+    state.editor.setScrollTop(carried === null ? target : carried);
   }
 
   /*
@@ -2664,11 +2878,31 @@
       // scrollToLine, which asks for the top and now gets it.
       stickyScroll: { enabled: false },
       renderLineHighlight: 'line',
-      scrollBeyondLastLine: true,
+
+      /*
+        Off, and the cushion below the last line comes from padding instead.
+
+        Monaco's own version of this is a whole viewport of it: the last line can be scrolled
+        all the way to the top, so a wheel at the end of a document buys a full screen of empty
+        pane with a document still on show beside it. Scroll sync makes that worse rather than
+        better, because the preview has nothing like a screenful of blank to spend keeping up.
+        The reason anyone wants the option is much smaller than what it gives - room to work on
+        the last line without it sitting on the frame - and padding.bottom is that room, exactly
+        and no more. Five lines of it.
+
+        The cost is that a heading in the final screenful can no longer be brought to the very
+        top of the pane, so scrollToLine's revealRangeAtTop leaves those ones lower down. That
+        is what every editor without this option does, and by then the whole tail of the
+        document is on screen anyway.
+
+        SOURCE_TRAILING_PADDING_PX is also the editor's whole overscroll now, which is what
+        carryOverscroll spends against the preview's 60vh. See editorMaxScrollTop.
+      */
+      scrollBeyondLastLine: false,
       smoothScrolling: true,
       cursorSmoothCaretAnimation: 'on',
       cursorBlinking: 'smooth',
-      padding: { top: 18, bottom: 18 },
+      padding: { top: 18, bottom: SOURCE_TRAILING_PADDING_PX },
       renderWhitespace: 'selection',
       occurrencesHighlight: 'off',
       selectionHighlight: false,
@@ -2740,6 +2974,20 @@
     state.editor.onDidChangeCursorPosition(function (e) {
       emitStats();
       highlightActiveBlock(e.position.lineNumber - 1);
+
+      /*
+        The caret is half of what sourceAnchorLine reads, and in a document that fits its pane
+        it is the only half that ever changes - no scroll event is coming, because nothing
+        scrolls. In a document taller than its pane this recomputes the same answer the scroll
+        handler would and assigns the position the preview is already at.
+
+        Focus is the test for the user having moved somewhere, rather than the caret having been
+        put back: restoring a tab's view state sets a position too.
+      */
+      if (state.suppressEditorEvents || syncOwner === 'preview') { return; }
+      if (!state.editor.hasTextFocus()) { return; }
+
+      syncEditorToPreview();
     });
 
     // Selection rather than position: this also fires when a selection grows or shrinks
@@ -4288,6 +4536,12 @@
         // while scrollPreviewToLine below puts that same heading at the very top of the
         // preview. One heading, two panes, two places. A heading is the start of a section
         // and what sits above it is the section just left, so both panes go to the top.
+        //
+        // Except for a heading inside the final screenful, which the source pane cannot lift
+        // any higher than its own scrolling allows now that scrollBeyondLastLine is off. The
+        // preview still takes it to the top, so those ones land in two places again - but by
+        // then the whole tail of the document is on screen in both panes, which is what the
+        // click was after.
         var line = p.line + 1;
         state.editor.revealRangeAtTop(new state.monaco.Range(line, 1, line, 1));
         state.editor.setPosition({ lineNumber: line, column: 1 });

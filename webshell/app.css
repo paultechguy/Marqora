@@ -396,8 +396,11 @@ body {
   margin-inline: auto;
 }
 
-/* The tall bottom padding lets the last line scroll to the top of the viewport,
-   which scroll sync needs in order to reach the end of the document. */
+/* The tall bottom padding lets the last block be scrolled clear of the bottom edge, so the
+   end of a document can be read in the middle of the pane rather than only in the last inch
+   of it. Scroll sync does not depend on it: endBlend in app.js eases onto the bottom of the
+   last rendered block, and treats this padding as the blank space below the document that
+   it is. */
 
 /*
   The preview fills its pane in every view, the way the source pane does.

@@ -173,6 +173,66 @@ lines in the source. Line mapping is immune to that.
 A `syncOwner` flag, cleared after two animation frames, stops the two panes from echoing
 each other into a feedback loop.
 
+### Which line the preview follows
+
+The editor's top line, wherever the editor has room to scroll. That is what keeps the two panes
+showing the same thing while either one is moved, and for a document taller than its pane it is
+the whole story.
+
+A document *shorter* than its pane never scrolls at all, so its top line is permanently zero -
+while its preview can still run to many screens, because eleven images are eleven lines of
+markdown. There the caret is the only thing that carries a position, so the caret is what the
+preview follows, and the caret event becomes the trigger the scroll event cannot be.
+
+`sourceAnchorLine` weights the two rather than switching between them, so a document a little
+taller than its pane is not perched on a cliff: the top line earns its say in proportion to the
+scroll range it actually has, and by a pane and a half of scroll it has all of it. Weighting
+also keeps this a single expression evaluated by both triggers - a separate caret rule and
+scroll rule would spend a long document taking turns undoing each other.
+
+### The last screenful
+
+Top-to-top line mapping has nothing to anchor against in the final viewport, because there is
+no line below the last one. Both panes have empty space past the end - `scrollBeyondLastLine`
+in the editor, 60vh of bottom padding in the preview - and a wheel can reach it, but a caret
+cannot: arrowing down to the last line leaves the editor with that line on the bottom edge and
+roughly a viewport of scroll unspent. Anchor the preview to the editor's top line there and the
+tail of the document sits below the fold, and because the preview renders taller than the source
+- around a third for prose, several times across a heading, table or diagram - that tail is more
+than one screen of unread content.
+
+So over the last screenful the target is eased from the line-mapped position across to the end
+of the document: `endBlend` returns 0 through 1, and both directions of the sync apply it. The
+end of the document means the bottom of the last rendered block resting on the bottom edge of
+the pane, which is the mirror of where the caret leaves the editor - not the scroller's maximum,
+which is padding. The ramp keeps it continuous instead of a jump at the end, and everything
+above the last screenful is untouched.
+
+Which pane's progress is read is weighted the same way the anchor is, and for the same reason.
+Taken from the editor's scroll alone it saturates the moment a barely scrollable document
+reaches its stop, collapsing everything the caret does afterwards onto the end of the preview;
+taken from the preview alone it gives up the accuracy the editor has in the documents that do
+scroll.
+
+### Past the end
+
+Both panes go on scrolling after the document has run out, and by different amounts: a five-line
+cushion in the editor against 60vh of padding in the preview. There is no line and no pixel to
+map between two blank regions of different sizes, so `carryOverscroll` maps the proportion of
+the way through instead, picking up from wherever the easing left off so the join is continuous.
+It spends the shorter of the two blanks, so a nudge into a small cushion can never fling the
+other pane through a large one, and it is weighted - wheeling the blank below a document that
+never scrolled in the first place must not drag the other pane along, because there the caret is
+the anchor and it has not moved.
+
+`scrollBeyondLastLine` is off, and the cushion is `padding.bottom` instead. Monaco's own version
+of the option is a whole viewport of blank: the last line can be scrolled to the top of the
+pane, so a wheel at the end of a document buys a full screen of nothing with a document still on
+show beside it. The reason anyone wants the option is much smaller than what it gives - room to
+work on the last line without it sitting on the frame - and a fixed cushion is that room exactly.
+The cost is that `scrollToLine` can no longer lift a heading in the final screenful to the very
+top of the source pane.
+
 ---
 
 ## Why mermaid runs in an iframe
