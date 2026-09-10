@@ -1,4 +1,4 @@
-# Marqora build scripts
+﻿# Marqora build scripts
 
 Everything here is PowerShell 7 (`pwsh`) and everything is run from the repository root:
 
@@ -23,7 +23,7 @@ tree when run with no arguments; `Test-ButtonStandards.ps1` only ever reports, a
 
 | Script | What it does |
 |---|---|
-| `Add-FileHeaders.ps1` | Puts the copyright and SPDX licence header on every hand-written `.cs` file under `src\` and `tests\`. Idempotent, so re-running is safe. `IDE0073` is a build warning, so a missing header costs you a build. |
+| `Add-FileHeaders.ps1` | Puts the copyright and SPDX license header on every hand-written `.cs` file under `src\` and `tests\`. Idempotent, so re-running is safe. `IDE0073` is a build warning, so a missing header costs you a build. |
 | `Set-AmericanSpelling.ps1` | Rewrites British spellings to American ones. The word list is deliberately short and sits at the top of the script — add to it when a word actually turns up. |
 | `Test-ButtonStandards.ps1` | Checks the app's buttons against `docs\Button-App-Standards.md`: inline sizes, unstyled buttons, hard-coded colors. The mechanical half only; the document's checklist covers the rest. |
 
