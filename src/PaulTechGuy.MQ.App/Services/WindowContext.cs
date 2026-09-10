@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.UI.Xaml;
+using PaulTechGuy.MQ.Abstractions.Ui;
 
 namespace PaulTechGuy.MQ.App.Services;
 
@@ -29,4 +30,35 @@ public sealed class WindowContext
     /// the element tree the theme is set on.
     /// </summary>
     public FrameworkElement? Root => Window?.Content as FrameworkElement;
+
+    /// <summary>
+    /// The palette windows that can raise a prompt of their own.
+    ///
+    /// A palette is owned by the main window and so always floats above it. A dialog anchored
+    /// to the main window would open behind the palette the user just clicked in, which is a
+    /// prompt nobody can answer. Registering the window here is what lets one be anchored to
+    /// itself instead. See <see cref="DialogAnchor"/>.
+    /// </summary>
+    private readonly Dictionary<DialogAnchor, Window> _palettes = [];
+
+    public void Register(DialogAnchor anchor, Window window) => _palettes[anchor] = window;
+
+    public void Unregister(DialogAnchor anchor) => _palettes.Remove(anchor);
+
+    /// <summary>
+    /// What to anchor a prompt to, falling back to the main window.
+    ///
+    /// The fallback is not a formality: a palette that has been dismissed is still registered,
+    /// and a dialog anchored to a hidden window would be as invisible as the problem this
+    /// solves. An unregistered or hidden palette hands the prompt back to the main window,
+    /// which is always somewhere the user can see.
+    /// </summary>
+    public FrameworkElement? RootFor(DialogAnchor anchor) =>
+        anchor != DialogAnchor.MainWindow
+            && _palettes.TryGetValue(anchor, out Window? palette)
+            && palette.AppWindow?.IsVisible == true
+            ? palette.Content as FrameworkElement ?? Root
+            : Root;
+
+    public XamlRoot? XamlRootFor(DialogAnchor anchor) => RootFor(anchor)?.XamlRoot;
 }

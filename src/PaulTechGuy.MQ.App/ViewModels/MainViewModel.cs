@@ -595,6 +595,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _cheatsheet.VisibilityChanged += (_, visible) => IsCheatsheetVisible = visible;
         _diagramWindows.OpenCountChanged += (_, count) => OpenDiagramWindowCount = count;
         _findAll.MatchActivated += OnFindMatchActivated;
+        _findAll.ReplaceAllRequested += OnReplaceAllRequested;
 
         Tabs.CollectionChanged += OnTabsCollectionChanged;
     }
@@ -3866,9 +3867,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
 
             // Find All is the app's own window rather than one of the editor's actions, so it
-            // never reaches the shell.
+            // never reaches the shell. Replace All is the same window, opened on its replace
+            // row - unlike Replace, which is the editor's own widget on one document.
             case "findAll":
                 await FindAllCommand.ExecuteAsync(null).ConfigureAwait(true);
+                return;
+
+            case "replaceAll":
+                await ReplaceAllCommand.ExecuteAsync(null).ConfigureAwait(true);
                 return;
 
             default:
@@ -3880,6 +3886,134 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Opens Find All, seeded with whatever is selected in the editor.</summary>
     [RelayCommand]
     private async Task FindAllAsync() => _findAll.Show(await SelectedTermAsync().ConfigureAwait(true));
+
+    /// <summary>The same window, opened with its replace row showing.</summary>
+    [RelayCommand]
+    private async Task ReplaceAllAsync() =>
+        _findAll.Show(await SelectedTermAsync().ConfigureAwait(true), replaceMode: true);
+
+    /// <summary>
+    /// Applies a Replace All, once the user has said so.
+    ///
+    /// The window worked out what each document would become; this asks whether to go ahead and
+    /// then pushes each one into the editor the way the formatter does - a whole document at a
+    /// time, as a single undoable edit. Format All is the same shape and asks the same way.
+    ///
+    /// async void because it is an event handler. The request's Completion is settled in the
+    /// finally whatever happens, because the window's Replace All button is waiting on it.
+    /// </summary>
+    private async void OnReplaceAllRequested(object? sender, ReplaceAllRequestedEventArgs e)
+    {
+        try
+        {
+            if (_host is null)
+            {
+                return;
+            }
+
+            int documents = e.Documents.Count;
+            bool one = documents == 1;
+
+            /*
+                Naming the document when there is only one is not decoration.
+
+                The dialog is anchored to the Find All window and dims the list behind it, so the
+                rows it was just about to describe are the one thing the user cannot read while
+                deciding. With the scope on the active tab, pressing Replace All after clicking
+                to another tab replaces in the tab now in front - correct, and impossible to
+                confirm safely from a bare "1 document".
+
+                And an empty replacement removes every match rather than changing it, which no
+                count can say.
+            */
+            string where = one
+                ? $"{Matches(e.TotalMatches)} in {e.Documents[0].Name}"
+                : $"{Matches(e.TotalMatches)} across {documents} documents";
+
+            string undo = one
+                ? "It becomes unsaved, and can be undone with Ctrl+Z."
+                : "Each becomes unsaved, and each can be undone separately with Ctrl+Z.";
+
+            ConfirmResult answer = await _dialogs.ConfirmAsync(
+                "Replace all matches?",
+                $"{where} will be {(e.IsDeletion ? "deleted" : "replaced")}. {undo}",
+                "Replace all",
+                anchor: DialogAnchor.FindAll).ConfigureAwait(true);
+
+            if (answer != ConfirmResult.Primary)
+            {
+                return;
+            }
+
+            int replaced = 0;
+            int changed = 0;
+            int skipped = 0;
+
+            foreach (ReplaceDocumentResult document in e.Documents)
+            {
+                /*
+                    Closed, or edited while the confirmation was up.
+
+                    The window searches immediately before asking, so the set is current when the
+                    question goes up - but the confirmation is not modal to the workspace: a file
+                    watcher reloading from disk, or a keystroke in another tab, can land between
+                    the question and the answer. Documents are immutable records, so the string
+                    reference is the version stamp - the same test the window itself uses to know
+                    its results have gone stale.
+
+                    Without this, a rewrite worked out before the dialog opened would overwrite
+                    whatever was typed while it stood.
+                */
+                if (_workspace.Find(document.DocumentId) is not { } live
+                    || !ReferenceEquals(live.Text, document.OriginalText))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                _workspace.ApplyEdit(document.DocumentId, document.NewText);
+
+                RenderedMarkdown rendered = await RenderAsync(document.DocumentId, document.NewText)
+                    .ConfigureAwait(true);
+
+                await _host.ReplaceTextAsync(document.DocumentId, document.NewText, rendered)
+                    .ConfigureAwait(true);
+
+                await PublishChecksAsync(
+                    document.DocumentId,
+                    document.NewText,
+                    _workspace.Find(document.DocumentId)?.Path,
+                    rendered).ConfigureAwait(true);
+
+                replaced += document.Count;
+                changed++;
+            }
+
+            _logger.LogInformation(
+                "Replace All: {Matches} matches in {Changed} documents, {Skipped} skipped.",
+                replaced, changed, skipped);
+
+            // What was actually written, not what was offered: a document skipped above still
+            // counted towards the total the question named.
+            StatusText = skipped == 0
+                ? $"Replaced {Matches(replaced)} in {changed} document{(changed == 1 ? string.Empty : "s")}"
+                : $"Replaced {Matches(replaced)} in {changed} document{(changed == 1 ? string.Empty : "s")}; "
+                    + $"{skipped} changed underneath and {(skipped == 1 ? "was" : "were")} left alone";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "The Replace All could not be applied.");
+            StatusText = "The replacement could not be applied";
+        }
+        finally
+        {
+            // The window is waiting on this to hand its button back.
+            e.Completion.TrySetResult(true);
+        }
+    }
+
+    /// <summary>"1 match" or "4 matches", for a sentence that reads.</summary>
+    private static string Matches(int count) => count == 1 ? "1 match" : $"{count} matches";
 
     /// <summary>
     /// The editor's selection, when it is worth searching for.
@@ -6567,6 +6701,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 case "findAll":
                     await FindAllCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "replaceAll":
+                    await ReplaceAllCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "close" when CloseTabCommand.CanExecute(null):

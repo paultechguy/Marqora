@@ -2513,6 +2513,7 @@
     // Edit and tools.
     { shift: true, alt: true, code: 'KeyF', run: 'formatDocument' },
     { ctrl: true, shift: true, code: 'KeyF', run: 'findAll' },
+    { ctrl: true, shift: true, code: 'KeyH', run: 'replaceAll' },
     { ctrl: true, shift: true, code: 'KeyC', run: 'copyRichText' },
     { ctrl: true, code: 'F1', run: 'cheatsheet' },
 
@@ -3200,13 +3201,28 @@
     var position = isActive ? editor.getPosition() : null;
     var scrollTop = isActive ? editor.getScrollTop() : 0;
 
-    if (isActive) { editor.pushUndoStop(); }
+    /*
+      Undo stops either side, whether or not this tab is the one on screen.
+
+      editor.pushUndoStop only exists for the editor, and the editor is only ever attached to
+      the active tab's model - so a background tab used to get the bare edit, which Monaco is
+      then free to fold into whatever edit element that model already had open. One Ctrl+Z
+      after switching to it could take back the rewrite *and* the last thing typed there.
+
+      pushStackElement is the model's own version of the same thing, and closing the element on
+      both sides is what makes "each document can be undone separately" true for every tab
+      rather than only the visible one. Replace All says exactly that in its confirmation, and
+      Format All has always meant it.
+    */
+    if (isActive) { editor.pushUndoStop(); } else { model.pushStackElement(); }
 
     model.pushEditOperations(
       [],
       [{ range: model.getFullModelRange(), text: text, forceMoveMarkers: true }],
       function () { return null; }
     );
+
+    if (!isActive) { model.pushStackElement(); }
 
     if (isActive) {
       editor.pushUndoStop();

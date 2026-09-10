@@ -702,7 +702,7 @@ mode. A results list is a list of lines and a match covering three of them would
 to sit on; the trade is that `^` and `$` anchor per line without `Multiline` entering into it.
 Line breaks are counted as the editor counts them — CRLF, LF and a bare CR each end one — so
 a file with mixed endings still reports the numbers shown in the gutter. The finder never
-splits a document into an array of lines: it walks spans and materialises a string only for
+splits a document into an array of lines: it walks spans and materializes a string only for
 lines that hold a match, shared across every match on that line.
 
 Two ceilings keep a loose search from taking the window down with it: 5,000 matches, and one
@@ -739,6 +739,22 @@ queued onto the same chain, behind whatever the activation put there.
 Selecting a row does not take the keyboard; `Enter` and double-click do. That is what lets
 the arrow keys walk the list with the editor following along, which is most of the value of
 having a list at all.
+
+### Stepping the results
+
+`F3` and `Shift+F3` move the selection through the list while the window has focus, which is
+the same pair the editor steps its own find with. There is no collision: which one they mean is
+settled by what has focus, exactly as `Ctrl+F` already is — the main window's accelerators live
+on its own tree and the shell's live inside the WebView, so neither can be reached from a
+focused palette.
+
+They step *matches*, skipping the document headings, and the arrow keys still walk every row.
+That difference is deliberate. A heading is inert — `ActivateSelectedMatch` only answers to a
+match row, so selecting one shows nothing — and if `F3` landed on one it would spend a keystroke
+doing nothing at every document boundary. "Next row" and "next match" are different questions,
+and the list is one place where both are worth asking. Stepping wraps at either end, and moves
+the selection only: showing the match in the editor is already what a selection change does, and
+it deliberately leaves the keyboard in the window so the keys keep working.
 
 ### Going to the first result on its own
 
@@ -784,10 +800,109 @@ lookup and gets away with it only because a WebView covers every pixel of the re
 All writes its surface and highlight colors out per theme instead, the way the caption
 colors already were.
 
-**The accent overrides in `App.xaml` do not reach a second window's tree.** An
+**The accent overrides in `App.xaml` did not reach a second window's tree.** An
 `AccentButtonStyle` button came up in the user's Windows accent rather than Marqora's teal,
-which is the one color in the app that is nobody's choice. Find All uses a plain button;
-`Enter` runs the search anyway, so the emphasis was carrying little.
+which was then the one color in the app that was nobody's choice — so Find All used a plain
+button. Both halves have since stopped being true: the teal override was removed from
+`App.xaml` deliberately, and the user's accent is now what the tab strip, the change notice and
+every dialog already wear. Find All's button takes `MqStyles.PrimaryCommandButton` today, and
+the comment above it in `FindAllWindow.BuildQuery` records the same reversal.
+
+### Replace All
+
+`Ctrl+Shift+H` is the same window with one more row. The toggle at the left of the search box
+folds a *Replace with* box in and out, the way the editor's own find widget does it, and
+everything above it — the term, the three switches, the scope, the results already on screen —
+is the same question either way. That is the whole reason it is a mode and not a second
+window, and why turning it on re-runs nothing.
+
+**The matches are found twice, deliberately.** `DocumentFinder` walks a line as a span and
+reports `ValueMatch`, which is an index and a length: no groups, which is exactly what lets it
+leave a line that does not match unallocated. A replacement of `$1` needs `Match.Groups`, and
+`Match` needs a real string, so `DocumentReplacer` runs its own scan. What the two share is the
+*definition* of a match — line splitting, the whole-word rule, the regex options and the time
+budget are all `internal` on `DocumentFinder` and called from the replacer, because a replace
+that disagreed with the find that listed the matches would be the worst bug available here:
+the user confirms against the count the find reported. A test asserts the two totals agree.
+
+Substitution itself is `Match.Result`, which already implements `$1`, `${name}`, `$&` and `$$`.
+It cannot fail — every sequence it does not recognize comes through as literal text — so there
+is no error path for the replacement box, only for the pattern. In literal mode the replacement
+is inserted exactly as typed, because there is no pattern for a `$` to refer back to. That
+asymmetry is the one place the two modes part company, and the help icon beside the box says
+which mode it is talking about.
+
+**Nothing new goes over the bridge.** Each document's whole new text is built in C# first — one
+forward pass over ascending, non-overlapping matches — and then pushed through the same
+`replaceText` message the formatter has always used, one document at a time. `replaceAllText`
+in the shell already addresses a tab by id rather than through the live editor, and models are
+created when a tab opens rather than when it is shown, so a background tab is reachable without
+switching to it. Nothing downstream has to reason about positions shifting as edits land.
+
+**It asks first, and the question has to be visible.** `MainViewModel.OnReplaceAllRequested`
+confirms before it writes anything, the way `FormatAllDocumentsAsync` does for the same
+"rewrite every open document" shape. But a `ContentDialog` is drawn in one window's popup root,
+and a palette is *owned* by the main window, so it always floats above it: a prompt anchored to
+the main window would have opened underneath Find All, invisible, with the app waiting on an
+answer nobody could see. `IDialogService.ConfirmAsync` therefore takes a `DialogAnchor`, and
+`WindowContext` keeps a small registry of the palettes that can raise one. It names the window
+rather than passing a `XamlRoot`, which is what keeps the interface free of the UI framework.
+
+**Replace All finds first, always.** It began life disabled until a search had been run, which
+meant the button the shortcut promised was dead on arrival and the fix — press a *different*
+button — was written down nowhere. A disabled WinUI control shows no tooltip, so the
+explanation could not live on the button either. It now runs the search itself and then
+confirms, which is also what keeps it honest: the list is rebuilt moments before the scan, so
+what is on screen is what gets rewritten. That closes a whole family of drift. Editing the term
+without re-searching, changing an option or the scope, or editing a document all used to leave
+the rows describing one thing while a replace did another; none of them survive a listing that
+is refreshed on the way past.
+
+The one bit that matters is whether the search *finished*. `SearchAsync` returns a `bool`,
+false for nothing typed, nothing open, a pattern that would not compile, no matches — and for a
+search overtaken by a newer one. That last case is the dangerous one and the reason the return
+value exists: `SearchAsync` opens by cancelling whatever is in flight, and a keystroke in the
+window (`F5`, `Enter` in either box, a pick from the history) can cancel the replace path's own
+search part-way. The cancelled call returns quietly without touching the list, so a Replace All
+that ignored the answer would rewrite whatever the *previous* search happened to leave behind.
+
+**What gets replaced is what was listed, not what is open.** `SearchedDocuments` rebuilds the
+set from `_searched` rather than calling `Gather`. `Gather` reads the live workspace, and the
+live workspace is not what the list describes — with the scope on the active tab it would reach
+whichever tab is in front rather than the one searched, and with the scope on every tab it
+would sweep in a document opened since. Tab activation is not something the window marks stale
+(`NoteWorkspaceChange` ignores any document outside the searched set), so nothing else was
+going to catch it.
+
+Two refusals remain, both about not rewriting something unseen. A search that hit the
+5,000-match ceiling is refused rather than confirmed: the finder stops scanning *documents* at
+the ceiling, so what came back covers an arbitrary part of the workspace, and listing that much
+is useful where rewriting it is not. And an empty search term does nothing but say so and put
+the keyboard back in the box — the one case the button genuinely cannot act on, answered with a
+sentence rather than with grey.
+
+Between the question and the answer, a file watcher or another tab can still move a document,
+so each one is checked again immediately before it is written — reference equality on the
+immutable `Text`, the same free version stamp the window uses to know its own results have gone
+stale. A document that moved is skipped and said so in the status line, rather than having a
+rewrite computed before the dialog opened dropped on top of it.
+
+The question itself has to carry more than a count. The dialog is anchored to the Find All
+window, which means it dims the list behind it — the rows it is describing are the one thing
+that cannot be read while deciding. So when a single document is affected it is named rather
+than counted, which is what makes replacing in the active tab safe to confirm after switching
+tabs. And an empty replacement box removes every match instead of changing it, which no count
+can say, so the dialog says *deleted* in that case. The shortest route to it takes no typing at
+all — select a word, `Ctrl+Shift+H`, Replace All — which is exactly why it is worth spelling
+out.
+
+Undo is per document, which is what the confirmation promises. That needed a fix in the shell:
+`editor.pushUndoStop` only exists for the editor, and the editor is only ever attached to the
+active tab, so a background tab used to take the bare edit and Monaco was free to fold it into
+whatever edit element that model already had open — one `Ctrl+Z` could have taken back the
+rewrite *and* the last thing typed there. `model.pushStackElement` on both sides is the model's
+own version of the same thing. Format All had the same latent gap and is fixed by the same
+line.
 
 ---
 

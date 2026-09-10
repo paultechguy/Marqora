@@ -34,6 +34,9 @@ internal static class MqStyles
     /// <summary>A quiet toolbar button: no chrome until the pointer arrives.</summary>
     public static Style ToolButton => Style("MqToolButtonStyle");
 
+    /// <summary>The two-state twin of <see cref="ToolButton"/>, for a switch that stays down.</summary>
+    public static Style ToolToggle => Style("MqToolToggleStyle");
+
     /// <summary>Square, glyph only, at the chrome row height.</summary>
     public static Style IconButton => Style("MqIconButtonStyle");
 
@@ -65,6 +68,7 @@ internal static class MqStyles
     public static void Verify()
     {
         _ = ToolButton;
+        _ = ToolToggle;
         _ = IconButton;
         _ = CompactToolButton;
         _ = CommandButton;

@@ -19,6 +19,7 @@ thing runs on your machine: no account, no sign-in, no network call, no telemetr
 - [ ] Press `Ctrl+F1` for the Markdown cheatsheet, and leave it beside the editor
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
+- [ ] Press `Ctrl+Shift+H` and replace across all of them, in one step
 - [ ] Type a word wrong on purpose, then press `Ctrl+.` on it
 
 Nothing here is a demo mode. It is the app, and this is an ordinary Markdown file.
@@ -80,7 +81,14 @@ small style slips the formatter would fix.
 
 **Find All.** `Ctrl+Shift+F` answers "where does this appear?" in one window: every match at
 once, across every open document, grouped by the file it came from. Select a row and the
-source pane switches tabs, scrolls to the line and selects the text.
+source pane switches tabs, scrolls to the line and selects the text. `F3` and `Shift+F3` walk
+the matches without leaving the window.
+
+**Replace All.** `Ctrl+Shift+H` is the same window with a *Replace with* box unfolded — or use
+the chevron beside the search box to fold it out yourself. Fill both boxes and press **Replace
+All**; it finds the matches and asks before changing anything, naming how many and where. In
+regular-expression mode the replacement can refer back to what matched with `$1`, `${name}` or
+`$&`, and the icon beside the box lists them. Every document it touches is one `Ctrl+Z`.
 
 **The outline.** `Alt+4` lists this document's headings down the side, indented by level, and
 highlights whichever section you are reading — the caret's in the source pane, the top of the
@@ -203,7 +211,7 @@ page whenever you want it.
 | Open                     | `Ctrl+O`                  | Bold / italic                  | `Ctrl+B` / `Ctrl+I` |
 | Open folder              | `Ctrl+Shift+O`            | Link                           | `Ctrl+K`            |
 | Save / Save all          | `Ctrl+S` / `Ctrl+Shift+S` | Format document                | `Shift+Alt+F`       |
-| New tab / close tab      | `Ctrl+N` / `Ctrl+W`       | Find All                       | `Ctrl+Shift+F`      |
+| New tab / close tab      | `Ctrl+N` / `Ctrl+W`       | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
 | Source / split / preview | `Alt+1` `Alt+2` `Alt+3`   | Cheatsheet                     | `Ctrl+F1`           |
 | Show / hide the outline  | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`       |
 | Spell check on / off     | `F7`                      | Correct the word at the cursor | `Ctrl+.`            |

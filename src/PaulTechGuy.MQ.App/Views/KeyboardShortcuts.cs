@@ -75,6 +75,7 @@ internal static class KeyboardShortcuts
             new("Find previous", "Shift+F3"),
             new("Find all", "Ctrl+Shift+F"),
             new("Replace", "Ctrl+H"),
+            new("Replace all", "Ctrl+Shift+H"),
             new("Go to line", "Ctrl+G"),
             new("Undo", "Ctrl+Z"),
             new("Redo", "Ctrl+Y"),

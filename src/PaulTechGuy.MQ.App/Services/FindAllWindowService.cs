@@ -29,7 +29,9 @@ public sealed class FindAllWindowService(
 
     public event EventHandler<FindMatchActivatedEventArgs>? MatchActivated;
 
-    public void Show(string? seedTerm)
+    public event EventHandler<ReplaceAllRequestedEventArgs>? ReplaceAllRequested;
+
+    public void Show(string? seedTerm, bool replaceMode = false)
     {
         try
         {
@@ -44,11 +46,16 @@ public sealed class FindAllWindowService(
                     loggerFactory.CreateLogger<FindAllWindow>());
 
                 _window.MatchActivated += OnMatchActivated;
+                _window.ReplaceAllRequested += OnReplaceAllRequested;
+
+                // So a prompt this window raises is anchored to it rather than to the main
+                // window, which it floats above. See DialogAnchor.
+                window.Register(DialogAnchor.FindAll, _window);
 
                 logger.LogInformation("Opened the Find All window.");
             }
 
-            _window.Present(seedTerm, MainWindowBounds());
+            _window.Present(seedTerm, replaceMode, MainWindowBounds());
         }
         catch (Exception ex)
         {
@@ -57,6 +64,8 @@ public sealed class FindAllWindowService(
             if (_window is not null)
             {
                 _window.MatchActivated -= OnMatchActivated;
+                _window.ReplaceAllRequested -= OnReplaceAllRequested;
+                window.Unregister(DialogAnchor.FindAll);
                 _window = null;
             }
         }
@@ -76,6 +85,8 @@ public sealed class FindAllWindowService(
         try
         {
             _window.MatchActivated -= OnMatchActivated;
+            _window.ReplaceAllRequested -= OnReplaceAllRequested;
+            window.Unregister(DialogAnchor.FindAll);
             _window.Shutdown();
         }
         catch (Exception ex)
@@ -90,6 +101,9 @@ public sealed class FindAllWindowService(
 
     private void OnMatchActivated(object? sender, FindMatchActivatedEventArgs e) =>
         MatchActivated?.Invoke(this, e);
+
+    private void OnReplaceAllRequested(object? sender, ReplaceAllRequestedEventArgs e) =>
+        ReplaceAllRequested?.Invoke(this, e);
 
     /// <summary>Where to put the window the first time, before it has a saved position.</summary>
     private RectInt32 MainWindowBounds()

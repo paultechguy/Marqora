@@ -470,6 +470,11 @@
                                         CommandParameter="replace"
                                         IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+H" />
+                        <MenuFlyoutItem Text="Replace All..."
+                                        Command="{x:Bind ViewModel.EditActionCommand}"
+                                        CommandParameter="replaceAll"
+                                        IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+H" />
 
                         <MenuFlyoutSeparator />
 

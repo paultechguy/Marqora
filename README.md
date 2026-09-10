@@ -182,6 +182,7 @@ would rather not reach for the mouse.
 | ✍️ | **Monaco editing** | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom |
 | 🎨 | **A formatting bar that pays attention** | Bold, lists, headings and the rest, one click away — and the buttons light up for whatever the caret is sitting inside |
 | 🔍 | **Find All** | Every match in one window, across one tab or all of them, grouped by document. Walk the list with the arrow keys and the editor follows along |
+| 🔁 | **Replace All** | The same window with a replacement box, across every open tab at once. Regular-expression capture groups, a count to confirm against, and one undo per document |
 | 🧭 | **Outline panel** | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there |
 | 🧹 | **One-key document formatting** | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word |
 | 📊 | **Mermaid 11 diagrams** | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast |
@@ -364,6 +365,7 @@ question "where does this appear?".
 | Options | Match case, whole word, regular expression — the same three the find bar offers |
 | Scope | Active tab, or all open tabs |
 | Run it | `Enter` in the search box, the **Find All** button, or `F5` to run it again |
+| Step the results | `F3` and `Shift+F3` move to the next and previous match, skipping the document headings and wrapping at either end |
 | Go to a match | Select a row. The source pane switches tabs if it has to, scrolls the line into view and selects the matched text |
 | Start again | **Clear**, or the search box's own clear button — either empties the term and the results together |
 | Dismiss | `Esc`. The window hides rather than closing, so the results are still there next time |
@@ -381,6 +383,25 @@ never quietly select the wrong thing.
 Regular expressions are .NET's, matched a line at a time — a pattern cannot span a line
 break, and `^` and `$` anchor to the line. A pattern that will not compile is reported in
 place of the results, and one that runs away is cut off rather than hanging the window.
+
+**Replace All**
+
+`Edit > Replace All...` (`Ctrl+Shift+H`) is the same window with a **Replace with** box folded
+out — the chevron beside the search box opens and closes it, so you can switch between finding
+and replacing without reopening anything. `Ctrl+H` is still the editor's own replace, for one
+document at a time; this one covers every open tab.
+
+| | |
+|---|---|
+| Run it | Fill both boxes and press **Replace All**. It runs the search itself, so there is no need to find first |
+| Confirm | It asks before changing anything, naming how many matches and which document — or how many documents |
+| Capture groups | In regular-expression mode the replacement can use `$1`, `$2`, `${name}` or `$&`. The icon beside the box lists them. In plain text mode the replacement is inserted exactly as typed |
+| Deleting | An empty **Replace with** box removes every match, and the confirmation says so |
+| Undo | One `Ctrl+Z` per document, whether or not that tab is the one on screen |
+
+Nothing is written to disk: each document it touches simply becomes unsaved. A search matching
+more than 5,000 times is refused rather than confirmed, since it stops scanning part-way and
+would rewrite an arbitrary part of the workspace.
 
 **Writing markdown**
 

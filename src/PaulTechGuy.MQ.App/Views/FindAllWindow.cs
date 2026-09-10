@@ -44,10 +44,24 @@ namespace PaulTechGuy.MQ.App.Views;
         + "application calls as it exits.")]
 public sealed partial class FindAllWindow : PaletteWindow
 {
+    /// <summary>Why there are no rows, which is not the same question as what to say about it.</summary>
+    private enum EmptyState
+    {
+        /// <summary>Nothing has been looked for yet.</summary>
+        BeforeSearch,
+
+        /// <summary>Something was, and it is not there.</summary>
+        NothingFound,
+    }
+
     /// <summary>Narrow enough to sit beside the editor, wide enough for a line of markdown.</summary>
     private const int DefaultMinimumWidth = 520;
 
-    private const int DefaultMinimumHeight = 320;
+    /// <summary>
+    /// Tall enough that the results are still a list once the replace row and the staleness
+    /// notice are both showing. It was 320 before either existed.
+    /// </summary>
+    private const int DefaultMinimumHeight = 368;
 
 
     /// <summary>How many terms the recent list keeps. A dropdown, not a history file.</summary>
@@ -72,6 +86,18 @@ public sealed partial class FindAllWindow : PaletteWindow
     private const string BeforeFirstSearch = "Results appear here";
     private const string NothingFound = "No matches";
 
+    /// <summary>
+    /// What the replace row's placeholder says before anything has been searched for.
+    ///
+    /// Instructional rather than descriptive, and deliberately so: the button it names used to
+    /// be disabled until a search had been run, which sent people hunting for the reason. It
+    /// names the next action outright instead of leaving it to be inferred from two button
+    /// labels, and puts Find All where it belongs - the optional look before the leap.
+    /// </summary>
+    private const string BeforeFirstReplace =
+        "Type what to find and what to replace it with, then press Replace All."
+        + "\n\nFind All lists the matches first, if you want to look before replacing.";
+
     private readonly IWorkspaceService _workspace;
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
@@ -87,6 +113,26 @@ public sealed partial class FindAllWindow : PaletteWindow
     /// </summary>
     private readonly AutoSuggestBox _term = new();
     private readonly Button _history = new();
+
+    /// <summary>
+    /// Shows and hides the replace row, the way the editor's own find widget does it.
+    ///
+    /// A switch rather than a second window: the term, the three options and the scope are the
+    /// same question whichever is being done with the answer, and Replace All is Find All with
+    /// somewhere for the matches to go.
+    /// </summary>
+    private readonly ToggleButton _replaceToggle = new();
+
+    /// <summary>
+    /// What each match becomes.
+    ///
+    /// A TextBox where the term is an AutoSuggestBox, deliberately. The recent-terms list earns
+    /// its complexity because a search is repeated across sessions; a replacement is typed once
+    /// and used once, which is the same reason the editor's own widget offers no history here.
+    /// </summary>
+    private readonly TextBox _replaceWith = new();
+
+    private readonly Button _replaceAll = new();
     private readonly CheckBox _matchCase = new();
     private readonly CheckBox _wholeWord = new();
     private readonly CheckBox _useRegex = new();
@@ -108,6 +154,7 @@ public sealed partial class FindAllWindow : PaletteWindow
     private readonly StackPanel _staleNotice = new();
     private readonly Button _clear = new();
     private readonly TextBlock _hint = new();
+    private readonly Grid _replaceRow = new();
     private readonly Border _frame = new();
     private readonly FindResultsList _results = new();
 
@@ -142,6 +189,23 @@ public sealed partial class FindAllWindow : PaletteWindow
     private TextBox? _termText;
 
     private FindScope _selectedScope = FindScope.AllDocuments;
+
+    /// <summary>Whether the replace row is showing. Not remembered: it is a mode, not a
+    /// preference.</summary>
+    private bool _replaceMode;
+
+    /// <summary>
+    /// Why the list is empty, which decides what shows through it. Kept rather than passed
+    /// straight to the placeholder, because the answer also depends on the mode - and the mode
+    /// can change without a search running.
+    /// </summary>
+    private EmptyState _empty = EmptyState.BeforeSearch;
+
+    /// <summary>
+    /// Set from the moment Replace All is pressed until the whole thing is over, confirmation
+    /// included, so the button cannot be pressed into a second one behind the first.
+    /// </summary>
+    private bool _replacing;
 
     private bool _isShuttingDown;
 
@@ -185,18 +249,33 @@ public sealed partial class FindAllWindow : PaletteWindow
     public event EventHandler<FindMatchActivatedEventArgs>? MatchActivated;
 
     /// <summary>
+    /// Raised when the user asks to replace every match listed. Nothing has been written yet -
+    /// whoever owns the editor confirms it and applies it.
+    /// </summary>
+    public event EventHandler<ReplaceAllRequestedEventArgs>? ReplaceAllRequested;
+
+    /// <summary>
     /// Shows the window and puts the keyboard in the search box.
     ///
     /// Unlike the cheatsheet this one does take focus, because the user has just asked to
     /// type a search term and there is nowhere else for those keystrokes to go.
     /// </summary>
-    public void Present(string? seedTerm, RectInt32 nearby)
+    /// <param name="replaceMode">
+    /// True to open with the replace row showing. Only ever turns it on: coming back by Find
+    /// All should not fold away a row that is being worked in.
+    /// </param>
+    public void Present(string? seedTerm, bool replaceMode, RectInt32 nearby)
     {
         RestorePlacement(nearby);
 
         if (!string.IsNullOrEmpty(seedTerm))
         {
             _term.Text = seedTerm;
+        }
+
+        if (replaceMode)
+        {
+            SetReplaceMode(true);
         }
 
         _focusPending = true;
@@ -259,14 +338,26 @@ public sealed partial class FindAllWindow : PaletteWindow
         var panel = new StackPanel { Spacing = 10 };
 
         var grid = new Grid { ColumnSpacing = 8 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // At the left edge, where the editor's own find widget keeps the same switch, and
+        // before the box rather than after it: it governs the row underneath, not the term.
+        // The style carries its own height; see Button-App-Standards on not overriding one.
+        _replaceToggle.Style = MqStyles.ToolToggle;
+        _replaceToggle.Content = ReplaceGlyph(open: false);
+        _replaceToggle.Click += (_, _) => SetReplaceMode(_replaceToggle.IsChecked == true);
+        ToolTipService.SetToolTip(_replaceToggle, "Replace");
+        AutomationProperties.SetName(_replaceToggle, "Show replace");
+        Place(grid, _replaceToggle, 0, 0);
 
         _term.PlaceholderText = "Find what";
         _term.Height = ControlHeight;
 
-        // About seven terms before it scrolls. The window can be as short as 320 and the
-        // popup is held inside it, so a list left to its own size would be cut off instead.
+        // About seven terms before it scrolls. The window can be as short as
+        // DefaultMinimumHeight and the popup is held inside it, so a list left to its own size
+        // would be cut off instead.
         _term.MaxSuggestionListHeight = 240;
 
         // Enter in the box and a term picked out of the list both arrive here, which leaves
@@ -290,7 +381,7 @@ public sealed partial class FindAllWindow : PaletteWindow
         // at.
         _term.TextChanged += OnTermTextChanged;
         AutomationProperties.SetName(_term, "Find what");
-        Place(grid, _term, 0, 0);
+        Place(grid, _term, 0, 1);
 
         _history.Style = Application.Current.Resources["MqToolButtonStyle"] as Style;
         _history.Height = ControlHeight;
@@ -298,9 +389,10 @@ public sealed partial class FindAllWindow : PaletteWindow
         _history.Click += (_, _) => ShowHistory();
         ToolTipService.SetToolTip(_history, "Recent searches");
         AutomationProperties.SetName(_history, "Recent searches");
-        Place(grid, _history, 0, 1);
+        Place(grid, _history, 0, 2);
 
         panel.Children.Add(grid);
+        panel.Children.Add(BuildReplace());
 
         var lower = new Grid { ColumnSpacing = 8 };
         lower.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -386,6 +478,124 @@ public sealed partial class FindAllWindow : PaletteWindow
     }
 
     /// <summary>
+    /// The replace row, hidden until the switch beside the search box is turned on.
+    ///
+    /// A Grid rather than a horizontal StackPanel, for the reason the search box above is one:
+    /// a text box in a StackPanel is measured against infinite width and settles at whatever it
+    /// wants, which is nothing. The star column is what gives it the row.
+    /// </summary>
+    private Grid BuildReplace()
+    {
+        _replaceRow.ColumnSpacing = MqStyles.ButtonGroupSpacing;
+        _replaceRow.Visibility = Visibility.Collapsed;
+
+        _replaceRow.ColumnDefinitions.Add(
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _replaceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _replaceRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        _replaceWith.PlaceholderText = "Replace with";
+        _replaceWith.Height = ControlHeight;
+        _replaceWith.FontSize = ControlFontSize;
+        AutomationProperties.SetName(_replaceWith, "Replace with");
+
+        // Enter runs the search, exactly as it does in the term box. What this window commits
+        // is a find; replacing is the second, deliberate press of a button.
+        _replaceWith.KeyDown += (_, args) =>
+        {
+            if (args.Key is not VirtualKey.Enter)
+            {
+                return;
+            }
+
+            args.Handled = true;
+            Search();
+        };
+
+        Place(_replaceRow, _replaceWith, 0, 0);
+
+        ContentControl hint = ReplacementSyntaxHint();
+        hint.VerticalAlignment = VerticalAlignment.Center;
+        Place(_replaceRow, hint, 0, 1);
+
+        /*
+            Neutral, and never the default.
+
+            The one accent on this surface belongs to Find All, which is what the window
+            commits - and a button that rewrites every open document is not something to arrive
+            at by pressing Enter on the way past. Button-App-Standards says a destructive action
+            takes a plain fill and an explicit verb, which "Replace All" is.
+        */
+        _replaceAll.Content = "Replace All";
+        _replaceAll.Style = MqStyles.CommandButton;
+        _replaceAll.Click += (_, _) => ReplaceAll();
+        ToolTipService.SetToolTip(_replaceAll, "Find every match and replace it");
+
+        Place(_replaceRow, _replaceAll, 0, 2);
+
+        return _replaceRow;
+    }
+
+    /// <summary>
+    /// What a replacement can say, stated once for the popup and for the screen reader.
+    ///
+    /// Only true in regular-expression mode, which is why the note at the end of the hint says
+    /// so: a dollar sign in a literal replacement is a dollar sign.
+    /// </summary>
+    private static readonly (string Syntax, string Meaning)[] ReplacementSyntax =
+    [
+        ("$1", "what the first group matched, $2 the second, and so on"),
+        ("${name}", "what a named group matched"),
+        ("$&", "the whole match"),
+        ("$$", "a single dollar sign"),
+    ];
+
+    private static ContentControl ReplacementSyntaxHint()
+    {
+        var panel = new StackPanel { Spacing = 8, MaxWidth = 340 };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "With Regular expression on, the replacement can refer back to what matched:",
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var table = new Grid { ColumnSpacing = 12, RowSpacing = 4 };
+        table.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        for (int row = 0; row < ReplacementSyntax.Length; row++)
+        {
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            (string syntax, string meaning) = ReplacementSyntax[row];
+
+            Place(table, new TextBlock { Text = syntax, FontFamily = new FontFamily("Consolas") }, row, 0);
+            Place(table, new TextBlock { Text = meaning, TextWrapping = TextWrapping.Wrap }, row, 1);
+        }
+
+        panel.Children.Add(table);
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Without it, the replacement is used exactly as typed.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.75,
+        });
+
+        return DialogFields.Hint(panel, "Replacement syntax", ReplacementSyntaxHelpText());
+    }
+
+    /// <summary>
+    /// The same content as a sentence, for Narrator. Built from the list above rather than
+    /// written out again, so the two cannot come to disagree.
+    /// </summary>
+    private static string ReplacementSyntaxHelpText() =>
+        "Replacement syntax. With Regular expression on: "
+        + string.Join("; ", ReplacementSyntax.Select(entry => $"{entry.Syntax} is {entry.Meaning}"))
+        + ". Without it, the replacement is used exactly as typed.";
+
+    /// <summary>
     /// The line under the search box: what was found, whether it still holds, and what to do
     /// about it.
     ///
@@ -468,11 +678,17 @@ public sealed partial class FindAllWindow : PaletteWindow
             ActivateSelectedMatch(focusEditor: true);
         };
 
-        _hint.Text = BeforeFirstSearch;
+        ShowEmptyState();
         _hint.Opacity = 0.55;
         _hint.HorizontalAlignment = HorizontalAlignment.Center;
         _hint.VerticalAlignment = VerticalAlignment.Center;
         _hint.TextAlignment = TextAlignment.Center;
+
+        // The replace-mode text is two sentences rather than three words, so it needs somewhere
+        // to wrap and a width to wrap at - left alone it would run the full span of a wide
+        // window and read as a banner rather than a note.
+        _hint.TextWrapping = TextWrapping.Wrap;
+        _hint.MaxWidth = 380;
 
         var layers = new Grid();
         layers.Children.Add(_hint);
@@ -512,12 +728,42 @@ public sealed partial class FindAllWindow : PaletteWindow
         root.KeyboardAccelerators.Add(Accelerator(VirtualKey.Escape, VirtualKeyModifiers.None, Dismiss));
         root.KeyboardAccelerators.Add(Accelerator(VirtualKey.F5, VirtualKeyModifiers.None, Search));
 
+        // The same keys the editor steps its own find with, over this window's list instead.
+        // Which one they mean is decided by what has focus, exactly as Ctrl+F already is.
+        root.KeyboardAccelerators.Add(Accelerator(
+            VirtualKey.F3,
+            VirtualKeyModifiers.None,
+            () => StepMatch(forward: true)));
+
+        root.KeyboardAccelerators.Add(Accelerator(
+            VirtualKey.F3,
+            VirtualKeyModifiers.Shift,
+            () => StepMatch(forward: false)));
+
         // The shortcut that opened the window brings the keyboard back to the term when the
         // window already has focus, which is what every other search box does.
         root.KeyboardAccelerators.Add(Accelerator(
             VirtualKey.F,
             VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift,
             FocusTerm));
+
+        // And the same for the shortcut that opens it on a replace. Both live here as well as
+        // in the main window because the main window's accelerators are on its own tree and the
+        // shell's are inside the WebView: neither can be reached from a focused palette, so
+        // without this the shortcut would be a dead key in the one window it is about.
+        root.KeyboardAccelerators.Add(Accelerator(
+            VirtualKey.H,
+            VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift,
+            FocusReplace));
+    }
+
+    /// <summary>Opens the replace row if it is folded away, and puts the keyboard in it.</summary>
+    private void FocusReplace()
+    {
+        SetReplaceMode(true);
+
+        _replaceWith.Focus(FocusState.Programmatic);
+        _replaceWith.SelectAll();
     }
 
     private static KeyboardAccelerator Accelerator(VirtualKey key, VirtualKeyModifiers modifiers, Action run)
@@ -624,11 +870,29 @@ public sealed partial class FindAllWindow : PaletteWindow
         catch (Exception ex)
         {
             _logger.LogError(ex, "The Find All search failed.");
-            Display(null, "The search could not be completed.", BeforeFirstSearch);
+            Display(null, "The search could not be completed.", EmptyState.BeforeSearch);
         }
     }
 
-    private async Task SearchAsync()
+    /// <summary>
+    /// Runs the search and puts the results on screen, reporting whether it got that far.
+    /// </summary>
+    /// <param name="goToFirstMatch">
+    /// False to leave the selection alone whatever the preference says. Replace All passes it:
+    /// going to the first match switches the active tab, can turn Preview into Side by side and
+    /// persist that, and takes the keyboard into the list - none of which anyone asked for a
+    /// moment before a confirmation appears.
+    /// </param>
+    /// <returns>
+    /// True only when the search finished and put rows on screen.
+    ///
+    /// False covers three different things - nothing typed, nothing open, a pattern that would
+    /// not compile, no matches, and a search overtaken by a newer one - which have in common
+    /// that there is now nothing to replace and that the reason is already on screen, or belongs
+    /// to whichever search took over. Replace All needs exactly that one bit: it must not go on
+    /// to rewrite anything against a list this call did not just produce.
+    /// </returns>
+    private async Task<bool> SearchAsync(bool goToFirstMatch = true)
     {
         // Whatever was running is now answering a question nobody is asking.
         _search?.Cancel();
@@ -651,16 +915,16 @@ public sealed partial class FindAllWindow : PaletteWindow
         // one more thing to read.
         if (string.IsNullOrEmpty(query.Term))
         {
-            Display(null, string.Empty, BeforeFirstSearch);
-            return;
+            Display(null, string.Empty, EmptyState.BeforeSearch);
+            return false;
         }
 
         List<FindDocument> documents = Gather(query.Scope);
 
         if (documents.Count == 0)
         {
-            Display(null, "There is nothing open to search.", BeforeFirstSearch);
-            return;
+            Display(null, "There is nothing open to search.", EmptyState.BeforeSearch);
+            return false;
         }
 
         Remember(query.Term);
@@ -678,7 +942,7 @@ public sealed partial class FindAllWindow : PaletteWindow
         catch (OperationCanceledException)
         {
             // A newer search is already on its way, and it owns the summary line now.
-            return;
+            return false;
         }
 
         _logger.LogInformation(
@@ -689,18 +953,22 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         if (results.Error is { } error)
         {
-            Display(null, error, NothingFound);
-            return;
+            Display(null, error, EmptyState.NothingFound);
+            return false;
         }
 
         List<FindRow> rows = Rows(results);
 
-        Display(rows, Describe(results), NothingFound, documents);
+        Display(rows, Describe(results), EmptyState.NothingFound, documents);
 
-        if (_settings.Current.FindSelectFirstResult)
+        if (goToFirstMatch && _settings.Current.FindSelectFirstResult)
         {
             SelectFirstMatch(rows);
         }
+
+        // A search that found nothing ran perfectly well, but it leaves nothing to replace, and
+        // "No matches." is already on the status line saying so.
+        return rows.Count > 0;
     }
 
     /// <summary>
@@ -768,6 +1036,43 @@ public sealed partial class FindAllWindow : PaletteWindow
         return documents;
     }
 
+    /// <summary>
+    /// The documents the rows on screen came from, in tab order, holding the text they were
+    /// found in.
+    ///
+    /// Deliberately not <see cref="Gather"/>. Gather reads the live workspace, and the live
+    /// workspace is not what the list describes: with the scope on the active tab, searching one
+    /// document and then clicking another tab would have Replace All rewrite the tab now in
+    /// front - whose matches were never listed - and with the scope on every tab, a document
+    /// opened since the search would be swept in unseen. Neither is something the user could
+    /// have confirmed, because neither was ever on screen.
+    ///
+    /// A document closed since the search simply is not here, which is the right answer.
+    ///
+    /// The text is the one recorded at search time rather than the one there now. Replace All
+    /// searches immediately before it calls this, so the two are the same string in every
+    /// ordinary case; taking the recorded one means a document that moved in the gap fails the
+    /// check at the point of writing rather than being rewritten against text nobody read.
+    /// </summary>
+    private List<FindDocument> SearchedDocuments()
+    {
+        var documents = new List<FindDocument>();
+
+        foreach (MarkdownDocument document in _workspace.Documents)
+        {
+            if (_searched.TryGetValue(document.Id, out string? text))
+            {
+                documents.Add(new FindDocument(
+                    document.Id,
+                    document.DisplayName,
+                    document.DisplayPath,
+                    text));
+            }
+        }
+
+        return documents;
+    }
+
     private static FindDocument Snapshot(MarkdownDocument document) =>
         new(document.Id, document.DisplayName, document.DisplayPath, document.Text);
 
@@ -820,9 +1125,11 @@ public sealed partial class FindAllWindow : PaletteWindow
     private void Display(
         IReadOnlyList<FindRow>? rows,
         string summary,
-        string hint,
+        EmptyState empty,
         IReadOnlyList<FindDocument>? searched = null)
     {
+        _empty = empty;
+
         _searched.Clear();
         _closed.Clear();
 
@@ -843,11 +1150,29 @@ public sealed partial class FindAllWindow : PaletteWindow
         _clear.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
 
         // The hint shows through the empty list, so it has to go when there are rows over it.
-        _hint.Text = hint;
+        ShowEmptyState();
         _hint.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
 
         _summary.Text = summary;
     }
+
+    /// <summary>
+    /// Writes the placeholder for the state the list is in and the mode the window is in.
+    ///
+    /// Only the before-search text differs by mode, and only because the replace row has
+    /// something worth teaching: which button to press. "No matches" answers the same question
+    /// either way.
+    ///
+    /// Computed rather than stored so that folding the replace row in and out changes the
+    /// message under an empty list without a search having to run.
+    /// </summary>
+    private void ShowEmptyState() =>
+        _hint.Text = _empty switch
+        {
+            EmptyState.BeforeSearch when _replaceMode => BeforeFirstReplace,
+            EmptyState.BeforeSearch => BeforeFirstSearch,
+            _ => NothingFound,
+        };
 
     /// <summary>
     /// Empties the box and the list, and hands the keyboard back to the box.
@@ -859,7 +1184,7 @@ public sealed partial class FindAllWindow : PaletteWindow
     private void ClearResults()
     {
         _term.Text = string.Empty;
-        Display(null, string.Empty, BeforeFirstSearch);
+        Display(null, string.Empty, EmptyState.BeforeSearch);
         FocusTerm();
     }
 
@@ -867,7 +1192,7 @@ public sealed partial class FindAllWindow : PaletteWindow
     {
         if (_term.Text.Length == 0)
         {
-            Display(null, string.Empty, BeforeFirstSearch);
+            Display(null, string.Empty, EmptyState.BeforeSearch);
         }
 
         // Only what was typed. Choosing from the list writes the term into the box, and so
@@ -914,6 +1239,191 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         _term.ItemsSource = matches;
         _term.IsSuggestionListOpen = matches.Count > 0;
+    }
+
+    // ----------------------------------------------------------------- replacing
+
+    /// <summary>
+    /// Shows or hides the replace row.
+    ///
+    /// Nothing else moves. The term, the three switches, the scope and the results already on
+    /// screen are the same question either way, which is what makes this a mode rather than a
+    /// second window - and why switching into it does not re-run anything.
+    /// </summary>
+    private void SetReplaceMode(bool on)
+    {
+        _replaceMode = on;
+
+        _replaceToggle.IsChecked = on;
+        _replaceToggle.Content = ReplaceGlyph(on);
+        _replaceRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+
+        // The placeholder under an empty list says something different in each mode, and the
+        // mode has just changed without a search having run.
+        ShowEmptyState();
+    }
+
+    /// <summary>Chevron down while the row is showing, right while it is folded away.</summary>
+    private static FontIcon ReplaceGlyph(bool open) =>
+        new() { Glyph = open ? "" : "", FontSize = 11 };
+
+    /// <summary>
+    /// Works out what every match would become, and asks for it to be applied.
+    ///
+    /// async void because it is an event, like <see cref="Search"/>, and the failure path is
+    /// handled here rather than left to the global handler. Nothing is written from this
+    /// window: it owns the question, and whoever owns the editor owns the answer.
+    /// </summary>
+    private async void ReplaceAll()
+    {
+        if (_replacing)
+        {
+            return;
+        }
+
+        try
+        {
+            _replacing = true;
+
+            // Down for the duration of something the user just started, which reads as work in
+            // progress. That is the opposite of the button's old resting state, which was down
+            // for a rule nothing on screen explained.
+            _replaceAll.IsEnabled = false;
+
+            await ReplaceAllAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "The Replace All failed.");
+            _summary.Text = "The replacement could not be completed.";
+        }
+        finally
+        {
+            _replacing = false;
+            _replaceAll.IsEnabled = true;
+        }
+    }
+
+    private async Task ReplaceAllAsync()
+    {
+        var query = new ReplaceQuery
+        {
+            Find = new FindQuery
+            {
+                Term = _term.Text,
+                MatchCase = _matchCase.IsChecked == true,
+                WholeWord = _wholeWord.IsChecked == true,
+                UseRegex = _useRegex.IsChecked == true,
+                Scope = SelectedScope,
+            },
+            Replacement = _replaceWith.Text,
+        };
+
+        // The one thing this button cannot do anything about. It says so and points at the box
+        // rather than going quiet, and the message is written here rather than left to the
+        // search, whose own empty-term path deliberately blanks the status line.
+        if (string.IsNullOrEmpty(query.Find.Term))
+        {
+            _summary.Text = "Type what to find, then press Replace All.";
+            FocusTerm();
+
+            return;
+        }
+
+        /*
+            Find first, always.
+
+            Replace All used to be disabled until a search had been run, which meant pressing a
+            different button first for reasons nothing on screen gave. Running the search here
+            instead is what makes the button work on its own - and it is also what keeps the
+            rows honest, because the list is rebuilt moments before the scan. Editing the term
+            without searching, switching scope, or editing a document all used to leave the list
+            describing one thing while a replace did another.
+
+            The answer matters more than it looks. A false means there is nothing to replace -
+            nothing open, no matches, a pattern that would not compile - or that a keystroke
+            started a newer search that cancelled this one part-way. That last case is the
+            dangerous one: the cancelled search returns quietly without touching the list, so
+            going on would rewrite whatever the *previous* search happened to leave behind. In
+            every case the reason is already on the status line, or belongs to the search that
+            took over.
+        */
+        bool found;
+
+        try
+        {
+            found = await SearchAsync(goToFirstMatch: false).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Search() carries this handling for its own callers; reaching SearchAsync directly
+            // means owning it here too, or a search that fell over would be reported as a
+            // replacement that did.
+            _logger.LogError(ex, "The search inside Replace All failed.");
+            Display(null, "The search could not be completed.", EmptyState.BeforeSearch);
+
+            return;
+        }
+
+        if (!found)
+        {
+            return;
+        }
+
+        List<FindDocument> documents = SearchedDocuments();
+
+        if (documents.Count == 0)
+        {
+            _summary.Text = "There is nothing to replace in.";
+            return;
+        }
+
+        ReplaceResults results = await Task
+            .Run(() => DocumentReplacer.Replace(query, documents))
+            .ConfigureAwait(true);
+
+        if (results.Error is { } error)
+        {
+            _summary.Text = error;
+            return;
+        }
+
+        // The ceiling stops the scan part-way through the documents, so what came back covers
+        // an arbitrary part of the workspace. Listing that much is useful; rewriting that much
+        // is not, because which part it covers is not something the user can see.
+        if (results.Truncated)
+        {
+            _summary.Text = $"More than {DocumentFinder.MatchLimit} matches. "
+                + "Narrow the search before replacing.";
+            return;
+        }
+
+        if (results.IsEmpty)
+        {
+            _summary.Text = "No matches to replace.";
+            return;
+        }
+
+        if (ReplaceAllRequested is not { } handler)
+        {
+            return;
+        }
+
+        var request = new ReplaceAllRequestedEventArgs(
+            results.Documents,
+            results.TotalMatches,
+            isDeletion: string.IsNullOrEmpty(query.Replacement));
+
+        handler(this, request);
+
+        _logger.LogInformation(
+            "Replace All: offered {Matches} matches across {Documents} documents.",
+            results.TotalMatches,
+            results.Documents.Count);
+
+        // Waited on so the button stays down until the whole thing is over, the confirmation
+        // included. See ReplaceAllRequestedEventArgs.Completion.
+        await request.Completion.Task.ConfigureAwait(true);
     }
 
     // ----------------------------------------------------------------- staleness
@@ -1012,6 +1522,53 @@ public sealed partial class FindAllWindow : PaletteWindow
         // Moving through the list shows each match without taking the keyboard away from it,
         // so the arrow keys keep working.
         ActivateSelectedMatch(focusEditor: false);
+    }
+
+    /// <summary>
+    /// Moves the selection to the next or previous match, stepping over the document headings.
+    ///
+    /// F3 means "next match", and a heading is not one: it is inert - selecting one shows
+    /// nothing, because <see cref="ActivateSelectedMatch"/> only answers to a match row - so
+    /// landing on one would spend a keystroke doing nothing at every document boundary. The
+    /// arrow keys still walk every row, which is the difference between "next row" and "next
+    /// match".
+    ///
+    /// Wraps at either end, the way the editor's own F3 does. Moving the selection is all this
+    /// does; showing the match in the editor is <see cref="OnResultSelectionChanged"/>'s job
+    /// already, and it deliberately leaves the keyboard where it is.
+    /// </summary>
+    private void StepMatch(bool forward)
+    {
+        if (_results.ItemsSource is not IReadOnlyList<FindRow> rows)
+        {
+            return;
+        }
+
+        List<int> matches = [.. Enumerable
+            .Range(0, rows.Count)
+            .Where(index => rows[index] is FindMatchRow)];
+
+        if (matches.Count == 0)
+        {
+            return;
+        }
+
+        int selected = _results.SelectedIndex;
+
+        // The first match after the selection, or the last one before it. A heading sitting
+        // between the two counts as neither, which is the whole point. Nothing selected is -1,
+        // and falls out as the first match going forward and the last going back.
+        int at = forward
+            ? matches.FindIndex(index => index > selected)
+            : matches.FindLastIndex(index => index < selected);
+
+        if (at < 0)
+        {
+            at = forward ? 0 : matches.Count - 1;
+        }
+
+        _results.SelectedIndex = matches[at];
+        _results.ScrollIntoView(rows[matches[at]]);
     }
 
     private void OnResultsKeyDown(object sender, KeyRoutedEventArgs e)

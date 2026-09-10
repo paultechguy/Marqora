@@ -10,6 +10,26 @@ public enum ConfirmResult
     Cancel,
 }
 
+/// <summary>
+/// Which window a prompt belongs to.
+///
+/// A ContentDialog is drawn in one window's popup root, and a palette window is owned by the
+/// main one - which means it always floats above it. A prompt raised by a click inside a
+/// palette but anchored to the main window therefore opens underneath the palette, invisible,
+/// with the app waiting on an answer to a question nobody can see.
+///
+/// Naming the anchor rather than passing a XamlRoot keeps this interface free of the UI
+/// framework, which is what lets a view model be exercised without one.
+/// </summary>
+public enum DialogAnchor
+{
+    /// <summary>The main window. Everything the editor itself asks.</summary>
+    MainWindow,
+
+    /// <summary>The Find All window, for a prompt raised by a click inside it.</summary>
+    FindAll,
+}
+
 /// <summary>Modal prompts, injected so view models can be exercised without a UI thread.</summary>
 public interface IDialogService
 {
@@ -26,11 +46,17 @@ public interface IDialogService
     /// is Save, which is the safe answer - and marking a harmless prompt makes Enter useless on
     /// a dialog the user meant to confirm.
     /// </param>
+    /// <param name="anchor">
+    /// Which window the prompt belongs to. Defaults to the main one, which is right for
+    /// everything the editor asks; a prompt raised by a click inside a palette window has to
+    /// name it, or it opens behind the palette. See <see cref="DialogAnchor"/>.
+    /// </param>
     Task<ConfirmResult> ConfirmAsync(
         string title,
         string message,
         string primaryText,
         string? secondaryText = null,
         bool destructivePrimary = false,
+        DialogAnchor anchor = DialogAnchor.MainWindow,
         CancellationToken cancellationToken = default);
 }

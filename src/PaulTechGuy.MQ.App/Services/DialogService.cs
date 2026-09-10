@@ -26,6 +26,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             secondaryText: null,
             showCancel: false,
             destructivePrimary: false,
+            DialogAnchor.MainWindow,
             cancellationToken).ConfigureAwait(true);
     }
 
@@ -35,6 +36,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         string primaryText,
         string? secondaryText = null,
         bool destructivePrimary = false,
+        DialogAnchor anchor = DialogAnchor.MainWindow,
         CancellationToken cancellationToken = default)
     {
         ContentDialogResult result = await ShowAsync(
@@ -44,6 +46,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             secondaryText,
             showCancel: true,
             destructivePrimary,
+            anchor,
             cancellationToken).ConfigureAwait(true);
 
         return result switch
@@ -61,9 +64,10 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         string? secondaryText,
         bool showCancel,
         bool destructivePrimary,
+        DialogAnchor anchor,
         CancellationToken cancellationToken)
     {
-        if (window.XamlRoot is null)
+        if (window.XamlRootFor(anchor) is null)
         {
             logger.LogWarning("Suppressed dialog '{Title}': no window is available yet.", title);
             return ContentDialogResult.None;
@@ -93,7 +97,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
                 DefaultButton = destructivePrimary && showCancel
                     ? ContentDialogButton.Close
                     : ContentDialogButton.Primary,
-            }.AnchorTo(window.Root);
+            }.AnchorTo(window.RootFor(anchor));
 
             if (!string.IsNullOrEmpty(secondaryText))
             {

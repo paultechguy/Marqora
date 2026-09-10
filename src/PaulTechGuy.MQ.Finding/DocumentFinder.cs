@@ -33,8 +33,10 @@ public static class DocumentFinder
     ///
     /// A pattern such as (a+)+$ backtracks essentially forever on the wrong input. The
     /// ceiling turns a frozen window into a sentence the user can act on.
+    ///
+    /// Shared with DocumentReplacer, so a replace gives up exactly where a find does.
     /// </summary>
-    private static readonly TimeSpan RegexBudget = TimeSpan.FromSeconds(1);
+    internal static readonly TimeSpan RegexBudget = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// Runs <paramref name="query"/> over <paramref name="documents"/> in the order given.
@@ -200,8 +202,10 @@ public static class DocumentFinder
     ///
     /// CRLF is one break rather than two, so a Windows file does not report every other line
     /// as blank; a bare CR ends a line as well, because the editor's model says it does.
+    ///
+    /// Shared with DocumentReplacer, so both count lines the same way.
     /// </summary>
-    private static (int End, int Next) LineBounds(string text, int start)
+    internal static (int End, int Next) LineBounds(string text, int start)
     {
         int end = start;
 
@@ -228,7 +232,7 @@ public static class DocumentFinder
         int budget,
         List<FindMatch> into)
     {
-        // Materialised on the first hit and shared by the rest of the line's matches.
+        // Materialized on the first hit and shared by the rest of the line's matches.
         string? text = null;
 
         if (pattern is null)
@@ -295,19 +299,23 @@ public static class DocumentFinder
     /// answer from the other end, by listing the separators instead, so the two agree on
     /// every character anyone searches a markdown file for and part company only over
     /// oddities such as the section sign.
+    ///
+    /// Shared with DocumentReplacer, so a whole-word replace matches a whole-word find.
     /// </summary>
-    private static bool IsWholeWord(ReadOnlySpan<char> line, int start, int length) =>
+    internal static bool IsWholeWord(ReadOnlySpan<char> line, int start, int length) =>
         (start == 0 || !IsWordCharacter(line[start - 1]))
         && (start + length == line.Length || !IsWordCharacter(line[start + length]));
 
-    private static bool IsWordCharacter(char value) => char.IsLetterOrDigit(value) || value == '_';
+    internal static bool IsWordCharacter(char value) => char.IsLetterOrDigit(value) || value == '_';
 
     /// <summary>
     /// No Multiline: each line is matched as a whole input of its own, so ^ and $ already
     /// anchor to the line the user is looking at. CultureInvariant keeps a case-insensitive
     /// search from taking the current culture's view of what I looks like.
+    ///
+    /// Shared with DocumentReplacer, so both build the same regex from the same switches.
     /// </summary>
-    private static RegexOptions RegexOptionsFor(FindQuery query) =>
+    internal static RegexOptions RegexOptionsFor(FindQuery query) =>
         query.MatchCase
             ? RegexOptions.CultureInvariant
             : RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;

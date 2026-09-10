@@ -48,6 +48,7 @@ $ErrorActionPreference = 'Stop'
 $words = [ordered]@{
     'behaviour' = 'behavior'
     'colour' = 'color'
+    'materialis' = 'materializ'
 }
 
 $extensions = @('*.cs', '*.xaml', '*.js', '*.css', '*.html', '*.json', '*.md')

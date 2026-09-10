@@ -552,6 +552,7 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.F, ctrl, () => RunEdit("find"));
         Add(VirtualKey.F, ctrlShift, () => RunEdit("findAll"));
         Add(VirtualKey.H, ctrl, () => RunEdit("replace"));
+        Add(VirtualKey.H, ctrlShift, () => RunEdit("replaceAll"));
         Add(VirtualKey.F3, VirtualKeyModifiers.None, () => RunEdit("findNext"));
         Add(VirtualKey.F3, VirtualKeyModifiers.Shift, () => RunEdit("findPrevious"));
         Add(VirtualKey.G, ctrl, () => RunEdit("gotoLine"));
