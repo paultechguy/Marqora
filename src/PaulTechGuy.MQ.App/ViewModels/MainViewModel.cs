@@ -80,6 +80,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Set while this class is reordering Tabs, so the change is not echoed back.</summary>
     private bool _isSyncingTabs;
 
+    /// <summary>
+    /// Tabs closed most recently first, each remembering the path and the index it held in
+    /// <see cref="Tabs"/> so Ctrl+Shift+T can put it back where it was. Untitled documents
+    /// have no path to reopen from, so closing one is never pushed here - see
+    /// <see cref="_lastCloseWasUntitled"/> for how that still disables the command.
+    /// </summary>
+    private readonly List<ClosedTabRecord> _closedTabs = [];
+
+    /// <summary>Caps <see cref="_closedTabs"/> so the history cannot grow without bound.</summary>
+    private const int MaxClosedTabHistory = 10;
+
+    /// <summary>
+    /// Whether the most recently closed tab of any kind - not only the ones recorded in
+    /// <see cref="_closedTabs"/> - was untitled. Reopen Closed Tab answers "can I get back
+    /// what I just closed", not "is there anything reopenable left further back", so this
+    /// blocks the command even while an older, reopenable tab is still sitting in the stack.
+    /// </summary>
+    private bool _lastCloseWasUntitled;
+
+    /// <summary>One entry in <see cref="_closedTabs"/>.</summary>
+    private readonly record struct ClosedTabRecord(string Path, int Index);
+
     // Plain fields behind CanUndo and CanRedo rather than observable properties, because
     // neither is the whole answer on its own: what the shell reports is true only while a
     // document is open, and a closed tab takes its undo stack with it without the shell
@@ -1699,7 +1721,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        RecordClosedTab(tab);
         _workspace.Close(tab.Id);
+    }
+
+    /// <summary>
+    /// Remembers a tab just before it closes, for Ctrl+Shift+T / Reopen Closed Tab. Called at
+    /// every site that calls <see cref="IWorkspaceService.Close"/> - one tab, Close Other
+    /// Tabs, or Close All - since each tab in any of those really did just close.
+    /// </summary>
+    private void RecordClosedTab(DocumentTabViewModel tab)
+    {
+        _lastCloseWasUntitled = tab.IsUntitled;
+
+        if (tab.Path is { } path)
+        {
+            if (_closedTabs.Count == MaxClosedTabHistory)
+            {
+                _closedTabs.RemoveAt(0);
+            }
+
+            _closedTabs.Add(new ClosedTabRecord(path, Tabs.IndexOf(tab)));
+        }
+
+        ReopenLastClosedTabCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanCloseOthers))]
@@ -1724,6 +1769,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            RecordClosedTab(tab);
             _workspace.Close(tab.Id);
         }
     }
@@ -1753,11 +1799,70 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return false;
             }
 
+            RecordClosedTab(tab);
             _workspace.Close(tab.Id);
         }
 
         return true;
     }
+
+    [RelayCommand(CanExecute = nameof(CanReopenLastClosedTab))]
+    private async Task ReopenLastClosedTabAsync()
+    {
+        if (_closedTabs.Count > 0)
+        {
+            ClosedTabRecord record = _closedTabs[^1];
+            _closedTabs.RemoveAt(_closedTabs.Count - 1);
+            ReopenLastClosedTabCommand.NotifyCanExecuteChanged();
+
+            bool alreadyOpen = Tabs.Any(
+                t => string.Equals(t.Path, record.Path, StringComparison.OrdinalIgnoreCase));
+
+            await OpenPathAsync(record.Path).ConfigureAwait(true);
+
+            // Already-open means OpenPathAsync just activated the existing tab, which stays
+            // where it was. Only a tab this call actually created gets moved back to the
+            // index it was closed from.
+            if (!alreadyOpen
+                && Tabs.FirstOrDefault(
+                    t => string.Equals(t.Path, record.Path, StringComparison.OrdinalIgnoreCase)) is { } tab)
+            {
+                int oldIndex = Tabs.IndexOf(tab);
+                int newIndex = Math.Clamp(record.Index, 0, Tabs.Count - 1);
+
+                if (newIndex != oldIndex)
+                {
+                    _workspace.Move(tab.Id, newIndex);
+
+                    _isSyncingTabs = true;
+                    Tabs.Move(oldIndex, newIndex);
+                    _isSyncingTabs = false;
+
+                    // OpenPathAsync already made this tab ActiveTab, at the index it was
+                    // appended to. Moving it afterwards does not change that reference, so
+                    // no PropertyChanged follows and MainWindow never re-applies
+                    // TabView.SelectedItem to the tab's new spot - the strip goes on
+                    // showing the old one highlighted. Re-raising it is what makes that
+                    // resync happen.
+                    if (ReferenceEquals(ActiveTab, tab))
+                    {
+                        OnPropertyChanged(nameof(ActiveTab));
+                    }
+                }
+            }
+        }
+
+        // Menu and accelerator both land here; same reason OpenAsync and CloseTabAsync
+        // restore focus unconditionally - nothing else gives it back when there was nothing
+        // to reopen.
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Disabled while there is nothing eligible to reopen, including right after closing an
+    /// untitled tab - see <see cref="_lastCloseWasUntitled"/>.
+    /// </summary>
+    private bool CanReopenLastClosedTab() => !_lastCloseWasUntitled && _closedTabs.Count > 0;
 
     /// <summary>
     /// Offers to save a tab before it is closed. Returns false when the user cancels, in
@@ -6713,6 +6818,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 case "closeAll" when CloseAllTabsCommand.CanExecute(null):
                     await CloseAllTabsCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "reopenLastClosedTab" when ReopenLastClosedTabCommand.CanExecute(null):
+                    await ReopenLastClosedTabCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "print" when PrintCommand.CanExecute(null):

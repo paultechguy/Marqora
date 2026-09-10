@@ -300,6 +300,11 @@
 
                         <MenuFlyoutSeparator />
 
+                        <MenuFlyoutItem Text="Reopen Closed Tab"
+                                        Command="{x:Bind ViewModel.ReopenLastClosedTabCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+T"
+                                        ToolTipService.ToolTip="Reopens the tab you just closed; unavailable if that tab was untitled" />
+
                         <MenuFlyoutItem Text="Close Tab"
                                         Command="{x:Bind ViewModel.CloseTabCommand}"
                                         KeyboardAcceleratorTextOverride="Ctrl+W" />

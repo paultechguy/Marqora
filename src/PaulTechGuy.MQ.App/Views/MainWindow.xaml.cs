@@ -489,6 +489,7 @@ public sealed partial class MainWindow : Window
 
         Add(VirtualKey.W, ctrl, () => ViewModel.CloseTabCommand.Execute(null));
         Add(VirtualKey.W, ctrlShift, () => ViewModel.CloseAllTabsCommand.Execute(null));
+        Add(VirtualKey.T, ctrlShift, () => ViewModel.ReopenLastClosedTabCommand.Execute(null));
 
         // Ctrl+, for preferences, as Visual Studio Code and most of the editors people also
         // have open have it. VirtualKey has no name for the comma, so the code is given
