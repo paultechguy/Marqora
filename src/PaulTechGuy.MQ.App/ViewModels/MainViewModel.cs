@@ -4724,7 +4724,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Exports the active document as a self-contained HTML file.
     ///
     /// The markup comes from the live preview rather than a fresh render, so diagrams,
-    /// maths and highlighting are exported exactly as they appear on screen.
+    /// math and highlighting are exported exactly as they appear on screen.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanActOnContent))]
     private async Task ExportHtmlAsync()

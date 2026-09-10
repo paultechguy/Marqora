@@ -458,7 +458,7 @@ public interface IPreviewHost
     // ------------------------------------------------------------------ export
 
     /// <summary>
-    /// The preview's markup exactly as rendered, with mermaid diagrams as inline SVG, maths
+    /// The preview's markup exactly as rendered, with mermaid diagrams as inline SVG, math
     /// laid out by KaTeX and code already highlighted. Export uses this rather than
     /// re-rendering, so what is exported is what was on screen.
     /// </summary>

@@ -49,6 +49,7 @@ $words = [ordered]@{
     'behaviour' = 'behavior'
     'colour' = 'color'
     'materialis' = 'materializ'
+    'maths' = 'math'
 }
 
 $extensions = @('*.cs', '*.xaml', '*.js', '*.css', '*.html', '*.json', '*.md')

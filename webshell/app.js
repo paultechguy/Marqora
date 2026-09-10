@@ -1152,7 +1152,7 @@
   }, { passive: true });
 
   /*
-    The map is built once the markdown, diagrams and maths are in, but the preview keeps
+    The map is built once the markdown, diagrams and math are in, but the preview keeps
     changing height after that: an image decodes, a font arrives, a diagram is re-themed.
     Everything below the change moves and the map does not know, so from then on the panes
     disagree by exactly that much, and stay that way until something else rebuilds it.
@@ -1604,7 +1604,7 @@
     });
   }
 
-  // --- maths ---------------------------------------------------------------
+  // --- math ---------------------------------------------------------------
 
   var katexReady = null;
 
@@ -4131,7 +4131,7 @@
 
     /*
       The first of the request-and-reply messages in the bridge. Export needs the preview
-      exactly as rendered, diagrams and maths included, so the host asks for it and matches
+      exactly as rendered, diagrams and math included, so the host asks for it and matches
       the reply by request id rather than assuming the next message back is the answer.
     */
     requestRenderedHtml: function (p) {

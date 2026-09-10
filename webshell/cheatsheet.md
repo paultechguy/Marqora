@@ -4,7 +4,7 @@ Everything Marqora renders, with the syntax beside the result.
 
 Jump to: [Text](#text) · [Headings](#headings) · [Lists](#lists) · [Links](#links-and-images) ·
 [Code](#code) · [Quotes](#quotes-and-rules) · [Tables](#tables) · [Notes](#footnotes-and-definitions) ·
-[Diagrams](#diagrams) · [Maths](#maths) · [Front matter](#front-matter) · [Escaping](#escaping)
+[Diagrams](#diagrams) · [Math](#math) · [Front matter](#front-matter) · [Escaping](#escaping)
 
 ## Text
 
@@ -252,9 +252,9 @@ sequenceDiagram
     Note right of Renderer: notes annotate a step
 ```
 
-## Maths
+## Math
 
-Wrap an expression in single dollars for inline maths, double dollars for a displayed one.
+Wrap an expression in single dollars for inline math, double dollars for a displayed one.
 
 | Type this | To get this |
 |---|---|

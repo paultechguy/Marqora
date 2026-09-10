@@ -7,7 +7,7 @@ namespace PaulTechGuy.MQ.Abstractions.Ui;
 /// Writes rendered preview markup out as a standalone HTML document.
 ///
 /// The caller supplies the markup, which comes from the live preview and therefore already
-/// contains inline SVG diagrams, laid-out maths and highlighted code. The implementation
+/// contains inline SVG diagrams, laid-out math and highlighted code. The implementation
 /// adds the surrounding document and makes it self-contained.
 /// </summary>
 public interface IHtmlExporter

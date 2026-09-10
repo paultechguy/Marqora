@@ -4,7 +4,7 @@
   A cut-down cousin of app.js. The host renders webshell/cheatsheet.md through the same
   Markdig pipeline the preview uses and posts the HTML here, so the two are guaranteed to
   agree about what markdown looks like. This file adds only what the fragment cannot carry
-  on its own: diagrams, maths, syntax highlighting, and the scroll position the host wants
+  on its own: diagrams, math, syntax highlighting, and the scroll position the host wants
   back so it can be restored the next time the window opens.
 
   Messages in  (host -> page): setContent, setTheme, restoreScroll, requestSelection, selectAll
@@ -194,7 +194,7 @@
     renderDiagrams();
   }
 
-  // ------------------------------------------------------------------ maths
+  // ------------------------------------------------------------------ math
 
   var katexReady = null;
 

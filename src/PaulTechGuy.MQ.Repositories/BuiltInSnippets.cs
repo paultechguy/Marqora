@@ -38,7 +38,7 @@ internal static class BuiltInSnippets
         // that same trimming whatever the keys are edited to, and hold the chord on one line.
         General("Keyboard Keys", "<kbd>Ctrl</kbd>&nbsp;+&nbsp;<kbd>S</kbd>"),
         General("Link Reference", "See [the docs][docs].\n\n[docs]: $0 \"Title\""),
-        General("Maths Block", "$$\n$0\n$$"),
+        General("Math Block", "$$\n$0\n$$"),
         General("Note", "> [!NOTE]\n> $0"),
         General("Warning", "> [!WARNING]\n> $0"),
 

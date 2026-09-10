@@ -116,7 +116,7 @@ marshalling proxy.
 | Kept out by | What |
 |---|---|
 | `MarkdownRegionScanner` | Fenced code, YAML front matter, four-space indented code |
-| `LineMasker` | Inline code, link and image targets, autolinks and bare URLs, HTML tags, maths, footnote markers, entities, emoji shortcodes |
+| `LineMasker` | Inline code, link and image targets, autolinks and bare URLs, HTML tags, math, footnote markers, entities, emoji shortcodes |
 | `WordPolicy` | ALL-CAPS acronyms, anything containing a digit, camelCase and PascalCase identifiers |
 | `SeedDictionary` | Around sixty words Marqora ships knowing — its own name, its vocabulary, and the software prose it is written in |
 | `IUserDictionary` | Whatever the user has accepted, including when the flagged token wears a possessive |

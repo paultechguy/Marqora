@@ -496,7 +496,7 @@ processes that each hand over and exit produce the same ten tabs, just more slow
 ## Exporting
 
 Both exports take the **rendered preview**, not a fresh render of the source. Diagrams are
-already inline SVG at that point, maths is already laid out by KaTeX and code is already
+already inline SVG at that point, math is already laid out by KaTeX and code is already
 highlighted, so an export cannot disagree with what was on screen. `IPreviewHost` grows one
 request/response call for this, `GetRenderedHtmlAsync`, keyed by request id — the bridge is
 otherwise one-way, and matching a reply to its request keeps an export correct even if other
@@ -518,7 +518,7 @@ experience, themed by the system and handing back settings the app had no way to
 stylesheet, which is what keeps exports looking like the preview; it carries a few pane and
 splitter rules an exported document has no use for, a fair trade for not having two
 stylesheets to keep in step. The KaTeX and highlight.js themes are included only when the
-document actually contains maths or code — KaTeX's stylesheet alone is most of the file for a
+document actually contains math or code — KaTeX's stylesheet alone is most of the file for a
 document with no equations. Local images become data URIs, read by the host rather than by
 the page, which sidesteps the CSP and the cross-origin rules entirely. KaTeX's web fonts are
 inlined too: the stylesheet refers to them by relative path, which resolves inside the app

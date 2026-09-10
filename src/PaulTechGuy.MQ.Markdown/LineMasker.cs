@@ -38,7 +38,7 @@ public static partial class LineMasker
     private const char Separator = '.';
 
     /// <summary>
-    /// Everything that is not prose, blanked: code spans, HTML tags, link targets, URLs, maths,
+    /// Everything that is not prose, blanked: code spans, HTML tags, link targets, URLs, math,
     /// footnote markers, entities and emoji shortcodes. The link text and the alt text of an
     /// image survive, because a reader sees them.
     ///
@@ -224,7 +224,7 @@ public static partial class LineMasker
     private static partial Regex DisplayMath();
 
     /// <summary>
-    /// Inline maths. The delimiters must hug their content — no space after the opening "$" nor
+    /// Inline math. The delimiters must hug their content — no space after the opening "$" nor
     /// before the closing one — which is the same heuristic KaTeX's auto-render uses, and what
     /// stops "$5 and $10" being read as a formula with "and" inside it.
     /// </summary>

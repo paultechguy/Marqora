@@ -15,7 +15,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// Turns the live preview's markup into something that survives leaving the app.
 ///
 /// The markup itself comes from the preview pane, so mermaid diagrams are already inline
-/// SVG, maths is already laid out by KaTeX and code is already highlighted. What is missing
+/// SVG, math is already laid out by KaTeX and code is already highlighted. What is missing
 /// is everything the page was relying on the app to provide: stylesheets that were linked,
 /// fonts that resolved against the app's own folders, and images that pointed at a virtual
 /// origin only WebView2 knows about. This class supplies all three.
@@ -66,7 +66,7 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// rules for panes and the splitter that a standalone document has no use for, a fair
     /// trade for not having a parallel stylesheet to keep in step.
     ///
-    /// The maths and highlighting themes are included only when the document actually
+    /// The math and highlighting themes are included only when the document actually
     /// contains them. KaTeX's stylesheet alone is around 25 KB, which is most of the file
     /// for a document with no equations in it.
     /// </summary>

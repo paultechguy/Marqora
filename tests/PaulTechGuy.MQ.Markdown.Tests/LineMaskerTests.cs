@@ -34,7 +34,7 @@ public sealed class LineMaskerTests
     [InlineData("Some <span class=\"x\">marked</span> text.")]
     [InlineData("Go to https://example.com/a/b?c=d now.")]
     [InlineData("The formula $E = mc^2$ is famous.")]
-    [InlineData("Display $$a + b = c$$ maths.")]
+    [InlineData("Display $$a + b = c$$ math.")]
     [InlineData("Tom &amp; Jerry &#8212; friends.")]
     [InlineData("Nice work :sparkles: indeed.")]
     [InlineData("Unclosed `backtick stays put.")]
@@ -119,7 +119,7 @@ public sealed class LineMaskerTests
     [InlineData("Go to https://example.com/deep/path now.", "deep")]
     [InlineData("Also www.example.com counts.", "example")]
     [InlineData("The formula $E = mcsquared$ is famous.", "mcsquared")]
-    [InlineData("Display $$alpha + beta$$ maths.", "alpha")]
+    [InlineData("Display $$alpha + beta$$ math.", "alpha")]
     [InlineData("Tom &amp; Jerry.", "amp")]
     [InlineData("Nice work :facepunch: indeed.", "facepunch")]
     public void Non_prose_runs_are_masked(string line, string shouldBeGone)
@@ -146,7 +146,7 @@ public sealed class LineMaskerTests
     [Fact]
     public void Two_dollar_amounts_are_not_a_formula()
     {
-        // "$5 and $10" is written identically to inline maths, and reading it as maths would
+        // "$5 and $10" is written identically to inline math, and reading it as math would
         // quietly stop "and" - and anything else between two prices - being checked. The
         // delimiters have to hug their content, which is the rule KaTeX itself uses.
         Mask("It cost $5 and then $10 more.").ShouldContain("and then");

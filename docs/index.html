@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marqora — a local-first markdown editor for Windows</title>
+<meta name="description" content="Marqora is a markdown editor and previewer for Windows 11 with live split-pane preview, Mermaid diagrams and KaTeX math -- built on one rule: no network calls, no telemetry, no account, ever.">
+<meta property="og:title" content="Marqora">
+<meta property="og:description" content="A markdown editor for Windows that makes exactly one promise: nothing you write here goes anywhere else.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://paultechguy.github.io/Marqora/assets/marqora-logo.png">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/png" href="assets/marqora-logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&family=Source+Serif+4:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper: #eef2f1;
+    --paper-deep: #e2e8e6;
+    --ink: #14181a;
+    --ink-soft: #48555a;
+    --accent: #1e6e73;
+    --accent-warm: #d9552c;
+    --line: #c9d3d1;
+    --grid-line: rgba(20,24,26,0.045);
+    --serif-display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --serif-body: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper: #0f1415; --paper-deep: #161d1e; --ink: #e9eeec; --ink-soft: #9bb0ac;
+      --accent: #6fc2c6; --accent-warm: #f0793f; --line: #263130;
+      --grid-line: rgba(233,238,236,0.05);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper: #0f1415; --paper-deep: #161d1e; --ink: #e9eeec; --ink-soft: #9bb0ac;
+    --accent: #6fc2c6; --accent-warm: #f0793f; --line: #263130;
+    --grid-line: rgba(233,238,236,0.05);
+  }
+
+  *{ box-sizing: border-box; }
+  body{
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 34px 34px;
+    color: var(--ink); font-family: var(--serif-body); padding: 0 20px;
+  }
+  h1, h2, h3{ text-wrap: balance; font-family: var(--serif-display); color: var(--ink); }
+  p{ text-wrap: pretty; }
+  ::selection{ background: var(--accent-warm); color: #fff; }
+  .wrap{ max-width: 1040px; margin: 0 auto; }
+
+  /* buttons */
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; font-family: var(--mono);
+    font-size: 0.85rem; letter-spacing: 0.02em; padding: 12px 22px; border-radius: 3px;
+    text-decoration: none; white-space: nowrap; border: 1px solid transparent; cursor:pointer;
+  }
+  .btn-primary{ background: var(--accent-warm); color: #fff; border-color: var(--accent-warm); }
+  .btn-primary:hover{ filter: brightness(1.07); }
+  .btn-ghost{ background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover{ border-color: var(--ink-soft); }
+  .btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-sm{ font-size: 0.75rem; padding: 8px 14px; }
+
+  /* masthead */
+  .masthead{
+    display:flex; align-items:center; justify-content:space-between; gap: 14px; flex-wrap: wrap;
+    padding-block: 16px; border-bottom: 1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand img{ width: 26px; height: 26px; display:block; border-radius: 50%; }
+  .brand span{
+    font-family: var(--mono); font-weight: 600; font-size: 0.95rem;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+  }
+  .nav-cta{ display:flex; gap:10px; align-items:center; }
+
+  /* hero */
+  .hero{ padding-block: 60px 44px; max-width: 860px; }
+  .kicker{
+    font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 18px;
+  }
+  h1{ font-size: clamp(2.2rem, 4.2vw + 1rem, 3.6rem); font-weight: 600; line-height: 1.08; margin: 0 0 24px; max-width: 15ch; }
+  .standfirst{ font-size: clamp(1.08rem, 0.9vw + 1rem, 1.25rem); line-height: 1.6; color: var(--ink-soft); max-width: 56ch; margin: 0 0 32px; }
+  .cta-row{ display:flex; gap: 14px; flex-wrap: wrap; align-items:center; margin-bottom: 14px; }
+  .cta-meta{ font-family: var(--mono); font-size: 0.76rem; color: var(--ink-soft); letter-spacing: 0.02em; }
+
+  /* chapters (shared with the story page) */
+  article{ padding-bottom: 8px; }
+  .chapter{ display:flex; gap: 26px; padding-block: 48px; border-top: 1px solid var(--line); }
+  .chapter-rail{ flex: 0 0 42px; padding-top: 4px; }
+  .chapter-num{ display:block; font-family: var(--mono); font-weight: 600; font-size: 1.5rem; color: var(--accent); line-height: 1; }
+  .chapter-label{
+    display:block; margin-top: 10px; font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.05em; color: var(--ink-soft); writing-mode: vertical-rl; transform: rotate(180deg); text-transform: uppercase;
+  }
+  .chapter-body{ flex: 1 1 auto; min-width: 0; max-width: 900px; }
+  .chapter-body h2{ font-size: clamp(1.4rem, 1.5vw + 1rem, 1.8rem); font-weight: 600; margin: 0 0 20px; max-width: 24ch; }
+  .chapter-body p{ max-width: 66ch; font-size: 1.03rem; line-height: 1.7; color: var(--ink); margin: 0 0 20px; }
+  .chapter-body p:last-child{ margin-bottom: 0; }
+
+  .note-row{ display:flex; gap: 36px; align-items: flex-start; margin-bottom: 20px; }
+  .note-row > p{ margin: 0; }
+  .note-row > .margin-note{ flex: 0 0 200px; margin: 0; }
+  .margin-note{
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.55; color: var(--ink-soft);
+    padding-left: 14px; border-left: 1px solid var(--line);
+  }
+  @media (max-width: 1039px){
+    .note-row{ flex-direction: column; gap: 10px; }
+    .note-row > .margin-note{ flex-basis: auto; width: 100%; max-width: 66ch; }
+    .margin-note{ padding-left: 0; padding-top: 10px; border-left: none; border-top: 1px dashed var(--line); }
+  }
+
+  /* pull quote */
+  .pullquote{ padding: 8px 0 8px 42px; margin: 4px 0 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .pullquote-inner{ max-width: 46ch; padding-block: 32px; position: relative; }
+  .pullquote-inner::before{ content:""; position:absolute; left:-42px; top:42px; width:22px; height:3px; background: var(--accent-warm); }
+  .pullquote p{ font-family: var(--serif-display); font-style: italic; font-weight: 500; font-size: clamp(1.4rem, 2.1vw + 0.9rem, 1.9rem); line-height: 1.32; color: var(--ink); margin: 0; }
+
+  /* features */
+  .features{ padding-block: 56px; border-top: 1px solid var(--line); }
+  .features .kicker{ margin-bottom: 14px; }
+  .features h2{ font-size: clamp(1.5rem, 1.6vw + 1rem, 2rem); margin: 0 0 8px; max-width: 20ch; }
+  .features .sub{ color: var(--ink-soft); font-size: 1rem; max-width: 56ch; margin: 0 0 8px; }
+  .feature-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr);
+    gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 30px;
+  }
+  @media (max-width: 720px){
+    .feature-grid{ grid-template-columns: 1fr; }
+  }
+  .feature-tile{ background: var(--paper); padding: 24px 22px; display:flex; flex-direction:column; gap: 10px; }
+  .ico{ width: 26px; height: 26px; color: var(--accent); }
+  .ico-math{
+    font-family: var(--serif-display); font-weight: 600; font-size: 1.7rem; color: var(--accent);
+    line-height: 1; height: 26px; display:flex; align-items:flex-start;
+  }
+  .feature-tile h3{ font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; }
+  .feature-tile p{ font-size: 0.93rem; line-height: 1.55; color: var(--ink-soft); margin: 0; }
+
+  /* closing */
+  .closing{ padding-block: 52px; border-top: 1px solid var(--line); max-width: 900px; }
+  .closing p{ max-width: 66ch; font-size: 1.03rem; line-height: 1.7; margin: 0 0 20px; }
+  .signature{ display:flex; align-items:center; gap: 16px; flex-wrap: wrap; padding-top: 6px; }
+  .signature svg{ flex: 0 0 auto; color: var(--accent-warm); }
+  .signature p{
+    font-family: var(--serif-display); font-style: italic; font-weight: 500;
+    font-size: clamp(1.1rem, 1.2vw + 0.8rem, 1.4rem); margin: 0; color: var(--ink);
+    text-decoration: underline; text-decoration-color: var(--accent-warm);
+    text-decoration-thickness: 2px; text-underline-offset: 6px;
+  }
+
+  .cta-band{
+    border-top: 1px solid var(--line); padding-block: 44px;
+    display:flex; flex-direction:column; gap: 18px;
+  }
+  .cta-band .cta-row{ margin-bottom: 0; }
+  .cta-band .cta-meta{ max-width: 60ch; }
+
+  /* colophon */
+  .colophon{ background: var(--paper-deep); border-top: 1px solid var(--line); margin: 0 -20px; padding: 16px 20px; }
+  .status-line{
+    max-width: 1040px; margin: 0 auto; display:flex; flex-wrap: wrap; gap: 6px 12px; align-items:center;
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.02em; color: var(--ink-soft);
+  }
+  .status-line .dot{ color: var(--line); }
+  .status-line a{ color: var(--ink-soft); }
+
+  @media (max-width: 640px){
+    .chapter{ gap: 16px; }
+    .chapter-rail{ flex-basis: 26px; }
+    .chapter-num{ font-size: 1.2rem; }
+    .chapter-label{ display: none; }
+    .pullquote{ padding-left: 0; }
+    .pullquote-inner::before{ display:none; }
+    .closing{ padding-left: 0; }
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .hero > *{ animation: rise 0.7s ease both; }
+    .hero .standfirst{ animation-delay: 0.06s; }
+    .hero .cta-row{ animation-delay: 0.12s; }
+    @keyframes rise{ from{ opacity:0; transform: translateY(10px);} to{ opacity:1; transform:none; } }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div class="brand">
+      <img src="assets/marqora-logo.png" alt="">
+      <span>Marqora</span>
+    </div>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="https://github.com/paultechguy/Marqora">GitHub</a>
+      <a class="btn btn-primary btn-sm" href="https://github.com/paultechguy/Marqora/releases/latest">Download</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <p class="kicker">A markdown editor for Windows 11</p>
+    <h1>Nothing you write here goes anywhere else.</h1>
+    <p class="standfirst">Split-pane editing with live preview, Mermaid diagrams, KaTeX math, real find-and-replace — the full set. Built on one rule underneath all of it: no network calls, no telemetry, no account. Ever.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/paultechguy/Marqora/releases/latest">Download for Windows &rarr;</a>
+      <a class="btn btn-ghost" href="https://github.com/paultechguy/Marqora">View source on GitHub</a>
+    </div>
+    <p class="cta-meta">Free &middot; Open source &middot; Apache&#8209;2.0 &middot; one zip, about 84&nbsp;MB &middot; no admin rights required</p>
+  </section>
+</div>
+
+<article class="wrap">
+
+  <section class="chapter">
+    <div class="chapter-rail">
+      <span class="chapter-num">I</span>
+      <span class="chapter-label">The room</span>
+    </div>
+    <div class="chapter-body">
+      <h2>The room</h2>
+      <p>Start with something ordinary. You're writing notes nobody else is meant to see yet — a diagnosis, a legal memo still in draft, the internal design document for a system your company hasn't announced, a page of a journal you're not ready to show anyone. You open an editor, and before you've typed a full sentence you run the check that's become reflexive: is this going anywhere? Is it syncing the moment I stop typing? Who finds out I opened this file at eleven at night?</p>
+      <p>Most markdown editors don't ask you to think about that on purpose. They just never gave you a reason not to. An account gets created because accounts are how software gets built now. A sync toggle turns itself on because sync is what people expect from an app with a cloud icon in the corner. A line in a settings page opts you into "anonymous usage statistics" because that's how the checkbox was drawn. None of it is usually malicious. Almost none of it was actually decided by you.</p>
+      <p>There's a second question sitting under the first, and it's the sharper one. It isn't only who might look — it's what happens to the file once it's sitting on a server you don't control. That server gets breached eventually; on a long enough timeline, they all do. That company gets acquired, and the fine print changes under you. That account gets phished, or reused, or left signed in on a laptop that goes missing. None of it requires anyone to be watching you specifically. It only requires your document to be dancing around in a cloud that was never yours to secure in the first place.</p>
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-rail">
+      <span class="chapter-num">II</span>
+      <span class="chapter-label">What no costs</span>
+    </div>
+    <div class="chapter-body">
+      <h2>What &ldquo;no&rdquo; costs</h2>
+      <p>Marqora starts from a different place: nothing leaves the machine. Not the document, not a hash of it, not a crash report, not a quiet "anonymous" ping. That sentence is easy to put on a download page. It's a much harder rule to actually keep, because keeping it means saying no to conveniences that would otherwise be free.</p>
+
+      <div class="note-row">
+        <p>Take something as small as checking for updates. Nearly every desktop app quietly asks its own server, the moment it opens, whether a newer version exists. Marqora doesn't, because asking would be a network call, and "no network calls" can't have an asterisk on it. What it keeps instead is a clock: after enough days pass, a line appears in the status bar suggesting you go look for yourself.</p>
+        <div class="margin-note">&gt; a thirty-day clock, not a ping. Help&nbsp;&gt;&nbsp;Check for Updates does the same thing by hand, any time.</div>
+      </div>
+
+      <div class="note-row">
+        <p>Or take link checking. Marqora underlines a link to a file that no longer exists, or a heading that was renamed — the kind of thing that renders exactly like a working link while it quietly rots underneath. It will not check whether a link out to the web still resolves, because confirming that means reaching out to the web, and reaching out is the one thing that isn't on the table.</p>
+        <div class="margin-note">&gt; checked — dead files, missing images, renamed headings. left alone — anything past the edge of your machine.</div>
+      </div>
+
+      <p>The dictionary is the one already on your PC — nothing downloaded, nothing kept in sync. The editor engine itself is fetched once, when the app is built, and never reached for again while you're writing.</p>
+
+      <div class="note-row">
+        <p>And when a document is actually ready to leave — to go to someone else, on purpose — there's no link with an expiry date, and no account they have to make first. A Folio is one file: the document, every image it uses, all of it inlined into a page that opens by double-click, in any browser, offline.</p>
+        <div class="margin-note">&gt; one .html file. images embedded, diagrams already drawn. opens without Marqora — drop it back in and get the markdown out again.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="pullquote">
+    <div class="pullquote-inner">
+      <p>&ldquo;No network calls&rdquo; can't have an asterisk on it.</p>
+    </div>
+  </div>
+
+  <section class="features">
+    <p class="kicker">The short version</p>
+    <h2>What's actually in the box</h2>
+    <p class="sub">Everything below ships in the zip, works offline, and is reachable from the keyboard.</p>
+    <div class="feature-grid">
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="8.5" height="16" rx="1"/><rect x="13.5" y="4" width="8.5" height="16" rx="1"/></svg>
+        <h3>Split view</h3>
+        <p>Source and rendered preview side by side, scrolling in lockstep through source line numbers.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="3" y1="6" x2="19" y2="6"/><line x1="3" y1="11" x2="21" y2="11"/><line x1="3" y1="16" x2="14" y2="16"/><line x1="14" y1="13.3" x2="14" y2="18.3"/></svg>
+        <h3>Monaco editing</h3>
+        <p>The same editing engine VS Code uses: real find and replace, multi-level undo, go-to-line.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="3" y1="5" x2="21" y2="5"/><rect x="9" y="7.6" width="6.5" height="4.3" rx="0.5" fill="currentColor" opacity="0.28" stroke="none"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="3" y1="20" x2="15" y2="20"/></svg>
+        <h3>Find All</h3>
+        <p>Every match across every open tab, in one list, grouped by document, walked with the arrow keys.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><line x1="7" y1="7.3" x2="10.2" y2="16"/><line x1="17" y1="7.3" x2="13.8" y2="16"/><line x1="7.2" y1="6" x2="16.8" y2="6"/></svg>
+        <h3>Mermaid diagrams</h3>
+        <p>Flowcharts, sequence and state diagrams render inline as you type, cached so typing stays fast.</p>
+      </div>
+
+      <div class="feature-tile">
+        <div class="ico-math">&sum;</div>
+        <h3>KaTeX math</h3>
+        <p>Inline and display math, laid out properly, exported the same way it looks on screen.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="3" y1="9" x2="21" y2="9"/><path d="M3 15q2 -3 4 0t4 0t4 0t4 0" /></svg>
+        <h3>Spell check</h3>
+        <p>Underlines as you type, using the dictionary already on your PC — nothing downloaded.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><circle cx="9.5" cy="14" r="1.8" fill="currentColor" stroke="none" opacity="0.3"/><line x1="7" y1="18" x2="17" y2="18"/></svg>
+        <h3>Folios</h3>
+        <p>Share a whole set of documents, with the images they use, as one self-contained file.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/></svg>
+        <h3>Rich exports</h3>
+        <p>Self-contained HTML, print-ready PDF, or rich text on the clipboard for Word and Outlook.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="1.5"/><rect x="4.5" y="8.5" width="2.5" height="2.5"/><rect x="8" y="8.5" width="2.5" height="2.5"/><rect x="11.5" y="8.5" width="2.5" height="2.5"/><rect x="15" y="8.5" width="4.5" height="2.5"/><rect x="4.5" y="12.5" width="15.5" height="2.5"/></svg>
+        <h3>Keyboard-first</h3>
+        <p>Every command has a shortcut. Alt drives the whole menu bar if you'd rather not reach for the mouse.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="chapter">
+    <div class="chapter-rail">
+      <span class="chapter-num">III</span>
+      <span class="chapter-label">Who this is for</span>
+    </div>
+    <div class="chapter-body">
+      <h2>Who this is for, and the trade</h2>
+      <p>None of this is really about markdown. It's about who ends up reaching for an editor built this way, and it's rarely for a dramatic reason.</p>
+      <p>It's the therapist typing up a session note while it's still fresh. The consultant drafting a memo under an NDA they take seriously. The engineer writing the internal design doc for a system the company hasn't announced yet, and would rather not explain to a stranger's server. The journalist keeping notes on a source who asked not to be named. The person who just doesn't love the idea of a diary entry being quietly read by something they never agreed to let read it.</p>
+      <p>None of these people are unusual, and none of them are being paranoid. They noticed that every extra server between them and their own words is one more thing that can be breached, subpoenaed or quietly sold — and that "this stays on my machine" stopped being the default almost everywhere else. It's worth being honest about the cost of that choice: Marqora won't sync your notes between machines for you, because there's no service in the loop to do it, and if a laptop dies without a backup, that loss is real. In exchange, what you write here belongs to you the way a piece of paper does — no server holding a copy for someone to breach, because there's no server; no account to close, because there was never one to open.</p>
+    </div>
+  </section>
+
+  <section class="closing">
+    <p>Go back to that ordinary moment — the file you weren't ready to show anyone yet. Close the laptop. The document is exactly where you left it, on the machine you left it on. It got there without asking anyone's permission, and without telling anyone it exists.</p>
+    <p>That's the whole idea. Not a bigger feature set, not a faster sync, not a smarter cloud. A room where what you write stays put — built for the people who already knew they wanted one.</p>
+    <div class="signature">
+      <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="14.6" y1="14.6" x2="27" y2="27" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="21.5" y1="21.5" x2="25" y2="18" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="24" y1="24" x2="27.2" y2="20.8" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <p>Nothing you write here goes anywhere else.</p>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/paultechguy/Marqora/releases/latest">Download for Windows &rarr;</a>
+      <a class="btn btn-ghost" href="https://github.com/paultechguy/Marqora">View source on GitHub</a>
+    </div>
+    <p class="cta-meta">Extract the zip. Double-click Install.cmd. Nothing to sign in to, nothing to configure — settings and snippets live in your own profile, not ours.</p>
+  </section>
+
+</article>
+
+<footer class="colophon">
+  <div class="status-line">
+    <span>No network calls</span><span class="dot">&middot;</span>
+    <span>No telemetry</span><span class="dot">&middot;</span>
+    <span>No account</span><span class="dot">&middot;</span>
+    <span>Apache&#8209;2.0</span><span class="dot">&middot;</span>
+    <span>Windows 11</span><span class="dot">&middot;</span>
+    <a href="https://github.com/paultechguy/Marqora">github.com/paultechguy/Marqora</a>
+  </div>
+</footer>
+
+</body>
+</html>

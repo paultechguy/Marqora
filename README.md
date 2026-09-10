@@ -11,6 +11,8 @@ Source and preview live side by side with synchronized scrolling, mermaid diagra
 inline, and everything runs locally: no network calls, no telemetry, no account.
 </p>
 
+<p><a href="https://paultechguy.github.io/Marqora/"><strong>paultechguy.github.io/Marqora</strong></a></p>
+
 </div>
 
 ---
@@ -659,7 +661,7 @@ A document about software is mostly not prose, so most of what is on screen is n
 | Fenced, indented and inline code | The text of a link, and a reference's title |
 | Link and image targets, autolinks, bare URLs | The alt text of an image |
 | HTML tags and attributes, entities | Everything else |
-| Maths, footnote markers, emoji shortcodes | |
+| Math, footnote markers, emoji shortcodes | |
 | YAML front matter | |
 | `SDK`, `win-x64`, `MainViewModel` — acronyms, anything with a digit, camelCase names | |
 
