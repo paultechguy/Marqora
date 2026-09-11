@@ -29,14 +29,15 @@ public sealed partial class SnippetCatalog(IAppPaths paths, ILogger<SnippetCatal
     {
         List<Snippet> builtIn = [.. BuiltInSnippets.All.Where(s => s.Group == group)];
 
-        // The user's folder holds general snippets. Diagrams stay curated: they exist to
-        // teach mermaid's syntax, and a half-remembered one would not.
-        if (group != SnippetGroup.General)
+        // Diagrams stay curated: they exist to teach mermaid's syntax, and a half-remembered
+        // one would not. The other two groups both draw on the user's folder, which is flat -
+        // ReadUserSnippets is what decides from a filename which of them a file joins.
+        if (group == SnippetGroup.Diagram)
         {
             return builtIn;
         }
 
-        List<Snippet> user = ReadUserSnippets();
+        List<Snippet> user = [.. ReadUserSnippets().Where(s => s.Group == group)];
 
         if (user.Count == 0)
         {
@@ -45,6 +46,18 @@ public sealed partial class SnippetCatalog(IAppPaths paths, ILogger<SnippetCatal
 
         // A user's snippet shadows a built-in of the same name. That is the natural way to
         // say "not that one, mine".
+        //
+        // The callouts are a fixed five, so one of the user's takes the place of the built-in
+        // it stands in for rather than starting a second run at the end. The submenu is the
+        // five callouts in severity order whatever happens to be behind them; a Warning of
+        // theirs that jumped to the bottom would cost the order its meaning to say something
+        // the menu already says with a tooltip. Every callout of the user's shadows something
+        // by definition - a filename only joins this group by matching one of the five.
+        if (group == SnippetGroup.Callout)
+        {
+            return [.. builtIn.Select(b => user.Find(u => SameName(u.Name, b.Name)) ?? b)];
+        }
+
         HashSet<string> overridden = new(user.Select(s => s.Name), StringComparer.CurrentCultureIgnoreCase);
 
         return
@@ -113,7 +126,14 @@ public sealed partial class SnippetCatalog(IAppPaths paths, ILogger<SnippetCatal
 
                 if (name.Length > 0)
                 {
-                    found.Add(new Snippet { Name = name, Group = SnippetGroup.General, Path = path });
+                    // One flat folder, two menus. A file named for one of the callouts joins
+                    // them and is not also a general snippet, so the same file never appears
+                    // in two places.
+                    SnippetGroup group = BuiltInSnippets.IsCallout(name)
+                        ? SnippetGroup.Callout
+                        : SnippetGroup.General;
+
+                    found.Add(new Snippet { Name = name, Group = group, Path = path });
                 }
             }
 
@@ -143,6 +163,14 @@ public sealed partial class SnippetCatalog(IAppPaths paths, ILogger<SnippetCatal
     private static string DisplayName(string fileName) =>
         Whitespace().Replace(SortPrefix().Replace(fileName, string.Empty).Replace('-', ' ').Replace('_', ' '), " ")
             .Trim();
+
+    /// <summary>
+    /// How two snippet names are matched. Culture-aware and case-insensitive: these are
+    /// names a person typed as a filename against names written in code, and "warning.md"
+    /// is plainly the same answer as "Warning".
+    /// </summary>
+    private static bool SameName(string left, string right) =>
+        StringComparer.CurrentCultureIgnoreCase.Equals(left, right);
 
     [GeneratedRegex(@"^\d+[-_. ]+")]
     private static partial Regex SortPrefix();

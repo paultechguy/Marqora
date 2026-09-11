@@ -12,6 +12,17 @@ public enum SnippetGroup
     /// <summary>Mermaid diagrams, which get their own button because the syntax is the
     /// least memorable thing the app renders.</summary>
     Diagram = 1,
+
+    /// <summary>
+    /// The five callouts — note, tip, important, warning and caution.
+    ///
+    /// A group rather than five more entries in <see cref="General"/>. They are one
+    /// construct with five flavours, and a flat name-ordered list scatters them from
+    /// Caution to Warning with six unrelated snippets in between; a reader who has found
+    /// one has found nothing about the other four. Two of them used to sit in General on
+    /// their own, which is how the set came to be half-present.
+    /// </summary>
+    Callout = 2,
 }
 
 /// <summary>

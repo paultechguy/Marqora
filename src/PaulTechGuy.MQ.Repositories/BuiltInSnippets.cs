@@ -39,8 +39,19 @@ internal static class BuiltInSnippets
         General("Keyboard Keys", "<kbd>Ctrl</kbd>&nbsp;+&nbsp;<kbd>S</kbd>"),
         General("Link Reference", "See [the docs][docs].\n\n[docs]: $0 \"Title\""),
         General("Math Block", "$$\n$0\n$$"),
-        General("Note", "> [!NOTE]\n> $0"),
-        General("Warning", "> [!WARNING]\n> $0"),
+
+        // Callouts. Note and Warning were once two General entries above, which left the
+        // other three missing and the two that existed sitting apart from each other in
+        // name order. All five now, under one submenu.
+        //
+        // Severity order rather than alphabetical, matching the cheatsheet: the list is
+        // short enough to read whole, and read whole it says what the five are for. The
+        // alphabet would open on Caution, which is the one reached for least.
+        Callout("Note", "> [!NOTE]\n> $0"),
+        Callout("Tip", "> [!TIP]\n> $0"),
+        Callout("Important", "> [!IMPORTANT]\n> $0"),
+        Callout("Warning", "> [!WARNING]\n> $0"),
+        Callout("Caution", "> [!CAUTION]\n> $0"),
 
         // Mermaid. Every one of these is a working diagram rather than a stub, because the
         // point of the menu is to hand over syntax nobody remembers, and a skeleton with
@@ -61,9 +72,25 @@ internal static class BuiltInSnippets
         Diagram("Git Graph", "```mermaid\ngitGraph\n    commit\n    branch feature\n    commit\n    checkout main\n    merge feature\n$0```"),
     ];
 
+    /// <summary>
+    /// Whether a name is one of the callouts.
+    ///
+    /// The user's snippets folder is flat, so a filename is the only thing that can say
+    /// which menu a file of theirs belongs under: "Warning.md" stands in for the built-in
+    /// Warning inside the Callouts submenu, and anything else is a general snippet. The
+    /// comparison is the one the catalogue shadows built-ins with, because this is the
+    /// same question asked a moment earlier.
+    /// </summary>
+    public static bool IsCallout(string name) =>
+        All.Any(s => s.Group == SnippetGroup.Callout
+            && StringComparer.CurrentCultureIgnoreCase.Equals(s.Name, name));
+
     private static Snippet General(string name, string body) =>
         new() { Name = name, Group = SnippetGroup.General, Body = body };
 
     private static Snippet Diagram(string name, string body) =>
         new() { Name = name, Group = SnippetGroup.Diagram, Body = body };
+
+    private static Snippet Callout(string name, string body) =>
+        new() { Name = name, Group = SnippetGroup.Callout, Body = body };
 }

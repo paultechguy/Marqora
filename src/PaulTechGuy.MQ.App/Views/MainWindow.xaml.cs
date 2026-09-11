@@ -2240,6 +2240,10 @@ public sealed partial class MainWindow : Window
     /// start, and once more before the folder link - which is the only entry here that inserts
     /// nothing.
     ///
+    /// Except for the curated groups, which are a flat run and nothing else. Callouts is one
+    /// of them, and it is also a submenu of the general list: this calls itself once to fill
+    /// it, because a MenuFlyoutSubItem has no opening event of its own to hang that on.
+    ///
     /// It used to take a flag that added Code Block and Table to the top, which is what let the
     /// bar call its dropdown "Insert". Both went when the menu bar gained a real Insert menu:
     /// one word naming two different sets is worse than duplication, so the code block became a
@@ -2256,8 +2260,24 @@ public sealed partial class MainWindow : Window
             items.Add(new MenuFlyoutItem { Text = "No snippets", IsEnabled = false });
         }
 
+        // The curated groups are a flat run in the order BuiltInSnippets writes them, and
+        // stop there. Neither has a second half to head: diagrams are built-in only, and the
+        // catalogue has already put any callout of the user's into the slot of the one it
+        // stands in for, so a "Your snippets" break would be splitting a list of five that
+        // means something as five. Neither is backed by a folder of its own either, so
+        // neither wants the link at the foot.
+        if (group != SnippetGroup.General)
+        {
+            foreach (Snippet snippet in snippets)
+            {
+                items.Add(SnippetItem(snippet));
+            }
+
+            return;
+        }
+
         // Everything that ships with the app, gathered into one run before any of it is shown.
-        List<MenuFlyoutItem> shipped = [];
+        List<MenuFlyoutItemBase> shipped = [];
 
         foreach (Snippet snippet in snippets)
         {
@@ -2267,15 +2287,24 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        // Name order for the general list, and the same comparison the catalogue sorts the
-        // user's files with, so the two halves of the menu read alike. The diagrams keep the
-        // order they are written in - see BuiltInSnippets.
-        if (group == SnippetGroup.General)
-        {
-            shipped.Sort(static (a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(a.Text, b.Text));
-        }
+        // The five callouts arrive as one submenu rather than five siblings, and take their
+        // place in the sort under its label - so they sit where a reader looking for
+        // "Callouts" would look, rather than being pinned somewhere that has to be learned.
+        //
+        // Filled now, in the same breath as the menu holding it. A MenuFlyoutSubItem has no
+        // opening event, which is the same reason the two on the Format menu are refilled
+        // when the window is activated.
+        var callouts = new MenuFlyoutSubItem { Text = "Callouts" };
 
-        foreach (MenuFlyoutItem item in shipped)
+        FillSnippetMenu(callouts.Items, SnippetGroup.Callout);
+        shipped.Add(callouts);
+
+        // Name order for the general list, and the same comparison the catalogue sorts the
+        // user's files with, so the two halves of the menu read alike. The curated groups
+        // returned above keep the order they are written in - see BuiltInSnippets.
+        shipped.Sort(static (a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(Label(a), Label(b)));
+
+        foreach (MenuFlyoutItemBase item in shipped)
         {
             items.Add(item);
         }
@@ -2313,18 +2342,28 @@ public sealed partial class MainWindow : Window
             items.Add(SnippetItem(snippet));
         }
 
-        // Only the general list is backed by a folder, so only it gets a way in.
-        if (group != SnippetGroup.General)
-        {
-            return;
-        }
-
+        // The way in to the folder all of this comes from, last and ruled off, being the one
+        // entry here that inserts nothing.
         items.Add(new MenuFlyoutSeparator());
 
         var open = new MenuFlyoutItem { Text = "Open Snippets Folder..." };
         open.Click += OnOpenSnippetsFolder;
         items.Add(open);
     }
+
+    /// <summary>
+    /// The text of a menu entry, whichever kind it is.
+    ///
+    /// Sorting the general list has to place the Callouts submenu among plain items, and
+    /// MenuFlyoutItem and MenuFlyoutSubItem share no base that carries a label - Text is
+    /// declared separately on each of them.
+    /// </summary>
+    private static string Label(MenuFlyoutItemBase item) => item switch
+    {
+        MenuFlyoutItem plain => plain.Text,
+        MenuFlyoutSubItem sub => sub.Text,
+        _ => string.Empty,
+    };
 
     /// <summary>
     /// One entry from the catalogue. The user's own carry their path as a tooltip, which is

@@ -62,6 +62,54 @@ public class SnippetCatalogTests
 
         catalog.Subject.List(SnippetGroup.General).ShouldNotBeEmpty();
         catalog.Subject.List(SnippetGroup.Diagram).ShouldNotBeEmpty();
+        catalog.Subject.List(SnippetGroup.Callout).ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void The_callouts_are_the_five_the_cheatsheet_documents_in_severity_order()
+    {
+        using var catalog = new Catalog();
+
+        catalog.Subject.List(SnippetGroup.Callout).Select(s => s.Name)
+            .ShouldBe(["Note", "Tip", "Important", "Warning", "Caution"]);
+    }
+
+    [Fact]
+    public void Every_built_in_callout_is_a_blockquote_with_a_kind_on_its_first_line()
+    {
+        using var catalog = new Catalog();
+
+        foreach (Snippet snippet in catalog.Subject.List(SnippetGroup.Callout))
+        {
+            snippet.Body.ShouldNotBeNull();
+            snippet.Body!.ShouldStartWith($"> [!{snippet.Name.ToUpperInvariant()}]\n");
+        }
+    }
+
+    [Fact]
+    public void No_callout_is_left_in_the_general_list()
+    {
+        using var catalog = new Catalog();
+
+        // Note and Warning lived there before the submenu existed. Two of five, sorted
+        // apart from each other, is the state this group was made to end.
+        catalog.Subject.List(SnippetGroup.General)
+            .ShouldNotContain(s => s.Name == "Note" || s.Name == "Warning");
+    }
+
+    [Fact]
+    public void A_user_file_named_for_a_callout_takes_that_callout_s_place()
+    {
+        using var catalog = new Catalog().With("warning.md", "mine");
+
+        IReadOnlyList<Snippet> callouts = catalog.Subject.List(SnippetGroup.Callout);
+
+        // Still five, still in order, with one of them now the user's file.
+        callouts.Select(s => s.Name).ShouldBe(["Note", "Tip", "Important", "warning", "Caution"]);
+        callouts[3].IsBuiltIn.ShouldBeFalse();
+
+        // And it is not also a general snippet: one file, one place in the menu.
+        catalog.User().ShouldBeEmpty();
     }
 
     [Fact]
@@ -129,7 +177,7 @@ public class SnippetCatalogTests
     [Fact]
     public async Task A_body_is_read_from_disk_at_the_moment_it_is_needed()
     {
-        using var catalog = new Catalog().With("note.md", "first version");
+        using var catalog = new Catalog().With("scratch.md", "first version");
 
         Snippet snippet = catalog.User().ShouldHaveSingleItem();
         (await catalog.Subject.ReadBodyAsync(snippet)).ShouldBe("first version");
@@ -143,7 +191,7 @@ public class SnippetCatalogTests
     [Fact]
     public async Task A_snippet_that_has_gone_since_the_menu_opened_reads_as_nothing()
     {
-        using var catalog = new Catalog().With("note.md");
+        using var catalog = new Catalog().With("scratch.md");
 
         Snippet snippet = catalog.User().ShouldHaveSingleItem();
         File.Delete(snippet.Path!);
