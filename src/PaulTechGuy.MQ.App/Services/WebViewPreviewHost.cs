@@ -1183,7 +1183,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 {
                     DiagramActivated?.Invoke(
                         this,
-                        new DiagramActivatedEventArgs(documentId, ReadInt(payload, "index", 0), hash, svg));
+                        new DiagramActivatedEventArgs(
+                            documentId,
+                            ReadInt(payload, "index", 0),
+                            hash,
+                            svg,
+                            ReadBool(payload, "shift", false)));
                 }
 
                 break;
@@ -1331,7 +1336,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
                     DiagramHit? diagram = diagramHash.Length == 0
                         ? null
-                        : new DiagramHit(diagramHash, ReadString(payload, "diagramSvg") ?? string.Empty);
+                        : new DiagramHit(
+                            diagramHash,
+                            ReadString(payload, "diagramSvg") ?? string.Empty,
+                            ReadInt(payload, "diagramIndex", 0));
 
                     ContextMenuRequested?.Invoke(this, new PaneContextMenuEventArgs(
                         clicked,

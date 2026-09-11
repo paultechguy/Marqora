@@ -399,6 +399,19 @@ public sealed record AppSettings
     /// </summary>
     public HeadingNumbering HeadingNumbering { get; set; }
 
+    /// <summary>
+    /// Whether double-clicking a diagram in the preview opens its window maximized, with the
+    /// diagram fitted to it.
+    ///
+    /// Off, which is the window the app has always opened: a cascade-sized one beside the
+    /// editor, where the point was to glance at a diagram and keep typing. Someone who reads
+    /// diagrams on a second monitor wants the other thing every time, and turns this on.
+    ///
+    /// Holding Shift inverts it rather than forcing maximized, so whichever way this is set
+    /// the other window is still one modifier away and neither needs a trip back here.
+    /// </summary>
+    public bool MaximizeDiagramWindows { get; set; }
+
     // ---------------------------------------------------------------------- files
 
     /// <summary>What a launch with no file named on the command line opens.</summary>

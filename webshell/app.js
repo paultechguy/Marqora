@@ -574,6 +574,9 @@
           // the link kind below use for their own blocks.
           diagramHash: diagramSvg ? diagram.getAttribute('data-mq-diagram') : '',
           diagramSvg: diagramSvg ? diagramSvg.outerHTML : '',
+          // Where it sits in the document, which is what names the window it opens in. Only
+          // the two Open items need it; the copies work from the markup alone.
+          diagramIndex: diagramSvg ? Number(diagram.getAttribute('data-mq-index')) : 0,
           // A link to a heading in this same document is not worth a Copy Link item:
           // there is no address to paste anywhere.
           linkUrl: href.charAt(0) === '#' ? '' : absoluteUrl(href),
@@ -1783,6 +1786,10 @@
     The rendered SVG goes across rather than the definition, so the new window needs neither
     mermaid nor a render pass and cannot disagree with what is on screen. The key travels
     with it so the host can raise an existing window instead of opening a second one.
+
+    Whether Shift was held goes too, raw. It is not "open maximized" yet: the host inverts
+    the "Maximize opened diagrams" preference with it, and the preference lives on that side
+    along with every other one rather than being pushed in here to be read back out.
   */
   els.preview.addEventListener('dblclick', function (e) {
     var diagram = e.target.closest ? e.target.closest('pre.mermaid[data-mq-diagram]') : null;
@@ -1801,7 +1808,8 @@
       documentId: state.activeTabId,
       index: Number(diagram.getAttribute('data-mq-index')),
       hash: diagram.getAttribute('data-mq-diagram'),
-      svg: svg.outerHTML
+      svg: svg.outerHTML,
+      shift: e.shiftKey
     });
   });
 

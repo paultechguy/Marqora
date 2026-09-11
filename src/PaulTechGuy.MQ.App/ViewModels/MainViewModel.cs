@@ -5940,12 +5940,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// double-clicking a second diagram feel broken. The service does the de-duplicating.
     /// </summary>
     [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task ShowDiagramAsync(DiagramActivatedEventArgs activated)
+    private Task ShowDiagramAsync(DiagramActivatedEventArgs activated)
+    {
+        // Shift means "the other one", not "maximized", so it inverts the preference rather
+        // than overriding it. With the preference off it is what maximizes; with it on it is
+        // what gets an ordinary window back, and neither direction costs a trip in here.
+        bool maximize = _settings.Current.MaximizeDiagramWindows ^ activated.ShiftHeld;
+
+        return OpenDiagramAsync(activated.DocumentId, activated.Index, activated.Hash, activated.Svg, maximize);
+    }
+
+    /// <summary>
+    /// Opens the right-clicked diagram in a window, as the preview menu's two Open items.
+    ///
+    /// Those items name the window they open, which is what makes the menu the place the
+    /// gesture is spelled out. So unlike a double-click they read neither the preference nor
+    /// a modifier: what the item says is what happens.
+    /// </summary>
+    public Task OpenDiagramWindowAsync(DiagramHit hit, bool maximize) =>
+        ActiveTab is { } tab
+            ? OpenDiagramAsync(tab.Id, hit.Index, hit.Hash, hit.Svg, maximize)
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// The one route into the pop-out service, shared by the double-click and the menu.
+    ///
+    /// Whether the window is maximized has been settled before this is called: the preference
+    /// and the modifier meet in <see cref="ShowDiagramAsync"/>, and the menu items are already
+    /// explicit. Everything left here is about naming the window.
+    /// </summary>
+    private async Task OpenDiagramAsync(Guid documentId, int index, string hash, string svg, bool maximize)
     {
         // Read now rather than on demand: the window has to keep naming its document after
         // that tab has closed, which is the case where the name matters most. The full path
         // goes too, for the header printed on the page.
-        DocumentTabViewModel? tab = FindTab(activated.DocumentId);
+        DocumentTabViewModel? tab = FindTab(documentId);
 
         string document = tab?.Title ?? string.Empty;
         string path = tab?.Path ?? string.Empty;
@@ -5953,7 +5982,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _logger.LogInformation("Opening a diagram from {Document} in its own window.", document);
 
         await _diagramWindows
-            .ShowAsync(activated.DocumentId, activated.Index, activated.Hash, activated.Svg, document, path)
+            .ShowAsync(documentId, index, hash, svg, document, path, maximize)
             .ConfigureAwait(true);
     }
 

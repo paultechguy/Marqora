@@ -194,6 +194,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _diagnostics;
     private readonly CheckBox _altTextCheck;
     private readonly CheckBox _spellCheck;
+    private readonly CheckBox _maximizeDiagrams;
     private readonly ComboBox _headingNumbers;
 
     private readonly CheckBox _showOutline;
@@ -387,6 +388,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _spellCheck = BuildCheck("Underline words that are not in the dictionary");
         Bind(_spellCheck, v => _vm.SetSpellCheckAsync(v));
+
+        _maximizeDiagrams = BuildCheck("Maximize opened diagrams");
+        Bind(_maximizeDiagrams, v => _vm.UpdateAsync(s => s with { MaximizeDiagramWindows = v }));
 
         _showOutline = BuildCheck("Show the outline panel");
         Bind(_showOutline, v => _vm.SetShowOutlineAsync(v));
@@ -1068,6 +1072,20 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(_spellCheck);
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("DIAGRAMS"));
+        panel.Children.Add(_maximizeDiagrams);
+
+        panel.Children.Add(Note(
+            "Double-clicking a diagram in the preview opens it in a window of its own. Off, "
+            + "that window opens beside the editor at a readable size; on, it opens maximized "
+            + "with the diagram fitted to it, which is what a second monitor is usually for.\n\n"
+            + "Holding Shift while double-clicking gives you the other one. So this is which "
+            + "window you get by default, not which windows you can have - whichever way it is "
+            + "set, the other is a key away and neither needs a trip back here.\n\n"
+            + "Right-clicking a diagram offers both outright, as Open in Window and Open "
+            + "Maximized. Those items ignore this setting: each one does what it says."));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("OUTLINE"));
         panel.Children.Add(_showOutline);
         panel.Children.Add(Field("List headings", _outlineDepth));
@@ -1659,6 +1677,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _diagnostics.IsChecked = s.ShowDiagnostics;
             _altTextCheck.IsChecked = s.CheckImageAltText;
             _spellCheck.IsChecked = s.SpellCheckEnabled;
+            _maximizeDiagrams.IsChecked = s.MaximizeDiagramWindows;
 
             // Greyed out, with the reason, when Windows has no dictionary for this language.
             // A switch that stays on and does nothing is worse than one that says why it cannot.

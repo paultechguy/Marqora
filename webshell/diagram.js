@@ -101,18 +101,60 @@
     els.surface.scrollTop = (els.surface.scrollHeight - els.surface.clientHeight) / 2;
   }
 
-  /// Largest zoom at which the whole diagram still fits, never enlarging past 100%.
+  /*
+    Largest zoom at which the whole diagram still fits, enlarging as readily as shrinking.
+
+    It used to cap at 100%, which read as "never blow a small diagram up". That cap is what
+    made a maximized window look broken: the window filled the screen and the diagram stayed
+    the size it always was, marooned in the middle of it. Enlarging costs nothing here
+    because zoom sets the SVG's pixel dimensions rather than transforming it, so the geometry
+    is re-rendered at the new size and stays sharp all the way up. clamp() still holds the
+    result inside the 25% to 500% the toolbar knows how to show.
+  */
   function fit() {
     if (!svg || !natural.width || !natural.height) { return; }
 
     var padding = 32;
     var available = els.surface.getBoundingClientRect();
 
-    var scale = Math.min(
+    setZoom(clamp(Math.min(
       (available.width - padding) / natural.width,
-      (available.height - padding) / natural.height);
+      (available.height - padding) / natural.height)));
+  }
 
-    setZoom(Math.min(1, clamp(scale)));
+  /*
+    A fit asked for by the host immediately after it maximized the window.
+
+    It cannot just be fit(). Maximizing resizes the WebView over on the host's thread, and
+    the surface in here has not been laid out again by the time the message arrives, so
+    measuring now would fit the diagram to the size the window has stopped being. So this
+    fits at once - which is the right answer when the window was already the size it is going
+    to be, and harmless when it was not - and arms a single refit for the resize still on its
+    way.
+
+    The arm is dropped after a moment either way. A window that turned out not to resize must
+    not carry a refit forward into the next thing the user does with its edge.
+  */
+  var pendingRefit = false;
+  var refitTimer = null;
+
+  function refit() {
+    fit();
+
+    pendingRefit = true;
+    if (refitTimer) { clearTimeout(refitTimer); }
+    refitTimer = setTimeout(function () { pendingRefit = false; }, 600);
+  }
+
+  if (window.ResizeObserver) {
+    // A ResizeObserver calls back once as soon as it is given something to watch, long
+    // before any refit has been asked for. The flag starting false is what sits that out.
+    new ResizeObserver(function () {
+      if (!pendingRefit) { return; }
+
+      pendingRefit = false;
+      fit();
+    }).observe(els.surface);
   }
 
   // ---------------------------------------------------------------- content
@@ -351,12 +393,15 @@
     else if (name === 'zoomOut') { step(-1); }
     else if (name === 'zoomReset') { setZoom(1); }
     else if (name === 'zoomFit') { fit(); }
+    else if (name === 'refit') { refit(); }
     else if (name === 'center') { center(); }
     else if (name === 'copyPng') { copyPng(); }
   }
 
-  // Refitting on resize only while the diagram is already fitted would need a mode flag; the
-  // simpler rule is to leave the user's zoom alone once they have chosen one.
+  // Refitting on every resize, for as long as the diagram is still at its fitted zoom, would
+  // need a mode flag; the simpler rule is to leave the user's zoom alone once they have
+  // chosen one. The observer above is not that flag - it fires once, for a refit the host
+  // asked for, and then goes quiet again.
 
   if (webview) {
     webview.addEventListener('message', function (e) {

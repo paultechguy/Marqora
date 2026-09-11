@@ -45,7 +45,9 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _copyImageItem;
     private MenuFlyoutSeparator? _targetSeparator;
 
-    // The two about a diagram, and the rule between them and the exports below.
+    // The four about a diagram, and the rule between them and the exports below.
+    private MenuFlyoutItem? _openDiagramItem;
+    private MenuFlyoutItem? _openDiagramMaximizedItem;
     private MenuFlyoutItem? _copyDiagramPngItem;
     private MenuFlyoutItem? _copyDiagramSvgItem;
     private MenuFlyoutSeparator? _diagramSeparator;
@@ -150,6 +152,8 @@ public sealed partial class MainWindow
 
             // The separator goes with them, so a menu raised away from a diagram keeps the
             // single rule it has always had between Copy as Rich Text and the exports.
+            Show(_openDiagramItem, e.Diagram is not null);
+            Show(_openDiagramMaximizedItem, e.Diagram is not null);
             Show(_copyDiagramPngItem, e.Diagram is not null);
             Show(_copyDiagramSvgItem, e.Diagram is not null);
             Show(_diagramSeparator, e.Diagram is not null);
@@ -560,13 +564,27 @@ public sealed partial class MainWindow
         menu.Items.Add(NeedsContent(richText));
         menu.Items.Add(new MenuFlyoutSeparator());
 
-        // The diagram under the pointer, in the two formats its pop-out window offers for
-        // the one it is showing - so the same diagram copies the same way whichever menu it
-        // is reached from. Shown only over a diagram, like the link and image items above.
+        // The diagram under the pointer: the two ways to open it, then the two formats its
+        // pop-out window offers for the one it is showing - so the same diagram copies the
+        // same way whichever menu it is reached from. Shown only over a diagram, like the
+        // link and image items above.
+        //
+        // The Open pair is also the only place the app says out loud that a diagram opens in
+        // a window at all. Double-click is the gesture people actually use and Shift is the
+        // modifier on it, but neither is visible until somebody has been told, and a menu
+        // raised on the diagram itself is where they would go looking. They name the window
+        // they open rather than mirroring the preference, so the menu reads the same on every
+        // machine and each item does exactly what it says.
         //
         // Deliberately not joined by the exports below them: those are about the document,
         // they are what this menu has always meant by Export, and a diagram that wants a
         // file of its own can be opened in its own window and exported from there.
+        _openDiagramItem = new MenuFlyoutItem { Text = "Open in Window" };
+        _openDiagramItem.Click += (_, _) => OpenClickedDiagram(maximize: false);
+
+        _openDiagramMaximizedItem = new MenuFlyoutItem { Text = "Open Maximized" };
+        _openDiagramMaximizedItem.Click += (_, _) => OpenClickedDiagram(maximize: true);
+
         _copyDiagramPngItem = new MenuFlyoutItem { Text = "Copy as PNG" };
         _copyDiagramPngItem.Click += (_, _) => CopyClickedDiagramPng();
 
@@ -575,6 +593,8 @@ public sealed partial class MainWindow
 
         _diagramSeparator = new MenuFlyoutSeparator();
 
+        menu.Items.Add(_openDiagramItem);
+        menu.Items.Add(_openDiagramMaximizedItem);
         menu.Items.Add(_copyDiagramPngItem);
         menu.Items.Add(_copyDiagramSvgItem);
         menu.Items.Add(_diagramSeparator);
@@ -594,6 +614,20 @@ public sealed partial class MainWindow
 
         _previewMenu = menu;
         return menu;
+    }
+
+    /// <summary>
+    /// Opens the right-clicked diagram in a pop-out, in the shape the chosen item named.
+    ///
+    /// Fire and forget, like the double-click route: opening a WebView takes a moment, and
+    /// there is nothing here that needs to wait for it.
+    /// </summary>
+    private void OpenClickedDiagram(bool maximize)
+    {
+        if (_clickedDiagram is { } hit)
+        {
+            _ = ViewModel.OpenDiagramWindowAsync(hit, maximize);
+        }
     }
 
     private void CopyClickedDiagramSvg()

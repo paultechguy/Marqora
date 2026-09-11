@@ -38,8 +38,21 @@ public interface IDiagramWindowService
     /// <paramref name="documentName"/> names the window. It is taken once, when the window
     /// opens, because it still has to answer "which file was this?" after that document has
     /// been closed - which is exactly when the question gets asked.
+    ///
+    /// <paramref name="maximize"/> opens the window maximized with the diagram fitted to it,
+    /// and applies to a window already following that diagram as well as to a new one - so
+    /// the gesture means one thing whether or not the diagram happens to be open already.
+    /// The caller has already weighed the preference against the modifier; by here it is
+    /// simply what to do.
     /// </summary>
-    Task ShowAsync(Guid documentId, int index, string hash, string svg, string documentName, string documentPath);
+    Task ShowAsync(
+        Guid documentId,
+        int index,
+        string hash,
+        string svg,
+        string documentName,
+        string documentPath,
+        bool maximize);
 
     /// <summary>
     /// Redraws the window with this id, if one is open, and records the definition the

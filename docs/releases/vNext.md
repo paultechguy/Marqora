@@ -28,3 +28,22 @@ take one.
 Both diagram menus offer it: right-click a diagram in the preview pane, or right-click inside the
 window a double-click opens. `Copy as SVG` sits beside it in both, renamed from
 `Copy Diagram (SVG)`.
+
+## Maximize opened diagrams
+
+Hold `Shift` while double-clicking a diagram in the preview pane and its window opens maximized,
+with the diagram fitted to it. The `Preview` page of preferences has **Maximize opened diagrams**
+for anyone who wants that every time; `Shift` then gives you the other one instead, so whichever
+way the preference is set, the window you did not choose is still a key away. It works on a
+diagram whose window is already open, too — that one comes forward maximized and refitted, which
+is the short way back from a window you have zoomed into the corner of. It only ever grows such a
+window; one you sized and parked yourself is never dragged back down.
+
+Fitting a diagram to its window now enlarges as readily as it shrinks. It used to stop at full
+size, which is what made a maximized window look wrong — the window filled the screen while a
+small diagram stayed exactly as big as it had always been, marooned in the middle. A flowchart of
+four boxes now fills the window it is given, and stays sharp doing it: the drawing is re-rendered
+at the new size rather than stretched. `Fit to Window` in the diagram menu follows the same rule.
+
+Right-clicking a diagram in the preview pane now offers `Open in Window` and `Open Maximized`
+alongside the two copy items. Neither reads the preference: each does what it says.

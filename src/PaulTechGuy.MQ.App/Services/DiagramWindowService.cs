@@ -61,7 +61,8 @@ public sealed class DiagramWindowService(
         string hash,
         string svg,
         string documentName,
-        string documentPath)
+        string documentPath,
+        bool maximize)
     {
         // Matched on the definition the window is currently following, which the preview
         // keeps up to date as the diagram is edited. Matching on the definition it was first
@@ -70,6 +71,20 @@ public sealed class DiagramWindowService(
         {
             logger.LogDebug("Raising the window already following diagram {Id}.", already.Id);
             already.Update(hash, index, svg);
+
+            // Before the raise, so the window comes forward in the shape it is going to keep
+            // rather than growing into it once it is in front of you.
+            //
+            // One-way on purpose. Asking for maximized takes an open window there, but asking
+            // for an ordinary one does not drag a maximized window back down: a window that is
+            // already open is one the user has arranged, and "show me that diagram" is a poor
+            // reason to undo it. So an existing window is only ever grown from here, and the
+            // way to shrink one is the same as it has always been - its own restore button.
+            if (maximize)
+            {
+                already.MaximizeAndFit();
+            }
+
             already.Raise();
             return;
         }
@@ -102,7 +117,10 @@ public sealed class DiagramWindowService(
 
             _windows[opened.Id] = opened;
 
-            await opened.InitializeAsync(Placement()).ConfigureAwait(true);
+            // The cascade slot is taken even when the window opens maximized: that placement
+            // becomes its restore bounds, so restoring one down still lands it beside the
+            // editor rather than wherever Windows would have guessed.
+            await opened.InitializeAsync(Placement(), maximize).ConfigureAwait(true);
 
             opened.Activate();
 

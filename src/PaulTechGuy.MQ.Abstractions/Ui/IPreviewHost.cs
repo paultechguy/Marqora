@@ -86,7 +86,13 @@ public sealed class PaneContextMenuEventArgs(
 /// The hash names the diagram for the one thing markup alone cannot do - rasterizing it -
 /// which happens back in the shell, where the diagram is laid out.
 /// </summary>
-public readonly record struct DiagramHit(string Hash, string Svg);
+/// <param name="Hash">Names the diagram, for the rasterizing and for finding an open window.</param>
+/// <param name="Svg">What was on screen when the menu went up.</param>
+/// <param name="Index">
+/// Where it sits in the document, which is the number the pop-out window puts in its title.
+/// Only the Open items need it.
+/// </param>
+public readonly record struct DiagramHit(string Hash, string Svg, int Index);
 
 /// <summary>
 /// A dead link the pointer was over, and the range the whole reference occupies.
@@ -130,7 +136,12 @@ public readonly record struct DiagramWatch(Guid Id, Guid DocumentId, string Hash
 /// of the definition comes too, so a second double-click on the same diagram can find the
 /// window already showing it.
 /// </summary>
-public sealed class DiagramActivatedEventArgs(Guid documentId, int index, string hash, string svg) : EventArgs
+public sealed class DiagramActivatedEventArgs(
+    Guid documentId,
+    int index,
+    string hash,
+    string svg,
+    bool shiftHeld) : EventArgs
 {
     public Guid DocumentId { get; } = documentId;
 
@@ -140,6 +151,17 @@ public sealed class DiagramActivatedEventArgs(Guid documentId, int index, string
     public string Hash { get; } = hash;
 
     public string Svg { get; } = svg;
+
+    /// <summary>
+    /// Whether Shift was down for the double-click, as a fact about the click rather than a
+    /// decision about the window.
+    ///
+    /// It means "the other one", not "maximized": it inverts the MaximizeDiagramWindows
+    /// preference, so with that preference on it is what asks for an ordinary window. The
+    /// preference is read where every other one is read, which is why only the raw modifier
+    /// travels this far.
+    /// </summary>
+    public bool ShiftHeld { get; } = shiftHeld;
 }
 
 /// <summary>
