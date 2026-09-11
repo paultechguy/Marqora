@@ -2383,6 +2383,7 @@
     { ctrl: true, shift: true, code: 'KeyS', run: 'saveAll' },
     { ctrl: true, alt: true, code: 'KeyS', run: 'saveAs' },
     { ctrl: true, code: 'KeyW', run: 'close' },
+    { ctrl: true, code: 'F4', run: 'close' },
     { ctrl: true, shift: true, code: 'KeyW', run: 'closeAll' },
     { ctrl: true, shift: true, code: 'KeyT', run: 'reopenLastClosedTab' },
     { ctrl: true, code: 'KeyP', run: 'print' },

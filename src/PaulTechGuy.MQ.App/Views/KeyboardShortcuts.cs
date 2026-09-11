@@ -45,7 +45,7 @@ internal static class KeyboardShortcuts
             new("Save", "Ctrl+S"),
             new("Save all", "Ctrl+Shift+S"),
             new("Save as...", "Ctrl+Alt+S"),
-            new("Close tab", "Ctrl+W"),
+            new("Close tab", "Ctrl+W or Ctrl+F4"),
             new("Close all tabs", "Ctrl+Shift+W"),
             new("Reopen closed tab", "Ctrl+Shift+T"),
             new("Move a document up or down in a Folio", "Alt+Up or Alt+Down"),

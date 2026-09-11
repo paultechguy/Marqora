@@ -488,6 +488,13 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.S, ctrlAlt, () => ViewModel.SaveAsCommand.Execute(null));
 
         Add(VirtualKey.W, ctrl, () => ViewModel.CloseTabCommand.Execute(null));
+
+        // Ctrl+F4 closes the tab as well. It is the older Windows key for closing the
+        // document rather than the application - what MDI used, and what Visual Studio and
+        // Word still answer to - so it arrives already learned with the people who learned
+        // it there. Ctrl+W stays the one the menus advertise.
+        Add(VirtualKey.F4, ctrl, () => ViewModel.CloseTabCommand.Execute(null));
+
         Add(VirtualKey.W, ctrlShift, () => ViewModel.CloseAllTabsCommand.Execute(null));
         Add(VirtualKey.T, ctrlShift, () => ViewModel.ReopenLastClosedTabCommand.Execute(null));
 

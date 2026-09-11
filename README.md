@@ -243,17 +243,17 @@ open by name but would sweep up unrelated files from a folder. Past 25 files it 
 Documents open as tabs in the title bar. Each tab keeps its own undo history, cursor and
 scroll position, so switching between them is instant and loses nothing.
 
-| Action             | How                                               |
-| ------------------ | ------------------------------------------------- |
-| New empty document | `Ctrl+N` or `Ctrl+T`, or the `+` button           |
-| The tab's own menu | **Right-click a tab**                             |
-| Close a tab        | The tab's `×`, **middle-click** it, or `Ctrl+W`   |
-| Close all          | `Ctrl+Shift+W`                                    |
-| Close others       | Right-click the tab, or `File > Close Other Tabs` |
-| Reorder            | Drag a tab along the strip                        |
-| Select tab 1–8     | `Ctrl+1` … `Ctrl+8`                               |
-| Select last tab    | `Ctrl+9`                                          |
-| Next / previous    | `Ctrl+Tab` / `Ctrl+Shift+Tab`                     |
+| Action             | How                                                       |
+| ------------------ | --------------------------------------------------------- |
+| New empty document | `Ctrl+N` or `Ctrl+T`, or the `+` button                   |
+| The tab's own menu | **Right-click a tab**                                     |
+| Close a tab        | The tab's `×`, **middle-click** it, `Ctrl+W` or `Ctrl+F4` |
+| Close all          | `Ctrl+Shift+W`                                            |
+| Close others       | Right-click the tab, or `File > Close Other Tabs`         |
+| Reorder            | Drag a tab along the strip                                |
+| Select tab 1–8     | `Ctrl+1` … `Ctrl+8`                                       |
+| Select last tab    | `Ctrl+9`                                                  |
+| Next / previous    | `Ctrl+Tab` / `Ctrl+Shift+Tab`                             |
 
 A tab with unsaved changes shows a dot before its name and prompts before closing. New
 documents are named `Untitled 1`, `Untitled 2`, and so on until the first save.
