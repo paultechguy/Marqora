@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="src/PaulTechGuy.MQ.App/Assets/MarqoraLogo.png" alt="Marqora logo" width="144" height="144">
 
@@ -10,6 +10,22 @@
 Source and preview live side by side with synchronized scrolling, mermaid diagrams render<br>
 inline, and everything runs locally: no network calls, no telemetry, no account.
 </p>
+
+<p>
+No account gets created behind the scenes, no sync quietly turns itself on, and nothing you<br>
+write ends up sitting in a cloud you don't control — waiting for that server to be breached,<br>
+that company to be acquired, or that account to be phished. Nothing you write here goes<br>
+anywhere else.
+</p>
+
+<p>
+  <a href="docs/assets/marqora-split-dark.png">
+    <img src="docs/assets/marqora-split-dark.png" width="900"
+         alt="Marqora in dark theme: markdown source on the left with spelling underlines, live preview on the right showing a rendered Mermaid flowchart, a table and typeset math.">
+  </a>
+</p>
+
+<p><a href="https://paultechguy.github.io/Marqora/"><strong>paultechguy.github.io/Marqora</strong></a></p>
 
 </div>
 
@@ -174,30 +190,31 @@ right-click a `.md` file, **Open with**, **Choose another app**, **Always**.
 Everything below ships in the box, works offline, and is driven from the keyboard if you
 would rather not reach for the mouse.
 
-| | Feature | What you get |
-|---|---------|--------------|
-| 🔒 | **Yours alone** | No network calls, no telemetry, no account, no sign-in. Your documents never leave the machine |
-| 📑 | **Tabbed workspace** | Every document in its own tab, each with its own undo history, cursor and scroll position. Open a whole folder at once, drag tabs to reorder, and pick up exactly where you left off next launch |
-| ⚡ | **Live side-by-side preview** | Source and rendered output together, scrolling in lockstep — mapped through line numbers, so tall diagrams never throw the alignment off |
-| ✍️ | **Monaco editing** | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom |
-| 🎨 | **A formatting bar that pays attention** | Bold, lists, headings and the rest, one click away — and the buttons light up for whatever the caret is sitting inside |
-| 🔍 | **Find All** | Every match in one window, across one tab or all of them, grouped by document. Walk the list with the arrow keys and the editor follows along |
-| 🧭 | **Outline panel** | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there |
-| 🧹 | **One-key document formatting** | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word |
-| 📊 | **Mermaid 11 diagrams** | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast |
-| ∑ | **KaTeX math** | Inline and display math, laid out properly, exported the same way it looks |
-| 🌈 | **Rich markdown** | Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and syntax-highlighted code in *both* panes |
-| 🩺 | **Document problems** | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you |
-| 🔤 | **Spell check** | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
-| 📤 | **Exports worth sending** | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, and rich text on the clipboard for Word, Outlook or Confluence |
-| 🧺 | **Folios** | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again |
-| 🧩 | **Snippets and diagram starters** | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them |
-| 📖 | **Cheatsheet at your elbow** | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor |
-| 🌗 | **Light, dark or system** | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included |
-| 🪟 | **One window, well behaved** | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it |
-| 👀 | **Files stay in sync** | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work |
-| ⌨️ | **Keyboard all the way down** | `Alt` drives the menu bar, every command has a shortcut, and `Help > Keyboard Shortcuts...` lists the lot with a button to copy them |
-| 🧳 | **Preferences that travel** | Every setting on six pages, applied as you change them and undone by Cancel — and exportable to a file you can import on another machine, whichever version of Marqora is on it |
+|     | Feature                                  | What you get                                                                                                                                                                                                                             |
+| --- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔒  | **Yours alone**                          | No network calls, no telemetry, no account, no sign-in. Your documents never leave the machine                                                                                                                                           |
+| 📑  | **Tabbed workspace**                     | Every document in its own tab, each with its own undo history, cursor and scroll position. Open a whole folder at once, drag tabs to reorder, and pick up exactly where you left off next launch                                         |
+| ⚡   | **Live side-by-side preview**            | Source and rendered output together, scrolling in lockstep — mapped through line numbers, so tall diagrams never throw the alignment off                                                                                                 |
+| ✍️  | **Monaco editing**                       | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom                                                                                                                  |
+| 🎨  | **A formatting bar that pays attention** | Bold, lists, headings and the rest, one click away — and the buttons light up for whatever the caret is sitting inside                                                                                                                   |
+| 🔍  | **Find All**                             | Every match in one window, across one tab or all of them, grouped by document. Walk the list with the arrow keys and the editor follows along                                                                                            |
+| 🔁  | **Replace All**                          | The same window with a replacement box, across every open tab at once. Regular-expression capture groups, a count to confirm against, and one undo per document                                                                          |
+| 🧭  | **Outline panel**                        | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there                                              |
+| 🧹  | **One-key document formatting**          | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word                                                                                   |
+| 📊  | **Mermaid 11 diagrams**                  | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast                                                                                                                 |
+| ∑   | **KaTeX math**                           | Inline and display math, laid out properly, exported the same way it looks                                                                                                                                                               |
+| 🌈  | **Rich markdown**                        | Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and syntax-highlighted code in *both* panes                                                                                                       |
+| 🩺  | **Document problems**                    | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you                                                                     |
+| 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
+| 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, and rich text on the clipboard for Word, Outlook or Confluence                                                                                 |
+| 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
+| 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
+| 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
+| 🌗  | **Light, dark or system**                | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included                                                                                                                                             |
+| 🪟  | **One window, well behaved**             | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it                                                                                                                    |
+| 👀  | **Files stay in sync**                   | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work                                                                                                                   |
+| ⌨️  | **Keyboard all the way down**            | `Alt` drives the menu bar, every command has a shortcut, and `Help > Keyboard Shortcuts...` lists the lot with a button to copy them                                                                                                     |
+| 🧳  | **Preferences that travel**              | Every setting on six pages, applied as you change them and undone by Cancel — and exportable to a file you can import on another machine, whichever version of Marqora is on it                                                          |
 
 The rest of this section covers each of these in detail.
 
@@ -226,17 +243,17 @@ open by name but would sweep up unrelated files from a folder. Past 25 files it 
 Documents open as tabs in the title bar. Each tab keeps its own undo history, cursor and
 scroll position, so switching between them is instant and loses nothing.
 
-| Action | How |
-|--------|-----|
-| New empty document | `Ctrl+N` or `Ctrl+T`, or the `+` button |
-| The tab's own menu | **Right-click a tab** |
-| Close a tab | The tab's `×`, **middle-click** it, or `Ctrl+W` |
-| Close all | `Ctrl+Shift+W` |
-| Close others | Right-click the tab, or `File > Close Other Tabs` |
-| Reorder | Drag a tab along the strip |
-| Select tab 1–8 | `Ctrl+1` … `Ctrl+8` |
-| Select last tab | `Ctrl+9` |
-| Next / previous | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| Action             | How                                               |
+| ------------------ | ------------------------------------------------- |
+| New empty document | `Ctrl+N` or `Ctrl+T`, or the `+` button           |
+| The tab's own menu | **Right-click a tab**                             |
+| Close a tab        | The tab's `×`, **middle-click** it, or `Ctrl+W`   |
+| Close all          | `Ctrl+Shift+W`                                    |
+| Close others       | Right-click the tab, or `File > Close Other Tabs` |
+| Reorder            | Drag a tab along the strip                        |
+| Select tab 1–8     | `Ctrl+1` … `Ctrl+8`                               |
+| Select last tab    | `Ctrl+9`                                          |
+| Next / previous    | `Ctrl+Tab` / `Ctrl+Shift+Tab`                     |
 
 A tab with unsaved changes shows a dot before its name and prompts before closing. New
 documents are named `Untitled 1`, `Untitled 2`, and so on until the first save.
@@ -270,11 +287,11 @@ that does not.
 
 **Views**
 
-| View | Shortcut |
-|------|----------|
-| Source only | `Alt+1` |
-| Split | `Alt+2` |
-| Preview only | `Alt+3` |
+| View         | Shortcut |
+| ------------ | -------- |
+| Source only  | `Alt+1`  |
+| Split        | `Alt+2`  |
+| Preview only | `Alt+3`  |
 
 View mode, zoom and word wrap are application-wide rather than per tab, matching how
 editors and browsers behave. `Ctrl+1`–`Ctrl+9` belong to tab selection.
@@ -295,15 +312,15 @@ below sheds on its own schedule, at about 990px and 780px.
 `View > Outline` lists the document's headings in a panel down the left-hand side, indented
 by level. It is off until you ask for it, and remembered after that.
 
-| Action | How |
-|--------|-----|
-| Show or hide the panel | `Alt+4`, or `View > Outline` |
-| Go to the panel, and back again | `Alt+Shift+4` |
-| Jump to a heading, staying in the panel | ↑ / ↓, or a single click |
-| Jump to a heading and start editing there | `Enter`, or a double-click |
-| Narrow the list | Type in the filter box |
-| Leave the panel for the document | `Escape` |
-| Copy a heading | `Ctrl+C` with the panel focused |
+| Action                                    | How                             |
+| ----------------------------------------- | ------------------------------- |
+| Show or hide the panel                    | `Alt+4`, or `View > Outline`    |
+| Go to the panel, and back again           | `Alt+Shift+4`                   |
+| Jump to a heading, staying in the panel   | ↑ / ↓, or a single click        |
+| Jump to a heading and start editing there | `Enter`, or a double-click      |
+| Narrow the list                           | Type in the filter box          |
+| Leave the panel for the document          | `Escape`                        |
+| Copy a heading                            | `Ctrl+C` with the panel focused |
 
 Visibility and the keyboard are two separate questions, so they get two separate keys.
 `Alt+4` shows and hides. `Alt+Shift+4` takes you to the panel and brings you back, opening it
@@ -333,9 +350,9 @@ and zoom still targets the last pane you were in.
 
 **Zoom**
 
-| Action | Shortcut |
-|--------|----------|
-| Zoom the active pane | `Ctrl` `+` / `-` / `0`, or `Ctrl`+wheel over it |
+| Action                   | Shortcut                                            |
+| ------------------------ | --------------------------------------------------- |
+| Zoom the active pane     | `Ctrl` `+` / `-` / `0`, or `Ctrl`+wheel over it     |
 | Zoom both panes together | `Ctrl+Shift` `+` / `-` / `0`, or `Ctrl+Shift`+wheel |
 
 Each pane remembers its own level between sessions.
@@ -359,14 +376,15 @@ active tab or across every open one, grouped under the document each came from. 
 still the editor's own find bar for stepping through one match at a time; this is for the
 question "where does this appear?".
 
-| | |
-|---|---|
-| Options | Match case, whole word, regular expression — the same three the find bar offers |
-| Scope | Active tab, or all open tabs |
-| Run it | `Enter` in the search box, the **Find All** button, or `F5` to run it again |
-| Go to a match | Select a row. The source pane switches tabs if it has to, scrolls the line into view and selects the matched text |
-| Start again | **Clear**, or the search box's own clear button — either empties the term and the results together |
-| Dismiss | `Esc`. The window hides rather than closing, so the results are still there next time |
+|                  |                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Options          | Match case, whole word, regular expression — the same three the find bar offers                                    |
+| Scope            | Active tab, or all open tabs                                                                                       |
+| Run it           | `Enter` in the search box, the **Find All** button, or `F5` to run it again                                        |
+| Step the results | `F3` and `Shift+F3` move to the next and previous match, skipping the document headings and wrapping at either end |
+| Go to a match    | Select a row. The source pane switches tabs if it has to, scrolls the line into view and selects the matched text  |
+| Start again      | **Clear**, or the search box's own clear button — either empties the term and the results together                 |
+| Dismiss          | `Esc`. The window hides rather than closing, so the results are still there next time                              |
 
 Selecting a row shows the match without taking the keyboard, so the arrow keys walk down the
 list with the editor following along. `Enter` or a double-click goes there properly and hands
@@ -382,20 +400,39 @@ Regular expressions are .NET's, matched a line at a time — a pattern cannot sp
 break, and `^` and `$` anchor to the line. A pattern that will not compile is reported in
 place of the results, and one that runs away is cut off rather than hanging the window.
 
+**Replace All**
+
+`Edit > Replace All...` (`Ctrl+Shift+H`) is the same window with a **Replace with** box folded
+out — the chevron beside the search box opens and closes it, so you can switch between finding
+and replacing without reopening anything. `Ctrl+H` is still the editor's own replace, for one
+document at a time; this one covers every open tab.
+
+|                |                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Run it         | Fill both boxes and press **Replace All**. It runs the search itself, so there is no need to find first                                                                               |
+| Confirm        | It asks before changing anything, naming how many matches and which document — or how many documents                                                                                  |
+| Capture groups | In regular-expression mode the replacement can use `$1`, `$2`, `${name}` or `$&`. The icon beside the box lists them. In plain text mode the replacement is inserted exactly as typed |
+| Deleting       | An empty **Replace with** box removes every match, and the confirmation says so                                                                                                       |
+| Undo           | One `Ctrl+Z` per document, whether or not that tab is the one on screen                                                                                                               |
+
+Nothing is written to disk: each document it touches simply becomes unsaved. A search matching
+more than 5,000 times is refused rather than confirmed, since it stops scanning part-way and
+would rewrite an arbitrary part of the workspace.
+
 **Writing markdown**
 
 The `Format` menu applies markdown constructs so you do not have to type the punctuation.
 
-| Command | Shortcut |
-|---------|----------|
-| Bold / italic / link | `Ctrl+B` / `Ctrl+I` / `Ctrl+K` |
-| Inline code | ``Ctrl+` `` |
-| Strikethrough | `Ctrl+Shift+X` |
-| Code block | `Ctrl+Shift+K` |
-| Blockquote | `Ctrl+Shift+.` |
-| Bullet / numbered list | `Ctrl+Shift+8` / `Ctrl+Shift+7` |
-| Heading level up / down | `Ctrl+Shift+]` / `Ctrl+Shift+[` |
-| Heading 1–6, task list, table, horizontal rule | Menu only |
+| Command                                        | Shortcut                        |
+| ---------------------------------------------- | ------------------------------- |
+| Bold / italic / link                           | `Ctrl+B` / `Ctrl+I` / `Ctrl+K`  |
+| Inline code                                    | ``Ctrl+` ``                     |
+| Strikethrough                                  | `Ctrl+Shift+X`                  |
+| Code block                                     | `Ctrl+Shift+K`                  |
+| Blockquote                                     | `Ctrl+Shift+.`                  |
+| Bullet / numbered list                         | `Ctrl+Shift+8` / `Ctrl+Shift+7` |
+| Heading level up / down                        | `Ctrl+Shift+]` / `Ctrl+Shift+[` |
+| Heading 1–6, task list, table, horizontal rule | Menu only                       |
 
 Everything toggles. `Ctrl+B` with nothing selected wraps the word under the cursor, and
 pressing it again takes the markers off. Applied to several lines at once, a list or quote
@@ -454,14 +491,14 @@ Open Documents` does the whole set of tabs at once.
 
 Sixteen rules, each independently switchable, because "tidy" is a matter of taste:
 
-| | | |
-|---|---|---|
-| Heading space | Blank lines | Collapse blanks |
-| Trailing whitespace | List marker space | Ordered numbering |
-| Normalize markers | Link syntax | Blockquote space |
-| Line endings | EOF newline | Table formatting |
-| Code fences | Underlined headings | Emphasis markers |
-| Re-wrap paragraphs | | |
+|                     |                     |                   |
+| ------------------- | ------------------- | ----------------- |
+| Heading space       | Blank lines         | Collapse blanks   |
+| Trailing whitespace | List marker space   | Ordered numbering |
+| Normalize markers   | Link syntax         | Blockquote space  |
+| Line endings        | EOF newline         | Table formatting  |
+| Code fences         | Underlined headings | Emphasis markers  |
+| Re-wrap paragraphs  |                     |                   |
 
 Two are off by default. **Normalize markers** rewrites every bullet to one character, and
 **re-wrap paragraphs** reflows prose to a column you choose (80 by default) — that one
@@ -484,13 +521,13 @@ you did not edit.
 
 **Exporting**
 
-| Export | What you get |
-|--------|--------------|
-| `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence |
-| `Tools > Export to PDF...` | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
-| `Tools > Export to HTML...` | One self-contained `.html` file |
-| `Tools > Share as Folio...` | Every open document, and every image they use, as one thing to send |
-| `Tools > Open Folio...` | A Folio unpacked back into its documents and images |
+| Export                                      | What you get                                                                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence                            |
+| `Tools > Export to PDF...`                  | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
+| `Tools > Export to HTML...`                 | One self-contained `.html` file                                                                                          |
+| `Tools > Share as Folio...`                 | Every open document, and every image they use, as one thing to send                                                      |
+| `Tools > Open Folio...`                     | A Folio unpacked back into its documents and images                                                                      |
 
 All three exports are enabled whenever a document is open, and the two file exports default the
 filename to the document's own name with the new extension.
@@ -518,11 +555,11 @@ email and the pictures do not. `Tools > Share as Folio...` takes the documents y
 collects every image they reference — including ones stored somewhere else entirely — and
 repoints the paths so the copy still resolves on somebody else's machine.
 
-| Form | For |
-|------|-----|
+| Form                                         | For                                                                                                                                                                                           |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **One file others can read without Marqora** | A single `.html`: every document in one page with a contents list, images inlined, diagrams and math already drawn, and no script in it at all. Opens by double-click in any browser, offline |
-| **A folder of markdown and images** | Someone who is going to keep editing, or a copy that has to survive being moved |
-| **One zip of that folder** | The same, as one file to send |
+| **A folder of markdown and images**          | Someone who is going to keep editing, or a copy that has to survive being moved                                                                                                               |
+| **One zip of that folder**                   | The same, as one file to send                                                                                                                                                                 |
 
 A preflight window shows what will travel before anything is written: how many documents and
 images, what it weighs, which images are missing, and which links point outside the set. Tick
@@ -606,12 +643,12 @@ does not re-render the diagrams.
 default, because none of it shows up any other way: the preview renders a dead link exactly
 like a live one.
 
-| Underlined | Why |
-|------------|-----|
-| `[text](./gone.md)` | Nothing at that path, relative to the document's own folder |
-| `![alt](missing.png)` | Same, for an image |
-| `[text](#no-such-heading)` | No heading in this document produces that anchor |
-| `##Heading`, `-item`, `>quote`, trailing spaces, `[text] (url)` | Syntax the formatter would tidy up |
+| Underlined                                                      | Why                                                         |
+| --------------------------------------------------------------- | ----------------------------------------------------------- |
+| `[text](./gone.md)`                                             | Nothing at that path, relative to the document's own folder |
+| `![alt](missing.png)`                                           | Same, for an image                                          |
+| `[text](#no-such-heading)`                                      | No heading in this document produces that anchor            |
+| `##Heading`, `-item`, `>quote`, trailing spaces, `[text] (url)` | Syntax the formatter would tidy up                          |
 
 The first three are warnings; the style rules are hints, because `Edit > Format Document`
 fixes all of them on request. Links that leave the machine are never checked — that would
@@ -633,14 +670,14 @@ check stays quiet and the setting greys out to say why.
 
 A document about software is mostly not prose, so most of what is on screen is never checked:
 
-| Never checked | Checked |
-|---------------|---------|
-| Fenced, indented and inline code | The text of a link, and a reference's title |
-| Link and image targets, autolinks, bare URLs | The alt text of an image |
-| HTML tags and attributes, entities | Everything else |
-| Maths, footnote markers, emoji shortcodes | |
-| YAML front matter | |
-| `SDK`, `win-x64`, `MainViewModel` — acronyms, anything with a digit, camelCase names | |
+| Never checked                                                                        | Checked                                     |
+| ------------------------------------------------------------------------------------ | ------------------------------------------- |
+| Fenced, indented and inline code                                                     | The text of a link, and a reference's title |
+| Link and image targets, autolinks, bare URLs                                         | The alt text of an image                    |
+| HTML tags and attributes, entities                                                   | Everything else                             |
+| Math, footnote markers, emoji shortcodes                                             |                                             |
+| YAML front matter                                                                    |                                             |
+| `SDK`, `win-x64`, `MainViewModel` — acronyms, anything with a digit, camelCase names |                                             |
 
 **Your own dictionary** is a plain text file, one word per line, at
 `%LOCALAPPDATA%\PaulTechGuy\Marqora\user-dictionary.txt`. Lines beginning `#` are comments.
@@ -727,13 +764,13 @@ says when the next reminder is due.
 
 ## Where things are kept
 
-| Path | Contents |
-|------|----------|
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\settings.json` | Preferences and window placement |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\recent-files.json` | Recent and pinned files |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\snippets\` | Your own snippets, one per file |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\logs\` | Rolling logs, 14 days |
-| `%LOCALAPPDATA%\PaulTechGuy\Marqora\WebView2\` | WebView2 cache |
+| Path                                                       | Contents                                                    |
+| ---------------------------------------------------------- | ----------------------------------------------------------- |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\settings.json`         | Preferences and window placement                            |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\recent-files.json`     | Recent and pinned files                                     |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\snippets\`             | Your own snippets, one per file                             |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\logs\`                 | Rolling logs, 14 days                                       |
+| `%LOCALAPPDATA%\PaulTechGuy\Marqora\WebView2\`             | WebView2 cache                                              |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora\Welcome to Marqora.md` | Your copy of the welcome document, replaced by each release |
 
 Deleting any of these is safe; the app recreates them. A corrupt state file is moved aside
@@ -824,11 +861,11 @@ Close Marqora and delete `%LOCALAPPDATA%\PaulTechGuy\Marqora`.
 
 Restored by `build/Get-WebAssets.ps1`, served locally, never fetched at runtime.
 
-| Component | Version | License |
-|-----------|---------|---------|
-| [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | 11.17.0 | MIT |
-| [KaTeX](https://github.com/KaTeX/KaTeX) | 0.18.4 | MIT |
+| Component                                                   | Version | License      |
+| ----------------------------------------------------------- | ------- | ------------ |
+| [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0  | MIT          |
+| [Mermaid](https://github.com/mermaid-js/mermaid)            | 11.17.0 | MIT          |
+| [KaTeX](https://github.com/KaTeX/KaTeX)                     | 0.18.4  | MIT          |
 | [highlight.js](https://github.com/highlightjs/highlight.js) | 11.12.0 | BSD-3-Clause |
 
 NuGet: Markdig, CommunityToolkit.Mvvm, Serilog, Windows App SDK, WebView2.
