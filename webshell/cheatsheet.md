@@ -3,7 +3,8 @@
 Everything Marqora renders, with the syntax beside the result.
 
 Jump to: [Text](#text) · [Headings](#headings) · [Lists](#lists) · [Links](#links-and-images) ·
-[Code](#code) · [Quotes](#quotes-and-rules) · [Tables](#tables) · [Notes](#footnotes-and-definitions) ·
+[Code](#code) · [Quotes](#quotes-and-rules) · [Callouts](#callouts) · [Tables](#tables) ·
+[Notes](#footnotes-and-definitions) ·
 [Diagrams](#diagrams) · [Math](#math) · [Front matter](#front-matter) · [Escaping](#escaping)
 
 ## Text
@@ -167,6 +168,34 @@ clearer and can carry a language.
 
 Three or more `-`, `*` or `_` on their own line draw a horizontal rule.
 
+## Callouts
+
+A blockquote whose first line is `[!NOTE]` becomes a callout. Five kinds, each with its own
+color and icon, and the body takes any markdown you like.
+
+````text
+> [!TIP]
+> Callouts hold **bold**, `code`, links and lists like anything else.
+````
+
+> [!NOTE]
+> Useful to know.
+
+> [!TIP]
+> A better way to go about it.
+
+> [!IMPORTANT]
+> Worth stopping for.
+
+> [!WARNING]
+> This one can bite.
+
+> [!CAUTION]
+> This one can hurt.
+
+The color comes from the app rather than from the document, so callouts follow the theme and
+land the right way round in an export.
+
 ## Tables
 
 Colons in the divider row set the alignment: left, centre, right.
@@ -226,31 +255,58 @@ A fence labelled `mermaid` is drawn as a diagram rather than shown as code.
 ```mermaid
 flowchart LR
     A[Markdown] --> B[Marqora] --> C[Export]
+
+    classDef in fill:#2f7c85,stroke:#1f5a61,color:#fff
+    classDef app fill:#6f42c1,stroke:#553098,color:#fff
+    classDef out fill:#1a7f37,stroke:#125926,color:#fff
+
+    class A in
+    class B app
+    class C out
 ```
 `````
 
 ```mermaid
 flowchart LR
     A[Markdown] --> B[Marqora] --> C[Export]
+
+    classDef in fill:#2f7c85,stroke:#1f5a61,color:#fff
+    classDef app fill:#6f42c1,stroke:#553098,color:#fff
+    classDef out fill:#1a7f37,stroke:#125926,color:#fff
+
+    class A in
+    class B app
+    class C out
 ```
+
+`classDef` names a set of styles and `class` puts nodes into it. Colors written this way belong
+to the document rather than to the app, so they stay exactly as typed when the theme changes —
+which is the reason to pick fills that carry white text on a light page and a dark one alike.
 
 Sequence, state, class, pie, Gantt, ER and mindmap diagrams all work the same way:
 
 `````text
 ```mermaid
 sequenceDiagram
-    Editor->>Renderer: markdown
-    Renderer-->>Preview: html
+    rect rgba(63, 143, 152, 0.15)
+        Editor->>Renderer: markdown
+        Renderer-->>Preview: html
+    end
     Note right of Renderer: notes annotate a step
 ```
 `````
 
 ```mermaid
 sequenceDiagram
-    Editor->>Renderer: markdown
-    Renderer-->>Preview: html
+    rect rgba(63, 143, 152, 0.15)
+        Editor->>Renderer: markdown
+        Renderer-->>Preview: html
+    end
     Note right of Renderer: notes annotate a step
 ```
+
+A sequence diagram has no `classDef`. `rect` shades a run of messages instead, and giving it a
+translucent color lets the page show through, so the one line reads on either theme.
 
 ## Math
 

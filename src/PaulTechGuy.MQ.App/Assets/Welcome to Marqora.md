@@ -22,7 +22,9 @@ thing runs on your machine: no account, no sign-in, no network call, no telemetr
 - [ ] Press `Ctrl+Shift+H` and replace across all of them, in one step
 - [ ] Type a word wrong on purpose, then press `Ctrl+.` on it
 
-Nothing here is a demo mode. It is the app, and this is an ordinary Markdown file.
+> [!NOTE]
+> Nothing here is a demo mode. It is the app, and this is an ordinary Markdown file on your
+> disk — edit it, save it, or write over it entirely.
 
 ---
 
@@ -36,6 +38,16 @@ flowchart LR
     C --> E[Diagrams · Math · Highlighting]
     C --> F[Problem checks]
     D --> G[PDF · HTML · Rich text]
+
+    classDef input fill:#2f7c85,stroke:#1f5a61,color:#fff
+    classDef engine fill:#6f42c1,stroke:#553098,color:#fff
+    classDef out fill:#1a7f37,stroke:#125926,color:#fff
+    classDef ship fill:#9a6700,stroke:#6f4a00,color:#fff
+
+    class A,B input
+    class C engine
+    class D,E,F out
+    class G ship
 ```
 
 Source on the left, the finished page on the right, and a render between them fast enough
@@ -112,10 +124,16 @@ sequenceDiagram
     participant You
     participant Marqora
     participant Anyone
-    You->>Marqora: Type a paragraph
-    Marqora-->>You: Rendered, instantly
-    You->>Marqora: Export to PDF
-    Marqora-->>Anyone: A document that stands on its own
+
+    rect rgba(63, 143, 152, 0.15)
+        You->>Marqora: Type a paragraph
+        Marqora-->>You: Rendered, instantly
+    end
+
+    rect rgba(154, 103, 0, 0.15)
+        You->>Marqora: Export to PDF
+        Marqora-->>Anyone: A document that stands on its own
+    end
 ```
 
 Math is typeset with KaTeX, inline as $a^2 + b^2 = c^2$ or as a display block:
@@ -150,11 +168,19 @@ Exports come from the preview you are looking at rather than from a fresh render
 are already drawn, math is already typeset and code is already colored. What you see is what
 leaves the building.
 
+> [!TIP]
+> `Ctrl+Shift+C` copies the formatted page rather than the Markdown — the quickest way into an
+> email or a Word document, with the diagrams already drawn and the math already typeset.
+
 A **Folio** is the one that takes more than a single document. The others hand you the page in
 front of you; a Folio takes the whole set, collects every picture they point at — including the
 ones living somewhere else on your disk — and fixes the paths so none of it breaks on the way.
 Sent as one file, it opens in any browser without Marqora, and dropping that same file back on
 this window unpacks it into the documents it was made from.
+
+> [!IMPORTANT]
+> A Folio is the only export that takes more than the document in front of you — and the only
+> one you can drop back on this window to get those documents back.
 
 ---
 
@@ -216,6 +242,12 @@ page whenever you want it.
 | Show / hide the outline  | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`       |
 | Spell check on / off     | `F7`                      | Correct the word at the cursor | `Ctrl+.`            |
 | Zoom the active pane     | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`             |
+
+Those are the keys; the syntax is one more. `Ctrl+F1` opens the Markdown cheatsheet — every
+construct on this page and a few that are not, each one's markup sitting beside its result, with
+the diagrams and the equations really drawn rather than pictured. It is a window rather than a
+dialog, so it can stay open beside the editor while you type, and it comes back to the place you
+left it. `Ctrl+F1` closes it again.
 
 ---
 

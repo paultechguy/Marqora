@@ -608,11 +608,27 @@ body {
   text-align: left;
 }
 
+/*
+  The header row carries the accent; the body stays neutral.
+
+  One colored element per table is the whole of the rule. A table is usually somebody's data
+  rather than a designed object, and tinting the stripes as well turns a page of meeting notes
+  into a spreadsheet - so the accent says "this is a table" at the top and then stops. The
+  2px rule wins the collapse against the first body row's own border, which is what keeps the
+  head visibly separate from the data once both are tinted.
+
+  Neither color is written down here. Both tokens have a dark pair at the top of the file and
+  both are re-stated in the print block, so this reads correctly on screen in either theme, on
+  paper, and in an exported HTML file - where RenderedHtmlPackager resolves them from the light
+  :root - without a fourth copy that could drift from the other three.
+*/
 .mq-preview thead th {
-  background: var(--mq-bg-subtle);
+  background: var(--mq-accent-soft);
+  border-bottom: 2px solid var(--mq-accent);
   font-weight: 620;
 }
 
+/* Deliberately still grey. See the note above the header rule. */
 .mq-preview tbody tr:nth-child(even) { background: color-mix(in srgb, var(--mq-bg-subtle) 55%, transparent); }
 
 /* ----------------------------------------------------------------- code */
