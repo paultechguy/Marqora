@@ -18,6 +18,13 @@ that company to be acquired, or that account to be phished. Nothing you write he
 anywhere else.
 </p>
 
+<p>
+  <a href="docs/assets/marqora-split-dark.png">
+    <img src="docs/assets/marqora-split-dark.png" width="900"
+         alt="Marqora in dark theme: markdown source on the left with spelling underlines, live preview on the right showing a rendered Mermaid flowchart, a table and typeset math.">
+  </a>
+</p>
+
 <p><a href="https://paultechguy.github.io/Marqora/"><strong>paultechguy.github.io/Marqora</strong></a></p>
 
 </div>
