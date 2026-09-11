@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions;
 using PaulTechGuy.MQ.Domain;
+using Windows.UI;
 
 namespace PaulTechGuy.MQ.App.Services;
 
@@ -77,6 +78,7 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         var builder = new StringBuilder();
 
         builder.AppendLine(ReadAsset("app.css"));
+        builder.AppendLine(AccentDeclarations());
 
         if (renderedHtml.Contains("hljs", StringComparison.Ordinal))
         {
@@ -89,6 +91,40 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// The accent, written out for a document that has left the app.
+    ///
+    /// app.css names no teal. It is chosen once, in <see cref="AccentColors"/>, because the
+    /// window paints the same color with WinUI brushes, and the shell is posted it at
+    /// startup - but a file on somebody else's disk has no host to be told by, and every link,
+    /// note callout and table header in it would come out uncolored. So the value is stated
+    /// here instead, after the stylesheet, where a plain :root block wins.
+    ///
+    /// The light shade whichever theme the app is in: an exported page and a pasted fragment
+    /// are white, as the data-theme="light" their writers put on the html tag says.
+    ///
+    /// The soft tint is spelled out as rgba rather than left to the color-mix app.css derives
+    /// it with. <see cref="FlattenCustomProperties"/> folds these values into a clipboard
+    /// fragment for Word and Outlook, which understand neither custom properties nor
+    /// color-mix, and this is the one place a tint of the accent is used as a background.
+    /// </summary>
+    private static string AccentDeclarations()
+    {
+        Color accent = AccentColors.Light;
+
+        // Two dollars, so a brace is a brace and an interpolation takes two of them: the block
+        // below is CSS, which is mostly braces.
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $$"""
+            :root {
+              --mq-accent-screen: {{AccentColors.LightHex}};
+              --mq-accent-print: {{AccentColors.LightHex}};
+              --mq-accent-soft: rgba({{accent.R}}, {{accent.G}}, {{accent.B}}, 0.14);
+            }
+            """);
     }
 
     /// <summary>

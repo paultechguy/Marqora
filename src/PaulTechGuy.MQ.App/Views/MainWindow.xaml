@@ -1686,14 +1686,8 @@
                                   ItemsSource="{x:Bind ViewModel.OutlineRows, Mode=OneWay}"
                                   SelectionMode="Single"
                                   Padding="0,0,0,8"
+                                  ItemContainerStyle="{StaticResource MqListRowStyle}"
                                   AutomationProperties.Name="Document outline">
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="MinHeight" Value="0" />
-                                    <Setter Property="Padding" Value="10,4" />
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="vm:OutlineRowViewModel">
                                     <!--

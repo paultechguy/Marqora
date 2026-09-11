@@ -5,6 +5,11 @@
   WebView content reads as part of the window rather than an embedded web page. Every
   color is defined once on :root and re-pointed under [data-theme="dark"]; nothing
   below this block hard-codes a color.
+
+  The exceptions are the colors WinUI also paints - the accent and the two a match is
+  drawn in. Those are chosen in the app project and put on the document by setTheme, so
+  that a color the window and the page both use is written down once. Each is marked
+  where it would otherwise have been named.
 */
 
 :root {
@@ -18,8 +23,14 @@
   --mq-text-tertiary: #8a8a8a;
   --mq-border: #e2e2e2;
   --mq-border-strong: #d0d0d0;
-  --mq-accent: #3f8f98;
-  --mq-accent-soft: rgba(81, 168, 177, 0.14);
+  /* The accent is the third color the host chooses rather than this file - see the note by
+     --mq-selection below. Marqora's teal is also the outline row and the Find All tint in
+     the window around this page, so it is written once, in AccentColors in the app project,
+     and setTheme puts the shade for the current theme onto the document as
+     --mq-accent-screen. Print re-points it a few hundred lines down; nothing else needs to
+     know which of the two is in play. */
+  --mq-accent: var(--mq-accent-screen);
+  --mq-accent-soft: color-mix(in srgb, var(--mq-accent) 14%, transparent);
   --mq-quote-bar: #c9c9c9;
   --mq-danger: #b3261e;
   --mq-danger-soft: rgba(179, 38, 30, 0.08);
@@ -63,8 +74,9 @@
     --mq-text-tertiary: #8a8a8a;
     --mq-border: #383838;
     --mq-border-strong: #4a4a4a;
-    --mq-accent: #7fcdd5;
-    --mq-accent-soft: rgba(99, 188, 197, 0.16);
+    /* --mq-accent follows --mq-accent-screen from :root, which the host has already set to
+       the dark teal; only the tint is re-pointed, a little heavier for the darker surface. */
+    --mq-accent-soft: color-mix(in srgb, var(--mq-accent) 16%, transparent);
     --mq-quote-bar: #4a4a4a;
     --mq-danger: #ff9d94;
     --mq-danger-soft: rgba(255, 157, 148, 0.10);
@@ -930,8 +942,7 @@ body {
     --mq-text-tertiary: #6b6b6b;
     --mq-border: #d8d8d8;
     --mq-border-strong: #bcbcbc;
-    --mq-accent: #3f8f98;
-    --mq-accent-soft: rgba(81, 168, 177, 0.14);
+    --mq-accent: var(--mq-accent-print);
     --mq-danger: #b3261e;
     --mq-danger-soft: rgba(179, 38, 30, 0.08);
     --mq-tip: #1a7f37;

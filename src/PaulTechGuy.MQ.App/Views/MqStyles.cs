@@ -6,7 +6,8 @@ using Microsoft.UI.Xaml;
 namespace PaulTechGuy.MQ.App.Views;
 
 /// <summary>
-/// The button vocabulary App.xaml states, reachable from the windows that are built in code.
+/// The vocabulary App.xaml states - the buttons, and the row a navigable list draws - reachable
+/// from the windows that are built in code.
 ///
 /// Code cannot write {StaticResource} - that is a XAML markup extension - so a code-built window
 /// has to ask the dictionary itself. Application.Current.Resources is the right dictionary to ask
@@ -52,6 +53,12 @@ internal static class MqStyles
     /// <summary>A split action standing in an action row.</summary>
     public static Style CommandDropDown => Style("MqCommandDropDownStyle");
 
+    /// <summary>
+    /// A row in a list that is navigated rather than edited, selected plainly enough to be
+    /// found while the keyboard is somewhere else.
+    /// </summary>
+    public static Style ListRow => Style("MqListRowStyle");
+
     /// <summary>The gap between buttons in a row.</summary>
     public static double ButtonGroupSpacing => Number("MqButtonGroupSpacing");
 
@@ -74,6 +81,7 @@ internal static class MqStyles
         _ = CommandButton;
         _ = PrimaryCommandButton;
         _ = CommandDropDown;
+        _ = ListRow;
         _ = ButtonGroupSpacing;
         _ = FormRowHeight;
     }

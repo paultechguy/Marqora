@@ -2034,6 +2034,18 @@
       return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + alpha : hex;
     }
 
+    /*
+      The accent, which Monaco is given for the active line number and nothing else.
+
+      Read once, with a fallback, because app.css no longer names it: setTheme puts it on the
+      document from the host's AccentColors, the way it already does the match colors, and
+      this can run before the first setTheme arrives. An empty value would not simply be
+      ignored - Monaco reads these with Color.fromHex and paints anything it cannot
+      understand bright red - so until the accent lands the active line keeps the color of
+      the inactive ones. setTheme calls this again, and the teal arrives with it.
+    */
+    var accent = token('--mq-accent') || token('--mq-text-tertiary');
+
     monaco.editor.defineTheme('marqora-light', {
       base: 'vs',
       inherit: true,
@@ -2042,7 +2054,7 @@
         'editor.background': token('--mq-bg'),
         'editor.foreground': token('--mq-text'),
         'editorLineNumber.foreground': token('--mq-text-tertiary'),
-        'editorLineNumber.activeForeground': token('--mq-accent'),
+        'editorLineNumber.activeForeground': accent,
         'editorGutter.background': token('--mq-bg'),
         'editor.lineHighlightBackground': token('--mq-bg-subtle'),
         'editorIndentGuide.background1': token('--mq-border'),
@@ -2107,7 +2119,7 @@
       'editor.background': token('--mq-bg'),
       'editor.foreground': token('--mq-text'),
       'editorLineNumber.foreground': token('--mq-text-tertiary'),
-      'editorLineNumber.activeForeground': token('--mq-accent'),
+      'editorLineNumber.activeForeground': accent,
       'editorGutter.background': token('--mq-bg'),
       'editor.lineHighlightBackground': token('--mq-bg-subtle'),
       'editorIndentGuide.background1': token('--mq-border'),
@@ -3946,6 +3958,22 @@
 
       if (p.selectionText) {
         document.documentElement.style.setProperty('--mq-selection-text', p.selectionText);
+      }
+
+      /*
+        Marqora's teal, on the same terms and for the same reason: the outline row and the
+        Find All tint are WinUI, so the color is chosen once in AccentColors and this page is
+        told. Two properties rather than one - the shade for the theme on screen, and the
+        light shade print uses whatever the window is wearing, because paper is white. The
+        :root block in app.css maps them onto --mq-accent; everything downstream reads that
+        and needs to know nothing about either.
+      */
+      if (p.accent) {
+        document.documentElement.style.setProperty('--mq-accent-screen', p.accent);
+      }
+
+      if (p.accentPrint) {
+        document.documentElement.style.setProperty('--mq-accent-print', p.accentPrint);
       }
 
       applyHighlightTheme();

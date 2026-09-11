@@ -380,7 +380,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     {
         _isReady = true;
 
-        Send("setTheme", new { theme = _theme.Effective.ToString() });
+        SendTheme(_theme.Effective);
         Send("restoreScroll", new { top = _settings.Current.CheatsheetScrollTop });
 
         foreach (string message in _pending)
@@ -402,8 +402,27 @@ public sealed partial class CheatsheetWindow : PaletteWindow
 
         ApplyTitleBarTheme(theme);
 
-        Send("setTheme", new { theme = theme.ToString() });
+        SendTheme(theme);
     }
+
+    /// <summary>
+    /// The theme, and the teal the page is to draw with.
+    ///
+    /// The cheatsheet loads app.css, which names no accent of its own: the color is chosen in
+    /// <see cref="AccentColors"/>, because the preview, this window and the outline row in the
+    /// main window all wear it and one of them is WinUI. See WebViewPreviewHost.SetThemeAsync,
+    /// which sends the same pair for the same reason - and the print shade with it, since
+    /// this window prints too.
+    /// </summary>
+    private void SendTheme(AppTheme theme) =>
+        Send(
+            "setTheme",
+            new
+            {
+                theme = theme.ToString(),
+                accent = AccentColors.HexFor(theme),
+                accentPrint = AccentColors.LightHex,
+            });
 
     private void RememberScroll(int top) =>
         _settings.Update(s => s with { CheatsheetScrollTop = top });

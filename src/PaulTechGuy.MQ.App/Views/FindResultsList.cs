@@ -58,6 +58,15 @@ internal sealed partial class FindResultsList : ListView
     {
         SelectionMode = ListViewSelectionMode.Single;
         IsItemClickEnabled = false;
+
+        // The same row as the outline: an accent plate and an accent edge, rather than the
+        // stock 6% fill. A result picked here is a place in a document, and the row saying
+        // which one has to survive the eye going back to the editor behind the window.
+        //
+        // A Style rather than a Brush, which is what makes it safe to hand out from a static
+        // dictionary lookup - see MqStyles for why the distinction matters here.
+        ItemContainerStyle = MqStyles.ListRow;
+
         ContainerContentChanging += OnContainerContentChanging;
     }
 

@@ -392,6 +392,26 @@
     },
 
     setTheme: function (p) {
+      /*
+        Marqora's teal, before the guard below rather than after it.
+
+        app.css names no accent - it is chosen once, in AccentColors in the app project,
+        because the window around the preview paints the same teal with WinUI brushes - so
+        this page has nothing to draw a link or a note callout with until the host sends it.
+        The first setTheme usually agrees with the theme the page booted in, and would return
+        here having set nothing at all.
+
+        --mq-accent-print is the light shade, which the print rules in app.css use whatever
+        the window is wearing: this window prints too, and paper is white.
+      */
+      if (p.accent) {
+        els.root.style.setProperty('--mq-accent-screen', p.accent);
+      }
+
+      if (p.accentPrint) {
+        els.root.style.setProperty('--mq-accent-print', p.accentPrint);
+      }
+
       var next = p.theme === 'Dark' ? 'Dark' : 'Light';
       if (next === theme) { return; }
 

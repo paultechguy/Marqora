@@ -130,6 +130,41 @@
                                              Opacity="0.18" />
 
                             <!--
+                                The row picked out in a list that is navigated rather than
+                                edited: the outline, and the Find All results.
+
+                                Marqora's teal, and the one thing in this file that is not the
+                                Windows accent. That accent belongs to the chrome - the button
+                                that commits, the active tab, the title bar - and it says "the
+                                app". The teal is the document's color, the one the preview
+                                draws a link and a note callout in, and an outline row points
+                                into the document sitting beside it in teal.
+
+                                Declared without a Color deliberately. The teal is stated once,
+                                in AccentColors, because the preview stylesheet is posted the
+                                same value and a color written down in two notations is one
+                                that will one day disagree with itself - it is the bargain the
+                                match colors already make. A XAML dictionary cannot read a C#
+                                constant, so MqAccentBrushes fills these three in at launch,
+                                before any window is built, and throws naming the key if one of
+                                them is renamed out from under it.
+
+                                What stays here is how far the plate is tinted, which is a
+                                question about this dictionary's theme rather than about the
+                                color. Stock selection is about 6%, drawn for a 40px row in a
+                                settings page; these rows are half that height, and the outline
+                                follows the caret as the document is typed in, so the row that
+                                matters is looked for out of the corner of an eye. At 6% it was
+                                genuinely hard to find. Pointer-over is a step up from it, and
+                                pressed shares that - a row is under the pointer before it can
+                                be pressed, and a third shade for the instant between them is
+                                not a distinction anyone sees.
+                            -->
+                            <SolidColorBrush x:Key="MqAccentBrush" />
+                            <SolidColorBrush x:Key="MqListRowSelectedBrush" Opacity="0.22" />
+                            <SolidColorBrush x:Key="MqListRowSelectedPointerOverBrush" Opacity="0.30" />
+
+                            <!--
                                 The chrome rules: the hairline under the tab strip, under the
                                 menu bar and under the format bar, the one over the status bar,
                                 and the short vertical bars that group the format toolbar.
@@ -196,6 +231,18 @@
                             <SolidColorBrush x:Key="TabViewItemHeaderBackgroundPressed"
                                              Color="{ThemeResource SystemAccentColorLight2}"
                                              Opacity="0.24" />
+
+                            <!--
+                                The selected row - see the Light dictionary for whose color
+                                this is, and why the Color is missing from all three.
+
+                                Heavier tints here, as the tab plate is and for the same
+                                reason: the alpha that lifts off a white page is lost against a
+                                dark one.
+                            -->
+                            <SolidColorBrush x:Key="MqAccentBrush" />
+                            <SolidColorBrush x:Key="MqListRowSelectedBrush" Opacity="0.30" />
+                            <SolidColorBrush x:Key="MqListRowSelectedPointerOverBrush" Opacity="0.38" />
 
                             <!--
                                 The chrome rules - see the Light dictionary for what these are
@@ -562,6 +609,123 @@
                                                   FontSize="{TemplateBinding FontSize}"
                                                   HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                A row in a list that is navigated rather than edited - the outline, and the
+                Find All results. Both are lists you move through to get somewhere else, and
+                in both the selected row is the answer to "where am I", so it is drawn to be
+                found rather than merely to be correct.
+
+                A template of its own rather than the three selected-background keys pointed
+                at Marqora's brushes. The plate those keys paint is only half of it: the
+                accent edge is drawn by ListViewItemPresenter as a short pill at a size the
+                presenter decides, which on a row this compact reads as a floating dash
+                rather than a marker. Nothing about that size is settable from out here, so
+                the bar is an ordinary Border instead, given the full height of the row.
+
+                The state names are SelectorItem's, which is what ListViewItem drives -
+                Normal, PointerOver, Pressed, and the three Selected pairs. There is no
+                separate unfocused state, and that is the behavior wanted anyway: the outline
+                row is usually selected while the keyboard is in the editor, so a state that
+                dimmed an unfocused selection would dim exactly the case this style is for.
+
+                Hover and press on an unselected row are the subtle fills the rest of the app
+                uses, so a list row and a toolbar toggle answer the pointer the same way.
+
+                The padding here is the outline's. Find All sets a tighter one on each
+                container as it builds the row, and a local value beats a style setter.
+            -->
+            <Style x:Key="MqListRowStyle" TargetType="ListViewItem">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Padding" Value="10,4" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <Grid x:Name="Root"
+                                  Background="{TemplateBinding Background}"
+                                  CornerRadius="{TemplateBinding CornerRadius}">
+
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource MqListRowSelectedBrush}" />
+                                                <Setter Target="Bar.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="PointerOverSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource MqListRowSelectedPointerOverBrush}" />
+                                                <Setter Target="Bar.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="PressedSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource MqListRowSelectedPointerOverBrush}" />
+                                                <Setter Target="Bar.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Opacity" Value="0.5" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+
+                                <!--
+                                    The left corners are rounded to the plate's own radius so
+                                    the bar sits inside it rather than squaring off its
+                                    corner; the two numbers are a pair and move together.
+                                -->
+                                <Border x:Name="Bar"
+                                        Width="4"
+                                        HorizontalAlignment="Left"
+                                        CornerRadius="4,0,0,4"
+                                        Background="{ThemeResource MqAccentBrush}"
+                                        Opacity="0" />
+
+                                <ContentPresenter x:Name="Presenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  ContentTransitions="{TemplateBinding ContentTransitions}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
                             </Grid>
                         </ControlTemplate>
                     </Setter.Value>

@@ -50,16 +50,38 @@
     Light when there is no fragment to read, matching app.css's own default. That is only
     reached by opening shell.html outside the app.
 
+    The accent comes the same way, and had to once app.css stopped naming it: Marqora's teal
+    is chosen in AccentColors, because the window paints the same color with WinUI brushes,
+    so until the host says what it is this page has no accent to draw with. The first thing
+    that wants one is the pulse on the boot screen below, which would be an invisible square
+    for as long as the old theme flash used to last.
+
+    Bare hex in the address, with the '#' put back here - a fragment would otherwise need it
+    escaped. Anything that is not six or eight hex digits is ignored rather than passed on:
+    these end up in a custom property that a stylesheet and Monaco both read.
+
     The setTheme message still arrives and is still needed - it carries the match colors,
     and the theme can change while the app is running. It just no longer has anything to
     correct on the way in.
   -->
   <script>
     (function () {
-      var found = /[#&]theme=(dark|light)/i.exec(window.location.hash);
+      var hash = window.location.hash;
+      var found = /[#&]theme=(dark|light)/i.exec(hash);
       var theme = found ? found[1].toLowerCase() : 'light';
 
       document.documentElement.setAttribute('data-theme', theme);
+
+      var accent = /[#&]accent=([0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?)(?:&|$)/.exec(hash);
+      var accentPrint = /[#&]accentPrint=([0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?)(?:&|$)/.exec(hash);
+
+      if (accent) {
+        document.documentElement.style.setProperty('--mq-accent-screen', '#' + accent[1]);
+      }
+
+      if (accentPrint) {
+        document.documentElement.style.setProperty('--mq-accent-print', '#' + accentPrint[1]);
+      }
 
       var light = document.getElementById('hljs-light');
       var dark = document.getElementById('hljs-dark');

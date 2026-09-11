@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Globalization;
 using Windows.UI;
 
 namespace PaulTechGuy.MQ.App;
@@ -34,37 +33,7 @@ internal static class MatchColors
     /// </summary>
     public const string ForegroundHex = "#000000";
 
-    public static Color Background => Parse(BackgroundHex);
+    public static Color Background => HexColor.Parse(BackgroundHex, nameof(MatchColors));
 
-    public static Color Foreground => Parse(ForegroundHex);
-
-    /// <summary>
-    /// #rrggbb or #rrggbbaa - the two forms Monaco accepts, so one constant can serve both
-    /// sides. Anything else is a typo in a constant above, and says so rather than quietly
-    /// painting something nobody chose.
-    /// </summary>
-    private static Color Parse(string hex)
-    {
-        ReadOnlySpan<char> digits = hex.AsSpan().TrimStart('#');
-
-        if (digits.Length is not (6 or 8)
-            || !TryByte(digits[..2], out byte r)
-            || !TryByte(digits.Slice(2, 2), out byte g)
-            || !TryByte(digits.Slice(4, 2), out byte b))
-        {
-            throw new FormatException($"MatchColors: '{hex}' is not a #rrggbb or #rrggbbaa color.");
-        }
-
-        byte alpha = 0xFF;
-
-        if (digits.Length == 8 && !TryByte(digits.Slice(6, 2), out alpha))
-        {
-            throw new FormatException($"MatchColors: '{hex}' does not end in a two-digit alpha.");
-        }
-
-        return Color.FromArgb(alpha, r, g, b);
-    }
-
-    private static bool TryByte(ReadOnlySpan<char> pair, out byte value) =>
-        byte.TryParse(pair, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+    public static Color Foreground => HexColor.Parse(ForegroundHex, nameof(MatchColors));
 }

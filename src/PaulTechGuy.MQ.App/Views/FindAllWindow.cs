@@ -1625,8 +1625,9 @@ public sealed partial class FindAllWindow : PaletteWindow
     ///
     /// Dark is <see cref="MatchColors"/>, the same color the source pane selects a picked
     /// result with, so a match looks the same in the row as it does in the text the row
-    /// points at. Light keeps the accent at about a third strength, which is all it has ever
-    /// needed, and is the one place that color appears.
+    /// points at. Light is Marqora's teal at about a third strength, which is all it has ever
+    /// needed - the teal itself from <see cref="AccentColors"/>, where the preview gets it,
+    /// rather than the copy of it that used to be written out here.
     ///
     /// A fixed color rather than a resource lookup, for the same reason
     /// <see cref="SurfaceBrush"/> is.
@@ -1634,7 +1635,7 @@ public sealed partial class FindAllWindow : PaletteWindow
     private static SolidColorBrush HighlightBrush(AppTheme theme) =>
         new(theme == AppTheme.Dark
             ? MatchColors.Background
-            : Windows.UI.Color.FromArgb(0x66, 0x51, 0xA8, 0xB1));
+            : AccentColors.Tint(AppTheme.Light, 0x66));
 
     /// <summary>
     /// The text on the tint, in dark mode only: the light tint is translucent and the row's

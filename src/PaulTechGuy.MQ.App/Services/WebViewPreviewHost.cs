@@ -286,9 +286,22 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// color by its first paint. The setTheme message that follows once the shell reports
     /// ready then changes nothing, which is the point - it is still sent, because it also
     /// carries the match colors and because the theme can change later.
+    ///
+    /// The accent rides along for the same reason. app.css names no teal - it is chosen in
+    /// <see cref="AccentColors"/>, because WinUI paints the same color - so a page that has
+    /// not been told yet has no accent at all, and the first thing drawn with it is the pulse
+    /// on the boot splash. Without this it would be an invisible square until the message
+    /// landed, which is exactly the flash the theme was moved into the address to stop.
+    ///
+    /// Bare hex, no '#': it would otherwise have to be escaped as %23 in a fragment, and a
+    /// color that has to be encoded on the way out and decoded on the way in is a color with
+    /// two more places to go wrong. The page puts the '#' back.
     /// </summary>
     private Uri ShellUriForTheme(AppTheme theme) =>
-        new($"{_assets.ShellUri}#theme={(theme == AppTheme.Dark ? "dark" : "light")}");
+        new($"{_assets.ShellUri}"
+            + $"#theme={(theme == AppTheme.Dark ? "dark" : "light")}"
+            + $"&accent={AccentColors.HexFor(theme).TrimStart('#')}"
+            + $"&accentPrint={AccentColors.LightHex.TrimStart('#')}");
 
     /// <summary>
     /// Records the open document's folder so relative images and links in the markdown
@@ -443,13 +456,19 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         SendAsync("setViewMode", new { mode = mode.ToString() });
 
     /// <summary>
-    /// The theme, and with it the two colors a match is drawn in.
+    /// The theme, and with it the colors both sides of the app draw with.
     ///
-    /// They ride along here rather than being written into app.css because the Find All
-    /// window paints the same two colors with WinUI brushes, and a color written down
-    /// twice is a color that will one day disagree with itself. <see cref="MatchColors"/>
-    /// is where they are chosen; the shell puts them into --mq-selection and
-    /// --mq-selection-text as it arrives, so Monaco and the stylesheet both read one value.
+    /// They ride along here rather than being written into app.css because WinUI paints the
+    /// same colors with brushes of its own, and a color written down twice is a color that
+    /// will one day disagree with itself. <see cref="MatchColors"/> and
+    /// <see cref="AccentColors"/> are where they are chosen; the shell puts them into
+    /// --mq-selection, --mq-selection-text and --mq-accent-screen as they arrive, so Monaco
+    /// and the stylesheet both read one value.
+    ///
+    /// The accent goes over twice. --mq-accent-screen is the shade for the theme on screen,
+    /// and --mq-accent-print is always the light one: a printed page and an exported PDF are
+    /// white whatever the window is wearing, and the dark teal is chosen to sit on a dark
+    /// surface, not on paper. app.css maps the two.
     /// </summary>
     public Task SetThemeAsync(AppTheme effectiveTheme)
     {
@@ -464,6 +483,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 theme = effectiveTheme.ToString(),
                 selection = MatchColors.BackgroundHex,
                 selectionText = MatchColors.ForegroundHex,
+                accent = AccentColors.HexFor(effectiveTheme),
+                accentPrint = AccentColors.LightHex,
             });
     }
 

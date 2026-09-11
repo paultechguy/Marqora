@@ -44,7 +44,13 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        // Before any window is built. The shared button styles are looked up by name from code,
+        // Before any window is built, and before MqStyles.Verify below, which resolves the style
+        // that uses these: Marqora's teal is stated in C# because the webshell is posted it too,
+        // so the brushes XAML paints a selected list row with are put into the theme dictionaries
+        // here rather than written out a second time in App.xaml.
+        MqAccentBrushes.Install();
+
+        // Also before any window is built. The shared styles are looked up by name from code,
         // and a name that no longer resolves would otherwise surface as a control quietly wearing
         // the stock style in whichever flyout happened to be opened first. This turns that into a
         // failure at launch, naming the key.
