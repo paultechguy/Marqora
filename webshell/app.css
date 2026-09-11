@@ -437,11 +437,15 @@ body {
 /*
   ------------------------------------------------------------ heading numbering
 
-  The number is a span that app.js puts inside the heading - see numberHeadings - rather than
-  a CSS counter. Counters cannot skip a level, and a document that puts a "###" straight
-  under a "#" is ordinary rather than unusual; they also gave a heading above the numbered
-  range no way to reset the levels beneath it, so numbering ran on across sections instead
-  of starting again.
+  The number is a span inside the heading, written by the renderer on the host side - see
+  HeadingNumberPass - rather than by a CSS counter. Counters cannot skip a level, and a
+  document that puts a "###" straight under a "#" is ordinary rather than unusual; they also
+  gave a heading above the numbered range no way to reset the levels beneath it, so numbering
+  ran on across sections instead of starting again.
+
+  The shell used to number the headings itself, after each render. It no longer does: the
+  outline panel shows the same numbers, and one rule that both sides read beats two that
+  agree until one of them is edited. The span arrives in the HTML already.
 
   Being real text, it needs nothing here to reach the HTML export, the PDF, the printed page
   or the clipboard. All that is left is how it looks.

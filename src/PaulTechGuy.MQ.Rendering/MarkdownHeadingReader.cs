@@ -13,12 +13,22 @@ namespace PaulTechGuy.MQ.Rendering;
 /// <summary>Extracts a plain-text outline from a parsed document for the outline flyout.</summary>
 internal static class MarkdownHeadingReader
 {
-    public static IReadOnlyList<OutlineHeading> ReadOutline(MarkdigDocument document)
+    /// <param name="numbers">
+    /// What <see cref="HeadingNumberPass"/> gave each heading, when the document has been
+    /// numbered. Read from here rather than from the heading's own inlines: the span the
+    /// pass inserted is raw HTML, and parsing a number back out of it would be inventing a
+    /// second source for something already known.
+    /// </param>
+    public static IReadOnlyList<OutlineHeading> ReadOutline(
+        MarkdigDocument document,
+        IReadOnlyDictionary<HeadingBlock, string>? numbers = null)
     {
         List<OutlineHeading> headings = [];
 
         foreach (HeadingBlock heading in document.Descendants<HeadingBlock>())
         {
+            // The number span is an HtmlInline, which the walk below ignores, so this is
+            // the heading's own words whether the document has been numbered or not.
             string text = ToPlainText(heading.Inline);
 
             if (string.IsNullOrWhiteSpace(text))
@@ -33,6 +43,9 @@ internal static class MarkdownHeadingReader
                 // UseAutoIdentifiers populates Id; fall back to a slug so anchors always work.
                 Slug = heading.GetAttributes().Id ?? Slugify(text),
                 SourceLine = heading.Line,
+                Number = numbers is not null && numbers.TryGetValue(heading, out string? number)
+                    ? number
+                    : string.Empty,
             });
         }
 

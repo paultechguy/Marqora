@@ -40,10 +40,15 @@ public enum AutoSaveMode
 }
 
 /// <summary>
-/// Whether the preview numbers headings, and which level starts the count.
+/// Whether headings are numbered, and which level starts the count.
+///
+/// One preference for both places a heading is shown: the preview and the outline panel.
+/// The panel follows this rather than carrying a switch of its own, so that a section named
+/// "2.3" in one is named "2.3" in the other.
 ///
 /// The numbers are added to the rendered copy, never to the document: the markdown source is
-/// not rewritten, so nothing here can damage a file. See numberHeadings in app.js.
+/// not rewritten, so nothing here can damage a file. See <see cref="HeadingNumbers"/> for the
+/// rule, and HeadingNumberPass for where it is written in.
 ///
 /// The level named is the one that becomes "1", "2", "3"; every level below it becomes a
 /// further component, so <see cref="FromHeading2"/> gives 1, 1.1, 1.1.1 starting at h2 and
@@ -54,7 +59,9 @@ public enum AutoSaveMode
 /// chapter restarts its own "##" numbering rather than the count running on through the
 /// whole document.
 ///
-/// The member values are the heading levels themselves, which the shell relies on.
+/// The member values are the heading levels themselves, which <see cref="HeadingNumbers"/>
+/// relies on: the cast from this enum to the level the count starts at is the mapping rather
+/// than a coincidence.
 /// </summary>
 public enum HeadingNumbering
 {

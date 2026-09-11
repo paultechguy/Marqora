@@ -42,7 +42,9 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
             .Build();
     }
 
-    public RenderedMarkdown Render(string markdown)
+    public RenderedMarkdown Render(string markdown) => Render(markdown, HeadingNumbering.Off);
+
+    public RenderedMarkdown Render(string markdown, HeadingNumbering headingNumbering)
     {
         ArgumentNullException.ThrowIfNull(markdown);
 
@@ -59,6 +61,11 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
             // document is needed for the outline and diagram detection.
             MarkdigDocument document = Markdig.Markdown.Parse(markdown, _pipeline);
 
+            // Between the parse and the render, which is the only place it can go: the
+            // anchor ids are settled by now, and the numbers still reach the HTML as text.
+            IReadOnlyDictionary<HeadingBlock, string> numbers =
+                HeadingNumberPass.Apply(document, headingNumbering);
+
             using var writer = new StringWriter();
             var renderer = new Markdig.Renderers.HtmlRenderer(writer);
             _pipeline.Setup(renderer);
@@ -68,7 +75,7 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
             RenderedMarkdown result = new()
             {
                 Html = writer.ToString(),
-                Outline = MarkdownHeadingReader.ReadOutline(document),
+                Outline = MarkdownHeadingReader.ReadOutline(document, numbers),
                 Links = ReadLinks(document),
                 Anchors = MarkdownAnchorReader.ReadAnchors(document),
                 ContainsDiagrams = ContainsDiagram(document),

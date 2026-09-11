@@ -579,6 +579,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DocumentName = string.Empty;
         DocumentPath = string.Empty;
 
+        // What the first render will use, so that opening Preferences and changing something
+        // else does not look like the numbering changed.
+        _renderedHeadingNumbering = settings.Current.HeadingNumbering;
+
         // Starts true, and the shell corrects it the moment the window is first activated.
         // The optimistic default is the safe one: an offered command that reports an empty
         // clipboard is a smaller failure than a greyed-out one that would have worked.
@@ -3078,14 +3082,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _host.ApplyPreferencesAsync(PreviewPreferences.FromSettings(_settings.Current))
+            AppSettings current = _settings.Current;
+
+            await _host.ApplyPreferencesAsync(PreviewPreferences.FromSettings(current))
                 .ConfigureAwait(true);
+
+            await ReapplyHeadingNumberingAsync(current.HeadingNumbering).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             // A preference that does not reach the shell is a cosmetic failure. It must not
             // take the dialog down with it, and the value is saved either way.
             _logger.LogWarning(ex, "Could not apply preferences to the preview.");
+        }
+    }
+
+    /// <summary>
+    /// Re-renders the open documents when the numbering preference has changed.
+    ///
+    /// The odd one out among the preferences. Every other value here is something the shell
+    /// can act on by itself - a font, a width, a Monaco option - but the section numbers are
+    /// written into the HTML by the renderer, so the document on screen stays as it was
+    /// until a new rendering arrives. This is what sends one.
+    ///
+    /// Every open document, not just the one in front: a background tab keeps the HTML it
+    /// was last sent and redraws from it when it is shown, so leaving the others alone would
+    /// mean a tab that quietly disagreed with the preference until it was next typed in.
+    ///
+    /// Guarded on the value having actually changed. The Preferences window applies live and
+    /// calls in whenever any preference moves, and re-rendering every open document because
+    /// someone chose a font would be a poor way to spend a large document.
+    /// </summary>
+    private async Task ReapplyHeadingNumberingAsync(HeadingNumbering numbering)
+    {
+        if (_host is null || numbering == _renderedHeadingNumbering)
+        {
+            return;
+        }
+
+        _renderedHeadingNumbering = numbering;
+
+        // A snapshot: each render below yields, and a tab closed in the meantime would
+        // otherwise be walked into.
+        foreach (MarkdownDocument document in _workspace.Documents.ToList())
+        {
+            RenderedMarkdown rendered =
+                await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
+
+            await _host.UpdatePreviewAsync(document.Id, rendered).ConfigureAwait(true);
         }
     }
 
@@ -5122,6 +5166,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         List<FolioRenderedDocument> rendered = [];
 
+        // Once, for the whole Folio: a preference changed while a long export is running
+        // must not number the first half of a collection and not the second.
+        HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+
         for (int i = 0; i < plan.Documents.Count; i++)
         {
             FolioDocumentPlan document = plan.Documents[i];
@@ -5130,7 +5178,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The planned text, not the buffer: its references have already been repointed at
             // what the Folio will actually contain.
-            RenderedMarkdown markdown = await Task.Run(() => _renderer.Render(document.Text))
+            //
+            // Numbered as the preview is. A Folio is the document as the author reads it,
+            // and the export used to be handed numbers by the shell on its way past; the
+            // renderer writes them now, so this is where they have to be asked for.
+            RenderedMarkdown markdown = await Task
+                .Run(() => _renderer.Render(document.Text, numbering))
                 .ConfigureAwait(true);
 
             string html = await _host.RenderForExportAsync(markdown.Html).ConfigureAwait(true);
@@ -6169,6 +6222,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<Guid, IReadOnlyList<OutlineHeading>> _outlines = [];
 
     /// <summary>
+    /// The numbering the open documents were last rendered with.
+    ///
+    /// Held because the Preferences window applies live and calls in on every change, and
+    /// only this one costs a re-render. See <see cref="ReapplyHeadingNumberingAsync"/>.
+    /// </summary>
+    private HeadingNumbering _renderedHeadingNumbering;
+
+    /// <summary>
     /// The headings the panel is currently showing, after filtering.
     ///
     /// Held so a re-render can be compared against what is on screen. Typing inside a
@@ -6578,7 +6639,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        string text = OutlineRows[OutlineSelectedIndex].Text;
+        // The row as it reads on screen, number and all. What was copied should be what was
+        // pointed at, and the number is real text everywhere else in the app.
+        string text = OutlineRows[OutlineSelectedIndex].CopyText;
 
         StatusText = ClipboardText.Set(text, _logger)
             ? $"Copied “{text}”"
@@ -6597,7 +6660,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<RenderedMarkdown> RenderAsync(Guid documentId, string text)
     {
-        RenderedMarkdown rendered = await Task.Run(() => _renderer.Render(text)).ConfigureAwait(true);
+        // Read here rather than inside the lambda: the preference is settled on this thread
+        // before the render leaves it, and one document cannot be numbered halfway.
+        HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+
+        RenderedMarkdown rendered = await Task.Run(() => _renderer.Render(text, numbering))
+            .ConfigureAwait(true);
 
         _outlines[documentId] = rendered.Outline;
 

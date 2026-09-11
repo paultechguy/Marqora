@@ -1095,9 +1095,9 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Field("Number headings", _headingNumbers));
 
         panel.Children.Add(Note(
-            "Numbers are added to the preview and never written into your markdown, so this "
-            + "cannot change a file. They carry through to Print, to the PDF and HTML "
-            + "exports, and to Copy as Rich Text.\n\n"
+            "Numbers are added to the preview and the outline, and never written into your "
+            + "markdown, so this cannot change a file. They carry through to Print, to the "
+            + "PDF and HTML exports, and to Copy as Rich Text.\n\n"
             + "The level chosen counts 1, 2, 3; levels below it become 1.1, 1.1.1 and so on. "
             + "A heading above that level is left unnumbered but still starts a new section, "
             + "so its sub-headings begin again at one. A document that skips a level - a "

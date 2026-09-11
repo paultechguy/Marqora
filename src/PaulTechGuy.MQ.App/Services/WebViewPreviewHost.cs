@@ -503,9 +503,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 highlightCurrentLine = preferences.HighlightCurrentLine,
                 continueLists = preferences.ContinueLists,
                 autoCloseBrackets = preferences.AutoCloseBrackets,
-                // The heading level that counts 1, 2, 3, or zero for off. The enum's values
-                // are those levels, so the cast is the mapping rather than a coincidence.
-                headingNumbers = (int)preferences.HeadingNumbering,
+
+                // Heading numbering is deliberately not here. The numbers are written into
+                // the HTML by the renderer, so the shell has nothing to do with them: see
+                // ReapplyHeadingNumberingAsync, which re-renders instead.
             });
     }
 

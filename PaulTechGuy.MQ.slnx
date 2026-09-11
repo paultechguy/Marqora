@@ -39,6 +39,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/PaulTechGuy.MQ.Domain.Tests/PaulTechGuy.MQ.Domain.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Markdown.Tests/PaulTechGuy.MQ.Markdown.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Rendering.Tests/PaulTechGuy.MQ.Rendering.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Spelling.Tests/PaulTechGuy.MQ.Spelling.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />

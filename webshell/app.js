@@ -77,9 +77,6 @@
   var SOURCE_TRAILING_PADDING_PX = 96;
   var ZOOM_STEPS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500];
 
-  /* Marks the spans numberHeadings adds, so a re-number can find and remove its own work. */
-  var HEADING_NUMBER_CLASS = 'mq-heading-number';
-
   /*
     The font stacks app.css ships with, read once at startup.
 
@@ -134,9 +131,6 @@
     showWrapGlyph: false,
     sourceFontBase: SOURCE_BASE_FONT_PX,
     continueLists: true,
-
-    /* 0 for off, otherwise the heading level that counts 1, 2, 3. See numberHeadings. */
-    headingNumberStart: 0,
 
     /*
       One entry per open tab, keyed by the host's document id:
@@ -351,76 +345,6 @@
       root.style.setProperty(name, family);
     } else {
       root.style.removeProperty(name);
-    }
-  }
-
-  /*
-    Numbers the preview's headings, or strips the numbers when the preference is off.
-
-    Written into the DOM rather than drawn with CSS counters, which is what this started as.
-    Counters cannot cope with a document that skips a level - and skipping is normal, not
-    exotic: a '###' sitting directly under a '#' with no '##' between them is everywhere in
-    real notes. A counter chain has to render the missing level as something, so those
-    headings came out as "9.0.1", and the level above the numbered range could not reset the
-    levels below it at all, so the deeper numbers ran on across sections instead of starting
-    again.
-
-    Doing it here fixes both, and pays for itself twice over: the numbers are real text, so
-    they travel into the HTML export, the PDF, the printed page and the rich-text clipboard
-    without any of them needing to know this feature exists. Word gets numbered headings too,
-    which the CSS version could never have managed.
-
-    The markdown source is still never touched. This runs on the rendered copy only.
-  */
-  function numberHeadings(root) {
-    root = root || els.preview;
-
-    var previous = root.querySelectorAll('.' + HEADING_NUMBER_CLASS);
-    for (var p = 0; p < previous.length; p++) {
-      previous[p].remove();
-    }
-
-    var start = state.headingNumberStart;
-    if (!start) { return; }
-
-    // One counter per level, so a heading only ever has to look at its own and its parents'.
-    var counters = [0, 0, 0, 0, 0, 0];
-    var headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6');
-
-    for (var i = 0; i < headings.length; i++) {
-      var heading = headings[i];
-      var level = parseInt(heading.tagName.charAt(1), 10);
-
-      if (level < start) {
-        /*
-          Above the numbered range: left unnumbered, but it still begins a new section, so
-          everything below it starts again. This is the half CSS counters could not express,
-          and the reason numbering ran on across a document's chapters.
-        */
-        for (var r = start - 1; r < 6; r++) { counters[r] = 0; }
-        continue;
-      }
-
-      counters[level - 1]++;
-
-      for (var d = level; d < 6; d++) { counters[d] = 0; }
-
-      var parts = [];
-      for (var c = start - 1; c < level; c++) {
-        // A level the document skipped is still zero here. Dropping those leading zeros is
-        // what turns "0.1" into "1" for a heading whose parent level was never used.
-        if (counters[c] === 0 && parts.length === 0) { continue; }
-
-        parts.push(counters[c]);
-      }
-
-      if (parts.length === 0) { continue; }
-
-      var label = document.createElement('span');
-      label.className = HEADING_NUMBER_CLASS;
-      label.textContent = parts.join('.') + '  ';
-
-      heading.insertBefore(label, heading.firstChild);
     }
   }
 
@@ -1846,7 +1770,6 @@
 
     wrapWideTables();
     rewriteRelativeUrls();
-    numberHeadings();
 
     if (resetScroll) {
       els.previewPane.scrollTop = 0;
@@ -4133,11 +4056,6 @@
       state.continueLists = p.continueLists !== false;
       state.sourceFontBase = p.sourceFontSize || SOURCE_BASE_FONT_PX;
 
-      // Re-numbered here rather than waiting for the next render, so switching the
-      // preference shows on the document already in front of the user.
-      state.headingNumberStart = p.headingNumbers || 0;
-      numberHeadings();
-
       if (state.editor) {
         state.editor.updateOptions({
           // The zoom is folded back in here: this runs whenever a preference changes, and
@@ -4242,7 +4160,6 @@
       }
 
       wrapWideTables(host);
-      numberHeadings(host);
 
       Promise.all([renderDiagrams(host, true), renderMath(host), highlightCode(host)])
         .then(finish)

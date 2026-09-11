@@ -59,8 +59,6 @@ public sealed record PreviewPreferences
     /// <summary>Close a bracket, quote or emphasis marker as it is typed.</summary>
     public bool AutoCloseBrackets { get; init; } = true;
 
-    public HeadingNumbering HeadingNumbering { get; init; }
-
     /// <summary>Everything the web surface needs, read off the settings record.</summary>
     public static PreviewPreferences FromSettings(AppSettings settings)
     {
@@ -79,7 +77,6 @@ public sealed record PreviewPreferences
             HighlightCurrentLine = settings.HighlightCurrentLine,
             ContinueLists = settings.ContinueLists,
             AutoCloseBrackets = settings.AutoCloseBrackets,
-            HeadingNumbering = settings.HeadingNumbering,
         };
     }
 

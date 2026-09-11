@@ -1696,12 +1696,27 @@
                             </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="vm:OutlineRowViewModel">
-                                    <TextBlock Text="{x:Bind Text}"
-                                               Margin="{x:Bind Indent}"
+                                    <!--
+                                        Two runs rather than one string. The number is the
+                                        preview's, not the document's, so it is dimmed and
+                                        the words keep the row's weight; and the filter box
+                                        searches the words alone, which one string would
+                                        make impossible.
+
+                                        Both runs are empty-safe: an unnumbered heading -
+                                        numbering off, or a heading above the level the
+                                        count starts at - draws nothing for the first.
+
+                                        They are jammed together on purpose. A newline
+                                        between two runs is content, not layout: XAML
+                                        collapses it to a space, which would indent every
+                                        unnumbered row by one character.
+                                    -->
+                                    <TextBlock Margin="{x:Bind Indent}"
                                                FontWeight="{x:Bind Weight}"
                                                FontSize="12.5"
                                                TextTrimming="CharacterEllipsis"
-                                               ToolTipService.ToolTip="{x:Bind Tooltip}" />
+                                               ToolTipService.ToolTip="{x:Bind Tooltip}"><Run Text="{x:Bind NumberLabel}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><Run Text="{x:Bind Text}" /></TextBlock>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>

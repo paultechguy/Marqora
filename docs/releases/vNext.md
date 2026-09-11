@@ -47,3 +47,23 @@ at the new size rather than stretched. `Fit to Window` in the diagram menu follo
 
 Right-clicking a diagram in the preview pane now offers `Open in Window` and `Open Maximized`
 alongside the two copy items. Neither reads the preference: each does what it says.
+
+## Numbered headings in the outline
+
+With **Number headings** on, the outline panel (`View > Outline`, `Alt+4`) now shows the same
+numbers the preview does, dimmed ahead of each heading — so a section reading `2.3` on the page
+reads `2.3` in the panel beside it. There is no second switch to find: the one on the `Preview`
+page of preferences drives both, and the panel and the page are never left disagreeing about
+what a section is called.
+
+The rules are the ones already in use. A heading above the level the count starts at is left
+unnumbered in the panel too, so `From heading 2` leaves a document's title as plain words in
+both places. A number belongs to the whole document rather than to whatever the panel happens
+to be showing, so filtering the list, or shortening it with **List headings**, leaves every
+number exactly as it was.
+
+The filter box still searches the words alone — typing `2.3` finds nothing, because the number
+is the preview's rather than the document's. Copying a row with `Ctrl+C` brings the number along
+with the heading.
+
+As before, none of this is written into your markdown.

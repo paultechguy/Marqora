@@ -30,13 +30,26 @@ public sealed class OutlineRowViewModel
     /// </summary>
     private const double IndentPerLevel = 13;
 
+    /// <summary>
+    /// The gap between a row's number and its words: two non-breaking spaces, which is what
+    /// the preview puts there, so the panel and the page are spaced alike.
+    ///
+    /// Written as a character rather than as ordinary spaces in a literal for two reasons:
+    /// XAML's text layout collapses a run of spaces to one, and a gap that cannot be seen in
+    /// the source is a gap the next person deletes by accident.
+    /// </summary>
+    private static readonly string NumberGap = new((char)0x00A0, 2);
+
     public OutlineRowViewModel(OutlineHeading heading)
     {
         ArgumentNullException.ThrowIfNull(heading);
 
         Level = heading.Level;
         Text = heading.Text;
+        Number = heading.Number;
         SourceLine = heading.SourceLine;
+
+        NumberLabel = heading.Number.Length == 0 ? string.Empty : heading.Number + NumberGap;
 
         // Levels are 1-based, so an H1 sits flush against the panel's own padding.
         Indent = new Thickness((heading.Level - 1) * IndentPerLevel, 0, 0, 0);
@@ -49,6 +62,27 @@ public sealed class OutlineRowViewModel
     public int Level { get; }
 
     public string Text { get; }
+
+    /// <summary>
+    /// The section number, as "1.2.1", or empty when the document is not numbered or the
+    /// heading sits above the level the count starts at.
+    ///
+    /// Apart from <see cref="Text"/> because the two are shown differently and searched
+    /// differently: the number is dimmed, and the filter box matches only the words.
+    /// </summary>
+    public string Number { get; }
+
+    /// <summary>The number as the row draws it, with the gap that holds it off the words.</summary>
+    public string NumberLabel { get; }
+
+    /// <summary>
+    /// What Copy puts on the clipboard: the row as it reads on screen.
+    ///
+    /// With an ordinary space rather than the pair the row is drawn with. Somewhere else is
+    /// about to receive this, and a non-breaking space pasted into a document is a character
+    /// that looks like a space until something wraps.
+    /// </summary>
+    public string CopyText => Number.Length == 0 ? Text : $"{Number} {Text}";
 
     /// <summary>Zero-based line in the markdown source, which is what the jump uses.</summary>
     public int SourceLine { get; }

@@ -13,6 +13,18 @@ public sealed record OutlineHeading
     /// <summary>Anchor id emitted into the preview HTML.</summary>
     public required string Slug { get; init; }
 
+    /// <summary>
+    /// The section number shown beside the heading, as "1.2.1", or empty when numbering is
+    /// off or the heading sits above the level the count starts at.
+    ///
+    /// Kept apart from <see cref="Text"/> rather than folded into it. The outline panel
+    /// dims the number and leaves the words alone, the filter box searches the words only,
+    /// and neither is possible once the two are one string.
+    ///
+    /// Not required, and defaulted, so every existing construction site still compiles.
+    /// </summary>
+    public string Number { get; init; } = string.Empty;
+
     /// <summary>Zero-based line in the markdown source that produced this heading.</summary>
     public required int SourceLine { get; init; }
 }
