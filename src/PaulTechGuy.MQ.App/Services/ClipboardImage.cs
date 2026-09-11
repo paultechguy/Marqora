@@ -13,7 +13,7 @@ using Windows.Storage.Streams;
 namespace PaulTechGuy.MQ.App.Services;
 
 /// <summary>
-/// Reads images off the Windows clipboard.
+/// Reads images off the Windows clipboard, and writes one to it.
 ///
 /// The one place WinRT imaging appears, sitting beside <see cref="ClipboardText"/> and
 /// <see cref="ClipboardHtml"/> for the same reason: everything that talks to the clipboard does
@@ -229,6 +229,142 @@ internal static class ClipboardImage
     /// </summary>
     public static Task<byte[]?> ResizeForFileAsync(byte[] bytes, int maxWidth, ILogger logger) =>
         EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger);
+
+    /// <summary>
+    /// Writes PNG bytes to the clipboard under two flavors that deliberately differ.
+    ///
+    /// <see cref="PngFormat"/> - the one <see cref="ReadPngAsync"/> looks for first, and the
+    /// one browsers and most modern applications take - gets the bytes untouched, alpha and
+    /// all, so a diagram pastes with nothing behind it.
+    ///
+    /// The standard bitmap flavor gets a copy composited onto white. A DIB carries no alpha
+    /// its consumers can be relied on to honor, and the transparent pixels in a canvas are
+    /// stored as black, so handing that flavor the same bytes pasted the diagram onto a
+    /// black field in everything that reads it - Paint among them.
+    ///
+    /// Which flavor an application asks for is its own decision, so the same copy can land
+    /// transparent in one and white-backed in another. That is the clipboard's design; what
+    /// is avoidable is only the black.
+    ///
+    /// Flushed rather than left lazy: the source streams do not outlive this call, and a
+    /// deferred read would find them already disposed.
+    /// </summary>
+    public static async Task<bool> SetAsync(byte[]? png, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+
+        if (png is null || png.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            // Falls back to the original bytes, which is the old behavior for that one
+            // flavor: a diagram on black beats no diagram at all.
+            byte[] opaque = await FlattenOntoWhiteAsync(png, logger).ConfigureAwait(true) ?? png;
+
+            using var transparent = new InMemoryRandomAccessStream();
+            using var flattened = new InMemoryRandomAccessStream();
+
+            await transparent.WriteAsync(png.AsBuffer()).AsTask().ConfigureAwait(true);
+            await flattened.WriteAsync(opaque.AsBuffer()).AsTask().ConfigureAwait(true);
+
+            transparent.Seek(0);
+            flattened.Seek(0);
+
+            var package = new DataPackage();
+
+            package.SetData(PngFormat, RandomAccessStreamReference.CreateFromStream(transparent));
+            package.SetBitmap(RandomAccessStreamReference.CreateFromStream(flattened));
+
+            Clipboard.SetContent(package);
+            Clipboard.Flush();
+
+            return true;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
+        {
+            logger.LogWarning(ex, "Could not write the diagram image to the clipboard.");
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The same picture with everything the diagram did not paint turned white, for the
+    /// clipboard flavor that cannot carry alpha.
+    ///
+    /// Composited rather than simply drawn on a white ground, so an antialiased edge keeps
+    /// its shape: those pixels are partly transparent, and taking their color alone would
+    /// leave a dark fringe around every stroke.
+    /// </summary>
+    /// <returns>Null when the bytes will not decode, which the caller treats as "use them as they are".</returns>
+    private static async Task<byte[]?> FlattenOntoWhiteAsync(byte[] png, ILogger logger)
+    {
+        try
+        {
+            using var source = new InMemoryRandomAccessStream();
+
+            await source.WriteAsync(png.AsBuffer()).AsTask().ConfigureAwait(true);
+            source.Seek(0);
+
+            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(source);
+
+            // Straight rather than premultiplied: the arithmetic below is the straight-alpha
+            // form, and premultiplied pixels would be composited twice.
+            using SoftwareBitmap bitmap = await decoder.GetSoftwareBitmapAsync(
+                BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight);
+
+            byte[] pixels = new byte[4 * bitmap.PixelWidth * bitmap.PixelHeight];
+
+            bitmap.CopyToBuffer(pixels.AsBuffer());
+
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                byte alpha = pixels[i + 3];
+
+                if (alpha == byte.MaxValue)
+                {
+                    continue;
+                }
+
+                pixels[i] = OverWhite(pixels[i], alpha);
+                pixels[i + 1] = OverWhite(pixels[i + 1], alpha);
+                pixels[i + 2] = OverWhite(pixels[i + 2], alpha);
+                pixels[i + 3] = byte.MaxValue;
+            }
+
+            bitmap.CopyFromBuffer(pixels.AsBuffer());
+
+            using var destination = new InMemoryRandomAccessStream();
+
+            BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, destination);
+
+            encoder.SetSoftwareBitmap(bitmap);
+
+            await encoder.FlushAsync();
+
+            destination.Seek(0);
+
+            return await ToArrayAsync(destination).ConfigureAwait(true);
+        }
+        // InvalidOperationException among them: a SoftwareBitmap is not always writable, and
+        // a failure here has to stay a failure of this one flavor. Letting it reach the
+        // caller's catch would abandon the copy altogether over the fallback being imperfect.
+        catch (Exception ex) when (ex is COMException
+            or ArgumentException
+            or NotSupportedException
+            or InvalidOperationException)
+        {
+            logger.LogWarning(ex, "Could not flatten the diagram image onto white.");
+
+            return null;
+        }
+
+        static byte OverWhite(byte channel, byte alpha) =>
+            (byte)(((channel * alpha) + (byte.MaxValue * (byte.MaxValue - alpha))) / byte.MaxValue);
+    }
 
     /// <summary>
     /// Decodes, optionally scales, and encodes as PNG.

@@ -45,6 +45,11 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _copyImageItem;
     private MenuFlyoutSeparator? _targetSeparator;
 
+    // The two about a diagram, and the rule between them and the exports below.
+    private MenuFlyoutItem? _copyDiagramPngItem;
+    private MenuFlyoutItem? _copyDiagramSvgItem;
+    private MenuFlyoutSeparator? _diagramSeparator;
+
     // Items that need a selection to mean anything. The two Copy items are separate
     // because they copy from different places: the editor's selection and the preview's.
     private MenuFlyoutItem? _cutItem;
@@ -95,6 +100,9 @@ public sealed partial class MainWindow
     private string? _clickedLinkUrl;
     private string? _clickedImageUrl;
 
+    /// <summary>The diagram that was right-clicked, captured for the Diagram submenu.</summary>
+    private DiagramHit? _clickedDiagram;
+
     /// <summary>
     /// A right-click arrived from one of the panes. Fit the menu to what was under the
     /// pointer, then put it where the pointer is.
@@ -109,6 +117,7 @@ public sealed partial class MainWindow
         _clickedImageUrl = e.ImageUrl;
         _clickedSpelling = e.Spelling;
         _clickedLink = e.LinkFinding;
+        _clickedDiagram = e.Diagram;
 
         MenuFlyout menu = e.Pane == EditorPane.Source
             ? BuildSourceMenu()
@@ -138,6 +147,12 @@ public sealed partial class MainWindow
             Show(_copyLinkItem, e.LinkUrl is not null);
             Show(_copyImageItem, e.ImageUrl is not null);
             Show(_targetSeparator, e.LinkUrl is not null || e.ImageUrl is not null);
+
+            // The separator goes with them, so a menu raised away from a diagram keeps the
+            // single rule it has always had between Copy as Rich Text and the exports.
+            Show(_copyDiagramPngItem, e.Diagram is not null);
+            Show(_copyDiagramSvgItem, e.Diagram is not null);
+            Show(_diagramSeparator, e.Diagram is not null);
 
             if (_previewCopyItem is not null) { _previewCopyItem.IsEnabled = e.HasSelection; }
         }
@@ -545,6 +560,25 @@ public sealed partial class MainWindow
         menu.Items.Add(NeedsContent(richText));
         menu.Items.Add(new MenuFlyoutSeparator());
 
+        // The diagram under the pointer, in the two formats its pop-out window offers for
+        // the one it is showing - so the same diagram copies the same way whichever menu it
+        // is reached from. Shown only over a diagram, like the link and image items above.
+        //
+        // Deliberately not joined by the exports below them: those are about the document,
+        // they are what this menu has always meant by Export, and a diagram that wants a
+        // file of its own can be opened in its own window and exported from there.
+        _copyDiagramPngItem = new MenuFlyoutItem { Text = "Copy as PNG" };
+        _copyDiagramPngItem.Click += (_, _) => CopyClickedDiagramPng();
+
+        _copyDiagramSvgItem = new MenuFlyoutItem { Text = "Copy as SVG" };
+        _copyDiagramSvgItem.Click += (_, _) => CopyClickedDiagramSvg();
+
+        _diagramSeparator = new MenuFlyoutSeparator();
+
+        menu.Items.Add(_copyDiagramPngItem);
+        menu.Items.Add(_copyDiagramSvgItem);
+        menu.Items.Add(_diagramSeparator);
+
         var pdf = new MenuFlyoutItem { Text = "Export to PDF..." };
         pdf.Click += (_, _) => ViewModel.ExportPdfCommand.Execute(null);
 
@@ -560,6 +594,22 @@ public sealed partial class MainWindow
 
         _previewMenu = menu;
         return menu;
+    }
+
+    private void CopyClickedDiagramSvg()
+    {
+        if (_clickedDiagram is { } hit)
+        {
+            ViewModel.CopyDiagramSvg(hit.Svg);
+        }
+    }
+
+    private void CopyClickedDiagramPng()
+    {
+        if (_clickedDiagram is { } hit)
+        {
+            _ = ViewModel.CopyDiagramPngAsync(hit.Hash);
+        }
     }
 
     /// <summary>Registers an item as one that needs a document with something in it.</summary>

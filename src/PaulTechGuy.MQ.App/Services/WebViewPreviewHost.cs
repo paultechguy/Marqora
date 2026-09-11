@@ -719,6 +719,51 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
+    /// <summary>Outstanding diagram-PNG requests, keyed the same way as the HTML ones.</summary>
+    private readonly Dictionary<Guid, TaskCompletionSource<string>> _diagramPngRequests = [];
+
+    public async Task<byte[]?> RequestDiagramPngAsync(string hash)
+    {
+        if (!IsReady || string.IsNullOrEmpty(hash))
+        {
+            return null;
+        }
+
+        var id = Guid.NewGuid();
+        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _diagramPngRequests[id] = completion;
+
+        try
+        {
+            await SendAsync("requestDiagramPng", new { requestId = id, hash }).ConfigureAwait(true);
+
+            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(20)))
+                .ConfigureAwait(true);
+
+            if (finished != completion.Task)
+            {
+                _logger.LogWarning("The shell did not answer with a diagram image.");
+                return null;
+            }
+
+            string data = await completion.Task.ConfigureAwait(true);
+
+            // An empty reply is the shell saying it could not produce one, which it reports
+            // on its own side; there is nothing to add to that here.
+            return data.Length == 0 ? null : Convert.FromBase64String(data);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "The shell's diagram image was not readable base64.");
+            return null;
+        }
+        finally
+        {
+            _diagramPngRequests.Remove(id);
+        }
+    }
+
     /// <summary>Outstanding selection-range requests, keyed the same way as the HTML ones.</summary>
     private readonly Dictionary<Guid, TaskCompletionSource<LineRange?>> _selectionRequests = [];
 
@@ -904,28 +949,6 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             throw new InvalidOperationException("The preview is not ready to export.");
         }
 
-        CoreWebView2PrintSettings settings = core.Environment.CreatePrintSettings();
-
-        settings.Orientation = setup.Orientation == PageOrientation.Landscape
-            ? CoreWebView2PrintOrientation.Landscape
-            : CoreWebView2PrintOrientation.Portrait;
-
-        settings.PageWidth = setup.WidthInches;
-        settings.PageHeight = setup.HeightInches;
-
-        settings.MarginTop = setup.MarginInches;
-        settings.MarginBottom = setup.MarginInches;
-        settings.MarginLeft = setup.MarginInches;
-        settings.MarginRight = setup.MarginInches;
-
-        settings.ShouldPrintBackgrounds = setup.IncludeBackgrounds;
-
-        // Deliberately off: the built-in header and footer print the page title and the
-        // source URL, and that URL would read https://marqora.assets/shell.html.
-        settings.ShouldPrintHeaderAndFooter = false;
-
-        settings.ScaleFactor = 1.0;
-
         _logger.LogInformation(
             "Printing to {Path} at {Width}x{Height}in, {Margin}in margins.",
             path,
@@ -935,10 +958,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
         using var _ = ForceLightCanvas();
 
-        if (!await core.PrintToPdfAsync(path, settings))
-        {
-            throw new IOException($"The preview could not be written to {path}.");
-        }
+        await WebViewPrinting.ExportPdfAsync(core, path, setup).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1224,6 +1244,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 }
                 break;
 
+            case "diagramPng":
+                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid pngId)
+                    && _diagramPngRequests.TryGetValue(pngId, out TaskCompletionSource<string>? rasterizing))
+                {
+                    rasterizing.TrySetResult(ReadString(payload, "data"));
+                }
+                break;
+
+
             case "selectionRange":
                 if (Guid.TryParse(ReadString(payload, "requestId"), out Guid selectionId)
                     && _selectionRequests.TryGetValue(selectionId, out TaskCompletionSource<LineRange?>? waiting))
@@ -1296,6 +1325,14 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                                 ReadInt(payload, "linkEnd", -1))
                             : null;
 
+                    // Same convention again: an empty hash means the pointer was not on a
+                    // diagram, or was on one that never rendered.
+                    string diagramHash = ReadString(payload, "diagramHash") ?? string.Empty;
+
+                    DiagramHit? diagram = diagramHash.Length == 0
+                        ? null
+                        : new DiagramHit(diagramHash, ReadString(payload, "diagramSvg") ?? string.Empty);
+
                     ContextMenuRequested?.Invoke(this, new PaneContextMenuEventArgs(
                         clicked,
                         ReadDouble(payload, "x", 0),
@@ -1304,7 +1341,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                         Localize(ReadString(payload, "linkUrl")),
                         Localize(ReadString(payload, "imageUrl")),
                         spelling,
-                        linkFinding));
+                        linkFinding,
+                        diagram));
                 }
                 break;
 

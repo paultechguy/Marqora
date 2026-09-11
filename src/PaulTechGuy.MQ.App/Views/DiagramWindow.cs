@@ -74,6 +74,9 @@ public sealed partial class DiagramWindow : Window
 
     private string _title;
 
+    /// <summary>Where the diagram sits in its document, for the name an export suggests.</summary>
+    private int _index;
+
     private string _svg;
     private bool _isReady;
     private bool _isRemoved;
@@ -86,6 +89,7 @@ public sealed partial class DiagramWindow : Window
         Guid id,
         Guid documentId,
         string hash,
+        int index,
         string title,
         string documentName,
         string documentPath,
@@ -97,6 +101,7 @@ public sealed partial class DiagramWindow : Window
         _settings = settings;
         _logger = logger;
         _svg = svg;
+        _index = index;
         _title = title;
         _documentName = documentName;
         _documentPath = documentPath;
@@ -224,6 +229,8 @@ public sealed partial class DiagramWindow : Window
     /// </summary>
     private void Retitle(int index)
     {
+        _index = index;
+
         string next = string.IsNullOrWhiteSpace(_documentName)
             ? $"Diagram {index + 1}"
             : $"{_documentName} - Diagram {index + 1}";
@@ -403,6 +410,16 @@ public sealed partial class DiagramWindow : Window
                     ShowContextMenu(ReadDouble(payload, "x"), ReadDouble(payload, "y"));
                     break;
 
+                case "diagramPng":
+                    _ = CopyPngAsync(ReadString(payload, "data"));
+                    break;
+
+                case "diagramPngError":
+                    _logger.LogWarning(
+                        "The diagram page could not rasterize the diagram: {Message}",
+                        ReadString(payload, "message") ?? "(no message)");
+                    break;
+
                 default:
                     break;
             }
@@ -419,6 +436,32 @@ public sealed partial class DiagramWindow : Window
                 && value.TryGetDouble(out double result)
                     ? result
                     : 0;
+
+        static string? ReadString(JsonElement payload, string name) =>
+            payload.ValueKind == JsonValueKind.Object
+                && payload.TryGetProperty(name, out JsonElement value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+    }
+
+    /// <summary>The page's rasterization of the diagram, base64 over the message bridge.</summary>
+    private async Task CopyPngAsync(string? base64)
+    {
+        if (string.IsNullOrEmpty(base64))
+        {
+            _logger.LogWarning("The diagram page's PNG message carried no data.");
+            return;
+        }
+
+        try
+        {
+            await ClipboardImage.SetAsync(Convert.FromBase64String(base64), _logger);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "Malformed PNG data from the diagram page.");
+        }
     }
 
     /// <summary>The diagram was queued from the constructor, so it lands on this first flush.</summary>
@@ -468,12 +511,29 @@ public sealed partial class DiagramWindow : Window
         menu.Items.Add(Command("Center", "center", null));
         menu.Items.Add(new MenuFlyoutSeparator());
 
+        // Rasterized in the page rather than here: the SVG only exists as markup on this
+        // side, and the page already has it laid out at its natural size. The page answers
+        // with a "diagramPng" message, handled in OnWebMessageReceived.
+        var copyPng = new MenuFlyoutItem { Text = "Copy as PNG" };
+        copyPng.Click += (_, _) => Send("command", new { name = "copyPng" });
+        menu.Items.Add(copyPng);
+
         // The SVG this window is showing, as markup. It is what the preview rendered, so a
         // paste lands the diagram exactly as it appears here rather than as mermaid source
         // somebody else would have to render.
-        var copy = new MenuFlyoutItem { Text = "Copy Diagram (SVG)" };
-        copy.Click += (_, _) => ClipboardText.Set(_svg, _logger);
-        menu.Items.Add(copy);
+        var copySvg = new MenuFlyoutItem { Text = "Copy as SVG" };
+        copySvg.Click += (_, _) => ClipboardText.Set(_svg, _logger);
+        menu.Items.Add(copySvg);
+
+        menu.Items.Add(new MenuFlyoutSeparator());
+
+        var pdf = new MenuFlyoutItem { Text = "Export to PDF..." };
+        pdf.Click += (_, _) => ExportPdf();
+        menu.Items.Add(pdf);
+
+        var html = new MenuFlyoutItem { Text = "Export to HTML..." };
+        html.Click += (_, _) => ExportHtml();
+        menu.Items.Add(html);
 
         var print = new MenuFlyoutItem { Text = "Print...", KeyboardAcceleratorTextOverride = "Ctrl+P" };
         print.Click += (_, _) => Print();
@@ -494,6 +554,106 @@ public sealed partial class DiagramWindow : Window
             return item;
         }
     }
+
+    /// <summary>
+    /// Writes the diagram to a PDF: page setup, then where to put it, then the pages.
+    ///
+    /// The setup dialog is anchored to this window rather than the main one, for the same
+    /// reason the print dialog is - it belongs over the diagram it is about. It opens on the
+    /// setup held in preferences and saves the answer back, so a diagram and a document come
+    /// off the same paper unless one of them is told otherwise.
+    ///
+    /// What reaches the page is the print stylesheet's view of this window: the zoom strip
+    /// gone and the whole diagram at its natural size, rather than the corner a window left
+    /// at 500% happens to be showing.
+    /// </summary>
+    private async void ExportPdf()
+    {
+        try
+        {
+            if (_webView.CoreWebView2 is not { } core)
+            {
+                return;
+            }
+
+            var dialog = new PdfExportDialog(_title, _settings.Current.PdfDefaults)
+                .AnchorTo(Content as FrameworkElement);
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            PdfPageSetup setup = dialog.Setup;
+
+            // Saved on accepting the dialog rather than on a successful write, the same rule
+            // the document export follows: the answer is what the user chose, and a failed
+            // write does not make it the wrong choice.
+            _settings.Update(s => s with { PdfSetup = setup });
+
+            string? path = Win32Dialogs.SaveFile(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                "Export as PDF document",
+                SuggestedFileName(".pdf"),
+                [".pdf"],
+                "PDF document");
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            await WebViewPrinting.ExportPdfAsync(core, path, setup);
+
+            _logger.LogInformation("Exported a diagram to {Path}.", path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not export the diagram to PDF.");
+        }
+    }
+
+    /// <summary>
+    /// Writes the diagram to a standalone HTML file.
+    ///
+    /// Nothing to ask beyond where to put it: an SVG needs no paper size, and what lands in
+    /// the file fetches nothing when it is opened.
+    /// </summary>
+    private async void ExportHtml()
+    {
+        try
+        {
+            string? path = Win32Dialogs.SaveFile(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                "Export as HTML document",
+                SuggestedFileName(".html"),
+                [".html", ".htm"],
+                "HTML document");
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            await File.WriteAllTextAsync(path, DiagramHtmlDocument.Build(_svg, _title));
+
+            _logger.LogInformation("Exported a diagram to {Path}.", path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not export the diagram to HTML.");
+        }
+    }
+
+    /// <summary>
+    /// What an export offers to call the file: the window's own name, minus the markdown
+    /// extension that would otherwise read as "Notes.md - Diagram 2.pdf".
+    /// </summary>
+    private string SuggestedFileName(string extension) =>
+        (string.IsNullOrWhiteSpace(_documentName)
+            ? $"Diagram {_index + 1}"
+            : $"{Path.GetFileNameWithoutExtension(_documentName)} - Diagram {_index + 1}")
+        + extension;
 
     /// <summary>
     /// Prints the diagram: the print dialog, then the pages.

@@ -48,6 +48,10 @@ public sealed class WebAssetProvider : IWebAssetProvider
         DiagramPage,
         "diagram.js",
         "diagram.css",
+
+        // Loaded by both the shell and the diagram page, so a missing copy breaks Copy as
+        // PNG in two places rather than one.
+        "diagram-raster.js",
         Path.Combine("vendor", "monaco", "vs", "loader.js"),
         Path.Combine("vendor", "mermaid", "mermaid.esm.min.mjs"),
         Path.Combine("vendor", "katex", "katex.min.js"),

@@ -558,11 +558,22 @@
         var spelling = spellingAt(pane, e.clientX, e.clientY);
         var deadLink = linkFindingAt(pane, e.clientX, e.clientY);
 
+        // A rendered diagram under the pointer, which the host answers with a menu about
+        // that diagram. One that failed to parse has no SVG and gets nothing, the same
+        // test double-click makes before opening a window on it.
+        var diagram = e.target.closest ? e.target.closest('pre.mermaid[data-mq-diagram]') : null;
+        var diagramSvg = diagram ? diagram.querySelector('svg') : null;
+
         post('contextMenu', {
           pane: pane,
           x: Math.round(e.clientX),
           y: Math.round(e.clientY),
           hasSelection: paneHasSelection(pane),
+
+          // Empty when the pointer was not on a diagram, the same convention the word and
+          // the link kind below use for their own blocks.
+          diagramHash: diagramSvg ? diagram.getAttribute('data-mq-diagram') : '',
+          diagramSvg: diagramSvg ? diagramSvg.outerHTML : '',
           // A link to a heading in this same document is not worth a Copy Link item:
           // there is no address to paste anywhere.
           linkUrl: href.charAt(0) === '#' ? '' : absoluteUrl(href),
@@ -3856,6 +3867,24 @@
     document.title = path ? ('Marqora - ' + path) : 'Marqora';
   }
 
+  /*
+    The rendered diagram carrying a given definition, or null.
+
+    Walked rather than selected: the hash goes in an attribute selector as a literal, and
+    what mermaid hashes with is not something to assume is safe to put in one.
+  */
+  function diagramByHash(hash) {
+    if (!hash) { return null; }
+
+    var blocks = els.preview.querySelectorAll('pre.mermaid[data-mq-diagram]');
+
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i].getAttribute('data-mq-diagram') === hash) { return blocks[i]; }
+    }
+
+    return null;
+  }
+
   var handlers = {
     openTab: function (p) {
       openTab(p.id, p.text || '', p.html || '');
@@ -4138,6 +4167,32 @@
     requestRenderedHtml: function (p) {
       post('renderedHtml', { requestId: p.requestId, html: els.preview.innerHTML });
     },
+
+    /*
+      One diagram as a PNG, for the preview menu's Copy as PNG.
+
+      The same rasterizer the pop-out window uses - see diagram-raster.js - so a diagram
+      copied from the page and the same diagram copied from its own window are one picture.
+      An empty reply is still a reply: the host is waiting on this id and would otherwise
+      sit there until its timeout.
+    */
+    requestDiagramPng: function (p) {
+      var diagram = diagramByHash(p.hash);
+      var svg = diagram ? diagram.querySelector('svg') : null;
+
+      if (!svg) {
+        post('diagramPng', { requestId: p.requestId, data: '' });
+        return;
+      }
+
+      window.mqDiagramRaster.toPngBase64(svg, 2).then(function (data) {
+        post('diagramPng', { requestId: p.requestId, data: data });
+      }).catch(function (err) {
+        report('warning', 'A diagram could not be rasterized', err && err.message);
+        post('diagramPng', { requestId: p.requestId, data: '' });
+      });
+    },
+
 
     /*
       The same treatment for a document that is not on screen, which is what a Folio of a

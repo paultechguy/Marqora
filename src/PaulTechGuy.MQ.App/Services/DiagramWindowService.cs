@@ -91,6 +91,7 @@ public sealed class DiagramWindowService(
                 Guid.NewGuid(),
                 documentId,
                 hash,
+                index,
                 Title(index, documentName),
                 documentName,
                 documentPath,

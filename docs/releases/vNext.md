@@ -17,3 +17,14 @@ Nothing is written to disk on its own: every document it touches simply becomes 
 same as if you had typed the change yourself, and `Ctrl+Z` takes it back one document at a time,
 whether or not that tab is the one on screen. A search matching more than 5,000 times is refused
 rather than run partway and left inconsistent.
+
+## Copy as PNG
+
+A diagram can now be copied as a picture rather than as markup — ready to paste straight into a
+document, a message or a ticket. It comes across cropped to the drawing itself, at twice its size
+so it stays sharp, and with a transparent background wherever the application you paste into can
+take one.
+
+Both diagram menus offer it: right-click a diagram in the preview pane, or right-click inside the
+window a double-click opens. `Copy as SVG` sits beside it in both, renamed from
+`Copy Diagram (SVG)`.

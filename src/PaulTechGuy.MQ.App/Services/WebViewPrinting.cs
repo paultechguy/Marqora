@@ -20,6 +20,47 @@ namespace PaulTechGuy.MQ.App.Services;
 internal static class WebViewPrinting
 {
     /// <summary>
+    /// Writes a WebView's pages to a PDF file on the page setup the user chose.
+    ///
+    /// Shared by the preview and the diagram pop-out, so a document and a diagram land on
+    /// the same paper with the same margins rather than each building its own settings.
+    ///
+    /// The header and footer band is off here for the same reason it is off in
+    /// <see cref="PrintAsync"/>: it prints the page title and the source URL, and that URL
+    /// would read https://marqora.assets/.
+    /// </summary>
+    /// <exception cref="IOException">The file was not written.</exception>
+    public static async Task ExportPdfAsync(CoreWebView2 core, string path, PdfPageSetup setup)
+    {
+        ArgumentNullException.ThrowIfNull(core);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(setup);
+
+        CoreWebView2PrintSettings settings = core.Environment.CreatePrintSettings();
+
+        settings.Orientation = setup.Orientation == PageOrientation.Landscape
+            ? CoreWebView2PrintOrientation.Landscape
+            : CoreWebView2PrintOrientation.Portrait;
+
+        settings.PageWidth = setup.WidthInches;
+        settings.PageHeight = setup.HeightInches;
+
+        settings.MarginTop = setup.MarginInches;
+        settings.MarginBottom = setup.MarginInches;
+        settings.MarginLeft = setup.MarginInches;
+        settings.MarginRight = setup.MarginInches;
+
+        settings.ShouldPrintBackgrounds = setup.IncludeBackgrounds;
+        settings.ShouldPrintHeaderAndFooter = false;
+        settings.ScaleFactor = 1.0;
+
+        if (!await core.PrintToPdfAsync(path, settings))
+        {
+            throw new IOException($"The pages could not be written to {path}.");
+        }
+    }
+
+    /// <summary>
     /// Prints and waits for the printer to accept the job.
     ///
     /// Throws <see cref="IOException"/> when the job does not land, which is a real

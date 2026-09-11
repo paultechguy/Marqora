@@ -194,6 +194,22 @@
   }
 
   /*
+    Rasterizes the diagram and hands the PNG to the host, which owns the clipboard.
+
+    The rasterizer is shared with the preview shell - see diagram-raster.js, which carries
+    the two traps worth knowing about - so both Copy as PNG items produce the same picture.
+  */
+  function copyPng() {
+    if (!svg) { return; }
+
+    window.mqDiagramRaster.toPngBase64(svg, 2).then(function (data) {
+      post('diagramPng', { data: data });
+    }).catch(function (err) {
+      post('diagramPngError', { message: err.message });
+    });
+  }
+
+  /*
     Names the file the diagram came from, in the page title.
 
     Nothing of it reaches paper: a printed page carries the diagram and nothing else. The
@@ -336,6 +352,7 @@
     else if (name === 'zoomReset') { setZoom(1); }
     else if (name === 'zoomFit') { fit(); }
     else if (name === 'center') { center(); }
+    else if (name === 'copyPng') { copyPng(); }
   }
 
   // Refitting on resize only while the diagram is already fitted would need a mode flag; the

@@ -47,7 +47,8 @@ public sealed class PaneContextMenuEventArgs(
     string? linkUrl,
     string? imageUrl,
     SpellingHit? spelling,
-    LinkFindingHit? linkFinding) : EventArgs
+    LinkFindingHit? linkFinding,
+    DiagramHit? diagram) : EventArgs
 {
     public EditorPane Pane { get; } = pane;
 
@@ -69,7 +70,23 @@ public sealed class PaneContextMenuEventArgs(
 
     /// <summary>The dead link that was right-clicked, or null if the pointer was not on one.</summary>
     public LinkFindingHit? LinkFinding { get; } = linkFinding;
+
+    /// <summary>The rendered diagram that was right-clicked, or null if there was none.</summary>
+    public DiagramHit? Diagram { get; } = diagram;
 }
+
+/// <summary>
+/// A rendered diagram the pointer was over.
+///
+/// The markup travels with the click rather than being fetched when an item is chosen, for
+/// the same reason the pop-out window is handed the SVG rather than the definition: it is
+/// what Copy as SVG and the HTML export write, and it cannot then disagree with what was on
+/// screen when the menu went up.
+///
+/// The hash names the diagram for the one thing markup alone cannot do - rasterizing it -
+/// which happens back in the shell, where the diagram is laid out.
+/// </summary>
+public readonly record struct DiagramHit(string Hash, string Svg);
 
 /// <summary>
 /// A dead link the pointer was over, and the range the whole reference occupies.
@@ -476,6 +493,15 @@ public interface IPreviewHost
     /// with one document's diagrams undrawn beats a Folio with the document missing.
     /// </summary>
     Task<string> RenderForExportAsync(string html);
+
+    /// <summary>
+    /// One rendered diagram as PNG bytes, or null when it could not be produced.
+    ///
+    /// Rasterized in the shell because that is where the diagram is laid out, and by the
+    /// same code the pop-out window uses, so a diagram copied from the page and the same one
+    /// copied from its own window are the same picture.
+    /// </summary>
+    Task<byte[]?> RequestDiagramPngAsync(string hash);
 
     /// <summary>
     /// The preview's markup for whatever is selected there, or for the whole document when

@@ -5435,6 +5435,55 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void AnnounceExport(string path) =>
         StatusText = $"Exported {Path.GetFileName(path)}";
 
+    // ------------------------------------------------------------------ one diagram
+
+    /*
+        Copying the diagram the preview menu was raised on, in the two formats its pop-out
+        window offers for the one it is showing.
+
+        Each takes what the right-click captured rather than looking the diagram up again:
+        the markup is what was on screen when the menu went up, and the hash names it for
+        the rasterizing, which has to happen back in the shell.
+    */
+
+    /// <summary>Copies one diagram's markup, as the menu's Copy as SVG.</summary>
+    public void CopyDiagramSvg(string svg)
+    {
+        if (ClipboardText.Set(svg, _logger))
+        {
+            StatusText = "Diagram copied";
+        }
+    }
+
+    /// <summary>
+    /// Copies one diagram as a picture.
+    ///
+    /// The shell rasterizes it, because that is where the diagram is laid out and where the
+    /// pop-out window's own Copy as PNG does the same work; this side only writes what comes
+    /// back onto the clipboard.
+    /// </summary>
+    public async Task CopyDiagramPngAsync(string hash)
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        byte[]? png = await _host.RequestDiagramPngAsync(hash).ConfigureAwait(true);
+
+        if (png is null)
+        {
+            StatusText = "That diagram could not be copied";
+            return;
+        }
+
+        if (await ClipboardImage.SetAsync(png, _logger).ConfigureAwait(true))
+        {
+            StatusText = "Diagram copied";
+        }
+    }
+
+
     // ------------------------------------------------------------------ scrolling
 
     [RelayCommand(CanExecute = nameof(CanActOnContent))]
