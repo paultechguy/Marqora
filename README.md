@@ -833,6 +833,7 @@ PaulTechGuy.MQ.slnx
 ├── build/Get-WebAssets.ps1              Restores Monaco, mermaid, KaTeX, highlight.js
 ├── build/Register-FileAssociation.ps1   Makes Windows offer Marqora for markdown files
 ├── docs/Architecture.md         How it fits together, and why
+├── docs/WordExport.md           The .docx exporter: design, traps, how to test it
 ├── docs/WebViewDebugging.md     Getting a DevTools console onto the preview
 ├── webshell/                    The preview shell: HTML, CSS, JS, vendor bundle
 ├── src/

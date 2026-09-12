@@ -546,6 +546,10 @@ answer to it through `ExportLayout`, which states the page rules once — they e
 a copy, and both capped the text at a 46em measure the preview itself had already dropped for
 the reason recorded beside `--mq-preview-measure` in `app.css`.
 
+`docs/WordExport.md` is the design in full - the part order, the section and numbering rules,
+the traps Word answers with a repair prompt rather than a message, and how to pick testing back
+up. What follows here is the shape of it.
+
 **Word** is the one export that does not carry the preview across, and it cannot be: a `.docx`
 is WordprocessingML, so there is nothing in an HTML fragment to carry. `PaulTechGuy.MQ.Docx`
 parses the markdown again — through the same `MarqoraMarkdownPipeline`, so it reads the
