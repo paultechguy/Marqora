@@ -972,11 +972,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
 
         _logger.LogInformation(
-            "Printing to {Path} at {Width}x{Height}in, {Margin}in margins.",
+            "Printing to {Path} at {Width}x{Height}in, {Vertical}x{Horizontal}in margins.",
             path,
             setup.WidthInches,
             setup.HeightInches,
-            setup.MarginInches);
+            setup.VerticalMarginInches,
+            setup.HorizontalMarginInches);
 
         using var _ = ForceLightCanvas();
 

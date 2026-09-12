@@ -206,7 +206,7 @@ would rather not reach for the mouse.
 | 🌈  | **Rich markdown**                        | Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and syntax-highlighted code in *both* panes                                                                                                       |
 | 🩺  | **Document problems**                    | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you                                                                     |
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
-| 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, and rich text on the clipboard for Word, Outlook or Confluence                                                                                 |
+| 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
@@ -526,10 +526,11 @@ you did not edit.
 | `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence                            |
 | `Tools > Export to PDF...`                  | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
 | `Tools > Export to HTML...`                 | One self-contained `.html` file                                                                                          |
+| `Tools > Export to Word...`                 | A real `.docx`: Word's own heading styles, numbering, tables, footnotes and equations, with page setup of your choosing  |
 | `Tools > Share as Folio...`                 | Every open document, and every image they use, as one thing to send                                                      |
 | `Tools > Open Folio...`                     | A Folio unpacked back into its documents and images                                                                      |
 
-All three exports are enabled whenever a document is open, and the two file exports default the
+All four exports are enabled whenever a document is open, and the three file exports default the
 filename to the document's own name with the new extension.
 
 **Copy as Rich Text** takes whatever is selected in the preview, or the whole document when
@@ -547,6 +548,53 @@ too large to embed is named rather than quietly left as a link. Exports
 are always light-themed: a dark background is rarely wanted in something printed or pasted
 into someone else's document. Their width follows **Maximum width** on the Appearance page —
 the same setting the preview uses, and unset by default, so an exported page fills the window.
+
+**Word**
+
+`Tools > Export to Word...` is the one export that does not carry the preview across, because a
+`.docx` is not a web page. The document is read again and written into Word's own constructs:
+Heading 1 to 6 rather than large bold text, so the navigation pane finds your sections and a
+contents field can collect them; tables it can resize; footnotes at the foot of the page; and
+equations you can click into and edit. The colors come from a document theme, so
+**Design → Colors** restyles the whole file the way it would any Word document.
+
+Numbering is Word's own — for lists, and for numbered headings when you have those switched on.
+Section numbers are attached to the heading styles the way Word's own **Multilevel List → link
+to Heading styles** does it, not typed in front of the text, so adding a section in Word later
+renumbers everything after it. The one consequence is that Word counts for itself from then on:
+a document that skips a heading level — a level-three heading directly under a level-one — can
+come out numbered differently from the preview, because Marqora drops the missing level and
+Word does not.
+
+Only the three things a browser alone can produce are taken from the preview — the diagrams
+mermaid drew, the layout KaTeX gave the equations, and the colors highlight.js put on the code.
+Everything else comes from the Markdown. Which is why this export never refuses: if the preview
+has not caught up, or has never been asked, you get the document without its colors rather than
+an error. Anything that could not be carried across — a picture that is not on this machine, a
+diagram that would not draw — is named when the export finishes rather than left to be
+discovered by whoever you sent it to.
+
+The dialog asks for paper, orientation and margins, and for three things only Word has: a
+header and page numbers, a table of contents, and a title page. The title page is a template
+rather than a statement: title, subtitle, date, version and author, each filled in from your
+front matter where it has something to say and left as a gray word to type over where it does
+not. The last two are off by default; both put content into the document that your Markdown
+did not contain.
+
+With both switched on the file is cut into three Word sections, which is how a report is built:
+the title page carries neither header nor page number, the contents number themselves i, ii,
+iii, and the body begins again at 1. The footer is the number by itself - `i` on the first
+contents page, `1` on the first page of the body.
+
+The margin presets are Word's own — Normal, Narrow, Moderate, Wide and None, with Word's
+measurements, and the PDF export uses the same five. They did not always: Normal meant half an
+inch on one dialog and a whole one on the other, so the same document exported both ways came
+out on two different measures under one word.
+
+The margin is still the one page setting not carried over from your PDF choices, because a
+document meant to be edited and one meant to be printed want different margins often enough
+that inheriting the answer is a worse guess than starting from Word's default. Paper and
+orientation are carried over, so somebody who works in A4 does not have to say so twice.
 
 **Folios**
 
@@ -791,17 +839,23 @@ PaulTechGuy.MQ.slnx
 │   ├── PaulTechGuy.MQ.Domain          Models and enums. No dependencies at all.
 │   ├── PaulTechGuy.MQ.Abstractions    Interfaces. Everything else talks through these.
 │   ├── PaulTechGuy.MQ.Repositories    JSON persistence
-│   ├── PaulTechGuy.MQ.Rendering       Markdig pipeline
+│   ├── PaulTechGuy.MQ.Markdown        Pure functions over markdown source text
+│   ├── PaulTechGuy.MQ.Rendering       Markdig pipeline, and markdown to HTML
+│   ├── PaulTechGuy.MQ.Docx            Markdown to Word, walking the same parse
 │   ├── PaulTechGuy.MQ.Formatting      The 16 tidy-up rules
 │   ├── PaulTechGuy.MQ.Editing         The Format menu's markdown commands
 │   ├── PaulTechGuy.MQ.Analysis        Link, image and style checks
+│   ├── PaulTechGuy.MQ.Spelling        The spelling analyzer and its skip rules
 │   ├── PaulTechGuy.MQ.Finding         Find All's search engine
+│   ├── PaulTechGuy.MQ.Folio           Gathering documents and their images
 │   ├── PaulTechGuy.MQ.Services        Document lifetime, settings, recent files, watching
 │   └── PaulTechGuy.MQ.App             WinUI 3 shell and view models
-└── tests/                       xUnit v3 projects for Editing, Analysis and Finding
+└── tests/                       One xUnit v3 project per library above
 ```
 
-No concrete layer references another. They meet at the composition root in
+No concrete layer references another, with one documented exception: `Docx` references
+`Rendering` for the Markdig pipeline, so that the Word export reads a document exactly as the
+preview does. Everything else meets at the composition root in
 `src/PaulTechGuy.MQ.App/Program.cs`.
 
 ---

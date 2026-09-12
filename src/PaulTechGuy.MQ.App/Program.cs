@@ -12,6 +12,7 @@ using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.App.ViewModels;
 using PaulTechGuy.MQ.App.Views;
 using PaulTechGuy.MQ.Analysis;
+using PaulTechGuy.MQ.Docx;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
 using PaulTechGuy.MQ.Folio;
@@ -132,6 +133,7 @@ public static class Program
         builder.Services.AddSingleton<IAppPaths>(paths);
         builder.Services.AddMarqoraRepositories(AppVersion.Current);
         builder.Services.AddMarqoraRendering();
+        builder.Services.AddMarqoraDocx();
         builder.Services.AddMarqoraFormatting();
         builder.Services.AddMarqoraEditing();
         builder.Services.AddMarqoraAnalysis();

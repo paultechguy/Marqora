@@ -9,10 +9,34 @@ using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Services;
 
-/// <summary>Shows the PDF page-setup dialog and hands back the chosen values.</summary>
+/// <summary>Shows the page-setup dialogs and hands back the chosen values.</summary>
 public sealed class ExportDialogService(WindowContext window, ILogger<ExportDialogService> logger)
     : IExportDialogService
 {
+    public async Task<DocxExportSetup?> RequestDocxSetupAsync(
+        string documentName,
+        DocxExportSetup current,
+        CancellationToken cancellationToken = default)
+    {
+        if (window.XamlRoot is null)
+        {
+            logger.LogWarning("Cannot ask for page setup: no window is available yet.");
+            return null;
+        }
+
+        try
+        {
+            var dialog = new WordExportDialog(documentName, current).AnchorTo(window.Root);
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Setup : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The Word page-setup dialog failed.");
+            return null;
+        }
+    }
+
     public async Task<PdfPageSetup?> RequestPdfSetupAsync(
         string documentName,
         PdfPageSetup current,

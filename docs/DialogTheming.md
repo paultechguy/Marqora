@@ -14,7 +14,7 @@ because the second finding is a printing bug rather than a cosmetic one.
 | Surface | Drawn by | Follows |
 |---|---|---|
 | Preview, editor, tab strip, palettes | WinUI / XAML | `ThemeService` → `RequestedTheme` |
-| Preferences, PDF export, About, shortcuts | WinUI `ContentDialog` | same, via `DialogExtensions.AnchorTo` |
+| Preferences, PDF export, Word export, About, shortcuts | WinUI `ContentDialog` | same, via `DialogExtensions.AnchorTo` |
 | Preview and cheatsheet content | WebView2 | `IPreviewHost.SetThemeAsync` |
 | **Print** | **Marqora**, since this change | the anchoring window's theme |
 | Open / Save As / folder (`IFileDialog`) | Windows | the Windows setting, and nothing else |

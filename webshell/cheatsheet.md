@@ -198,16 +198,16 @@ land the right way round in an export.
 
 ## Tables
 
-Colons in the divider row set the alignment: left, centre, right.
+Colons in the divider row set the alignment: left, center, right.
 
 ````text
-| Left | Centre | Right |
+| Left | Center | Right |
 |:-----|:------:|------:|
 | a    |   b    |     c |
 | long text | 2 |  3.50 |
 ````
 
-| Left | Centre | Right |
+| Left | Center | Right |
 |:-----|:------:|------:|
 | a    |   b    |     c |
 | long text | 2 |  3.50 |

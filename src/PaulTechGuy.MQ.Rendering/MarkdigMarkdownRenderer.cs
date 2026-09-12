@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using Markdig;
-using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
@@ -29,15 +28,10 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
     {
         _logger = logger;
 
-        _pipeline = new MarkdownPipelineBuilder()
-            // Tables, footnotes, task lists, definition lists, figures, math, auto-links,
-            // custom containers and the diagram blocks that carry mermaid.
-            .UseAdvancedExtensions()
-            // GitHub-compatible anchors so links like #my-heading behave as users expect.
-            .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
-            // Front matter is metadata, not content: parse it so it is not rendered as a table.
-            .UseYamlFrontMatter()
-            .UseEmojiAndSmiley()
+        // The extension set lives in MarqoraMarkdownPipeline because the Word export parses
+        // the same documents and has to read them the same way. Only the source-line stamping
+        // is added here: it exists for the shell's scroll sync and nothing else needs it.
+        _pipeline = MarqoraMarkdownPipeline.CreateBuilder()
             .Use<SourceLineExtension>()
             .Build();
     }

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  The document theme. accent1 and the two font faces are rewritten at write time by
+  DocxTheme; everything else is here because Word requires it and none of it varies.
+
+  The format scheme in particular is not decoration. Word treats a theme without a complete
+  a:fmtScheme as damaged and offers to repair the file, so the three fill styles, three line
+  styles, three effect styles and three background fills below all have to be present even
+  though a markdown document uses none of them. They are the Office defaults, flattened: no
+  gradients, no shadows, because nothing here draws a shape.
+-->
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Marqora">
+  <a:themeElements>
+    <a:clrScheme name="Marqora">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="1F3B3E"/></a:dk2>
+      <a:lt2><a:srgbClr val="F2F2F2"/></a:lt2>
+      <a:accent1><a:srgbClr val="3F8F98"/></a:accent1>
+      <a:accent2><a:srgbClr val="1A7F37"/></a:accent2>
+      <a:accent3><a:srgbClr val="8250DF"/></a:accent3>
+      <a:accent4><a:srgbClr val="9A6700"/></a:accent4>
+      <a:accent5><a:srgbClr val="B3261E"/></a:accent5>
+      <a:accent6><a:srgbClr val="005CC5"/></a:accent6>
+      <a:hlink><a:srgbClr val="3F8F98"/></a:hlink>
+      <a:folHlink><a:srgbClr val="8250DF"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Marqora">
+      <a:majorFont>
+        <a:latin typeface="Aptos Display" panose="02110004020202020204"/>
+        <a:ea typeface=""/>
+        <a:cs typeface=""/>
+      </a:majorFont>
+      <a:minorFont>
+        <a:latin typeface="Aptos" panose="02110004020202020204"/>
+        <a:ea typeface=""/>
+        <a:cs typeface=""/>
+      </a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="Office">
+      <a:fillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+        <a:solidFill><a:schemeClr val="phClr"><a:lumMod val="110000"/><a:satMod val="105000"/><a:tint val="67000"/></a:schemeClr></a:solidFill>
+        <a:solidFill><a:schemeClr val="phClr"><a:lumMod val="105000"/><a:satMod val="103000"/><a:tint val="73000"/></a:schemeClr></a:solidFill>
+      </a:fillStyleLst>
+      <a:lnStyleLst>
+        <a:ln w="6350" cap="flat" cmpd="sng" algn="ctr">
+          <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+          <a:prstDash val="solid"/>
+          <a:miter lim="800000"/>
+        </a:ln>
+        <a:ln w="12700" cap="flat" cmpd="sng" algn="ctr">
+          <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+          <a:prstDash val="solid"/>
+          <a:miter lim="800000"/>
+        </a:ln>
+        <a:ln w="19050" cap="flat" cmpd="sng" algn="ctr">
+          <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+          <a:prstDash val="solid"/>
+          <a:miter lim="800000"/>
+        </a:ln>
+      </a:lnStyleLst>
+      <a:effectStyleLst>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+      </a:effectStyleLst>
+      <a:bgFillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+        <a:solidFill><a:schemeClr val="phClr"><a:tint val="95000"/><a:satMod val="170000"/></a:schemeClr></a:solidFill>
+        <a:solidFill><a:schemeClr val="phClr"><a:shade val="93000"/><a:satMod val="150000"/></a:schemeClr></a:solidFill>
+      </a:bgFillStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+  <a:objectDefaults/>
+  <a:extraClrSchemeLst/>
+</a:theme>

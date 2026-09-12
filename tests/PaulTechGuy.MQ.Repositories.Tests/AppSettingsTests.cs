@@ -141,6 +141,16 @@ public sealed class AppSettingsTests : IDisposable
         // answer even though the key is absent.
         settings.PdfSetup.ShouldBeNull();
         settings.PdfDefaults.ShouldBe(PdfPageSetup.Default);
+
+        // The Word setup arrived later still, and starts from the PDF one so that somebody
+        // who already works in A4 does not have to say so twice. A file written before Word
+        // export existed has neither key, and must still answer with Letter rather than with
+        // a record of zeroes.
+        settings.DocxSetup.ShouldBeNull();
+        settings.DocxDefaults.ShouldBe(DocxExportSetup.SeededFrom(PdfPageSetup.Default));
+        settings.DocxDefaults.IncludeHeaderAndFooter.ShouldBeTrue();
+        settings.DocxDefaults.IncludeTableOfContents.ShouldBeFalse();
+        settings.DocxDefaults.IncludeCoverPage.ShouldBeFalse();
     }
 
     [Fact]
@@ -167,6 +177,16 @@ public sealed class AppSettingsTests : IDisposable
             NewFileLineEnding = LineEndingStyle.Lf,
             WriteUtf8Bom = true,
             PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape },
+            DocxSetup = new DocxExportSetup
+            {
+                Paper = PaperSize.Legal,
+
+                // Word's own margin presets, not the PDF's - they share some names and none of
+                // their measurements, which is why they are separate enums.
+                Margin = PageMargin.Moderate,
+                IncludeTableOfContents = true,
+                IncludeCoverPage = true,
+            },
             LogRetentionDays = 30,
             SpellCheckEnabled = false,
             FindSelectFirstResult = true,
@@ -189,6 +209,51 @@ public sealed class AppSettingsTests : IDisposable
             AppSettings read = await repository.LoadAsync();
 
             read.ShouldBe(written);
+        }
+        finally
+        {
+            repository.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Computed values do not belong in the settings file.
+    ///
+    /// A read-only property is serialized by default and ignored on the way back in, so one
+    /// that derives from another setting gets written out as a fact and then never read - a
+    /// stale record of a calculation, sitting in the file looking authoritative. Both page
+    /// setups had several: the page size in inches, the margin in inches. They cost nothing to
+    /// write and are actively misleading to anyone reading the file to find out what the app
+    /// thinks.
+    /// </summary>
+    [Fact]
+    public async Task Derived_measurements_are_not_written_to_the_settings_file()
+    {
+        var written = AppSettings.Default with
+        {
+            PdfSetup = new PdfPageSetup { Paper = PaperSize.A4 },
+            DocxSetup = new DocxExportSetup { Margin = PageMargin.Wide },
+        };
+
+        var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);
+
+        try
+        {
+            await repository.SaveAsync(written, TestContext.Current.CancellationToken);
+
+            string json = await File.ReadAllTextAsync(
+                _paths.SettingsFilePath,
+                TestContext.Current.CancellationToken);
+
+            json.ShouldNotContain("marginInches");
+            json.ShouldNotContain("widthInches");
+            json.ShouldNotContain("heightInches");
+            json.ShouldNotContain("verticalMarginInches");
+            json.ShouldNotContain("horizontalMarginInches");
+
+            // The answers themselves are still there; it is only the arithmetic that is not.
+            json.ShouldContain("\"margin\": \"Wide\"");
+            json.ShouldContain("\"paper\": \"A4\"");
         }
         finally
         {

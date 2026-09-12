@@ -466,6 +466,23 @@ public sealed record AppSettings
     [System.Text.Json.Serialization.JsonIgnore]
     public PdfPageSetup PdfDefaults => PdfSetup ?? PdfPageSetup.Default;
 
+    /// <summary>
+    /// Page setup and extras the Word export dialog opens on. Nullable for the same reason as
+    /// <see cref="PdfSetup"/>; read it through <see cref="DocxDefaults"/>.
+    /// </summary>
+    public DocxExportSetup? DocxSetup { get; set; }
+
+    /// <summary>
+    /// The Word export setup, safe to use whatever the settings file held.
+    ///
+    /// Seeded from the PDF setup until the Word dialog has been answered once, so that
+    /// somebody who has already said they work in A4 does not have to say it again to reach
+    /// the same paper. After that the two are remembered apart, because a document meant for
+    /// editing and one meant for printing want different margins.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DocxExportSetup DocxDefaults => DocxSetup ?? DocxExportSetup.SeededFrom(PdfDefaults);
+
     // ------------------------------------------------------------------- advanced
 
     /// <summary>Days a log file is kept before it is swept up. Zero keeps them indefinitely.</summary>

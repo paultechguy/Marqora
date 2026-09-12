@@ -45,10 +45,12 @@ internal static class WebViewPrinting
         settings.PageWidth = setup.WidthInches;
         settings.PageHeight = setup.HeightInches;
 
-        settings.MarginTop = setup.MarginInches;
-        settings.MarginBottom = setup.MarginInches;
-        settings.MarginLeft = setup.MarginInches;
-        settings.MarginRight = setup.MarginInches;
+        // Two figures, not one: Moderate and Wide change the measure without changing the
+        // page, which is what Word means by them and now what the PDF dialog means too.
+        settings.MarginTop = setup.VerticalMarginInches;
+        settings.MarginBottom = setup.VerticalMarginInches;
+        settings.MarginLeft = setup.HorizontalMarginInches;
+        settings.MarginRight = setup.HorizontalMarginInches;
 
         settings.ShouldPrintBackgrounds = setup.IncludeBackgrounds;
         settings.ShouldPrintHeaderAndFooter = false;
@@ -92,10 +94,10 @@ internal static class WebViewPrinting
         settings.PageWidth = job.WidthInches;
         settings.PageHeight = job.HeightInches;
 
-        settings.MarginTop = job.MarginInches;
-        settings.MarginBottom = job.MarginInches;
-        settings.MarginLeft = job.MarginInches;
-        settings.MarginRight = job.MarginInches;
+        settings.MarginTop = job.VerticalMarginInches;
+        settings.MarginBottom = job.VerticalMarginInches;
+        settings.MarginLeft = job.HorizontalMarginInches;
+        settings.MarginRight = job.HorizontalMarginInches;
 
         settings.ShouldPrintBackgrounds = job.IncludeBackgrounds;
 

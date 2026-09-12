@@ -180,7 +180,7 @@ body {
 }
 
 /*
-  margin:auto centres the diagram while it is smaller than the viewport and stops centring
+  margin:auto centers the diagram while it is smaller than the viewport and stops centering
   once it is larger, which is what keeps the top-left corner reachable when zoomed in.
 */
 .mq-canvas { margin: auto; padding: 16px; }

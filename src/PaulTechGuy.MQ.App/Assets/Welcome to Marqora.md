@@ -37,7 +37,7 @@ flowchart LR
     C --> D[Preview pane]
     C --> E[Diagrams · Math · Highlighting]
     C --> F[Problem checks]
-    D --> G[PDF · HTML · Rich text]
+    D --> G[PDF · Word · HTML · Rich text]
 
     classDef input fill:#2f7c85,stroke:#1f5a61,color:#fff
     classDef engine fill:#6f42c1,stroke:#553098,color:#fff
@@ -162,11 +162,19 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 | `Ctrl+Shift+C` — Copy as Rich Text | The formatted page on the clipboard, ready for Word, Outlook or Confluence        |
 | `Tools > Export to PDF...`         | A printed copy, with paper size, orientation and margins of your choosing         |
 | `Tools > Export to HTML...`        | One self-contained `.html` file — styles inlined, images embedded, fonts included |
+| `Tools > Export to Word...`        | A real `.docx` — Word's own heading styles, numbering, tables and footnotes       |
 | `Tools > Share as Folio...`        | Every open document *and* the images they use, gathered into one thing to send    |
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
 leaves the building.
+
+Word is the one that works differently, because it has to. A `.docx` is not a web page, so the
+document is read again and written into Word's own constructs: headings that the navigation
+pane can find, lists Word counts itself, tables it can resize, equations you can click into and
+edit. Only the three things a browser alone can make — the diagrams, the typeset math and the
+colored code — are taken from the preview. Which means a Word export never refuses: if the
+preview has not caught up, you get the document without its colors rather than no document.
 
 > [!TIP]
 > `Ctrl+Shift+C` copies the formatted page rather than the Markdown — the quickest way into an

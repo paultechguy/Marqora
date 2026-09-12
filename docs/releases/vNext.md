@@ -1,5 +1,26 @@
 # Marqora vNext - What's New
 
+## Export to Word
+
+`Tools > Export to Word...` turns the document in front of you into a real `.docx` — Word's own
+heading styles, tables you can resize, footnotes at the foot of the page, diagrams as pictures,
+and equations you can click into and edit. It opens in Word as a document somebody wrote there,
+not as something converted.
+
+Numbering is Word's own, both for lists and for numbered headings. Add a section in Word a
+fortnight later and everything after it renumbers itself, the way it would in a document you
+started there.
+
+The dialog asks for paper size, orientation and margins — Word's own presets, so Normal is the
+inch Word means by it — and offers three things only Word has: a header with page numbers, a
+table of contents, and a title page. The title page is a template: it carries a title,
+subtitle, date, version and author, fills in whatever your front matter knows, and leaves the
+rest as gray words to type over. The last two are off unless you ask for them.
+
+Ask for both and the file comes out as three Word sections, the way a report is put together:
+the title page carries no header or page number, the contents number themselves i, ii, iii,
+and the body starts again at 1. The footer is the number on its own. Your answers are remembered separately from the PDF ones.
+
 ## Replace All
 
 `Edit > Replace All...` (`Ctrl+Shift+H`) is Find All with a **Replace with** box folded out —
@@ -11,7 +32,8 @@ many matches it found and in how many documents. In regular-expression mode the 
 reach into the match with `$1`, `$2`, `${name}` or `$&` — the icon beside the box lists whichever
 of those the current pattern actually captured; in plain text mode the replacement goes in
 exactly as typed. An empty **Replace with** box deletes every match outright, and the
-confirmation says so plainly rather than leaving it to be discovered afterward.
+confirmation says so plainly rather than leaving it to be discovered afterward. Enter on that
+confirmation cancels: replacing across every open document at once is worth a deliberate click.
 
 Nothing is written to disk on its own: every document it touches simply becomes unsaved, the
 same as if you had typed the change yourself, and `Ctrl+Z` takes it back one document at a time,

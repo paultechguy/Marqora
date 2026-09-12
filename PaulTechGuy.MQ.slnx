@@ -28,6 +28,7 @@
     <Project Path="src/PaulTechGuy.MQ.Abstractions/PaulTechGuy.MQ.Abstractions.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Repositories/PaulTechGuy.MQ.Repositories.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Rendering/PaulTechGuy.MQ.Rendering.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Docx/PaulTechGuy.MQ.Docx.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Formatting/PaulTechGuy.MQ.Formatting.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Editing/PaulTechGuy.MQ.Editing.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Analysis/PaulTechGuy.MQ.Analysis.csproj" />
@@ -40,6 +41,7 @@
     <Project Path="tests/PaulTechGuy.MQ.Domain.Tests/PaulTechGuy.MQ.Domain.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Markdown.Tests/PaulTechGuy.MQ.Markdown.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Rendering.Tests/PaulTechGuy.MQ.Rendering.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Docx.Tests/PaulTechGuy.MQ.Docx.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Spelling.Tests/PaulTechGuy.MQ.Spelling.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />

@@ -222,7 +222,7 @@ public sealed class FolioHtmlWriter(RenderedHtmlPackager packager, ILogger<Folio
 
     /// <summary>
     /// The contents list is held to the same measure as the documents it lists, so the two are
-    /// not centred on different axes. Written the same way <see cref="ExportLayout"/> writes it.
+    /// not centered on different axes. Written the same way <see cref="ExportLayout"/> writes it.
     /// </summary>
     private static string Measure(int measurePixels) => measurePixels > 0
         ? string.Create(

@@ -15,9 +15,14 @@
     Case is preserved from what was there: COLOUR, Colour and colour come back as COLOR,
     Color and color.
 
-    Nothing here understands code from prose. That is safe only while no identifier, CSS
-    custom property or serialized property name contains one of these stems - checked when
-    the list was written, and worth checking again before adding to it.
+    Nothing here understands code from prose, and it does not have to. The whole tree is
+    rewritten in one pass, so when an identifier carries a stem the declaration and every
+    reference to it move together: "centre" named a private enum member and a protected
+    helper until the run that added it renamed both.
+
+    What breaks is a name that leaves the scanned files - a string literal resolved by
+    reflection, a serialized property name, a CSS custom property read from a file type not
+    in the extension list below. Check for that before adding a word.
 
 .PARAMETER Check
     Report the occurrences and exit non-zero. Nothing is written. This is the CI form.
@@ -44,9 +49,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # British stem on the left, American on the right. Both lower case; the case of what was
-# found is put back afterwards.
+# found is put back afterwards. One word can need several entries when its forms do not all
+# fall out of one stem, and then the order they are written in matters - see the note below.
 $words = [ordered]@{
     'behaviour' = 'behavior'
+
+    # The longer forms first. The alternation is tried in the order written, so a bare
+    # 'centre' placed above these would take the front of "centred" and leave "centerd".
+    'centred' = 'centered'
+    'centring' = 'centering'
+    'centre' = 'center'
+
     'colour' = 'color'
     'materialis' = 'materializ'
     'maths' = 'math'

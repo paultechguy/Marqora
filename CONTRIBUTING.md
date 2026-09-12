@@ -75,7 +75,9 @@ no fetching anything. This is the point of the application rather than an implem
 detail, and a change that adds one will not be merged.
 
 **The layering holds.** No concrete layer references another; they meet at the composition
-root in `src/PaulTechGuy.MQ.App/Program.cs`. If a change seems to need a new project
+root in `src/PaulTechGuy.MQ.App/Program.cs`. There is one documented exception — `Docx`
+references `Rendering` for the Markdig pipeline, so the Word export reads a document exactly as
+the preview does — and one is the number to keep it at. If a change seems to need a new project
 reference, that is worth an issue before a pull request. `docs/Architecture.md` explains how
 it fits together and why.
 

@@ -59,7 +59,14 @@ public sealed record PrintJob
     /// <summary>Page height in inches, after orientation is applied.</summary>
     public double HeightInches { get; init; } = 11.0;
 
-    public double MarginInches { get; init; } = 0.5;
+    /// <summary>Top and bottom margin in inches.</summary>
+    public double VerticalMarginInches { get; init; } = 1.0;
+
+    /// <summary>
+    /// Left and right margin in inches. A pair rather than one figure because two of the
+    /// presets behind it - Moderate and Wide - change the measure without changing the page.
+    /// </summary>
+    public double HorizontalMarginInches { get; init; } = 1.0;
 
     /// <summary>Print the page background colors, which diagram and code surfaces rely on.</summary>
     public bool IncludeBackgrounds { get; init; } = true;

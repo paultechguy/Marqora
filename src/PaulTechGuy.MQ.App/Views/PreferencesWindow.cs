@@ -213,6 +213,12 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly ComboBox _orientation;
     private readonly ComboBox _margin;
     private readonly CheckBox _backgrounds;
+    private readonly ComboBox _wordPaper;
+    private readonly ComboBox _wordOrientation;
+    private readonly ComboBox _wordMargin;
+    private readonly CheckBox _wordHeaderFooter;
+    private readonly CheckBox _wordContents;
+    private readonly CheckBox _wordCoverPage;
 
     private readonly NumberBox _logRetention;
     private readonly NumberBox _updateReminder;
@@ -472,7 +478,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             Orientation = (PageOrientation)Math.Max(0, _orientation.SelectedIndex),
         }));
 
-        _margin = BuildCombo(["Normal (0.5 in)", "Narrow (0.25 in)", "Wide (1 in)", "None"]);
+        _margin = BuildCombo(PageMargins.Labels);
         _margin.SelectionChanged += (_, _) => ApplyAsync(() => UpdatePdfAsync(setup => setup with
         {
             Margin = (PageMargin)Math.Max(0, _margin.SelectedIndex),
@@ -480,6 +486,33 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _backgrounds = BuildCheck("Include background colors");
         Bind(_backgrounds, v => UpdatePdfAsync(setup => setup with { IncludeBackgrounds = v }));
+
+        _wordPaper = BuildCombo(["Letter", "A4", "Legal"]);
+        _wordPaper.SelectionChanged += (_, _) => ApplyAsync(() => UpdateDocxAsync(setup => setup with
+        {
+            Paper = (PaperSize)Math.Max(0, _wordPaper.SelectedIndex),
+        }));
+
+        _wordOrientation = BuildCombo(["Portrait", "Landscape"]);
+        _wordOrientation.SelectionChanged += (_, _) => ApplyAsync(() => UpdateDocxAsync(setup => setup with
+        {
+            Orientation = (PageOrientation)Math.Max(0, _wordOrientation.SelectedIndex),
+        }));
+
+        _wordMargin = BuildCombo(PageMargins.Labels);
+        _wordMargin.SelectionChanged += (_, _) => ApplyAsync(() => UpdateDocxAsync(setup => setup with
+        {
+            Margin = (PageMargin)Math.Max(0, _wordMargin.SelectedIndex),
+        }));
+
+        _wordHeaderFooter = BuildCheck("Header and page numbers");
+        Bind(_wordHeaderFooter, v => UpdateDocxAsync(setup => setup with { IncludeHeaderAndFooter = v }));
+
+        _wordContents = BuildCheck("Table of contents");
+        Bind(_wordContents, v => UpdateDocxAsync(setup => setup with { IncludeTableOfContents = v }));
+
+        _wordCoverPage = BuildCheck("Title page");
+        Bind(_wordCoverPage, v => UpdateDocxAsync(setup => setup with { IncludeCoverPage = v }));
 
         // ----------------------------------------------------------------- advanced
         // Deferred with the other two, though this one only ever takes effect at the next
@@ -613,14 +646,14 @@ internal sealed class PreferencesWindow : PaletteWindow
     protected override bool IsResizable => false;
 
     /// <summary>
-    /// Centred on the editor, not tucked against its right edge.
+    /// Centered on the editor, not tucked against its right edge.
     ///
     /// The palette default suits something you read alongside the document. This is a dialog
     /// that happens to be a window - it is looked at rather than referred to - and a dialog
     /// opens in the middle of what it belongs to.
     /// </summary>
     protected override RectInt32 DefaultPosition(RectInt32 nearby, int width, int height) =>
-        CentredOn(nearby, width, height);
+        CenteredOn(nearby, width, height);
 
     /// <summary>
     /// Puts the window where it was last left and brings it up.
@@ -851,7 +884,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     ///
     /// Still a Flyout now that this is a window and a real dialog would be allowed. Anchored to
     /// the Cancel button, it appears where the user is already looking and points at what they
-    /// just pressed; a centred dialog for a two-word question would be the heavier answer.
+    /// just pressed; a centered dialog for a two-word question would be the heavier answer.
     /// </summary>
     private void AskToDiscard() =>
         DiscardConfirmation().ShowAt(_cancel, new FlyoutShowOptions
@@ -1150,6 +1183,21 @@ internal sealed class PreferencesWindow : PaletteWindow
             "Where Export to PDF starts from, and what Print uses for the margins and "
             + "backgrounds its own dialog has no field for. Changing the setup in the export "
             + "dialog updates these too."));
+
+        panel.Children.Add(Divider());
+
+        panel.Children.Add(Heading("WORD"));
+        panel.Children.Add(Field("Paper", _wordPaper));
+        panel.Children.Add(Field("Orientation", _wordOrientation));
+        panel.Children.Add(Field("Margins", _wordMargin));
+        panel.Children.Add(_wordHeaderFooter);
+        panel.Children.Add(_wordContents);
+        panel.Children.Add(_wordCoverPage);
+
+        panel.Children.Add(Note(
+            "Kept apart from the PDF setup on purpose: a document meant to be edited and one "
+            + "meant to be printed want different margins. The presets themselves are the "
+            + "same on both, and are Word's own - Normal is a whole inch."));
 
         return panel;
     }
@@ -1713,6 +1761,14 @@ internal sealed class PreferencesWindow : PaletteWindow
             _margin.SelectedIndex = (int)pdf.Margin;
             _backgrounds.IsChecked = pdf.IncludeBackgrounds;
 
+            DocxExportSetup docx = s.DocxDefaults;
+            _wordPaper.SelectedIndex = (int)docx.Paper;
+            _wordOrientation.SelectedIndex = (int)docx.Orientation;
+            _wordMargin.SelectedIndex = (int)docx.Margin;
+            _wordHeaderFooter.IsChecked = docx.IncludeHeaderAndFooter;
+            _wordContents.IsChecked = docx.IncludeTableOfContents;
+            _wordCoverPage.IsChecked = docx.IncludeCoverPage;
+
             UpdateEnabledState();
             RefreshFontHints();
 
@@ -1770,6 +1826,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
     private Task UpdatePdfAsync(Func<PdfPageSetup, PdfPageSetup> mutate) =>
         _vm.UpdateAsync(s => s with { PdfSetup = mutate(s.PdfDefaults) });
+
+    private Task UpdateDocxAsync(Func<DocxExportSetup, DocxExportSetup> mutate) =>
+        _vm.UpdateAsync(s => s with { DocxSetup = mutate(s.DocxDefaults) });
 
     // ---------------------------------------------------------------------- plumbing
 
@@ -1871,7 +1930,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         return box;
     }
 
-    private static ComboBox BuildCombo(string[] labels)
+    private static ComboBox BuildCombo(IReadOnlyList<string> labels)
     {
         var box = new ComboBox { Width = FieldWidth };
 

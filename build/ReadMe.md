@@ -18,14 +18,15 @@ dot-sourced by the others rather than invoked.
 ## Checks
 
 Run these before you commit. `Add-FileHeaders.ps1` and `Set-AmericanSpelling.ps1` rewrite the
-tree when run with no arguments; `Test-ButtonStandards.ps1` only ever reports, and its
-`-Check` changes the exit code rather than the output.
+tree when run with no arguments; `Test-ButtonStandards.ps1` and `Test-DocumentColors.ps1` only
+ever report, and their `-Check` changes the exit code rather than the output.
 
 | Script | What it does |
 |---|---|
 | `Add-FileHeaders.ps1` | Puts the copyright and SPDX license header on every hand-written `.cs` file under `src\` and `tests\`. Idempotent, so re-running is safe. `IDE0073` is a build warning, so a missing header costs you a build. |
 | `Set-AmericanSpelling.ps1` | Rewrites British spellings to American ones. The word list is deliberately short and sits at the top of the script — add to it when a word actually turns up. |
 | `Test-ButtonStandards.ps1` | Checks the app's buttons against `docs\Button-App-Standards.md`: inline sizes, unstyled buttons, hard-coded colors. The mechanical half only; the document's checklist covers the rest. |
+| `Test-DocumentColors.ps1` | Checks that the callout colors and the highlight yellow agree between `webshell\app.css` and `src\PaulTechGuy.MQ.Domain`. The preview reads the stylesheet; the Word export builds a `.docx` with no browser in sight and cannot, so those few values are written twice. This is what keeps the copies honest. |
 
 `Set-AmericanSpelling.ps1` reads `.cs`, `.xaml`, `.js`, `.css`, `.html`, `.json` and `.md`.
 `.ps1` is not in that list, so the scripts in this folder — and their prose — are not covered
@@ -101,6 +102,7 @@ of the run unless `-KeepStaging` is passed.
 | `ReleaseCommon.ps1` | reads, for its callers | writes, for its callers | writes, for its callers | — |
 | `Set-AmericanSpelling.ps1` | — | excluded by design | excluded by design | rewrites the whole tree |
 | `Test-ButtonStandards.ps1` | — | — | — | reads `src\PaulTechGuy.MQ.App\`, `webshell\` |
+| `Test-DocumentColors.ps1` | — | — | — | reads `webshell\app.css`, `src\PaulTechGuy.MQ.Domain\` |
 
 `Publish-Release.ps1` reaches `installer\` and both artifacts folders only through the scripts
 it calls, which is why its own rows are otherwise empty. `Set-AmericanSpelling.ps1` skips

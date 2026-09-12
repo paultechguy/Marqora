@@ -605,11 +605,15 @@ public sealed partial class MainWindow
         var html = new MenuFlyoutItem { Text = "Export to HTML..." };
         html.Click += (_, _) => ViewModel.ExportHtmlCommand.Execute(null);
 
+        var word = new MenuFlyoutItem { Text = "Export to Word..." };
+        word.Click += (_, _) => ViewModel.ExportWordCommand.Execute(null);
+
         var print = new MenuFlyoutItem { Text = "Print...", KeyboardAcceleratorTextOverride = "Ctrl+P" };
         print.Click += (_, _) => ViewModel.PrintCommand.Execute(null);
 
         menu.Items.Add(NeedsContent(pdf));
         menu.Items.Add(NeedsContent(html));
+        menu.Items.Add(NeedsContent(word));
         menu.Items.Add(NeedsContent(print));
 
         _previewMenu = menu;

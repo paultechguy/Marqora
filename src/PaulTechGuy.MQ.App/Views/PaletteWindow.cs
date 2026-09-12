@@ -356,13 +356,13 @@ public abstract class PaletteWindow : Window
     ///
     /// Just inside the main window's right edge, which reads as belonging to it without covering
     /// the document - the right answer for something you glance at while typing. A subclass that
-    /// is really a dialog rather than a palette overrides this to centre instead.
+    /// is really a dialog rather than a palette overrides this to center instead.
     /// </summary>
     protected virtual RectInt32 DefaultPosition(RectInt32 nearby, int width, int height) =>
         new(nearby.X + Math.Max(0, nearby.Width - width - 48), nearby.Y + 64, width, height);
 
-    /// <summary>Centred on <paramref name="nearby"/>, for the subclasses that want it.</summary>
-    protected static RectInt32 CentredOn(RectInt32 nearby, int width, int height) =>
+    /// <summary>Centered on <paramref name="nearby"/>, for the subclasses that want it.</summary>
+    protected static RectInt32 CenteredOn(RectInt32 nearby, int width, int height) =>
         new(
             nearby.X + ((nearby.Width - width) / 2),
             nearby.Y + ((nearby.Height - height) / 2),

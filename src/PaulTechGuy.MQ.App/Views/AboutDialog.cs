@@ -48,6 +48,7 @@ internal sealed class AboutDialog : ContentDialog
         ("KaTeX", "0.18.4", "MIT"),
         ("highlight.js", "11.12.0", "BSD-3-Clause"),
         ("Markdig", "1.3.2", "BSD-2-Clause"),
+        ("DocumentFormat.OpenXml", "3.5.1", "MIT"),
         ("Serilog", "4.4.0", "Apache-2.0"),
     ];
 

@@ -1910,7 +1910,7 @@ public sealed partial class MainWindow : Window
     // ------------------------------------------------------------ chrome density
 
     /*
-      The toolbar row carries three things side by side: the menu bar, the centred view
+      The toolbar row carries three things side by side: the menu bar, the centered view
       switcher and the zoom cluster. Together they want roughly 630 effective pixels, which is
       more than the window's 640-pixel minimum leaves once padding is counted - so at narrow
       widths the switcher, sitting in the star column, was clipped mid-word.

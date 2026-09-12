@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Markdown to Word. The sibling of Rendering: same parse, different destination.
+
+    It lives in its own project rather than beside HtmlExporter in the app because it is
+    several hundred mapping decisions - which Word style a heading level takes, when a list
+    needs a fresh numbering instance, how a table's column widths are shared out - and every
+    one of them is worth a test. The app project has no test project, which is exactly why
+    HtmlExporter has no coverage; this is the mistake not repeated.
+
+    It references Rendering for the Markdig pipeline, which is a concrete layer referencing
+    another and the one exemption to the layering rule in docs/Architecture.md. The
+    alternative was a second copy of the extension list, and a second copy would drift: a
+    document would render one way on screen and export another, with nothing to catch it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Docx</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Word requires a complete theme part, most of which is a format scheme a markdown
+      document never draws with. It ships as a resource rather than as code so the part that
+      does vary - the accent and the two faces - is a three-line patch on the way out.
+    -->
+    <EmbeddedResource Include="Resources\theme1.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="Markdig" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+</Project>

@@ -25,17 +25,21 @@ namespace PaulTechGuy.MQ.App;
 /// text on a white page, and on a dark one it is nearly invisible, so dark mode lifts it to
 /// #7fcdd5. Changing one means looking at the other.
 ///
-/// To change the color, change the two constants below and nothing else. The webshell is
-/// posted these by SetThemeAsync and names no teal of its own, exactly as it does not name
-/// the match colors - see <see cref="MatchColors"/>, which is the same bargain.
+/// To change the color, change the two constants in <see cref="DocumentAccent"/> and nothing
+/// else. They sit in Domain rather than here because the Word exporter is a fourth reader and
+/// is a library: it cannot see the app, and a second copy of the teal written into the
+/// document theme it builds would be a second copy to keep right. What stayed here is
+/// everything that returns a <c>Windows.UI.Color</c>, which Domain has no business knowing
+/// about. The webshell is posted these by SetThemeAsync and names no teal of its own, exactly
+/// as it does not name the match colors - see <see cref="MatchColors"/>, the same bargain.
 /// </summary>
 internal static class AccentColors
 {
     /// <summary>The teal on a light page. #rrggbb, or #rrggbbaa to let what is behind it through.</summary>
-    public const string LightHex = "#3f8f98";
+    public const string LightHex = DocumentAccent.LightHex;
 
     /// <summary>The teal on a dark one, lifted far enough to still be a color rather than a shadow.</summary>
-    public const string DarkHex = "#7fcdd5";
+    public const string DarkHex = DocumentAccent.DarkHex;
 
     public static Color Light => HexColor.Parse(LightHex, nameof(AccentColors));
 

@@ -10,7 +10,7 @@ namespace PaulTechGuy.MQ.App.Services;
 ///
 /// Stated once because both exports need it and they were drifting: each carried its own copy
 /// of the same rules, and both capped the text at a 46em measure that the preview itself had
-/// already dropped. <c>webshell/app.css</c> records why it went - a centred measure "left a
+/// already dropped. <c>webshell/app.css</c> records why it went - a centered measure "left a
 /// wide band of empty background down both sides of the pane, so widening the preview bought
 /// nothing" - and an export that ignores the reader's own width preference makes exactly that
 /// complaint again on somebody else's monitor.

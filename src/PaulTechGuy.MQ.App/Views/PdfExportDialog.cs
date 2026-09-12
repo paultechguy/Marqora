@@ -34,9 +34,10 @@ internal sealed class PdfExportDialog : ContentDialog
 
         _paper = DialogFields.Combo(["Letter", "A4", "Legal"], (int)current.Paper);
         _orientation = DialogFields.Combo(["Portrait", "Landscape"], (int)current.Orientation);
-        _margin = DialogFields.Combo(
-            ["Normal (0.5 in)", "Narrow (0.25 in)", "Wide (1 in)", "None"],
-            (int)current.Margin);
+        // Word's presets and Word's measurements, which this dialog now means too. Its Normal
+        // was half an inch until a document exported both ways came out on two measures under
+        // one word.
+        _margin = DialogFields.Combo(PageMargins.Labels, (int)current.Margin);
 
         _backgrounds = new CheckBox
         {

@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IThemeService _themeService;
     private readonly IUiDispatcher _ui;
     private readonly IHtmlExporter _exporter;
+    private readonly IDocxExporter _docxExporter;
     private readonly RenderedHtmlPackager _packager;
     private readonly IExportDialogService _exportDialogs;
     private readonly IFolioDialogService _folioDialogs;
@@ -519,6 +520,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IThemeService theme,
         IUiDispatcher ui,
         IHtmlExporter exporter,
+        IDocxExporter docxExporter,
         RenderedHtmlPackager packager,
         IExportDialogService exportDialogs,
         IFolioDialogService folioDialogs,
@@ -552,6 +554,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _themeService = theme;
         _ui = ui;
         _exporter = exporter;
+        _docxExporter = docxExporter;
         _packager = packager;
         _exportDialogs = exportDialogs;
         _folioDialogs = folioDialogs;
@@ -2006,7 +2009,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 .Order(StringComparer.CurrentCultureIgnoreCase),
         ];
 
-        // "more were reloaded", not "other files changed on disk". The centre of this same bar
+        // "more were reloaded", not "other files changed on disk". The center of this same bar
         // says the latter for tabs waiting on a decision, and the two must not read as the
         // same sentence: one is work the user still has to do, this one is already done.
         string text = waiting.Count switch
@@ -4083,10 +4086,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ? "It becomes unsaved, and can be undone with Ctrl+Z."
                 : "Each becomes unsaved, and each can be undone separately with Ctrl+Z.";
 
+            // Enter cancels rather than replaces. Everything this does is undoable and none of
+            // it reaches disk, so the loss is not permanent - but it changes every open
+            // document at once, and the reader arrives here having just pressed Enter or
+            // clicked a button, with their hand still on the key that would do it again.
+            // A bulk edit across documents is worth a deliberate click.
             ConfirmResult answer = await _dialogs.ConfirmAsync(
                 "Replace all matches?",
                 $"{where} will be {(e.IsDeletion ? "deleted" : "replaced")}. {undo}",
                 "Replace all",
+                destructivePrimary: true,
                 anchor: DialogAnchor.FindAll).ConfigureAwait(true);
 
             if (answer != ConfirmResult.Primary)
@@ -5356,6 +5365,151 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+    }
+
+    /// <summary>
+    /// Exports the active document as a Word file, after asking for page setup.
+    ///
+    /// The one export that does not simply carry the preview across. Word has no use for
+    /// HTML, so the markdown is walked again into Word's own constructs - real heading
+    /// styles, real numbering, real tables and footnotes - and the preview is asked only for
+    /// the three things a browser alone can produce: the pictures mermaid drew, the layout
+    /// KaTeX gave the equations, and the colors highlight.js put on the code.
+    ///
+    /// Which is why this cannot refuse the way the HTML export does. A preview that has not
+    /// caught up costs a Word file its colors and its diagrams; it does not stop one being
+    /// written.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    private async Task ExportWordAsync()
+    {
+        await WriteWordExportAsync().ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    private async Task WriteWordExportAsync()
+    {
+        if (_workspace.Active is not { } document || _docxExporter is null)
+        {
+            return;
+        }
+
+        DocxExportSetup? setup = await _exportDialogs
+            .RequestDocxSetupAsync(document.DisplayName, _settings.Current.DocxDefaults)
+            .ConfigureAwait(true);
+
+        if (setup is null)
+        {
+            return;
+        }
+
+        // Saved on accepting the dialog rather than on a successful write, the same rule the
+        // PDF path follows: the answer is what the user chose, and a failed export does not
+        // make it the wrong choice.
+        _settings.Update(s => s with { DocxSetup = setup });
+
+        string? path = await _fileDialogs
+            .PickExportFileAsync(SuggestedExportName(document, ".docx"), "Word document", [".docx"])
+            .ConfigureAwait(true);
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            StatusText = "Exporting Word document...";
+
+            // Whatever the preview has, or nothing at all. A document that has never been
+            // previewed, or one typed into a second ago, still exports.
+            string rendered = _host is null
+                ? string.Empty
+                : await _host.GetRenderedHtmlAsync().ConfigureAwait(true);
+
+            string markdown = document.Text;
+            string title = document.DisplayName;
+            string? source = document.Path;
+            HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+
+            // Off the UI thread. Building a .docx is heavier than building an HTML file -
+            // there are images to re-encode and a whole part graph to assemble - and the HTML
+            // export freezing the window on a picture-heavy document is the mistake not to
+            // repeat.
+            IReadOnlyList<string> skipped = await Task.Run(
+                () => _docxExporter.WriteAsync(
+                    path,
+                    title,
+                    markdown,
+                    setup,
+                    numbering,
+                    source,
+                    rendered,
+                    RequestDiagramPngAsync))
+                .ConfigureAwait(true);
+
+            AnnounceExport(path);
+
+            if (skipped.Count > 0)
+            {
+                await _dialogs.ShowMessageAsync(
+                    "Some things could not be carried across",
+                    "The document was written, and these are not in it:\n\n"
+                    + string.Join(Environment.NewLine, skipped.Take(10)))
+                    .ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _logger.LogError(ex, "Could not export a Word document to {Path}.", path);
+            await _dialogs.ShowMessageAsync("Could not export", ex.Message).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Asks the shell to rasterize one diagram, from whatever thread the export is on.
+    ///
+    /// The export itself runs on a worker, and the bridge cannot be spoken to from there: it
+    /// writes to the WebView, which belongs to the UI thread. So the request goes back across
+    /// the dispatcher and the answer comes home through a completion source.
+    ///
+    /// Returns null when there is no preview to ask, or when the shell could not draw the
+    /// diagram - which the exporter treats as "write the definition instead", so a document is
+    /// never left with a gap where a picture was.
+    /// </summary>
+    private Task<byte[]?> RequestDiagramPngAsync(string hash)
+    {
+        if (_host is not { } host)
+        {
+            return Task.FromResult<byte[]?>(null);
+        }
+
+        var completion = new TaskCompletionSource<byte[]?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _ui.Post(async () =>
+        {
+            // Nothing is thrown out of here: the continuation is the dispatcher's, and an
+            // exception escaping it would take the window down rather than the export.
+            try
+            {
+                completion.SetResult(await host.RequestDiagramPngAsync(hash).ConfigureAwait(true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "A diagram could not be rasterized for the Word export.");
+                completion.SetResult(null);
+            }
+        });
+
+        return completion.Task;
     }
 
     /// <summary>Exports the active document as a PDF, after asking for page setup.</summary>
@@ -6897,7 +7051,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Switch to split view first: recentring a divider that is not on screen would look
+        // Switch to split view first: recentering a divider that is not on screen would look
         // like the double-click did nothing.
         if (ViewMode != ViewMode.SideBySide)
         {

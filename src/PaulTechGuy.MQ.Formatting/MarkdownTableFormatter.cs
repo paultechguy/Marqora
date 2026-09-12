@@ -19,7 +19,7 @@ internal static class MarkdownTableFormatter
     {
         None,
         Left,
-        Centre,
+        Center,
         Right,
     }
 
@@ -174,7 +174,7 @@ internal static class MarkdownTableFormatter
 
             alignments[i] = (left, right) switch
             {
-                (true, true) => Alignment.Centre,
+                (true, true) => Alignment.Center,
                 (true, false) => Alignment.Left,
                 (false, true) => Alignment.Right,
                 _ => Alignment.None,
@@ -197,7 +197,7 @@ internal static class MarkdownTableFormatter
             {
                 Alignment.Left => ':' + new string('-', width - 1),
                 Alignment.Right => new string('-', width - 1) + ':',
-                Alignment.Centre => ':' + new string('-', width - 2) + ':',
+                Alignment.Center => ':' + new string('-', width - 2) + ':',
                 _ => new string('-', width),
             };
 
@@ -221,7 +221,7 @@ internal static class MarkdownTableFormatter
             string padded = a switch
             {
                 Alignment.Right => new string(' ', slack) + value,
-                Alignment.Centre => new string(' ', slack / 2) + value + new string(' ', slack - (slack / 2)),
+                Alignment.Center => new string(' ', slack / 2) + value + new string(' ', slack - (slack / 2)),
                 _ => value + new string(' ', slack),
             };
 

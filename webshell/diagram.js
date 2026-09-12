@@ -94,7 +94,7 @@
     deliberately does not touch the zoom.
 
     A diagram smaller than the window has nothing to scroll, so both of these come out at
-    zero and the canvas is already centred by its own margins.
+    zero and the canvas is already centered by its own margins.
   */
   function center() {
     els.surface.scrollLeft = (els.surface.scrollWidth - els.surface.clientWidth) / 2;

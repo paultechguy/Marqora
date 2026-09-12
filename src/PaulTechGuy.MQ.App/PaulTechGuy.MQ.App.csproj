@@ -54,6 +54,7 @@
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Analysis\PaulTechGuy.MQ.Analysis.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Docx\PaulTechGuy.MQ.Docx.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Finding\PaulTechGuy.MQ.Finding.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />

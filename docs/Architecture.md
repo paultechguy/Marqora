@@ -26,6 +26,7 @@ Repositories Rendering Analysis Spelling Services   App
 | `Abstractions` | every interface, plus event argument types | contain behavior |
 | `Repositories` | atomic reads and writes, JSON and text | know about markdown or UI |
 | `Rendering` | the Markdig pipeline and the source-line extension | touch the file system or UI |
+| `Docx` | markdown to WordprocessingML: styles, numbering, tables, footnotes, equations | know about the WebView, or need one |
 | `Analysis` | dead links, missing images, the style rules | rewrite anything |
 | `Spelling` | the spelling analyzer, the skip rules, the seed list, the cache | know how to spell — that arrives as `ISpellingEngine`. See `Spelling.md` |
 | `Services` | the document workspace, settings, recent files, file watching, the word list | reference WinUI |
@@ -36,6 +37,20 @@ both depend on it. It has no state, no I/O and no references — every member ta
 strings and arrays — so it sits beside `Domain` rather than among the layers that meet at the
 composition root. It exists because `Analysis` and `Spelling` both need the same answer to "which
 part of this line is prose?", and a second copy of a fence scanner is a second copy to keep right.
+
+**`Docx` referencing `Rendering` is the one exception to the layering**, and it is deliberate.
+The Word export walks a parsed document rather than rendered HTML, so it needs the same Markdig
+pipeline the preview uses - and it has to be the *same* one. The alternative was a second copy
+of the extension list, which would drift: a document would render one way on screen and export
+another, and nothing would catch it. `MarqoraMarkdownPipeline` in `Rendering` is that one
+source; `MarkdigMarkdownRenderer` adds the source-line extension on top of it for the shell's
+scroll sync, and the exporter takes it bare because it reads `Block.Line` off the tree directly.
+
+The document colors are a smaller version of the same bargain, settled the other way. `Docx`
+cannot read `webshell/app.css`, so the four callout colors and the highlight yellow are written
+down a second time in `Domain/CalloutColors.cs` - and `build/Test-DocumentColors.ps1` fails when
+the two disagree. Pushing five colors across the bridge would have cost more than it saves; a
+test costs nothing.
 
 Each layer registers itself: `AddMarqoraRepositories()`, `AddMarqoraRendering()`,
 `AddMarqoraServices()`, `AddMarqoraSpelling()`. The composition root stays a list of intents.
@@ -495,12 +510,14 @@ processes that each hand over and exit produce the same ten tabs, just more slow
 
 ## Exporting
 
-Both exports take the **rendered preview**, not a fresh render of the source. Diagrams are
+HTML and PDF take the **rendered preview**, not a fresh render of the source. Diagrams are
 already inline SVG at that point, math is already laid out by KaTeX and code is already
 highlighted, so an export cannot disagree with what was on screen. `IPreviewHost` grows one
 request/response call for this, `GetRenderedHtmlAsync`, keyed by request id — the bridge is
 otherwise one-way, and matching a reply to its request keeps an export correct even if other
 traffic arrives in between.
+
+Word is the exception, and the section on it below says why.
 
 **PDF** goes through `CoreWebView2.PrintToPdfAsync` with a print stylesheet. `@media print`
 hides the editor pane and the splitter and pins the light palette, which is why the PDF holds
@@ -529,7 +546,39 @@ answer to it through `ExportLayout`, which states the page rules once — they e
 a copy, and both capped the text at a 46em measure the preview itself had already dropped for
 the reason recorded beside `--mq-preview-measure` in `app.css`.
 
-**A Folio** is the third export and the one that takes more than one document: the whole set,
+**Word** is the one export that does not carry the preview across, and it cannot be: a `.docx`
+is WordprocessingML, so there is nothing in an HTML fragment to carry. `PaulTechGuy.MQ.Docx`
+parses the markdown again — through the same `MarqoraMarkdownPipeline`, so it reads the
+document exactly as the preview does — and walks the tree into Word's own constructs: the
+built-in `Heading1`-`Heading6` styles so the navigation pane and a contents field can find the
+sections, real numbering definitions, real tables, real footnotes, and OMML equations a reader
+can click into. Colors and fonts are theme references rather than literals, which is what lets
+Word's Design tab restyle the whole file.
+
+Three things exist only after a browser has drawn them, and those still come from the preview:
+the SVG mermaid produced, the MathML KaTeX produced, and the token classes highlight.js
+produced. `PreviewHarvest` reads all three out of the same `GetRenderedHtmlAsync` string the
+HTML export already asks for, so there is no second conversation with the shell and nothing in
+`webshell/` had to change. Diagram pictures come back through the existing
+`RequestDiagramPngAsync`, fetched together before the walk begins because the walk is
+synchronous and the bridge allows twenty seconds a diagram.
+
+Two details are worth knowing before touching it. The artifacts are matched on the source line
+Markdig stamped on each block, **not** on the order they appear in: display math renders as a
+`div` while being a `FencedCodeBlock` in the tree, and a fence inside a footnote is relocated to
+the end of the document, so a counter would hand blocks somebody else's colors and the counts
+would still agree. And every artifact is checked against the tree before it is trusted — the
+editor runs ahead of the preview by a debounce interval, so a block edited a moment ago comes
+back with the right shape and stale text. Both failures would otherwise be silent, which is why
+they are guarded rather than assumed away.
+
+The upshot is the property that makes this export different: it degrades instead of refusing.
+No preview, a busy preview, a diagram that would not draw, an equation the converter does not
+know — each costs the document that one thing and nothing else. `OpenXmlValidator` runs over a
+kitchen-sink document in the tests, because WordprocessingML is a schema *sequence* and Word
+answers a wrong child order by offering to repair the file rather than by saying what is wrong.
+
+**A Folio** is the fourth export and the one that takes more than one document: the whole set,
 every image it references, and the paths repointed so the copy resolves somewhere other than
 this machine. It is a feature rather than a variation, and `docs/Folio.md` covers it — what a
 Folio is, why it is an `.html` file that carries its own sources, how the off-screen render
@@ -966,6 +1015,13 @@ home even if a document asks it to.
 A self-contained unpackaged build starts at roughly 247 MB. Three things were removed to
 bring it to about 178 MB, none of which Marqora can reach at runtime.
 
+One thing was since added back: `DocumentFormat.OpenXml`, about 8 MB across its own assembly,
+its framework and `System.IO.Packaging`. That is a real cost and it was weighed against the
+alternative, which was writing a `.docx` by hand - a zip of a dozen XML parts against a schema
+Word validates strictly and repairs silently. The SDK is the only part of the build that exists
+to serve one feature; it earns it by being the difference between a Word file and something
+Word offers to repair.
+
 **The Windows App SDK is referenced by component, not by metapackage.** `Microsoft.WindowsAppSDK`
 also pulls in `.AI`, `.ML` and `.Widgets`, which carry `onnxruntime.dll` and `DirectML.dll`:
 about 42 MB of machine-learning runtime. `Directory.Packages.props` names Base, Foundation,
@@ -998,7 +1054,7 @@ markdown models, and a language worker is fetched only when a model of that lang
 
 ## Testing
 
-Eight projects under `tests/`, run with `dotnet test`. xUnit v3 and Shouldly; `Directory.Build.props`
+One project under `tests/` for each library, run with `dotnet test`. xUnit v3 and Shouldly; `Directory.Build.props`
 recognises anything under `tests/` and turns on the test SDK, so a new one needs no wiring beyond
 a reference to the project it exercises.
 

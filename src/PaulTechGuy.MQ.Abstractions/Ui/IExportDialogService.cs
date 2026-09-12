@@ -6,7 +6,7 @@ using PaulTechGuy.MQ.Domain;
 namespace PaulTechGuy.MQ.Abstractions.Ui;
 
 /// <summary>
-/// Asks the user how a PDF should be laid out.
+/// Asks the user how an exported document should be laid out.
 ///
 /// Kept separate from <see cref="IDialogService"/>, which deals in plain messages and
 /// confirmations, so the view model can request page setup without knowing that a WinUI
@@ -25,5 +25,18 @@ public interface IExportDialogService
     Task<PdfPageSetup?> RequestPdfSetupAsync(
         string documentName,
         PdfPageSetup current,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the chosen Word setup, or null when the user cancels.
+    /// </summary>
+    /// <param name="current">
+    /// What the dialog opens on, for the same reason the PDF one takes it: the answer belongs
+    /// in preferences rather than in the dialog, so it survives a restart and there is one
+    /// record of it.
+    /// </param>
+    Task<DocxExportSetup?> RequestDocxSetupAsync(
+        string documentName,
+        DocxExportSetup current,
         CancellationToken cancellationToken = default);
 }

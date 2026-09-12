@@ -70,9 +70,9 @@
 
             <TabView.TabStripHeader>
                 <!--
-                    Given the strip's height outright rather than centring in whatever the
+                    Given the strip's height outright rather than centering in whatever the
                     slot happens to be. With no tabs open the slot is only as tall as the add
-                    button, so a centred header rode high and then dropped as soon as the
+                    button, so a centered header rode high and then dropped as soon as the
                     first tab appeared and made the row taller.
                 -->
                 <StackPanel x:Name="TabStripLeading"
@@ -850,10 +850,18 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
 
+                        <MenuFlyoutItem Text="Export to Word..."
+                                        Command="{x:Bind ViewModel.ExportWordCommand}"
+                                        ToolTipService.ToolTip="Export as a Word document with real styles, numbering and headings">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8A5;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
                         <MenuFlyoutSeparator />
 
                         <!--
-                            Below the two exports rather than beside them: those take the
+                            Below the three exports rather than beside them: those take the
                             document in front and turn it into one page, and this takes the
                             whole set of open documents and everything they reference.
                         -->
@@ -1744,7 +1752,7 @@
                 Empty state: the drop target and the way back into recent work.
 
                 Spans all three columns. With no document open the outline and its handle are
-                both collapsed, so the drop target has the row to itself and stays centred in
+                both collapsed, so the drop target has the row to itself and stays centered in
                 the window rather than in whatever is left beside a panel.
             -->
             <ScrollViewer Grid.Column="0"
@@ -1803,7 +1811,7 @@
                                 every pair of columns whether or not they hold anything, so
                                 once folded, the two columns left empty still pushed 20
                                 pixels of nothing onto the end of the row and threw the
-                                block off centre.
+                                block off center.
 
                                 Stretch is set explicitly so that both buttons in a shared
                                 column render at that column's width. That is what lines

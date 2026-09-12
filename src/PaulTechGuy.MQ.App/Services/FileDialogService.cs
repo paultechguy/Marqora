@@ -123,7 +123,7 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
         }
     }
 
-    /// <summary>Owner handle for the modal dialog, so it centres on and blocks the window.</summary>
+    /// <summary>Owner handle for the modal dialog, so it centers on and blocks the window.</summary>
     private IntPtr RequireOwner()
     {
         IntPtr handle = window.WindowHandle;
