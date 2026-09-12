@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Net;
-using System.Text.RegularExpressions;
 using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.Analysis;
@@ -65,9 +64,24 @@ internal static partial class LinkChecks
                 continue;
             }
 
-            // Anything with a scheme, or protocol-relative, is somebody else's problem:
-            // checking it would mean going out to the network, which this app never does.
-            if (AbsoluteUrl().IsMatch(url) || url.StartsWith("//", StringComparison.Ordinal))
+            MediaTargetKind kind = MediaTarget.Classify(url);
+
+            // On the web. Nothing is fetched and nothing is verified - that would mean going to
+            // the network, which this app never does - but a picture is now told about rather
+            // than left as a blank box with no explanation. A link still says nothing: it is a
+            // navigation, and clicking one works.
+            if (kind == MediaTargetKind.Remote)
+            {
+                if (request.CheckBlockedImages && link.IsImage)
+                {
+                    Report(link, LinkFindingKind.RemoteMedia, RemoteMessage(), into);
+                }
+
+                continue;
+            }
+
+            // mailto:, data:, blob: and the rest. Somebody else's problem, as before.
+            if (kind == MediaTargetKind.OtherScheme)
             {
                 continue;
             }
@@ -76,6 +90,20 @@ internal static partial class LinkChecks
             // none. Nothing is reported rather than everything being reported.
             if (folder is null || !Directory.Exists(folder))
             {
+                continue;
+            }
+
+            // "C:\pics\shot.png" and "file:///C:/pics/shot.png". These used to match the scheme
+            // test and be waved through, so a picture named this way was blank and silent. Only
+            // media is reported: a link written this way stays as quiet as it has always been,
+            // because clicking it is a different question from whether a picture appears.
+            if (kind == MediaTargetKind.LocalAbsolute)
+            {
+                if (request.CheckBlockedImages && link.IsImage)
+                {
+                    ReportLocalAbsolute(link, url, folder, into);
+                }
+
                 continue;
             }
 
@@ -88,12 +116,121 @@ internal static partial class LinkChecks
 
             if (!Exists(folder, target))
             {
+                // The file may be perfectly well there and simply not beside the document -
+                // "../shared/logo.png" is the everyday shape. Saying "no image at" about a file
+                // sitting on the disk sent people looking for something that was never lost.
+                if (request.CheckBlockedImages
+                    && link.IsImage
+                    && OutsideButPresent(folder, target) is { } outside)
+                {
+                    Report(link, LinkFindingKind.OutsideFolder, OutsideMessage(outside), into);
+
+                    continue;
+                }
+
                 Report(
                     link,
                     link.IsImage ? LinkFindingKind.MissingImage : LinkFindingKind.BrokenLink,
                     link.IsImage ? $"No image at \"{url}\"." : $"Nothing at \"{url}\".",
                     into);
             }
+        }
+    }
+
+    /// <summary>
+    /// What to say about a picture addressed on the web.
+    ///
+    /// The second sentence is not padding. A README carrying build badges gets one of these per
+    /// badge, and without it each mark reads as an accusation about a document that is, in fact,
+    /// correct - it renders everywhere its readers will see it. Saying so is the difference
+    /// between a mark somebody reads and a rule somebody switches off.
+    ///
+    /// The host is not named, and neither is an example of somewhere it works. Both were there
+    /// at first and both were noise: the address is on the line the pointer is resting on, and a
+    /// hover that has explained itself in two sentences should stop.
+    /// </summary>
+    /// <remarks>
+    /// Worded without naming the element. The same check covers an iframe and a video, and
+    /// "this image will not appear" is simply wrong about those - a small wrongness, but in the
+    /// one sentence whose whole job is to be believed.
+    /// </remarks>
+    private static string RemoteMessage() =>
+        "Marqora does not load content from the web, so this will not appear in the preview. "
+        + "It will still work anywhere that does.";
+
+    /// <summary>What to say about a file kept somewhere else on this machine.</summary>
+    private static string OutsideMessage(string path) =>
+        $"This is at \"{path}\", which is outside the document's folder. Marqora only loads files "
+        + "kept beside the document.";
+
+    /// <summary>
+    /// Reports an absolutely-named local picture, saying which of the two things is true.
+    ///
+    /// A share is never probed. <c>File.Exists</c> on a UNC path blocks until the other machine
+    /// answers, and this runs while somebody is typing - see <see cref="MediaTarget.IsNetworkShare"/>.
+    /// What can be said without asking the disk is that it is not beside the document, which is
+    /// the part that decides whether it appears.
+    /// </summary>
+    private static void ReportLocalAbsolute(
+        LinkReference link,
+        string url,
+        string folder,
+        List<LinkFinding> into)
+    {
+        string? path = MediaTarget.LocalPathOf(StripSuffix(url));
+
+        if (path is null)
+        {
+            Report(link, LinkFindingKind.MissingImage, $"No image at \"{url}\".", into);
+
+            return;
+        }
+
+        if (MediaTarget.IsNetworkShare(path))
+        {
+            Report(link, LinkFindingKind.OutsideFolder, OutsideMessage(path), into);
+
+            return;
+        }
+
+        // An absolute path can still land inside the document's own folder, and then there is
+        // nothing wrong with it at all beyond the spelling.
+        if (PathContainment.Contains(folder, path) && File.Exists(path))
+        {
+            return;
+        }
+
+        if (File.Exists(path))
+        {
+            Report(link, LinkFindingKind.OutsideFolder, OutsideMessage(path), into);
+
+            return;
+        }
+
+        Report(link, LinkFindingKind.MissingImage, $"No image at \"{url}\".", into);
+    }
+
+    /// <summary>
+    /// The full path of a relative reference that escapes the document's folder but is really
+    /// there, or null when it is simply missing.
+    /// </summary>
+    private static string? OutsideButPresent(string folder, string relative)
+    {
+        try
+        {
+            string full = Path.GetFullPath(
+                Path.Combine(folder, WebUtility.UrlDecode(relative).Replace('/', Path.DirectorySeparatorChar)));
+
+            if (MediaTarget.IsNetworkShare(full))
+            {
+                return full;
+            }
+
+            return !PathContainment.Contains(folder, full) && File.Exists(full) ? full : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
         }
     }
 
@@ -136,8 +273,4 @@ internal static partial class LinkChecks
             Kind = kind,
             Message = message,
         });
-
-    /// <summary>A scheme followed by a colon: http:, https:, mailto:, ftp:, data: and so on.</summary>
-    [GeneratedRegex(@"^[a-zA-Z][a-zA-Z0-9+.\-]*:", RegexOptions.CultureInvariant)]
-    private static partial Regex AbsoluteUrl();
 }

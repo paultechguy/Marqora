@@ -34,6 +34,17 @@ internal static class ImageChecks
                 continue;
             }
 
+            // A picture written as "<img src=...>" is not asked about its alt text, because
+            // nothing here reads one. MarkdownMediaReader collects the address and leaves Text
+            // empty, so every raw tag would look like an image nobody had described - and the
+            // first thing anyone would see after an update is a fresh mark on every such line in
+            // a document they had already put right. Reading the attribute and lifting this is a
+            // small change, and a separate one to judge on its own merits.
+            if (link.IsRawHtml)
+            {
+                continue;
+            }
+
             // A badge - "[![](build.svg)](https://ci.example)" - takes its accessible name from
             // the link around it, so an empty alt is correct there rather than missing. Skipping
             // these is the single biggest thing keeping the rule off a README's every line.

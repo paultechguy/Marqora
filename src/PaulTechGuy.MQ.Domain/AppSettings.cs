@@ -381,6 +381,18 @@ public sealed record AppSettings
     /// </summary>
     public bool CheckImageAltText { get; set; } = true;
 
+    /// <summary>
+    /// Underline pictures that will not appear: the ones addressed on the web, and the ones kept
+    /// somewhere else on this machine.
+    ///
+    /// On by default, and subordinate to <see cref="ShowDiagnostics"/> like the rule above. Its
+    /// own switch for a reason of quantity rather than taste: a README carrying a row of build
+    /// badges has eight of these on one line and nothing whatever wrong with it, and somebody who
+    /// works on such documents should be able to quiet them without also losing the dead links
+    /// and the broken anchors.
+    /// </summary>
+    public bool ShowBlockedImages { get; set; } = true;
+
     public bool HighlightCurrentLine { get; set; } = true;
 
     /// <summary>Carry a list marker onto the next line when Enter is pressed.</summary>

@@ -43,6 +43,17 @@
   --mq-important-soft: rgba(130, 80, 223, 0.08);
   --mq-warning: #9a6700;
   --mq-warning-soft: rgba(154, 103, 0, 0.10);
+
+  /* The fourth claim a source-pane mark can make: a picture that will not appear here.
+
+     It began as an alias of --mq-important, on the grounds that one violet beats two to keep in
+     step. That held right up until the mark had to be read: the callout violet is dark enough
+     that a thin dotted underline and a two-pixel ruler tick both pass for black on white, and a
+     tick whose color cannot be told from the text is a tick that says nothing. Brighter here,
+     lighter in weight than the callout it sat on top of, and the two are now separate values
+     because they answer different questions - one fills a block in the preview, this one draws
+     a hairline in the source pane. */
+  --mq-blocked: #a259ff;
   --mq-mark: #fff3a3;
   /* Whitespace marks in the source pane: present enough to read, quiet enough to ignore. */
   --mq-whitespace: #7fb0da;
@@ -84,6 +95,10 @@
     --mq-tip-soft: rgba(111, 206, 138, 0.12);
     --mq-important: #c9a6ff;
     --mq-important-soft: rgba(201, 166, 255, 0.12);
+    /* Named here now that it is a value rather than an alias. Lighter than the light-mode
+       violet rather than darker: the surface it draws on went dark, so the hairline has to go
+       the other way to stay visible. */
+    --mq-blocked: #c9a6ff;
     --mq-warning: #e0b341;
     --mq-warning-soft: rgba(224, 179, 65, 0.12);
     --mq-mark: #5c4a00;
@@ -223,6 +238,75 @@ body {
   text-decoration: underline dotted var(--mq-text-tertiary);
   text-decoration-skip-ink: none;
   text-underline-offset: 0.22em;
+}
+
+/*
+  A picture that will not appear here: addressed on the web, or kept somewhere else on the disk.
+
+  Dotted, like the alt-text note, because nothing is wrong with the document - the address is
+  valid, the file is there, and on GitHub the picture renders.
+
+  Violet rather than the dead link's amber, and that is the part worth defending. These earn a
+  tick in the overview ruler, and a tick has no texture: dotted and wavy look identical at two
+  pixels wide, so sharing amber would have made a correct README's row of build badges
+  indistinguishable from eight broken links at the one glance the ruler exists to serve. A
+  fourth claim needs a fourth color or it is not a fourth claim.
+
+  Red is wrong, amber is broken, grey is incomplete, violet is "not here".
+*/
+.monaco-editor .view-line span.mq-unrenderable {
+  text-decoration: underline dotted var(--mq-blocked);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.22em;
+}
+
+/*
+  The preview's half of the same claim: a picture that is not here, said out loud.
+
+  Without it the preview lies by omission - a blocked picture with no alt text collapses to a
+  zero-sized box, so two paragraphs close up over the space where a screenshot belongs and a
+  reader proofing their own document has no way to know. The same violet as the source-pane
+  mark, so the two surfaces read as one statement about one thing.
+
+  Drawn as generated content on purpose. Copy as Rich Text and the printer both take their
+  markup from this DOM, and generated content never reaches innerHTML - so a paste into Outlook
+  carries the original <img src="https://..."> and loads it, which is the right answer there.
+  The element is hidden rather than removed for the same reason.
+
+  Inline-block, and modest: a README's row of eight build badges has to stay a row. Sizing these
+  to the picture they stand in for would be the more informative answer and is not available -
+  nothing here knows how big a file it never fetched would have been.
+*/
+.mq-preview .mq-blocked-media {
+  display: inline-block;
+  vertical-align: baseline;
+  max-width: 100%;
+}
+
+.mq-preview .mq-blocked-media > img,
+.mq-preview .mq-blocked-media > video,
+.mq-preview .mq-blocked-media > audio,
+.mq-preview .mq-blocked-media > iframe,
+.mq-preview .mq-blocked-media > embed {
+  display: none;
+}
+
+.mq-preview .mq-blocked-media::after {
+  content: attr(data-mq-blocked);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: baseline;
+  padding: 0.05em 0.45em;
+  border: 1px dashed var(--mq-blocked);
+  border-radius: 4px;
+  color: var(--mq-blocked);
+  background: color-mix(in srgb, var(--mq-blocked) 8%, transparent);
+  font-family: var(--mq-font-ui);
+  font-size: 0.82em;
+  line-height: 1.5;
 }
 
 /*
@@ -973,6 +1057,32 @@ body {
     height: auto;
     overflow: visible;
     background: #ffffff;
+  }
+
+  /*
+    The blocked-picture chip prints, and the element it stands in for stays hidden.
+
+    This was the other way round at first, on the principle that a PDF is the user's deliverable
+    and should not carry this app's commentary - the same argument that keeps spelling squiggles
+    off the page. Printing one proved it wrong. A blocked picture cannot be in the PDF whatever
+    is done here, so the only question is what occupies the hole: restoring the element paints a
+    200x80 grey rectangle for an iframe and a broken-image glyph for a picture, both of which
+    look like a fault in the document rather than a fact about it. Hiding both leaves a silent
+    gap, which is the very defect this feature exists to close, now printed.
+
+    So the chip stays. It is small, it is quiet, and it is the only one of the three that tells
+    the reader of the PDF the truth: something belongs here that this copy does not have.
+
+    A squiggle is not the same case and stays off the page. A squiggle marks a fault in the
+    document; this marks content missing from the artifact, and the artifact is the only place
+    that fact can still be useful.
+  */
+  .mq-preview .mq-blocked-media::after {
+    /* Solid over bright: #a259ff is tuned for a screen and washes out on paper. */
+    border-style: dashed;
+    color: #8250df;
+    border-color: #8250df;
+    background: none;
   }
 
   .mq-root {

@@ -205,6 +205,7 @@ would rather not reach for the mouse.
 | ∑   | **KaTeX math**                           | Inline and display math, laid out properly, exported the same way it looks                                                                                                                                                               |
 | 🌈  | **Rich markdown**                        | Tables, footnotes, task lists, definition lists, YAML front matter, auto-links, emoji, and syntax-highlighted code in *both* panes                                                                                                       |
 | 🩺  | **Document problems**                    | Dead links, missing images and broken anchors underlined as you write — the preview renders a broken link exactly like a working one, so nothing else would tell you                                                                     |
+| 🚫  | **Pictures that will not appear**         | A picture on the web, or one kept in another folder, is marked and explained rather than left as a blank box — and **Copy it in** brings a stray one home beside the document in a click                                                 |
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
@@ -699,12 +700,42 @@ like a live one.
 | `##Heading`, `-item`, `>quote`, trailing spaces, `[text] (url)` | Syntax the formatter would tidy up                          |
 
 The first three are warnings; the style rules are hints, because `Edit > Format Document`
-fixes all of them on request. Links that leave the machine are never checked — that would
-mean going to the network, which Marqora does not do. A document that has never been saved
-has no folder for a relative path to resolve against, so its file links are left alone,
-though its anchors are still checked.
+fixes all of them on request. A document that has never been saved has no folder for a
+relative path to resolve against, so its file links are left alone, though its anchors are
+still checked.
 
 Nothing inside a fenced code block or YAML front matter is ever flagged.
+
+**Pictures that will not appear**
+
+`View > Show Blocked Images` underlines a picture Marqora cannot show you, and the hover says
+which of the two reasons it is. On by default, because nothing else in the app explains a
+blank box.
+
+| Underlined                                           | Why                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `![alt](https://example.com/shot.png)`               | Marqora does not load content from the web                           |
+| `<img src="https://example.com/shot.png">`           | The same, written as HTML                                            |
+| `![alt](C:\Users\you\Pictures\shot.png)`             | The file is real, but it is not beside the document                  |
+| `![alt](../shared/logo.png)`                         | The same — it resolves to a file, just outside the document's folder |
+
+Right-click one for what can be done about it. A picture on the web can be opened in your
+browser, copied as an address, or written as the link it effectively is; one sitting elsewhere
+on the disk offers **Copy it in**, which copies the file in beside the document, points the
+reference at it, and is the one repair that fixes the problem outright. Either can be replaced
+from a file, pasted over from the clipboard, or removed.
+
+A **link** is never underlined by this, however far away it points. Nothing is fetched until
+you click one, and clicking works — Marqora hands it to your browser. The rule is about what
+the preview would have to go and load by itself.
+
+Nor is a web address ever checked. That would mean going to the network, which Marqora does
+not do; the mark says the picture will not appear here, and says nothing about whether it
+works anywhere else. Usually it does — a README full of build badges is not wrong, it simply
+renders somewhere Marqora is not.
+
+This has its own switch precisely because of those badges. Quieting a row of eight should not
+cost you the dead links and the broken anchors, so `Show Problems` keeps those.
 
 **Spell check**
 

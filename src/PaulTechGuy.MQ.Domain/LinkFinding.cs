@@ -31,6 +31,34 @@ public enum LinkFindingKind
     /// finding, which is exactly the chrome the rest of this type exists to avoid.
     /// </summary>
     MissingAltText = 3,
+
+    /// <summary>
+    /// A picture, video or frame whose address is on the web.
+    ///
+    /// Not a fault, which is what makes it the fourth kind of claim rather than a variation on
+    /// the first. The address is valid, the file is there, the author meant every character of
+    /// it, and on GitHub it renders. The only thing that is true is that Marqora will not go and
+    /// fetch it - so the message says that, and says where it does work, because a mark that
+    /// reads as an accusation gets switched off.
+    ///
+    /// Never reported for a link. A link is a navigation and nothing is fetched until somebody
+    /// clicks, which is the line this whole rule is drawn on.
+    /// </summary>
+    RemoteMedia = 4,
+
+    /// <summary>
+    /// A picture whose file is somewhere else on this machine, rather than beside the document.
+    ///
+    /// Distinct from <see cref="MissingImage"/> because the difference is the whole point: that
+    /// one says the file is not there, and for years it said so about files that were sitting
+    /// happily on the disk a folder away. Telling somebody to go and find a file that was never
+    /// lost is worse than saying nothing.
+    ///
+    /// It also has the best repair in the app behind it - copying the file in beside the document
+    /// and repointing the reference, which needs no network and leaves the document able to
+    /// travel.
+    /// </summary>
+    OutsideFolder = 5,
 }
 
 /// <summary>

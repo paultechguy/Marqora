@@ -97,7 +97,11 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
     }
 
     /// <summary>
-    /// Every link and image in the document, with its position.
+    /// Every link, image and raw-HTML media reference in the document, with its position.
+    ///
+    /// Two walks, because Markdig models the two quite differently. Markdown's own syntax is a
+    /// LinkInline; a picture written as a tag is unparsed text that no LinkInline walk would ever
+    /// see - see <see cref="MarkdownMediaReader"/>, which is why it exists.
     ///
     /// Markdig models both as LinkInline and tells them apart with IsImage, and the base
     /// MarkdownObject carries Line, Column and Span, so this needs nothing the parse has not
@@ -105,6 +109,10 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
     /// having to parse the document a second time on every keystroke.
     /// </summary>
     private static IReadOnlyList<LinkReference> ReadLinks(MarkdigDocument document) =>
+        [.. MarkdownLinks(document), .. MarkdownMediaReader.ReadMedia(document)];
+
+    /// <summary>Every markdown link and image - the "[a](b)" and "![a](b)" forms.</summary>
+    private static IEnumerable<LinkReference> MarkdownLinks(MarkdigDocument document) =>
         [.. document.Descendants<LinkInline>()
             .Where(link => !string.IsNullOrEmpty(link.Url))
             .Select(link => new LinkReference

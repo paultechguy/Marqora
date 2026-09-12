@@ -193,6 +193,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _scrollSync;
     private readonly CheckBox _diagnostics;
     private readonly CheckBox _altTextCheck;
+    private readonly CheckBox _blockedImages;
     private readonly CheckBox _spellCheck;
     private readonly CheckBox _maximizeDiagrams;
     private readonly ComboBox _headingNumbers;
@@ -391,6 +392,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _altTextCheck = BuildCheck("Underline images with no alt text");
         Bind(_altTextCheck, v => _vm.UpdateAsync(s => s with { CheckImageAltText = v }));
+
+        _blockedImages = BuildCheck("Underline pictures that will not appear");
+        Bind(_blockedImages, v => _vm.SetBlockedImagesAsync(v));
 
         _spellCheck = BuildCheck("Underline words that are not in the dictionary");
         Bind(_spellCheck, v => _vm.SetSpellCheckAsync(v));
@@ -1099,6 +1103,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(_scrollSync);
         panel.Children.Add(_diagnostics);
         panel.Children.Add(_altTextCheck);
+        panel.Children.Add(_blockedImages);
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SPELLING"));
@@ -1724,6 +1729,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _scrollSync.IsChecked = s.ScrollSyncEnabled;
             _diagnostics.IsChecked = s.ShowDiagnostics;
             _altTextCheck.IsChecked = s.CheckImageAltText;
+            _blockedImages.IsChecked = s.ShowBlockedImages;
             _spellCheck.IsChecked = s.SpellCheckEnabled;
             _maximizeDiagrams.IsChecked = s.MaximizeDiagramWindows;
 

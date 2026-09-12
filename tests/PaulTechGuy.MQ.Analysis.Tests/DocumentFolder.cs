@@ -34,6 +34,25 @@ internal sealed class DocumentFolder : IDisposable
     /// <summary>The document being analyzed. It does not have to exist on disk.</summary>
     public string DocumentPath => Path.Combine(_root, "doc.md");
 
+    /// <summary>
+    /// Creates a file in a neighbouring folder and returns its full path, for the references an
+    /// author writes absolutely - "C:\Users\paul\Pictures\shot.png" and the like.
+    /// </summary>
+    public string WithAbsoluteSibling(string relativePath, string contents = "")
+    {
+        _sibling = _root + "2";
+
+        string full = Path.Combine(_sibling, relativePath);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, contents);
+
+        return full;
+    }
+
+    /// <summary>The full path of a file inside the document's own folder.</summary>
+    public string PathTo(string relativePath) => Path.Combine(_root, relativePath);
+
     /// <summary>Creates a neighbouring file for a link to point at.</summary>
     public DocumentFolder With(string relativePath, string contents = "")
     {
@@ -73,13 +92,18 @@ internal sealed class DocumentFolder : IDisposable
         Analyze(markdown, null, altText).Diagnostics;
 
     /// <summary>The dead links found in markdown treated as a saved document in this folder.</summary>
-    public IReadOnlyList<LinkFinding> Links(string markdown) => Analyze(markdown, DocumentPath).LinkFindings;
+    public IReadOnlyList<LinkFinding> Links(string markdown, bool blocked = true) =>
+        Analyze(markdown, DocumentPath, blockedImages: blocked).LinkFindings;
 
     /// <summary>The dead links found in markdown that has never been saved anywhere.</summary>
     public static IReadOnlyList<LinkFinding> LinksUnsaved(string markdown, bool altText = true) =>
         Analyze(markdown, null, altText).LinkFindings;
 
-    private static AnalysisResult Analyze(string markdown, string? path, bool altText = true)
+    private static AnalysisResult Analyze(
+        string markdown,
+        string? path,
+        bool altText = true,
+        bool blockedImages = true)
     {
         RenderedMarkdown rendered = Renderer.Render(markdown);
 
@@ -91,6 +115,7 @@ internal sealed class DocumentFolder : IDisposable
             Outline = rendered.Outline,
             Anchors = rendered.Anchors,
             CheckImageAltText = altText,
+            CheckBlockedImages = blockedImages,
         });
     }
 

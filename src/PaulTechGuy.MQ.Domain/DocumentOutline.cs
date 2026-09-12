@@ -70,6 +70,20 @@ public sealed record LinkReference
     /// to switch a check off.
     /// </summary>
     public bool IsInsideLink { get; init; }
+
+    /// <summary>
+    /// Whether this came from a raw HTML tag rather than from markdown's own image syntax.
+    ///
+    /// Two things turn on it. The alt-text rule skips these, because nothing reads an "alt"
+    /// attribute here and every one of them would otherwise look like an image nobody had
+    /// described. And a repair cannot use <see cref="LinkTargetSpan"/>, which reads the "](url)"
+    /// syntax an attribute does not have - so for these <see cref="SourceColumn"/> and
+    /// <see cref="Length"/> cover the address itself, and a repair replaces exactly what was
+    /// marked.
+    ///
+    /// Defaulted false, so every existing construction site still means what it always did.
+    /// </summary>
+    public bool IsRawHtml { get; init; }
 }
 
 /// <summary>The result of rendering markdown to a preview fragment.</summary>

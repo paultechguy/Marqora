@@ -68,6 +68,7 @@ public sealed class PreferencesTransferTests : IDisposable
         ShowOutline = true,
         OutlineMaxDepth = 3,
         SpellCheckEnabled = false,
+        ShowBlockedImages = false,
     };
 
     /// <summary>Settings carrying a session: open documents, a window, a search history.</summary>

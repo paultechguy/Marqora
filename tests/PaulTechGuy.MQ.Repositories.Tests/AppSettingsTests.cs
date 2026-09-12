@@ -115,6 +115,12 @@ public sealed class AppSettingsTests : IDisposable
         // before it existed must come up with it on rather than silently without.
         settings.CheckImageAltText.ShouldBeTrue();
 
+        // Marking pictures that will not appear arrives on too. It reports something no other
+        // surface in the app explains, so a settings file written before it existed must come
+        // back with it on - silently off would leave those blank boxes as unexplained as they
+        // have always been, which is the whole thing it was added to fix.
+        settings.ShowBlockedImages.ShouldBeTrue();
+
         // Spell checking arrived on by default, and a settings file written before it existed
         // must come back with it on rather than silently off.
         settings.SpellCheckEnabled.ShouldBeTrue();
@@ -169,6 +175,7 @@ public sealed class AppSettingsTests : IDisposable
             HighlightCurrentLine = false,
             ContinueLists = false,
             AutoCloseBrackets = false,
+            ShowBlockedImages = false,
             HeadingNumbering = HeadingNumbering.FromHeading2,
             Startup = StartupBehavior.EmptyTab,
             RecentFilesLimit = 30,

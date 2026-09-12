@@ -59,8 +59,16 @@ public class LinkCheckTests
         // The file really is on disk, and it is still outside the document's folder, which is
         // what the check refuses - the preview cannot serve it either. Comparing the paths as
         // bare strings said otherwise, because "...\abc2\logo.png" starts with "...\abc".
-        folder.Links($"![logo]({link})").ShouldHaveSingleItem()
-            .Kind.ShouldBe(LinkFindingKind.MissingImage);
+        //
+        // Reporting it at all is the containment guarantee: a check that thought this was inside
+        // the folder would find the file, be satisfied, and say nothing.
+        LinkFinding found = folder.Links($"![logo]({link})").ShouldHaveSingleItem();
+
+        // OutsideFolder rather than MissingImage, and that distinction is the point. This file is
+        // not missing - it is one folder over, exactly where the author put it. Saying "no image
+        // at ..." sent people looking for something that was never lost.
+        found.Kind.ShouldBe(LinkFindingKind.OutsideFolder);
+        found.Message.ShouldContain("outside the document's folder");
     }
 
     [Fact]

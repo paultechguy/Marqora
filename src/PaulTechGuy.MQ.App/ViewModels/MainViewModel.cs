@@ -132,6 +132,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private IReadOnlyList<string> _lastAnchors = [];
 
+    /// <summary>The View menu's wording when this document has no blocked pictures, or is not being asked.</summary>
+    private const string BlockedImagesMenuLabel = "Show Blocked Images";
+
+    /// <summary>
+    /// How many blocked pictures each open document has, so the menu can say so without
+    /// re-checking.
+    ///
+    /// Per document rather than one number, because the menu is global and the count is not: a
+    /// single figure would go stale the moment a tab was switched, and it would be wrong in the
+    /// most visible way possible - showing the previous document's answer about this one. Every
+    /// check fills this in for whichever document it ran on, and the label is worked out from
+    /// whichever is active when anything moves.
+    /// </summary>
+    private readonly Dictionary<Guid, int> _blockedImageCounts = [];
+
     /// <summary>
     /// Which screen-clip wait is the current one. Bumped when a new clip starts, so an earlier
     /// wait can see it has been retired and stand down.
@@ -302,6 +317,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     public partial bool DiagnosticsEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool BlockedImagesEnabled { get; set; }
+
+    /// <summary>
+    /// The View menu's wording for the blocked-image switch, carrying this document's count.
+    ///
+    /// The ruler ticks say where they are; this says whether there are any at all, which is the
+    /// question you cannot answer by looking at one screenful. A document with none reads exactly
+    /// as it did before, because "(0)" would be a different claim from silence - it would say the
+    /// rule had looked and found nothing, which is only true when the rule is switched on.
+    /// </summary>
+    [ObservableProperty]
+    public partial string BlockedImagesMenuText { get; set; } = BlockedImagesMenuLabel;
 
     [ObservableProperty]
     public partial bool SpellCheckEnabled { get; set; }
@@ -732,6 +761,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         LineNumbersEnabled = current.ShowLineNumbers;
         ShowWhitespaceEnabled = current.ShowWhitespace;
         DiagnosticsEnabled = current.ShowDiagnostics;
+        BlockedImagesEnabled = current.ShowBlockedImages;
         SpellCheckEnabled = current.SpellCheckEnabled;
         ShowWrapGlyphEnabled = current.ShowWrapGlyph;
         ReloadOnExternalChangeEnabled = current.ReloadOnExternalChange;
@@ -2470,6 +2500,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     // Leaves every file the document wrote where it is, and puts back anything
                     // currently recycled. Closing a tab is not a way to lose a picture.
                     _pastedImages.Forget(e.DocumentId);
+                    _blockedImageCounts.Remove(e.DocumentId);
                     await RemoveTabAsync(e.DocumentId).ConfigureAwait(true);
                     RefreshExternalNotice();
                     break;
@@ -2778,11 +2809,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ? null
             : Path.GetDirectoryName(Path.GetFullPath(documentPath));
 
+    /// <summary>
+    /// Puts this document's blocked-picture count on the View menu, or takes it off.
+    ///
+    /// Three things have to be true before a number is shown, and each of them stops a different
+    /// lie. The switch must be on, or "(0)" would claim the rule had looked; underlining must be
+    /// on, or the count would describe marks that are not being drawn; and the count must be
+    /// above zero, because a document with nothing wrong should read exactly as it always did.
+    /// </summary>
+    private void RefreshBlockedImagesMenuText()
+    {
+        int count = BlockedImagesEnabled
+            && DiagnosticsEnabled
+            && _workspace.Active is { } document
+            && _blockedImageCounts.TryGetValue(document.Id, out int found)
+                ? found
+                : 0;
+
+        BlockedImagesMenuText = count > 0
+            ? $"{BlockedImagesMenuLabel} ({count})"
+            : BlockedImagesMenuLabel;
+    }
+
     private void UpdateActiveDocumentState()
     {
         MarkdownDocument? document = _workspace.Active;
 
         HasDocument = document is not null;
+
+        // The menu is global and the count is per document, so switching tab has to move it.
+        RefreshBlockedImagesMenuText();
 
         // Whitespace-only counts as empty: there is nothing to export, format or search for
         // in a file of blank lines, and offering those commands only invites a no-op.
@@ -3360,6 +3416,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DiagnosticsEnabled = enabled;
         _settings.Update(s => s with { ShowDiagnostics = enabled });
 
+        // With underlining off, the count would be describing marks nobody is drawing - and
+        // turning it back on re-checks only the document in front, so a number kept from before
+        // would outlive the check that produced it and speak for a tab nothing had looked at.
+        // Forgetting them means an unchecked document says nothing, which is the truth.
+        if (!enabled)
+        {
+            _blockedImageCounts.Clear();
+        }
+
+        RefreshBlockedImagesMenuText();
+
         if (_host is null)
         {
             return;
@@ -3377,6 +3444,59 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // diagnostics half, deliberately - spelling has its own switch and is not being asked
         // about here.
         if (_workspace.Active is { } document)
+        {
+            RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
+
+            await PublishDiagnosticsAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Turns the marks on pictures that will not appear on and off.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleBlockedImagesAsync()
+    {
+        await SetBlockedImagesAsync(!BlockedImagesEnabled).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Turns the blocked-image marks on or off and remembers the choice.
+    ///
+    /// Nothing is cleared first, and every open document is re-checked rather than only the one in
+    /// front. These findings ride in the same list as the dead links, so clearing would take those
+    /// with them, and re-checking only the active tab would leave the others wearing marks the
+    /// setting has just withdrawn - visible the moment somebody switches tab, with nothing to
+    /// re-check them until an edit. A dozen re-renders on a menu click is not a cost worth
+    /// counting; the same loop already runs whenever the shell becomes ready.
+    ///
+    /// The early return matters - <see cref="PreferencesViewModel"/> calls every setter
+    /// unconditionally when Cancel or Restore Defaults puts the old settings back.
+    /// </summary>
+    public async Task SetBlockedImagesAsync(bool enabled)
+    {
+        if (BlockedImagesEnabled == enabled)
+        {
+            return;
+        }
+
+        BlockedImagesEnabled = enabled;
+        _settings.Update(s => s with { ShowBlockedImages = enabled });
+
+        // Off takes the number off the menu at once, rather than at the end of the re-check
+        // below - and that re-check does not happen at all when underlining is off.
+        RefreshBlockedImagesMenuText();
+
+        // With underlining off altogether nothing is drawn, and turning it back on re-checks
+        // everything anyway.
+        if (_host is null || !DiagnosticsEnabled)
+        {
+            return;
+        }
+
+        foreach (MarkdownDocument document in _workspace.Documents)
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
 
@@ -3735,6 +3855,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public IReadOnlyList<string> SuggestionsFor(LinkFindingHit hit)
     {
+        // A picture that will not appear is not a misspelled path, so "did you mean" has nothing
+        // to offer: the address is exactly what the author meant, and the file it names is either
+        // on a web server or a folder away. What these want is on the menu below - open it, copy
+        // it in, replace it - and a list of near-miss filenames beside those would be noise.
+        if (hit.Kind is LinkFindingKind.RemoteMedia or LinkFindingKind.OutsideFolder)
+        {
+            return [];
+        }
+
         try
         {
             IReadOnlyList<string> candidates = hit.Kind == LinkFindingKind.DeadAnchor
@@ -3777,10 +3906,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Where the target sits inside the reference is worked out in Domain, where it can be
-        // tested. A null means the line no longer holds what the decoration says it does, which
-        // is a reason to do nothing rather than a reason to edit blindly.
-        if (LinkTargetSpan.Find(lines[hit.Line], hit.Start, hit.End) is not { } span)
+        if (TargetSpanOf(lines[hit.Line], hit) is not { } span)
         {
             return;
         }
@@ -3793,6 +3919,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             .ConfigureAwait(true);
 
         StatusText = $"Pointed at {target}";
+    }
+
+    /// <summary>
+    /// Which characters on the line are the address, for a repair that is about to replace them.
+    ///
+    /// Two shapes, and they are told apart by looking rather than by carrying a flag across the
+    /// bridge. A markdown reference is underlined end to end - "![alt](x.png)" - so the address
+    /// has to be found inside it, which <see cref="LinkTargetSpan"/> does by working backwards
+    /// from the closing bracket. A picture written as "&lt;img src="x.png"&gt;" is underlined on the
+    /// address alone, because a tag can carry two of them; there the marked span already is the
+    /// answer, and LinkTargetSpan would find no brackets and give up.
+    ///
+    /// Null when the line no longer holds what the decoration says it does, which is a reason to
+    /// do nothing rather than a reason to edit blindly.
+    /// </summary>
+    private static (int Start, int End)? TargetSpanOf(string line, LinkFindingHit hit)
+    {
+        if (hit.Start >= 0
+            && hit.End <= line.Length
+            && hit.End > hit.Start
+            && line.AsSpan(hit.Start, hit.End - hit.Start).SequenceEqual(hit.Url))
+        {
+            return (hit.Start, hit.End);
+        }
+
+        return LinkTargetSpan.Find(line, hit.Start, hit.End);
     }
 
     /// <summary>
@@ -3814,6 +3966,287 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         await _host.ApplyEditsAsync(new EditResult([new TextEdit(range, string.Empty)], null))
             .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Opens a picture's web address in the browser.
+    ///
+    /// The honest answer to a reference this app will not fetch: it cannot show you the picture,
+    /// so it takes you to it. No network call happens here - the shell is launched, exactly as
+    /// the About box launches Explorer, and whether anything is fetched is then the browser's
+    /// business and the reader's choice.
+    /// </summary>
+    public Task OpenBlockedImageAsync(LinkFindingHit hit) =>
+        ExternalLink.OpenAsync(hit.Url, _logger);
+
+    /// <summary>Puts a picture's address on the clipboard.</summary>
+    public void CopyBlockedImageAddress(LinkFindingHit hit)
+    {
+        if (ClipboardText.Set(hit.Url, _logger))
+        {
+            StatusText = "Address copied";
+        }
+    }
+
+    /// <summary>
+    /// Copies a picture that lives elsewhere on this machine in beside the document, and points
+    /// the reference at its new home.
+    ///
+    /// The best repair in the set, and the only one that fixes the problem outright: afterwards
+    /// the picture appears, the document can be moved or sent without losing it, and nothing went
+    /// near the network to achieve it.
+    /// </summary>
+    public async Task CopyBlockedImageInAsync(LinkFindingHit hit)
+    {
+        string? source = MediaTarget.LocalPathOf(hit.Url)
+            ?? ResolveOutsideFolder(hit.Url);
+
+        if (source is null)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] bytes = await File.ReadAllBytesAsync(source).ConfigureAwait(true);
+
+            await PlaceImageAsync(hit, bytes, Path.GetFileName(source)).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not read {Path} to copy it in.", source);
+
+            await _dialogs.ShowMessageAsync("Could not read that image", ex.Message).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Replaces a picture that will not appear with one the reader picks off the disk.</summary>
+    public async Task ReplaceBlockedImageAsync(LinkFindingHit hit)
+    {
+        string? picked = await _fileDialogs.PickImportFileAsync(
+            "Replace Image",
+            "Images",
+            [.. ImageFileTypes.AllowedExtensions]).ConfigureAwait(true);
+
+        if (picked is null)
+        {
+            return;
+        }
+
+        try
+        {
+            byte[] bytes = await File.ReadAllBytesAsync(picked).ConfigureAwait(true);
+
+            await PlaceImageAsync(hit, bytes, Path.GetFileName(picked)).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not read {Path}.", picked);
+
+            await _dialogs.ShowMessageAsync("Could not read that image", ex.Message).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Replaces a picture that will not appear with whatever is on the clipboard.
+    ///
+    /// This is the closest thing to fetching a remote image that the app offers, and it is a very
+    /// deliberate distance: the reader opens the address in their own browser, copies the picture
+    /// there, and hands Marqora the bytes. They did the fetching, with their own browser and their
+    /// own sign-in, and they saw what they were getting.
+    /// </summary>
+    public async Task PasteOverBlockedImageAsync(LinkFindingHit hit)
+    {
+        AppSettings settings = _settings.Current;
+
+        IReadOnlyList<PastedImage> images = await ClipboardImage.ReadAsync(
+            Clipboard.GetContent(),
+            settings.LimitPastedImageWidth ? settings.MaxPastedImageWidth : null,
+            settings.DownscaleImageFiles,
+            _logger).ConfigureAwait(true);
+
+        if (images.Count == 0)
+        {
+            await _dialogs.ShowMessageAsync(
+                "No image on the clipboard",
+                "Copy a picture first, then try again.").ConfigureAwait(true);
+
+            return;
+        }
+
+        await PlaceImageAsync(hit, images[0].Bytes, images[0].SuggestedName).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Whether this reference is markdown's own image syntax, and so can become a link by losing
+    /// a character. A picture written as a tag cannot, and the menu does not offer it.
+    /// </summary>
+    public bool CanDemoteToLink(LinkFindingHit hit)
+    {
+        if (_workspace.Active is not { Text: { } text })
+        {
+            return false;
+        }
+
+        string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        if (hit.Line < 0 || hit.Line >= lines.Length)
+        {
+            return false;
+        }
+
+        string line = lines[hit.Line];
+
+        return hit.Start >= 0
+            && hit.End <= line.Length
+            && hit.End > hit.Start
+            && line.AsSpan(hit.Start).StartsWith("![", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Turns a picture that will not appear into an ordinary link to the same address.
+    ///
+    /// Frequently the correct edit rather than a workaround. A badge or an embedded video in a
+    /// document Marqora will not fetch is, in practice, a link: writing it as one stops the
+    /// document promising a picture it cannot deliver, and the mark goes away because the document
+    /// is now right rather than because the rule was silenced.
+    ///
+    /// An empty label is filled with the host. "[](https://...)" is a link with nothing to click,
+    /// which would trade one broken thing for another.
+    /// </summary>
+    public async Task DemoteBlockedImageToLinkAsync(LinkFindingHit hit)
+    {
+        if (_host is null || _workspace.Active is not { Text: { } text })
+        {
+            return;
+        }
+
+        string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        if (hit.Line < 0 || hit.Line >= lines.Length)
+        {
+            return;
+        }
+
+        string line = lines[hit.Line];
+
+        if (hit.Start < 0 || hit.End > line.Length || hit.End <= hit.Start)
+        {
+            return;
+        }
+
+        string reference = line[hit.Start..hit.End];
+
+        // Only markdown's own image syntax can become a link by dropping a character. A picture
+        // written as a tag is a different edit, and not one to guess at.
+        if (!reference.StartsWith("![", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string demoted = reference.StartsWith("![]", StringComparison.Ordinal)
+            ? $"[{HostOf(hit.Url)}]{reference[3..]}"
+            : reference[1..];
+
+        var range = new TextRange(
+            new TextPosition(hit.Line, hit.Start),
+            new TextPosition(hit.Line, hit.End));
+
+        await _host.ApplyEditsAsync(new EditResult([new TextEdit(range, demoted)], null))
+            .ConfigureAwait(true);
+
+        StatusText = "Changed to a link";
+    }
+
+    /// <summary>
+    /// Writes an image beside the document and points the reference at it.
+    ///
+    /// The shared tail of copying one in, picking one and pasting one - the same three routes
+    /// <see cref="InsertImagesAsync"/> serves, doing the same work to the same folder, except that
+    /// this one replaces an address instead of inserting a new reference.
+    /// </summary>
+    private async Task PlaceImageAsync(LinkFindingHit hit, ReadOnlyMemory<byte> bytes, string? suggestedName)
+    {
+        if (await EnsureSavedForImagesAsync().ConfigureAwait(true) is not { } documentPath)
+        {
+            return;
+        }
+
+        ImageFolderMode mode = _settings.Current.ImageFolder;
+
+        try
+        {
+            // Off the UI thread for the same reason the paste path is: a document in a
+            // synchronized folder can make writing a few megabytes take a visible moment.
+            string? reference = await Task.Run(() =>
+                _assets.SaveAsync(documentPath, bytes, suggestedName, mode)).ConfigureAwait(true);
+
+            if (reference is null)
+            {
+                await _dialogs.ShowMessageAsync(
+                    "That file is not an image",
+                    "Marqora reads the bytes rather than the name, and these are not a picture.")
+                    .ConfigureAwait(true);
+
+                return;
+            }
+
+            await RepointLinkAsync(hit, reference).ConfigureAwait(true);
+
+            // The file has only just appeared, and completion should know about it at once.
+            if (_workspace.Active?.Id is { } id)
+            {
+                await PublishLinkTargetsAsync(id, documentPath).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not write an image beside {Path}.", documentPath);
+
+            await _dialogs.ShowMessageAsync("Could not save the image", ex.Message).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// The full path a relative reference that escapes the document's folder actually names, for
+    /// the repair that is about to read it.
+    /// </summary>
+    private string? ResolveOutsideFolder(string url)
+    {
+        if (_workspace.Active?.Path is not { } documentPath)
+        {
+            return null;
+        }
+
+        try
+        {
+            string? folder = Path.GetDirectoryName(Path.GetFullPath(documentPath));
+
+            if (folder is null)
+            {
+                return null;
+            }
+
+            string full = Path.GetFullPath(Path.Combine(
+                folder,
+                Uri.UnescapeDataString(url).Replace('/', Path.DirectorySeparatorChar)));
+
+            return File.Exists(full) ? full : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The host of a web address, for a link that would otherwise have nothing to click.</summary>
+    private static string HostOf(string url)
+    {
+        string absolute = url.StartsWith("//", StringComparison.Ordinal) ? $"https:{url}" : url;
+
+        return Uri.TryCreate(absolute, UriKind.Absolute, out Uri? uri) && uri.Host.Length > 0
+            ? uri.Host
+            : "link";
     }
 
     /// <summary>
@@ -3934,6 +4367,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ];
 
             bool checkAltText = _settings.Current.CheckImageAltText;
+            bool checkBlocked = _settings.Current.ShowBlockedImages;
 
             AnalysisResult found = await Task.Run(() => _analyzer.Analyze(new AnalysisRequest
             {
@@ -3943,7 +4377,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Outline = rendered.Outline,
                 Anchors = rendered.Anchors,
                 CheckImageAltText = checkAltText,
+                CheckBlockedImages = checkBlocked,
             })).ConfigureAwait(true);
+
+            // Recorded for whichever document was checked, not only the active one: a background
+            // tab is checked on open and after a save, and its answer has to be waiting when
+            // somebody switches to it rather than arriving an edit later.
+            _blockedImageCounts[documentId] = found.LinkFindings.Count(f =>
+                f.Kind is LinkFindingKind.RemoteMedia or LinkFindingKind.OutsideFolder);
+
+            RefreshBlockedImagesMenuText();
 
             await _host.SetDiagnosticsAsync(documentId, found.Diagnostics).ConfigureAwait(true);
 

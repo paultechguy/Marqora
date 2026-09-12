@@ -1014,6 +1014,84 @@ home even if a document asks it to.
 
 ---
 
+## Saying so, rather than leaving a blank box
+
+The policy above has a cost, and for a long time the user paid it without being told. A
+document referencing a picture over the web rendered a broken-image glyph and nothing
+explained it: `app.js` leaves an absolute URL exactly as written, the policy kills the fetch,
+and `LinkChecks` deliberately skipped anything with a scheme. The reader concluded the app was
+broken.
+
+Two neighbouring shapes were worse than silent. `C:\pics\shot.png` matched the old scheme test —
+a drive letter is one character and a colon — and was waved through as somebody else's URL.
+And `../shared/logo.png` was reported as *"No image at…"* about a file sitting happily on the
+disk one folder over, which sent people looking for something that was never lost.
+
+**One pass, not a second checker.** The obvious shape was a `MediaChecks.cs` beside
+`ImageChecks.cs`, and it is the wrong one: it would overlap `LinkChecks` on every relative path
+and draw two marks on one reference. Classification belongs where resolution already happens,
+so `LinkChecks.Run` now asks `MediaTarget.Classify` what kind of place a target is and answers
+accordingly. `MediaTarget` itself is pure and lives in Domain, because "what kind of target is
+this" has one answer whether or not the document was ever saved.
+
+**Loads, not navigations.** Only something the renderer fetches by itself is marked. A link is
+never marked however far away it points — nothing happens until a click, and a click works. Get
+that line wrong and a README's dozen ordinary links light up, which is the fastest possible way
+to have the whole rule switched off.
+
+**A fourth claim, and its own mark.** Red is wrong, amber is broken, grey is incomplete — and
+this is none of them. The address is valid, the file is there, the author meant it, and on
+GitHub it renders. So it wears dotted violet, and earns a tick in the overview ruler in the
+same violet.
+
+> The tick was left out of the first cut, reasoning that a README's row of build badges would
+> stripe the ruler and cost the amber ticks the only thing they are good for, which is being
+> rare enough to notice. That was the wrong fix for a real problem. Without a tick, the only way
+> to find one of these in a thousand-line document is to scroll the whole file looking for an
+> underline — and a mark nobody can find explains nothing, which is the entire defect this
+> feature exists to close. The separate color is the right fix: a ruler tick has no texture, so
+> dotted and wavy are identical at two pixels wide and hue is the only thing that can say which
+> claim a tick is making. `editorError.foreground` carries `--mq-blocked` into Monaco — a free
+> color slot, since `StyleChecks` is the only source of markers and reports Hint, never Error.
+>
+> `--mq-blocked` started as an alias of `--mq-important`, one violet being better than two to
+> keep in step. That lasted until it had to be read: the callout violet is dark enough that a
+> hairline underline and a two-pixel tick both pass for black on white. They are separate values
+> now, because they answer different questions — one fills a block in the preview, the other
+> draws a hairline in the source pane.
+
+**The ruler has three lanes, and this uses the left one.** Everything had been in the right lane,
+so two findings a few lines apart landed on the same few pixels and whichever was drawn second
+won outright — a misspelling on line 887 hid a blocked picture on 889 completely, with nothing on
+screen to say a second mark existed. Blocked pictures moved to the left lane; the right keeps the
+squiggle marks it has always carried, and Monaco's own find matches take the center. Two
+misspellings close together still collide, as they always have — three lanes only go so far — but
+that costs precision rather than information, because both ticks are making the same claim.
+
+**Raw HTML needed its own reader.** `ReadLinks` walks `LinkInline`, so `<img>` and `<iframe>`
+reached no check at all — and pinning a width is exactly why people reach for the tag.
+`MarkdownMediaReader` follows `MarkdownAnchorReader`: read from the parsed tree, and HTML
+inside a code fence costs nothing to exclude because the parser already decided it is an
+example. It marks the address rather than the whole tag, since a tag can carry two of them and
+two underlines over one span means only one of them can be right-clicked. That also gives the
+repairs something to replace, which an attribute otherwise lacks — `LinkTargetSpan` reads
+`](url)` syntax and would find nothing.
+
+> A tag split across lines is deliberately not reported. Every column here is an offset into
+> one line, so a tag opening on one line and carrying its address on the next produced a column
+> past the end of the opening line — an underline drawn in empty space. Silence is the right
+> failure: a mark in the wrong place explains nothing and costs the reader their trust in the
+> marks that are right.
+
+**Two things are never done, and both are load-bearing.** A web address is never fetched, not
+even to build a hover thumbnail — a hover that tried would be the very network call the mark
+exists to say never happens. And a UNC path is never probed, because `File.Exists` on a share
+blocks until the other machine answers and this runs while somebody is typing; what can be said
+without asking is that it is not beside the document, which is the part that decides whether it
+appears.
+
+---
+
 ## Output size
 
 A self-contained unpackaged build starts at roughly 247 MB. Three things were removed to

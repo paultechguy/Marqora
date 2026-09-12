@@ -783,6 +783,10 @@
                                               IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
                                               ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax" />
+                        <ToggleMenuFlyoutItem Text="{x:Bind ViewModel.BlockedImagesMenuText, Mode=OneWay}"
+                                              IsChecked="{x:Bind ViewModel.BlockedImagesEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleBlockedImagesCommand}"
+                                              ToolTipService.ToolTip="Underline pictures that will not appear in the preview" />
                         <ToggleMenuFlyoutItem Text="Spell Check"
                                               IsChecked="{x:Bind ViewModel.SpellCheckEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleSpellCheckCommand}"

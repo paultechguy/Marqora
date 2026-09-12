@@ -591,7 +591,12 @@
     for (var i = 0; i < covering.length; i++) {
       var className = (covering[i].options || {}).inlineClassName;
 
-      if (className !== 'mq-dead-link' && className !== 'mq-missing-alt') { continue; }
+      // Every class this check draws has to be listed here, or the hover and the right-click go
+      // dead on whichever one was forgotten - the decoration is still on screen, so the mark
+      // looks fine and only stops answering.
+      if (className !== 'mq-dead-link'
+        && className !== 'mq-missing-alt'
+        && className !== 'mq-unrenderable') { continue; }
 
       var slot = tab.linkInk.indexOf(covering[i].id);
       if (slot < 0 || slot >= tab.linkFindings.length) { continue; }
@@ -1690,6 +1695,140 @@
     }
   }
 
+  /*
+    Says, in the preview, that something is here which this app will not fetch.
+
+    Without it the preview lies by omission. A blocked picture collapses to nothing - an empty
+    alt gives a zero-sized box - so a reader checking their finished document sees two paragraphs
+    sitting next to each other with no hint that a screenshot belongs between them and will be
+    there on GitHub. The source pane has said so all along, but the preview is where people read
+    their own work.
+
+    The placeholder is drawn entirely by CSS, from a data attribute, and that is load-bearing
+    rather than tidy. Two things take their markup from this DOM - Copy as Rich Text, and the
+    printer - and neither may carry Marqora's own commentary into somebody's document. Generated
+    content does not serialize into innerHTML, so a paste into Outlook gets the original
+    <img src="https://..."> and loads it exactly as it should; print hides it in the stylesheet.
+    Replacing the element instead would have put a violet chip in both.
+  */
+  function markBlockedMedia() {
+    // An unsaved document has no folder, so every relative reference is unresolvable and every
+    // picture would wear one of these. The source pane stays quiet for the same reason - see
+    // LinkChecks, which gives up without a folder - and the two surfaces agree or neither is
+    // believed.
+    if (!state.documentBaseUrl) { return; }
+
+    var media = els.preview.querySelectorAll(
+      'img[src], video[src], audio[src], iframe[src], embed[src]');
+
+    for (var i = 0; i < media.length; i++) {
+      var element = media[i];
+      var source = element.getAttribute('src');
+
+      if (!willNotLoad(source)) { continue; }
+
+      // Already wrapped: updatePreview replaces the whole subtree each time, so this only
+      // guards against a second pass over the same nodes.
+      var parent = element.parentNode;
+      if (parent && parent.classList && parent.classList.contains('mq-blocked-media')) { continue; }
+
+      var wrapper = document.createElement('span');
+      wrapper.className = 'mq-blocked-media';
+      wrapper.setAttribute('data-mq-blocked', blockedLabel(element, source));
+
+      // The source pane's hover is the authority on why; this is the short version, because a
+      // chip in the middle of a paragraph cannot carry two sentences.
+      wrapper.title = 'Not shown here. Marqora does not load content from the web, '
+        + "and serves pictures only from the document's own folder.";
+
+      parent.insertBefore(wrapper, element);
+      wrapper.appendChild(element);
+    }
+  }
+
+  /*
+    Whether an address is one the preview can actually fetch.
+
+    Everything servable has already been pointed at the document's virtual origin by
+    rewriteRelativeUrls, so the test is simply whether it ended up there. That catches the web
+    addresses, the drive letters, the file: URLs and the "../" references left as written, all
+    with one rule and no list of schemes to keep in step with the analyzer's.
+  */
+  function willNotLoad(url) {
+    if (!url) { return false; }
+    if (url.indexOf('data:') === 0 || url.indexOf('blob:') === 0) { return false; }
+
+    return url.indexOf(state.documentBaseUrl) !== 0;
+  }
+
+  /*
+    What the chip says: the author's own description if they wrote one, and the host otherwise.
+
+    Alt text first because it is the better answer - it is what the picture was of, in the words
+    of whoever put it there. The host is the fallback rather than an addition, since a row of
+    eight build badges has no alt text between them and "img.shields.io" eight times is at least
+    eight true statements.
+  */
+  function blockedLabel(element, source) {
+    var alt = (element.getAttribute('alt') || '').trim();
+
+    if (alt) { return 'not shown - ' + alt; }
+
+    var label = source;
+
+    if (/^https?:/i.test(source) || source.indexOf('//') === 0) {
+      try {
+        label = new URL(source.indexOf('//') === 0 ? 'https:' + source : source).host || source;
+      } catch (err) {
+        /* Not a parseable address; the raw text says more than nothing. */
+      }
+    } else {
+      // A path rather than an address. The file name says more in the room available than the
+      // folders above it do, and "C:\Users\...\Pictures\screenshots\2026\q1\shot.png" in the
+      // middle of a paragraph is a chip wider than the paragraph.
+      var segments = source.replace(/\\/g, '/').split('/');
+      label = segments[segments.length - 1] || source;
+    }
+
+    return 'not shown - ' + label;
+  }
+
+  /*
+    A copy of the preview with this app's own commentary taken back out, for markup that leaves.
+
+    The chip is generated content, so it was never going to serialize on its own - but the
+    wrapper around it does, and the wrapper is what hides the picture. Exported as-is, an HTML
+    file carries a hidden <img> and a stylesheet saying "not shown", which is a lie the moment
+    somebody opens it: their browser has a network and would have loaded it perfectly well.
+    Unwrapping restores the element to exactly what Markdig produced.
+
+    Applied at both points that serialize this pane - Export HTML and Copy as Rich Text - rather
+    than inside each exporter on the host side, so the rule lives next to the code that adds the
+    wrapper in the first place.
+
+    Two paths deliberately do not come through here. A Folio is built by requestExportHtml from
+    the host's own Markdig markup rather than from this DOM, so it never sees a wrapper to
+    remove. And the printer serializes nothing at all - it paints this very DOM, and there the
+    chip is wanted, because a picture that cannot be fetched cannot be in the PDF either and a
+    small honest chip beats the grey rectangle an unhidden iframe leaves behind. See app.css.
+  */
+  function withoutBlockedChips(root) {
+    var clone = root.cloneNode(true);
+    var wrapped = clone.querySelectorAll('.mq-blocked-media');
+
+    for (var i = 0; i < wrapped.length; i++) {
+      var wrapper = wrapped[i];
+
+      while (wrapper.firstChild) {
+        wrapper.parentNode.insertBefore(wrapper.firstChild, wrapper);
+      }
+
+      wrapper.parentNode.removeChild(wrapper);
+    }
+
+    return clone;
+  }
+
   function wrapWideTables(root) {
     var tables = (root || els.preview).querySelectorAll('table');
 
@@ -1770,6 +1909,7 @@
 
     wrapWideTables();
     rewriteRelativeUrls();
+    markBlockedMedia();
 
     if (resetScroll) {
       els.previewPane.scrollTop = 0;
@@ -2096,6 +2236,19 @@
         'editorHint.foreground': token('--mq-text-tertiary'),
 
         /*
+          The blocked-picture tick, borrowing --mq-blocked the way the three lines above borrow
+          theirs. app.css draws the dotted underline from the same token, which is what keeps the
+          ruler and the mark the same color.
+
+          Named editorError.foreground only because it is a free, registered color slot: the app
+          publishes nothing at Error severity - StyleChecks is the only source of markers and it
+          reports Hint - so Monaco will never draw anything else with it. Exactly the argument
+          editorInfo.foreground makes above for carrying the misspelling ticks. It is not a claim
+          that these are errors; they are the one mark in the pane that reports no fault at all.
+        */
+        'editorError.foreground': token('--mq-blocked'),
+
+        /*
           One color for both, so a selection does not change color when the keyboard
           leaves the editor.
 
@@ -2135,7 +2288,10 @@
       'editorWarning.foreground': token('--mq-warning'),
 
       // The missing-alt-text tick, quieter than either. See the light theme above.
-      'editorHint.foreground': token('--mq-text-tertiary')
+      'editorHint.foreground': token('--mq-text-tertiary'),
+
+      // The blocked-picture tick. See the light theme above for why the error slot carries it.
+      'editorError.foreground': token('--mq-blocked')
     };
 
     /*
@@ -2540,13 +2696,24 @@
         var finding = linkFindingAtPosition(model, position);
         var notes = finding && finding.message ? [{ value: finding.message }] : [];
 
-        // The check has already been to the disk and found nothing there. Asking the page to
-        // load it anyway just puts a broken-image glyph under a sentence that has explained the
-        // problem - two ways of saying the same thing, one of them ugly. The thumbnail is only
-        // ever offered when there is reason to believe there is a picture to show.
-        var missing = finding && finding.kind === 'MissingImage';
+        /*
+          The check has already been to the disk and found nothing there. Asking the page to
+          load it anyway just puts a broken-image glyph under a sentence that has explained the
+          problem - two ways of saying the same thing, one of them ugly. The thumbnail is only
+          ever offered when there is reason to believe there is a picture to show.
 
-        if (!state.documentBaseUrl || missing) {
+          The two blocked kinds are refused here as well, and for a stronger reason than
+          tidiness. A remote address cannot be previewed without fetching it, which is the one
+          thing this app does not do - and a hover that tried would be exactly the network call
+          the mark exists to say never happens. One somewhere else on the disk is refused too:
+          the virtual host serves the document's own folder and nothing outside it, so the
+          request could only ever come back empty.
+        */
+        var unshowable = finding && (finding.kind === 'MissingImage'
+          || finding.kind === 'RemoteMedia'
+          || finding.kind === 'OutsideFolder');
+
+        if (!state.documentBaseUrl || unshowable) {
           return notes.length
             ? { range: finding.range, contents: notes }
             : null;
@@ -4120,7 +4287,10 @@
       the reply by request id rather than assuming the next message back is the answer.
     */
     requestRenderedHtml: function (p) {
-      post('renderedHtml', { requestId: p.requestId, html: els.preview.innerHTML });
+      post('renderedHtml', {
+        requestId: p.requestId,
+        html: withoutBlockedChips(els.preview).innerHTML
+      });
     },
 
     /*
@@ -4330,8 +4500,22 @@
         // with something that is a suggestion rather than a fault.
         var isHint = link.kind === 'MissingAltText';
 
+        /*
+          A picture that will not appear here is the fourth kind of claim, and it needed its own
+          mark rather than borrowing one.
+
+          Red is wrong, amber is broken, grey is incomplete - and this is none of the three. The
+          address is valid, the file is there, the author meant every character of it, and on
+          GitHub it renders. Wearing the dead-link mark would say the document is broken, which
+          is not true and is exactly the way to teach somebody that the amber marks can be
+          ignored. See app.css for what it looks like and why.
+        */
+        var isBlocked = link.kind === 'RemoteMedia' || link.kind === 'OutsideFolder';
+
         var options = {
-          inlineClassName: isHint ? 'mq-missing-alt' : 'mq-dead-link',
+          inlineClassName: isBlocked
+            ? 'mq-unrenderable'
+            : (isHint ? 'mq-missing-alt' : 'mq-dead-link'),
           description: 'marqora-link',
 
           // No hoverMessage. Monaco merges every contribution at a position in an order nothing
@@ -4344,14 +4528,50 @@
           // will say where the reference now ends.
           stickiness: state.monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 
-          // A tick in the scrollbar for every finding, so a long document can be scanned without
-          // being scrolled. Missing alt text gets one too - an accessibility pass is exactly the
-          // job of "find all of them", and a mark you cannot locate is a mark you ignore - but in
-          // a quieter color, because it reports something incomplete rather than something
-          // broken. Named as theme colors so both follow a theme change with nothing re-checked.
+          /*
+            A tick in the scrollbar for every finding, so a long document can be scanned without
+            being scrolled. Missing alt text gets one too - an accessibility pass is exactly the
+            job of "find all of them", and a mark you cannot locate is a mark you ignore - but in
+            a quieter color, because it reports something incomplete rather than something broken.
+            Named as theme colors so all of them follow a theme change with nothing re-checked.
+
+            A blocked picture earns one as well, in a violet of its own. It was left out at first,
+            on the grounds that a README's row of build badges would stripe the ruler and cost the
+            amber ticks the only thing they are good for, which is being rare enough to notice.
+            That was the wrong fix for a real problem: without a tick the only way to find one of
+            these in a thousand-line document is to scroll the whole thing looking for an
+            underline, and a mark nobody can find explains nothing. The right fix is the separate
+            color - a tick has no texture, so dotted and wavy are identical at two pixels wide and
+            the hue is the only thing that can tell the reader which claim a tick is making.
+          */
           overviewRuler: {
-            color: { id: isHint ? 'editorHint.foreground' : 'editorWarning.foreground' },
-            position: state.monaco.editor.OverviewRulerLane.Right
+            color: {
+              id: isBlocked
+                ? 'editorError.foreground'
+                : (isHint ? 'editorHint.foreground' : 'editorWarning.foreground')
+            },
+
+            /*
+              Blocked pictures ride in the left lane, everything else in the right.
+
+              The ruler is three lanes wide and the whole app had been using one of them, so two
+              findings a couple of lines apart landed on the same few pixels and whichever was
+              drawn second won. A misspelling on line 887 was enough to hide a blocked picture on
+              889 completely - not crowd it, hide it, with nothing on screen to say a second mark
+              was ever there.
+
+              Lanes separate them horizontally instead, so both are visible at the same height.
+              Left is free: the right lane has carried the squiggle marks since they existed, and
+              Monaco's own find matches take the center.
+
+              This does not fix the general case. Two misspellings two lines apart still collide,
+              as they always have, because they share a lane and a color and there are only three
+              lanes to go round. What it fixes is the collision between two different claims,
+              which is the one that loses information rather than just precision.
+            */
+            position: isBlocked
+              ? state.monaco.editor.OverviewRulerLane.Left
+              : state.monaco.editor.OverviewRulerLane.Right
           }
         };
 
@@ -4487,7 +4707,7 @@
 
       post('previewHtml', {
         requestId: p.requestId,
-        html: withInlineStyles(source),
+        html: withInlineStyles(withoutBlockedChips(source)),
         text: text
       });
     },

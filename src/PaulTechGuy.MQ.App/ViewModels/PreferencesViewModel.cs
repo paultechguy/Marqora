@@ -140,6 +140,8 @@ public sealed class PreferencesViewModel(
 
     public bool SpellCheckAvailable => main.SpellCheckAvailable;
 
+    public Task SetBlockedImagesAsync(bool value) => main.SetBlockedImagesAsync(value);
+
     public Task SetSpellCheckAsync(bool value) => main.SetSpellCheckAsync(value);
 
     public Task SetShowOutlineAsync(bool value) => main.SetShowOutlineAsync(value);
@@ -225,6 +227,7 @@ public sealed class PreferencesViewModel(
         await main.SetWrapGlyphAsync(restored.ShowWrapGlyph).ConfigureAwait(true);
         await main.SetScrollSyncAsync(restored.ScrollSyncEnabled).ConfigureAwait(true);
         await main.SetDiagnosticsAsync(restored.ShowDiagnostics).ConfigureAwait(true);
+        await main.SetBlockedImagesAsync(restored.ShowBlockedImages).ConfigureAwait(true);
         await main.SetSpellCheckAsync(restored.SpellCheckEnabled).ConfigureAwait(true);
 
         SetOutlineMaxDepth(restored.OutlineMaxDepth);

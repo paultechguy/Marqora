@@ -41,4 +41,18 @@ public sealed record AnalysisRequest
     /// matches how it ships.
     /// </summary>
     public bool CheckImageAltText { get; init; } = true;
+
+    /// <summary>
+    /// Whether to report pictures that will not appear: the ones addressed on the web, and the
+    /// ones kept somewhere else on the machine.
+    ///
+    /// Its own flag rather than riding with the rest, because these arrive in a different
+    /// quantity. A README carrying a row of build badges has eight of them on one line and
+    /// nothing wrong with it, and somebody who works on such documents all day should be able to
+    /// quiet this without also losing the dead links and the broken anchors.
+    ///
+    /// Defaulted true for the same reason the others are: it reports something no other surface
+    /// in the app explains.
+    /// </summary>
+    public bool CheckBlockedImages { get; init; } = true;
 }

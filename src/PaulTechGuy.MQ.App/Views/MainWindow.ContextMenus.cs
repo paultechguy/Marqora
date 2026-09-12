@@ -92,6 +92,26 @@ public sealed partial class MainWindow
 
     private MenuFlyoutSeparator? _linkSeparator;
 
+    /// <summary>
+    /// What is offered for a picture that will not appear.
+    ///
+    /// Two kinds share this block and want different halves of it. One on the web can be opened,
+    /// copied, or written as the link it effectively is; one sitting elsewhere on the disk can be
+    /// copied in, which is the only repair in the app that fixes the problem outright. Both can be
+    /// replaced from a file, pasted over, or removed.
+    /// </summary>
+    private MenuFlyoutItem? _copyImageInItem;
+
+    private MenuFlyoutItem? _openImageItem;
+
+    private MenuFlyoutItem? _copyImageAddressItem;
+
+    private MenuFlyoutItem? _demoteImageItem;
+
+    private MenuFlyoutItem? _replaceImageItem;
+
+    private MenuFlyoutItem? _pasteOverImageItem;
+
     /// <summary>Shown only when the clipboard is actually carrying a picture.</summary>
     private MenuFlyoutItem? _pasteImageItem;
 
@@ -282,13 +302,34 @@ public sealed partial class MainWindow
             Show(_linkSuggestionItems[i], used);
         }
 
+        // A picture that will not appear. None of these is a guess at what was meant - the address
+        // is exactly what the author wrote - so what is offered is what can be done about it,
+        // which differs by where the picture actually is.
+        bool remote = finding is { Kind: LinkFindingKind.RemoteMedia };
+        bool outside = finding is { Kind: LinkFindingKind.OutsideFolder };
+
+        Show(_copyImageInItem, outside);
+        Show(_openImageItem, remote);
+        Show(_copyImageAddressItem, remote);
+
+        // Only markdown's own syntax can lose its "!" and become a link. A picture written as a
+        // tag would need a different edit, and offering an item that quietly does nothing is
+        // worse than not offering it.
+        Show(_demoteImageItem, remote && finding is { } demotable && ViewModel.CanDemoteToLink(demotable));
+
+        Show(_replaceImageItem, remote || outside);
+        Show(_pasteOverImageItem, remote || outside);
+
         // Worded for what it removes. An image and a link are the same construct to the parser
         // and a different thing entirely to the person looking at the screen.
         if (_removeLinkItem is not null && finding is { } removable)
         {
-            _removeLinkItem.Text = removable.Kind == LinkFindingKind.MissingImage
-                ? "Remove this image"
-                : "Remove this link";
+            _removeLinkItem.Text = removable.Kind
+                is LinkFindingKind.MissingImage
+                or LinkFindingKind.RemoteMedia
+                or LinkFindingKind.OutsideFolder
+                    ? "Remove this image"
+                    : "Remove this link";
         }
 
         // A dead anchor is not removed from here. The heading it wanted usually exists under
@@ -319,6 +360,28 @@ public sealed partial class MainWindow
         {
             _ = ViewModel.RemoveLinkAsync(hit);
         }
+    }
+
+    /// <summary>
+    /// One collapsed menu item that runs a repair on whatever was right-clicked.
+    ///
+    /// The hit is read inside the handler rather than captured here, for the reason the suggestion
+    /// slots read their Tag: these items are built once and outlive every right-click, so anything
+    /// captured now would be the wrong reference by the time it is clicked.
+    /// </summary>
+    private MenuFlyoutItem LinkAction(string text, Func<Task> run)
+    {
+        var item = new MenuFlyoutItem { Text = text, Visibility = Visibility.Collapsed };
+
+        item.Click += (_, _) =>
+        {
+            if (_clickedLink is not null)
+            {
+                _ = run();
+            }
+        };
+
+        return item;
     }
 
     /// <summary>
@@ -447,6 +510,42 @@ public sealed partial class MainWindow
             _linkSuggestionItems[i] = suggestion;
             menu.Items.Add(suggestion);
         }
+
+        // What is offered for a picture that will not appear. None of these is a guess at what the
+        // author meant - the address is exactly what they meant - so they are actions rather than
+        // suggestions, and they are built once and shown as the kind under the pointer warrants.
+        _copyImageInItem = LinkAction("Copy it in", () => ViewModel.CopyBlockedImageInAsync(_clickedLink!.Value));
+        _openImageItem = LinkAction("Open in browser", () => ViewModel.OpenBlockedImageAsync(_clickedLink!.Value));
+        _demoteImageItem = LinkAction(
+            "Make this a link instead",
+            () => ViewModel.DemoteBlockedImageToLinkAsync(_clickedLink!.Value));
+        _replaceImageItem = LinkAction(
+            "Replace with a file...",
+            () => ViewModel.ReplaceBlockedImageAsync(_clickedLink!.Value));
+        _pasteOverImageItem = LinkAction(
+            "Paste image over it",
+            () => ViewModel.PasteOverBlockedImageAsync(_clickedLink!.Value));
+
+        _copyImageAddressItem = new MenuFlyoutItem
+        {
+            Text = "Copy address",
+            Visibility = Visibility.Collapsed,
+        };
+
+        _copyImageAddressItem.Click += (_, _) =>
+        {
+            if (_clickedLink is { } hit)
+            {
+                ViewModel.CopyBlockedImageAddress(hit);
+            }
+        };
+
+        menu.Items.Add(_copyImageInItem);
+        menu.Items.Add(_openImageItem);
+        menu.Items.Add(_copyImageAddressItem);
+        menu.Items.Add(_demoteImageItem);
+        menu.Items.Add(_replaceImageItem);
+        menu.Items.Add(_pasteOverImageItem);
 
         _removeLinkItem = new MenuFlyoutItem
         {
