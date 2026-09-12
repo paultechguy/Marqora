@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 
 namespace PaulTechGuy.MQ.App.Views;
@@ -15,9 +16,17 @@ namespace PaulTechGuy.MQ.App.Views;
 /// window with a story of its own, and MainWindow.xaml.cs is long enough already.
 ///
 /// The interaction is the one Find All settled on - arrowing the list shows each section
-/// with the keyboard still in the panel, Enter or a double-click hands it to the text -
-/// because they are the same gesture asked of the same kind of list, and answering it two
-/// different ways in one app would be the surprise.
+/// with the keyboard still in the panel, Enter hands it to the text - because they are the
+/// same gesture asked of the same kind of list, and answering it two different ways in one
+/// app would be the surprise.
+///
+/// A click is the exception, and deliberately so. Find All is a window of its own, where
+/// taking the keyboard away would take it out of the list being worked; this panel sits
+/// beside the text in the same window, and a hand already on the mouse has pointed at a
+/// heading rather than stepped towards it. So a click goes: both panes scroll, and the
+/// caret lands on the heading line with the source pane holding the keyboard, ready to
+/// type. Without that last part the caret is placed but never drawn - Monaco hides it
+/// while the editor is blurred - and the click looks like it left the cursor nowhere.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -36,8 +45,14 @@ public sealed partial class MainWindow
     {
         OutlineList.SelectionChanged += OnOutlineSelectionChanged;
         OutlineList.KeyDown += OnOutlineKeyDown;
-        OutlineList.DoubleTapped += OnOutlineDoubleTapped;
         OutlineList.GotFocus += OnOutlineGotFocus;
+
+        // handledEventsToo, where the others are plain subscriptions. A tap is the one
+        // event here a ListViewItem may have marked handled on its way past - that is how
+        // the container claims a click for selection - and a click that selects a row is
+        // exactly the click this needs to hear about.
+        OutlineList.AddHandler(
+            UIElement.TappedEvent, new TappedEventHandler(OnOutlineTapped), handledEventsToo: true);
 
         OutlineFilterBox.GotFocus += OnOutlineGotFocus;
         OutlineFilterBox.KeyDown += OnOutlineFilterKeyDown;
@@ -136,11 +151,48 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void OnOutlineDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    /// <summary>
+    /// A click on a row: shows the section, and hands the keyboard to the source pane with
+    /// the caret at the start of the heading line.
+    ///
+    /// This runs after the SelectionChanged the same click raised, which has already done
+    /// the scrolling; what is left is the focus. Asking for the jump a second time costs a
+    /// repeat of a move that is already where it is going, which is nothing on screen.
+    ///
+    /// The second click of a double-click arrives here too, on the row the first one went
+    /// to, and does that same harmless nothing - which is why there is no DoubleTapped
+    /// handler beside this one any more. One gesture, one answer.
+    /// </summary>
+    private async void OnOutlineTapped(object sender, TappedRoutedEventArgs e)
     {
-        e.Handled = true;
+        // Only a click that landed on a row. The list is taller than its contents for any
+        // document shorter than the panel, and a click in the space below the last heading
+        // selects nothing - so without this, pointing at empty space would take the editor
+        // to whatever row was picked last.
+        if (!IsOutlineRow(e.OriginalSource))
+        {
+            return;
+        }
 
         await ViewModel.GoToOutlineRowAsync(OutlineList.SelectedIndex, focusEditor: true);
+    }
+
+    /// <summary>
+    /// Whether a pointer event started inside one of the list's rows.
+    ///
+    /// Walked up the visual tree rather than asked of the source directly: what gets hit is
+    /// the TextBlock the row draws, and the row itself is a parent or three above it.
+    /// </summary>
+    private static bool IsOutlineRow(object? source)
+    {
+        DependencyObject? node = source as DependencyObject;
+
+        while (node is not null and not ListViewItem)
+        {
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return node is not null;
     }
 
     /// <summary>
