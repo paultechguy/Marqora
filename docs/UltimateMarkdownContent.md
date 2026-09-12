@@ -58,26 +58,26 @@ surviving prose will still tell you what you were looking at.
 > **PASS IF** these links jump to their sections. **FAIL IF** they 404 or
 > render as literal text.
 
-1. [Headings](#1-headings)
-2. [Paragraphs, Line Breaks & Whitespace](#2-paragraphs-line-breaks--whitespace)
-3. [Inline Emphasis & Text Decoration](#3-inline-emphasis--text-decoration)
-4. [Escaping, Entities & Unicode](#4-escaping-entities--unicode)
-5. [Blockquotes & Admonitions](#5-blockquotes--admonitions)
-6. [Lists of Every Shape](#6-lists-of-every-shape)
-7. [Code: Inline, Fenced, Indented, Nested](#7-code-inline-fenced-indented-nested)
-8. [Links, Images & Footnotes](#8-links-images--footnotes)
-9. [Tables](#9-tables)
-10. [Horizontal Rules](#10-horizontal-rules)
-11. [Raw HTML](#11-raw-html)
-12. [Definition Lists, Abbreviations & Metadata Blocks](#12-definition-lists-abbreviations--metadata-blocks)
-13. [Mathematics](#13-mathematics)
-14. [Mermaid Diagrams](#14-mermaid-diagrams)
-15. [Deeply Nested & Adversarial Combinations](#15-deeply-nested--adversarial-combinations)
+1. [Headings](#headings)
+2. [Paragraphs, Line Breaks & Whitespace](#paragraphs-line-breaks--whitespace)
+3. [Inline Emphasis & Text Decoration](#inline-emphasis--text-decoration)
+4. [Escaping, Entities & Unicode](#escaping-entities--unicode)
+5. [Blockquotes & Admonitions](#blockquotes--admonitions)
+6. [Lists of Every Shape](#lists-of-every-shape)
+7. [Code: Inline, Fenced, Indented, Nested](#code-inline-fenced-indented-nested)
+8. [Links, Images & Footnotes](#links-images--footnotes)
+9. [Tables](#tables)
+10. [Horizontal Rules](#horizontal-rules)
+11. [Raw HTML](#raw-html)
+12. [Definition Lists, Abbreviations & Metadata Blocks](#definition-lists-abbreviations--metadata-blocks)
+13. [Mathematics](#mathematics)
+14. [Mermaid Diagrams](#mermaid-diagrams)
+15. [Deeply Nested & Adversarial Combinations](#deeply-nested--adversarial-combinations)
 16. [Appendix A — Scorecard](#appendix-a--conversion-scorecard)
 
 ---
 
-## 1. Headings
+## Headings
 
 > **What is under test.** Six ATX levels, the two Setext levels, headings with
 > inline markup, headings with trailing hashes, and headings with awkward
@@ -116,7 +116,7 @@ surviving prose will still tell you what you were looking at.
 
 ---
 
-## 2. Paragraphs, Line Breaks & Whitespace
+## Paragraphs, Line Breaks & Whitespace
 
 > **What is under test.** Paragraph separation, soft wraps, two-space hard
 > breaks, backslash hard breaks, and `<br>` hard breaks.
@@ -145,7 +145,7 @@ boring and most important test in the file.
 
 ---
 
-## 3. Inline Emphasis & Text Decoration
+## Inline Emphasis & Text Decoration
 
 > **What is under test.** The full inline formatting matrix, including the
 > combinations that trip naive regex-based converters.
@@ -189,7 +189,7 @@ boring and most important test in the file.
 
 ---
 
-## 4. Escaping, Entities & Unicode
+## Escaping, Entities & Unicode
 
 > **What is under test.** Backslash escapes, HTML entities, and non-ASCII text
 > including CJK, RTL, combining marks, and emoji with zero-width joiners.
@@ -242,7 +242,7 @@ left as straight ASCII.
 
 ---
 
-## 5. Blockquotes & Admonitions
+## Blockquotes & Admonitions
 
 > **What is under test.** Simple quotes, multi-paragraph quotes, nested quotes,
 > quotes containing every other block type, lazy continuation, and the two
@@ -321,13 +321,13 @@ this; GitHub does not.
 
 ---
 
-## 6. Lists of Every Shape
+## Lists of Every Shape
 
 > **What is under test.** Bullet markers, ordered markers, start offsets,
 > nesting depth, tight vs. loose spacing, task lists, lists interrupted by other
 > blocks, and lazy continuation.
 
-### 6.1 Unordered, three marker styles (each is a separate list)
+### Unordered, three marker styles (each is a separate list)
 
 - Hyphen marker, item one
 - Hyphen marker, item two
@@ -338,7 +338,7 @@ this; GitHub does not.
 + Plus marker, item one
 + Plus marker, item two
 
-### 6.2 Ordered lists
+### Ordered lists
 
 1. First item
 2. Second item
@@ -357,7 +357,7 @@ this; GitHub does not.
 8) Parenthesis-style ordered marker
 9) Second item
 
-### 6.3 Nesting to five levels, mixing ordered and unordered
+### Nesting to five levels, mixing ordered and unordered
 
 1. Level 1 — ordered
    - Level 2 — unordered
@@ -370,7 +370,7 @@ this; GitHub does not.
    - Level 2, sibling
 2. Level 1, sibling
 
-### 6.4 Tight vs. loose lists
+### Tight vs. loose lists
 
 Tight list (no blank lines — items should render without `<p>` wrappers and with
 minimal vertical spacing):
@@ -388,7 +388,7 @@ spacing):
 
 - Loose three
 
-### 6.5 Multi-block list items
+### Multi-block list items
 
 1. A list item whose first paragraph is here.
 
@@ -410,7 +410,7 @@ spacing):
 
 2. The second top-level item, proving the list survived all of that.
 
-### 6.6 Task lists (GFM)
+### Task lists (GFM)
 
 - [x] Completed task
 - [ ] Incomplete task
@@ -424,7 +424,7 @@ spacing):
 > **PASS IF** checkboxes render as real (disabled) checkbox widgets in HTML, or
 > as `☒` / `☐` glyphs in PDF/DOCX. **FAIL IF** you see literal `[x]` text.
 
-### 6.7 Lazy continuation and hanging indents
+### Lazy continuation and hanging indents
 
 - This list item's text is wrapped across
 lines with no indentation at all, which is
@@ -433,7 +433,7 @@ lines with no indentation at all, which is
 - This item uses a proper hanging indent
   aligned under the text, which is the safer style.
 
-### 6.8 Lists containing hard-to-parse text
+### Lists containing hard-to-parse text
 
 - An item containing a literal number followed by a period: 1986. It was a year.
 - An item whose text starts with a marker-like string: \- not a nested bullet
@@ -443,13 +443,13 @@ lines with no indentation at all, which is
 
 ---
 
-## 7. Code: Inline, Fenced, Indented, Nested
+## Code: Inline, Fenced, Indented, Nested
 
 > **What is under test.** Inline code with awkward contents, fenced blocks with
 > and without language hints, tilde fences, indented blocks, nested fences, and
 > line-highlight / filename attributes.
 
-### 7.1 Inline code
+### Inline code
 
 Basic `inline code`. Code containing a backtick: `` a ` b ``. Code containing
 double backticks: ``` a `` b ```. Code with markdown inside that must NOT be
@@ -457,7 +457,7 @@ interpreted: `**not bold** and _not italic_ and [not a link](x)`. Code with
 HTML: `<div class="x">`. Code with entities: `&amp; &lt; &gt;`. Code with a
 newline-ish run of spaces: `a     b`. Empty-ish code: ` `.
 
-### 7.2 Fenced code with language hints (syntax-highlighting check)
+### Fenced code with language hints (syntax-highlighting check)
 
 ```python
 # Python — check keyword, string, comment, decorator and f-string colouring
@@ -581,7 +581,7 @@ This is valid CommonMark and is the easiest way to embed ``` inside a block.
     It is the oldest form of Markdown code block.
     *Markdown inside must not be interpreted.*
 
-### 7.3 Nested fences (the classic renderer-killer)
+### Nested fences (the classic renderer-killer)
 
 Below, a four-backtick fence wraps a three-backtick fence so that the inner
 fence is shown as literal text rather than being executed:
@@ -597,7 +597,7 @@ print("this inner block is CONTENT, not a real code block")
 > code block. **PASS IF** the four-backtick block above displays three-backtick
 > markers literally.
 
-### 7.4 Fence info-string extensions
+### Fence info-string extensions
 
 ```python title="example.py" linenums="1" hl_lines="2 3"
 def f(x):
@@ -612,12 +612,12 @@ echo "attributes may be ignored, but must not leak into the output"
 
 ---
 
-## 8. Links, Images & Footnotes
+## Links, Images & Footnotes
 
 > **What is under test.** Every link syntax, image syntax, reference
 > definitions, footnotes, and the URL shapes that break naive parsers.
 
-### 8.1 Link forms
+### Link forms
 
 - Inline link: [Example Domain](https://example.com)
 - Inline link with title: [Example](https://example.com "The title attribute")
@@ -628,7 +628,7 @@ echo "attributes may be ignored, but must not leak into the output"
 - Email autolink: <someone@example.com>
 - Raw URL (GFM linkifies): https://example.com/raw-url-no-brackets
 - Relative link: [another file](./sibling-document.md)
-- Anchor link within this file: [jump to Mathematics](#13-mathematics)
+- Anchor link within this file: [jump to Mathematics](#mathematics)
 - Link with parentheses in the URL: [Wikipedia (disambiguation)](https://en.wikipedia.org/wiki/Test_(assessment))
 - Link with encoded spaces: [encoded](https://example.com/a%20path%20with%20spaces)
 - Link with query and fragment: [query](https://example.com/search?q=markdown&lang=en#results)
@@ -643,7 +643,7 @@ echo "attributes may be ignored, but must not leak into the output"
 [ref-2]: https://example.com/reference-two
 [ref-3]: https://example.com/reference-three 'Single-quoted title'
 
-### 8.2 Images
+### Images
 
 Inline image with alt text and title:
 
@@ -675,7 +675,7 @@ Figure with caption (Pandoc turns a lone image paragraph into a `<figure>`):
 
 ![This caption text should appear beneath the figure when figure support is on.](data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40"><rect width="120" height="40" fill="%2310b981"/></svg>)
 
-### 8.3 Footnotes
+### Footnotes
 
 Markdown footnotes come in several dialects. Here is a simple one[^simple], one
 with a longer multi-paragraph body[^long], an inline footnote^[This is a Pandoc
@@ -702,13 +702,13 @@ reference[^1].
 
 ---
 
-## 9. Tables
+## Tables
 
 > **What is under test.** GFM pipe tables, alignment rows, ragged rows, inline
 > markup inside cells, escaped pipes, empty cells, and the non-GFM table
 > dialects that Pandoc supports.
 
-### 9.1 Basic GFM table
+### Basic GFM table
 
 | Feature      | Supported | Notes             |
 | ------------ | --------- | ----------------- |
@@ -716,7 +716,7 @@ reference[^1].
 | Alignment    | Yes       | See below         |
 | Row spanning | No        | Requires raw HTML |
 
-### 9.2 Column alignment
+### Column alignment
 
 | Left aligned     |  Center aligned  |    Right aligned | Default          |
 | :--------------- | :--------------: | ---------------: | ---------------- |
@@ -725,7 +725,7 @@ reference[^1].
 | 1                |        22        |              333 | 4444             |
 | longer cell text | longer cell text | longer cell text | longer cell text |
 
-### 9.3 Formatting inside cells
+### Formatting inside cells
 
 | Element             | Example                                                           | Renders as                                                                                                                                          |
 | ------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -742,7 +742,7 @@ reference[^1].
 | Empty cell          |                                                                   |                                                                                                                                                     |
 | Long unbroken token | `supercalifragilisticexpialidocious_antidisestablishmentarianism` | wraps or overflows?                                                                                                                                 |
 
-### 9.4 Ragged / malformed rows (EDGE CASE)
+### Ragged / malformed rows (EDGE CASE)
 
 | A             | B     | C    |                         |
 | ------------- | ----- | ---- | ----------------------- |
@@ -754,7 +754,7 @@ reference[^1].
 > **PASS IF** the table still renders with three columns and missing cells come
 > out empty. **FAIL IF** the table collapses into paragraphs of pipe characters.
 
-### 9.5 Unaligned source pipes (valid, just ugly)
+### Unaligned source pipes (valid, just ugly)
 
 | Feature            | Value       |
 | ------------------ | ----------- |
@@ -762,14 +762,14 @@ reference[^1].
 | wildly             | uneven      |
 | spacing everywhere | still valid |
 
-### 9.6 Table without leading/trailing pipes
+### Table without leading/trailing pipes
 
 Feature | Value
 --------|------
 Leading pipe omitted | valid GFM
 Trailing pipe omitted | also valid
 
-### 9.7 Pandoc grid table (non-GFM)
+### Pandoc grid table (non-GFM)
 
 +---------------+---------------+--------------------+
 
@@ -789,7 +789,7 @@ Trailing pipe omitted | also valid
 
 : Table caption for the grid table, Pandoc style.
 
-### 9.8 HTML table with a merged cell (the only portable way to span)
+### HTML table with a merged cell (the only portable way to span)
 
 <table>
   <caption>An HTML table with <code>colspan</code> and <code>rowspan</code></caption>
@@ -808,7 +808,7 @@ Trailing pipe omitted | also valid
 
 ---
 
-## 10. Horizontal Rules
+## Horizontal Rules
 
 > **What is under test.** All three rule markers, spaced variants, and the
 > Setext ambiguity where `---` under text becomes a heading instead of a rule.
@@ -840,13 +840,13 @@ Many markers:
 
 ---
 
-## 11. Raw HTML
+## Raw HTML
 
 > **What is under test.** Block-level HTML passthrough, inline HTML, self-closing
 > tags, HTML with attributes and inline styles, and the security-sensitive tags
 > that sanitizers strip.
 
-### 11.1 Block HTML with styling
+### Block HTML with styling
 
 <div style="border-left: 4px solid #6366f1; background: #eef2ff; color: #1e1b4b; padding: 0.75rem 1rem; border-radius: 6px;">
   <strong>A styled callout built from raw HTML.</strong>
@@ -854,7 +854,7 @@ Many markers:
   strip HTML should still show this sentence as plain text.
 </div>
 
-### 11.2 Collapsible section (`<details>`)
+### Collapsible section (`<details>`)
 
 <details>
   <summary><strong>Click to expand — this summary must remain visible</strong></summary>
@@ -872,7 +872,7 @@ Many markers:
 
 </details>
 
-### 11.3 Inline HTML
+### Inline HTML
 
 Text with <span style="color:#e11d48; font-weight:600">red bold span</span>,
 a <sup>superscript</sup> and a <sub>subscript</sub>, a <mark>marked span</mark>,
@@ -880,7 +880,7 @@ a <small>small span</small>, a <q>quoted span</q>, a <cite>citation</cite>,
 a <var>variable</var>, <samp>sample output</samp>, and
 <time datetime="2026-09-12">a machine-readable date</time>.
 
-### 11.4 Structures sanitizers usually strip
+### Structures sanitizers usually strip
 
 <script>console.log("This script MUST NOT execute or appear as text.");</script>
 
@@ -896,7 +896,7 @@ a <var>variable</var>, <samp>sample output</samp>, and
 > the raw tag text leaks into the visible output. Stripping them entirely is the
 > correct behavior for a sanitizing converter.
 
-### 11.5 Self-closing and void elements
+### Self-closing and void elements
 
 A horizontal rule as HTML: <hr />
 
@@ -906,12 +906,12 @@ An image tag: <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/20
 
 ---
 
-## 12. Definition Lists, Abbreviations & Metadata Blocks
+## Definition Lists, Abbreviations & Metadata Blocks
 
 > **What is under test.** Pandoc/PHP-Markdown-Extra constructs that GFM does not
 > support. Graceful degradation to readable text is an acceptable result.
 
-### 12.1 Definition lists (Pandoc)
+### Definition lists (Pandoc)
 
 Markdown
 :   A lightweight markup language created by John Gruber in 2004.
@@ -926,7 +926,7 @@ Mermaid
 
     A second paragraph of the same definition, indented to stay attached.
 
-### 12.2 Abbreviations (PHP Markdown Extra)
+### Abbreviations (PHP Markdown Extra)
 
 The HTML spec is maintained by the W3C and the WHATWG, and CSS is too.
 
@@ -935,7 +935,7 @@ The HTML spec is maintained by the W3C and the WHATWG, and CSS is too.
 * [WHATWG]: Web Hypertext Application Technology Working Group
 * [CSS]: Cascading Style Sheets
 
-### 12.3 Fenced divs and bracketed spans (Pandoc attributes)
+### Fenced divs and bracketed spans (Pandoc attributes)
 
 ::: {#special-block .note data-role="sidebar"}
 A fenced div carrying an id, a class, and a data attribute.
@@ -943,7 +943,7 @@ A fenced div carrying an id, a class, and a data attribute.
 
 A [bracketed span]{.highlight #span-id lang="en"} with attributes attached.
 
-### 12.4 Line blocks (Pandoc — preserves line structure)
+### Line blocks (Pandoc — preserves line structure)
 
 | The quick brown fox
 |     jumps over
@@ -951,7 +951,7 @@ A [bracketed span]{.highlight #span-id lang="en"} with attributes attached.
 | and every leading space
 |     should be preserved.
 
-### 12.5 Custom heading identifier
+### Custom heading identifier
 
 #### A heading with an explicit id {#custom-heading-id}
 
@@ -959,7 +959,7 @@ Link to it: [jump to the custom id](#custom-heading-id).
 
 ---
 
-## 13. Mathematics
+## Mathematics
 
 > **What is under test.** Inline and display math in both the `$…$` and
 > `\(…\)` families, AMS environments, matrices, cases, alignment, chemistry,
@@ -971,7 +971,7 @@ Link to it: [jump to the custom id](#custom-heading-id).
 > as readable LaTeX source. **FAIL IF** the LaTeX is mangled by the Markdown
 > parser (e.g. `_` eaten as italics, `\\` collapsed, `*` turned into emphasis).
 
-### 13.1 Inline math
+### Inline math
 
 The mass–energy equivalence is $E = mc^2$, the quadratic roots are
 $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$, Euler's identity is
@@ -992,7 +992,7 @@ Inline math inside a list:
 - Convergence requires $\lim_{n \to \infty} \lvert a_{n+1} - a_n \rvert = 0$.
 - The complexity is $O(n \log n)$ average, $O(n^2)$ worst case.
 
-### 13.2 Display math — `$$` delimiters
+### Display math — `$$` delimiters
 
 $$
 \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
@@ -1003,13 +1003,13 @@ $$
   = \frac{4\pi}{c}\mathbf{J}
 $$
 
-### 13.3 Display math — `\[ … \]` delimiters
+### Display math — `\[ … \]` delimiters
 
 \[
 f(x) = \int_{0}^{x} \frac{\sin t}{t}\, dt
 \]
 
-### 13.4 Aligned equations (AMS `align`)
+### Aligned equations (AMS `align`)
 
 $$
 \begin{align}
@@ -1028,7 +1028,7 @@ $$
 \end{align*}
 $$
 
-### 13.5 Matrices
+### Matrices
 
 $$
 A = \begin{pmatrix}
@@ -1042,7 +1042,7 @@ B = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
 \det(C) = \begin{vmatrix} a & b \\ c & d \end{vmatrix} = ad - bc
 $$
 
-### 13.6 Cases, stacked conditions
+### Cases, stacked conditions
 
 $$
 \operatorname{sgn}(x) =
@@ -1053,7 +1053,7 @@ $$
 \end{cases}
 $$
 
-### 13.7 Large operators, limits and fractions
+### Large operators, limits and fractions
 
 $$
 \lim_{n \to \infty} \left(1 + \frac{1}{n}\right)^{n} = e
@@ -1069,7 +1069,7 @@ $$
 \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \cdots}}} = \frac{\sqrt{5} - 1}{2}
 $$
 
-### 13.8 Statistics and machine-learning notation
+### Statistics and machine-learning notation
 
 $$
 \hat{\theta}_{\text{MLE}}
@@ -1088,7 +1088,7 @@ $$
 \mathrm{KL}(P \parallel Q) = \sum_{x \in \mathcal{X}} P(x)\log\frac{P(x)}{Q(x)}
 $$
 
-### 13.9 Text, spacing, color and sizing inside math
+### Text, spacing, color and sizing inside math
 
 $$
 \underbrace{a + b + \cdots + z}_{26 \text{ terms}}
@@ -1108,7 +1108,7 @@ $$
 \Big| \Bigg\| \bigg\langle x, y \bigg\rangle \Bigg\| \Big|
 $$
 
-### 13.10 Chemistry (`mhchem` extension)
+### Chemistry (`mhchem` extension)
 
 $$
 \ce{CO2 + C -> 2 CO}
@@ -1123,7 +1123,7 @@ $$
 > **Note.** `mhchem` requires the extension to be loaded. Absence of support is
 > an expected partial failure, not a parser bug.
 
-### 13.11 Dollar-sign HAZARDS (the classic false-positive trap)
+### Dollar-sign HAZARDS (the classic false-positive trap)
 
 The following paragraph contains **no math at all** and must render with plain
 dollar signs:
@@ -1146,7 +1146,7 @@ echo "Total: $PRICE.00 — and $ALSO_NOT_MATH"
 > A converter that turns "costs $5.00 and the gadget costs $" into typeset math
 > has a greedy `$…$` matcher and will corrupt real documents.
 
-### 13.12 LaTeX passthrough blocks (Pandoc raw blocks)
+### LaTeX passthrough blocks (Pandoc raw blocks)
 
 ```{=latex}
 \begin{center}
@@ -1161,7 +1161,7 @@ appear only in HTML output.</p>
 
 ---
 
-## 14. Mermaid Diagrams
+## Mermaid Diagrams
 
 > **What is under test.** Mermaid is embedded as a fenced code block with the
 > info string `mermaid`. Renderers fall into three groups:
@@ -1177,7 +1177,7 @@ appear only in HTML output.</p>
 > `%%{init: ...}%%` (theme variables). Every diagram below is deliberately
 > styled so that a monochrome result tells you color support is missing.
 
-### 14.1 Flowchart — every node shape, every edge type, subgraphs, `classDef`
+### Flowchart — every node shape, every edge type, subgraphs, `classDef`
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "Segoe UI, sans-serif", "fontSize": "14px"}, "flowchart": {"curve": "basis", "htmlLabels": true}}}%%
@@ -1264,7 +1264,7 @@ flowchart TD
 > **PASS IF** you see a colored flowchart: blue terminals, amber diamonds,
 > green cylinders, a red dashed error node, and three dashed subgraph frames.
 
-### 14.2 Flowchart — left-to-right, emoji labels, markdown strings, escaped text
+### Flowchart — left-to-right, emoji labels, markdown strings, escaped text
 
 ```mermaid
 flowchart LR
@@ -1278,7 +1278,7 @@ flowchart LR
     class A,B,C,D,E neon
 ```
 
-### 14.3 Sequence diagram — the full feature set
+### Sequence diagram — the full feature set
 
 ```mermaid
 sequenceDiagram
@@ -1337,7 +1337,7 @@ sequenceDiagram
     CLI-->>-U: ✅ done in 1.24s
 ```
 
-### 14.4 Class diagram — generics, visibility, relationships, `cssClass` color
+### Class diagram — generics, visibility, relationships, `cssClass` color
 
 ```mermaid
 classDiagram
@@ -1413,7 +1413,7 @@ classDiagram
     classDef special fill:#fef3c7,stroke:#b45309,stroke-width:3px,color:#78350f
 ```
 
-### 14.5 State diagram — composite states, forks, choices, concurrency, color
+### State diagram — composite states, forks, choices, concurrency, color
 
 ```mermaid
 stateDiagram-v2
@@ -1465,7 +1465,7 @@ stateDiagram-v2
     class Failed bad
 ```
 
-### 14.6 Entity-relationship diagram — attributes, keys, cardinality
+### Entity-relationship diagram — attributes, keys, cardinality
 
 ```mermaid
 erDiagram
@@ -1519,7 +1519,7 @@ erDiagram
     }
 ```
 
-### 14.7 User journey
+### User journey
 
 ```mermaid
 journey
@@ -1537,7 +1537,7 @@ journey
       Ship the PDF                    : 5 : Author, Reviewer, Maintainer
 ```
 
-### 14.8 Gantt chart — sections, dependencies, milestones, critical path
+### Gantt chart — sections, dependencies, milestones, critical path
 
 ```mermaid
 gantt
@@ -1569,7 +1569,7 @@ gantt
         GA                          :milestone, m3, after rel1, 0d
 ```
 
-### 14.9 Pie chart
+### Pie chart
 
 ```mermaid
 pie showData
@@ -1582,7 +1582,7 @@ pie showData
     "Everything else" : 6
 ```
 
-### 14.10 Quadrant chart
+### Quadrant chart
 
 ```mermaid
 quadrantChart
@@ -1605,7 +1605,7 @@ quadrantChart
     "Grid tables":         [0.12, 0.18]
 ```
 
-### 14.11 Requirement diagram
+### Requirement diagram
 
 ```mermaid
 requirementDiagram
@@ -1654,7 +1654,7 @@ requirementDiagram
     noNetwork - refines -> conformance
 ```
 
-### 14.12 Git graph
+### Git graph
 
 ```mermaid
 ---
@@ -1684,7 +1684,7 @@ gitGraph
     commit id: "docs" type: HIGHLIGHT
 ```
 
-### 14.13 C4 context diagram
+### C4 context diagram
 
 ```mermaid
 C4Context
@@ -1713,7 +1713,7 @@ C4Context
     UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
 
-### 14.14 Mindmap
+### Mindmap
 
 ```mermaid
 mindmap
@@ -1756,7 +1756,7 @@ mindmap
       Dropped diagrams
 ```
 
-### 14.15 Timeline
+### Timeline
 
 ```mermaid
 timeline
@@ -1779,7 +1779,7 @@ timeline
         2026 : This test file tries to break all of it
 ```
 
-### 14.16 Sankey diagram
+### Sankey diagram
 
 ```mermaid
 ---
@@ -1802,7 +1802,7 @@ DOCX pipeline,DOCX output,15
 DOCX pipeline,Dropped content,3
 ```
 
-### 14.17 XY chart
+### XY chart
 
 ```mermaid
 xychart-beta
@@ -1813,7 +1813,7 @@ xychart-beta
     line [10, 19, 40, 88, 195, 430, 990, 2210]
 ```
 
-### 14.18 Block diagram
+### Block diagram
 
 ```mermaid
 block-beta
@@ -1845,7 +1845,7 @@ block-beta
     class html,pdf,docx,tex,epub out
 ```
 
-### 14.19 Packet diagram (binary layout)
+### Packet diagram (binary layout)
 
 ```mermaid
 packet-beta
@@ -1858,7 +1858,7 @@ packet-beta
     128-255: "Reserved"
 ```
 
-### 14.20 Kanban board
+### Kanban board
 
 ```mermaid
 kanban
@@ -1876,7 +1876,7 @@ kanban
         task7[Hard line breaks in DOCX]
 ```
 
-### 14.21 Architecture diagram
+### Architecture diagram
 
 ```mermaid
 architecture-beta
@@ -1898,7 +1898,7 @@ architecture-beta
     md:R --> L:store
 ```
 
-### 14.22 Radar chart
+### Radar chart
 
 ```mermaid
 radar-beta
@@ -1912,7 +1912,7 @@ radar-beta
     min 0
 ```
 
-### 14.23 Treemap
+### Treemap
 
 ```mermaid
 treemap-beta
@@ -1931,7 +1931,7 @@ treemap-beta
         "Inline": 380
 ```
 
-### 14.24 Mermaid support notes and edge cases
+### Mermaid support notes and edge cases
 
 > **HAZARD — bleeding-edge diagram types.** Sections 14.17–14.23 use `-beta`
 > grammars (`xychart`, `block`, `packet`, `kanban`, `architecture`, `radar`,
@@ -1994,12 +1994,12 @@ flowchart TD
 
 ---
 
-## 15. Deeply Nested & Adversarial Combinations
+## Deeply Nested & Adversarial Combinations
 
 > **What is under test.** Real documents combine constructs. This section nests
 > them until something snaps.
 
-### 15.1 The matryoshka block
+### The matryoshka block
 
 1. **Ordered item** containing everything below.
 
@@ -2041,7 +2041,7 @@ flowchart TD
 2. **Second top-level item.** If you can read this as item 2 of an ordered
    list, the nesting survived.
 
-### 15.2 Constructs that look like other constructs
+### Constructs that look like other constructs
 
 | Source text                             | Must render as                        |
 | --------------------------------------- | ------------------------------------- |
@@ -2066,7 +2066,7 @@ flowchart TD
 
 `http://example.com` and `> not a quote` and `| not | a | table |`
 
-### 15.3 Very long unbroken content (wrapping / overflow test)
+### Very long unbroken content (wrapping / overflow test)
 
 A very long single-line paragraph with no early wrap opportunity, which should be re-flowed by the renderer rather than overflowing the page: the quick brown fox jumps over the lazy dog while the five boxing wizards jump quickly and pack my box with five dozen liquor jugs, repeatedly, until the line is comfortably wider than any sensible column.
 
@@ -2085,7 +2085,7 @@ A wide code block that should scroll horizontally rather than wrap:
 | 1  | 2026-09-12T08:14:22Z | WARN  | converter.pipeline.tables       | ragged row detected in table at line 418; padded 2 missing cells to preserve column count |
 ```
 
-### 15.4 Whitespace and invisible-character hazards
+### Whitespace and invisible-character hazards
 
 - A line with trailing spaces but no following line:  
 - A line containing a literal tab between words:	tab was here.
@@ -2094,7 +2094,7 @@ A wide code block that should scroll horizontally rather than wrap:
 - A line with a soft hyphen: super&shy;calif&shy;ragilistic.
 - Consecutive     internal     spaces     collapse     in     HTML.
 
-### 15.5 Document-structure directives
+### Document-structure directives
 
 Some converters honour these; all others should ignore them silently.
 
@@ -2118,7 +2118,7 @@ Some converters honour these; all others should ignore them silently.
 > **PASS IF** none of the above renders as broken markup. Silent omission or
 > literal display are both acceptable; corrupted surrounding content is not.
 
-### 15.6 Citations and cross-references (Pandoc/Quarto)
+### Citations and cross-references (Pandoc/Quarto)
 
 According to the specification [@commonmark2024, pp. 12-15], inline parsing is
 defined in terms of delimiter runs; see also [@gruber2004; @macfarlane2017].
@@ -2129,7 +2129,7 @@ Cross-references: see @fig-example, @tbl-results, and @eq-loss.
 > **Expected.** Without a bibliography these will stay as literal `@keys`, which
 > is fine. They must not be eaten or turned into email addresses.
 
-### 15.7 Mixed-direction text (bidi)
+### Mixed-direction text (bidi)
 
 An English sentence containing Arabic ‏مرحبا بالعالم‎ in the middle, then more
 English. And a Hebrew sentence with English inside: ‏זהו טקסט עם המילה Markdown בתוכו‎.
