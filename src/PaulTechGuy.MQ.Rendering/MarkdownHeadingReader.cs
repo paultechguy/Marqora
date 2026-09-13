@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Text;
+using Markdig.Extensions.Abbreviations;
 using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -40,8 +41,10 @@ internal static class MarkdownHeadingReader
             {
                 Level = heading.Level,
                 Text = text,
-                // UseAutoIdentifiers populates Id; fall back to a slug so anchors always work.
-                Slug = heading.GetAttributes().Id ?? Slugify(text),
+                // GitHubHeadingSlug.FixIdentifiers has already assigned an id to every heading
+                // that needed one; the fallback is only for a heading it would also skip - see
+                // there - so anchors still work rather than the outline entry losing its link.
+                Slug = heading.GetAttributes().Id ?? GitHubHeadingSlug.Slugify(text),
                 SourceLine = heading.Line,
                 Number = numbers is not null && numbers.TryGetValue(heading, out string? number)
                     ? number
@@ -52,7 +55,7 @@ internal static class MarkdownHeadingReader
         return headings;
     }
 
-    private static string ToPlainText(ContainerInline? container)
+    internal static string ToPlainText(ContainerInline? container)
     {
         if (container is null)
         {
@@ -79,29 +82,16 @@ internal static class MarkdownHeadingReader
                 case LineBreakInline:
                     builder.Append(' ');
                     break;
+                // A leaf, not a container: *[HTML]: ... turns every later "HTML" into one of
+                // these, and its own children are always empty. What was actually written is
+                // the short form on the abbreviation itself, not its title-attribute expansion.
+                case AbbreviationInline abbreviation:
+                    builder.Append(abbreviation.Abbreviation?.Label);
+                    break;
                 case ContainerInline nested:
                     Append(nested, builder);
                     break;
             }
         }
-    }
-
-    private static string Slugify(string text)
-    {
-        var builder = new StringBuilder(text.Length);
-
-        foreach (char c in text.ToLowerInvariant())
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                builder.Append(c);
-            }
-            else if (c is ' ' or '-' or '_' && builder.Length > 0 && builder[^1] != '-')
-            {
-                builder.Append('-');
-            }
-        }
-
-        return builder.ToString().Trim('-');
     }
 }

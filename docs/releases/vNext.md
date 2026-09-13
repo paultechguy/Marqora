@@ -89,3 +89,12 @@ is the preview's rather than the document's. Copying a row with `Ctrl+C` brings 
 with the heading.
 
 As before, none of this is written into your markdown.
+
+## Fixes
+
+**A table of contents now lands where GitHub's would.** A heading whose title loses a word to
+punctuation — "Escaping, Entities & Unicode" — used to get an anchor with one hyphen where
+GitHub gives it two, so a hand-written `#escaping-entities--unicode` link went nowhere: not in
+the preview, and not in an exported HTML file or PDF either. Marqora's anchors now match
+GitHub's own, so a table of contents written against the real thing works everywhere Marqora
+shows or exports the document. A heading given its own id explicitly is unaffected either way.

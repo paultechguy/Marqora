@@ -1732,18 +1732,41 @@
       var parent = element.parentNode;
       if (parent && parent.classList && parent.classList.contains('mq-blocked-media')) { continue; }
 
-      var wrapper = document.createElement('span');
+      // A web address is a place the reader can be sent without Marqora ever fetching it -
+      // the same distinction LinkChecks draws between RemoteMedia and OutsideFolder. Only that
+      // case gets a real <a>; a file elsewhere on this machine stays a plain span; navigating a
+      // reader's browser there would name a path on someone else's disk about their own.
+      var remote = isRemoteAddress(source);
+      var wrapper = document.createElement(remote ? 'a' : 'span');
       wrapper.className = 'mq-blocked-media';
       wrapper.setAttribute('data-mq-blocked', blockedLabel(element, source));
 
       // The source pane's hover is the authority on why; this is the short version, because a
       // chip in the middle of a paragraph cannot carry two sentences.
-      wrapper.title = 'Not shown here. Marqora does not load content from the web, '
-        + "and serves pictures only from the document's own folder.";
+      wrapper.title = remote
+        ? 'Not shown here. Marqora does not load content from the web, and serves pictures '
+          + 'only from the document\'s own folder. Click to open it in your browser.'
+        : 'Not shown here. Marqora does not load content from the web, '
+          + "and serves pictures only from the document's own folder.";
+
+      if (remote) {
+        // The existing delegated click handler on els.preview (see "a[href]" below) already
+        // hands any absolute href to the host as linkActivated, so nothing more is wired here.
+        wrapper.setAttribute('href', source);
+      }
 
       parent.insertBefore(wrapper, element);
       wrapper.appendChild(element);
     }
+  }
+
+  /*
+    Whether an address is one written for the web, as opposed to a local path this app refuses
+    for a different reason (outside the document's folder). Mirrors MediaTarget.Classify's
+    Remote case: http:, https:, or the protocol-relative "//host/path" form.
+  */
+  function isRemoteAddress(source) {
+    return /^https?:/i.test(source) || source.indexOf('//') === 0;
   }
 
   /*
@@ -1776,7 +1799,7 @@
 
     var label = source;
 
-    if (/^https?:/i.test(source) || source.indexOf('//') === 0) {
+    if (isRemoteAddress(source)) {
       try {
         label = new URL(source.indexOf('//') === 0 ? 'https:' + source : source).host || source;
       } catch (err) {

@@ -71,8 +71,11 @@ internal sealed class DocxImages
         // is a property of the product rather than an omission. The preview cannot load one
         // either - its content policy blocks it - so nothing is lost that was ever visible,
         // but the reader should still be told the file has a hole where a picture was.
-        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        //
+        // MediaTarget.Classify rather than a StartsWith of its own, so this agrees with the
+        // preview and the source pane about what counts as "on the web" - "//host/path" included,
+        // which a plain http/https prefix check used to miss and send down the wrong Skip reason.
+        if (MediaTarget.Classify(url) == MediaTargetKind.Remote)
         {
             Skip(sourceLine, altText, url, "Not on this machine");
             return null;

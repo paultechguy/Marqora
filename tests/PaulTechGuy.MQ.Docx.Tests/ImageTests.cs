@@ -113,6 +113,39 @@ public class ImageTests : IDisposable
         exported.DocumentXml().ShouldNotContain("<w:drawing>");
     }
 
+    /// <summary>
+    /// The picture itself is never fetched, but the address is just text - sending the reader
+    /// to it costs Marqora no network call, so the alt-text placeholder is a real hyperlink
+    /// rather than inert text.
+    /// </summary>
+    [Fact]
+    public async Task A_remote_image_placeholder_links_to_the_original_address()
+    {
+        using var exported = await ExportAsync("![Remote](https://example.com/x.png)\n");
+
+        exported.DocumentXml().ShouldContain("<w:hyperlink");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// "[![alt](img)](page)" - a remote image standing in as the label of an outer link. The
+    /// outer Hyperlink is already being built one level up (see WriteInto), and w:hyperlink
+    /// cannot nest inside w:hyperlink, so the placeholder for the inner image has to fall back
+    /// to a plain run even though it would otherwise qualify for one of its own.
+    /// </summary>
+    [Fact]
+    public async Task A_remote_image_labelling_an_outer_link_does_not_nest_hyperlinks()
+    {
+        using var exported = await ExportAsync(
+            "[![Remote](https://example.com/x.png)](https://example.com/page)\n");
+
+        // OpenXmlValidator does not flag w:hyperlink nested inside w:hyperlink - Word does, with
+        // an "unreadable content" repair prompt - so the count is the real check here, not
+        // ValidationErrors.
+        exported.DocumentXml().Split("<w:hyperlink").Length.ShouldBe(2);
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task A_missing_image_is_reported_and_leaves_its_alt_text_behind()
     {

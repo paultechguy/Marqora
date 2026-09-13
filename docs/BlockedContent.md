@@ -246,8 +246,20 @@ whole trick: everything servable has already been pointed at `https://marqora.do
 `willNotLoad` is one rule — *did it end up there?* — instead of a list of schemes kept in step
 with the analyzer's. `data:` and `blob:` are exempt.
 
-Each blocked element is wrapped in `<span class="mq-blocked-media" data-mq-blocked="...">`. The
-element is hidden with `display: none`; the chip is drawn by CSS `::after` from the attribute.
+Each blocked element is wrapped in a `.mq-blocked-media` element carrying `data-mq-blocked="..."`.
+The wrapped element is hidden with `display: none`; the chip is drawn by CSS `::after` from the
+attribute.
+
+The wrapper's tag is the one thing `isRemoteAddress` decides. A web address — `RemoteMedia` in
+the source pane's terms — gets an `<a href="...">`: sending the reader there is a navigation,
+not a fetch, so it costs this app nothing to offer, and the existing delegated click handler on
+`els.preview` (the one that already turns any `a[href]` click into a `linkActivated` message to
+the host) picks it up with no code of its own. A file present but outside the document's folder
+— `OutsideFolder` — stays a plain `<span>`, on purpose: that block is a sandboxing rule, not a
+network one, and the repair for it is "Copy it in," not "open it from wherever it sits" — the
+same reason the right-click menu withholds **Open in browser** for that case. `--mq-blocked`
+paints the chip either way; `a.mq-blocked-media { cursor: pointer }` is the only rule that knows
+the difference.
 
 **That is load-bearing, not tidy.** Generated content never serializes into `innerHTML`, so a
 paste into Outlook carries the original `<img src="https://...">` and loads it exactly as it
@@ -307,15 +319,29 @@ nothing is drawn, whatever this switch says.
 | --- | --- |
 | Copy as Rich Text | `withoutBlockedChips` — the wrapper is unwound, the original element travels |
 | Export HTML | the same |
-| Print / PDF | **the chip stays**, restyled to `#8250df` |
+| Print / PDF | **the chip stays**, restyled to `#8250df`, and is a live link for `RemoteMedia` |
 | Folio | never sees a wrapper; built from the host's Markdig markup |
-| Word (`.docx`) | `DocxImages.TryBuild` skips a remote image and writes the alt text, recording *"not on this machine"* |
+| Word (`.docx`) | `DocxImages.TryBuild` skips a remote image and writes the alt text, recording *"not on this machine"*; `InlineRenderer.WriteImage` wraps that text in a real `w:hyperlink` |
 
 The printer is the deliberate odd one out. It paints this very DOM rather than serializing it,
 and a picture that cannot be fetched cannot be in the PDF either — so a small quiet chip beats a
 silent gap, which is the very defect this feature exists to close. A *squiggle* is not the same
 case and stays off the page: a squiggle marks a fault in the document, the chip marks content
 missing from the artifact, and the artifact is the only place that fact is still useful.
+
+**The picture is never in the artifact Marqora builds; the address always can be.** PDF and
+Word are not "somewhere else" the way GitHub or a browser opening an HTML export are — Marqora
+itself produces both, by painting its own DOM for one and walking Markdig into OpenXML for the
+other, and "Marqora never goes to the network" binds both exactly as it binds the live preview.
+Embedding the actual picture in either would mean *this app* fetching it at export time, which
+is the one thing ruled out. A clickable address is a different claim: it is text, not a fetch,
+so both the PDF chip and the Word placeholder carry one when the reference is a web address —
+`RemoteMedia`, not `OutsideFolder`, since a file elsewhere on the machine has no address to send
+a reader to and stays a plain mark in both places. `InlineRenderer.WriteImage` checks
+`MediaTarget.Classify` itself rather than trusting `DocxImages`'s skip reason, and refuses the
+`w:hyperlink` wrapper when the image is already standing in as the label of an outer link —
+`[![alt](img)](page)` — because `w:hyperlink` cannot nest inside `w:hyperlink`; the placeholder
+still wears the Hyperlink character style there, inherited from the link it sits inside.
 
 ---
 

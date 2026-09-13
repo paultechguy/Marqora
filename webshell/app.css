@@ -314,6 +314,14 @@ body {
   display: inline-block;
   vertical-align: baseline;
   max-width: 100%;
+  text-decoration: none;
+}
+
+/* Only the remote case is an <a> - see isRemoteAddress in app.js. An off-folder local path
+   stays a plain span, so this rule never paints a hand cursor over something that does nothing
+   on click. */
+a.mq-blocked-media {
+  cursor: pointer;
 }
 
 .mq-preview .mq-blocked-media > img,

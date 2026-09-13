@@ -1,4 +1,4 @@
----
+﻿---
 # =============================================================================
 # STOP. DO NOT AUTO-FORMAT THIS FILE. NOT EVER. NOT "JUST THE TABLES".
 #
@@ -676,7 +676,7 @@ Inline image with alt text and title:
 
 Reference-style image:
 
-![Reference image alt text][img-ref]
+![Example image alt text](https://commons.wikimedia.org/wiki/Special:Redirect/file/Example.jpg)
 
 [img-ref]: https://via.placeholder.com/320x120.png "Remote placeholder image"
 

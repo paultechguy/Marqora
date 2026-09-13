@@ -11,6 +11,7 @@ using Markdig.Extensions.TaskLists;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
+using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -202,18 +203,45 @@ internal sealed class InlineRenderer
     /// remote, or in a format Word will not draw, leaves the document with a gap; writing the
     /// alt text in its place means a reader can tell what was meant to be there, and the
     /// caller is separately told so it can say which ones were left out.
+    ///
+    /// A web address Marqora will not fetch is still one the reader can be sent to - a
+    /// hyperlink costs no network call, unlike the picture itself, so the placeholder for a
+    /// <see cref="MediaTargetKind.Remote"/> image is clickable. A missing or unreadable local
+    /// file has no address worth sending anyone to, so it stays plain text.
     /// </summary>
     private void WriteImage(LinkInline image, Paragraph paragraph, RunFormat format)
     {
         string alt = AltTextOf(image);
+        string url = image.Url ?? string.Empty;
 
-        if (_images.TryBuild(image.Url ?? string.Empty, alt, _maximumImageWidthTwips, _sourceLine) is { } run)
+        if (_images.TryBuild(url, alt, _maximumImageWidthTwips, _sourceLine) is { } run)
         {
             paragraph.AppendChild(run);
             return;
         }
 
-        Append(paragraph, format.WithItalic().ToRun(alt.Length > 0 ? $"[{alt}]" : "[image]"));
+        string placeholder = alt.Length > 0 ? $"[{alt}]" : "[image]";
+
+        // format.Hyperlink means this image is itself the label of an outer link - the
+        // "[![alt](img)](page)" shape - and that outer Hyperlink is already being built one
+        // level up in WriteInto. w:hyperlink cannot nest inside w:hyperlink, so the placeholder
+        // stays a run; it still wears the Hyperlink style, because format.Hyperlink is already set.
+        if (!format.Hyperlink
+            && MediaTarget.Classify(url) == MediaTargetKind.Remote
+            && Uri.TryCreate(
+                url.StartsWith("//", StringComparison.Ordinal) ? "https:" + url : url,
+                UriKind.Absolute,
+                out Uri? target))
+        {
+            HyperlinkRelationship relationship = _main.AddHyperlinkRelationship(target, isExternal: true);
+            var hyperlink = new Hyperlink { Id = relationship.Id, History = true };
+
+            hyperlink.AppendChild(format.WithHyperlink().WithItalic().ToRun(placeholder));
+            paragraph.AppendChild(hyperlink);
+            return;
+        }
+
+        Append(paragraph, format.WithItalic().ToRun(placeholder));
     }
 
     /// <summary>
