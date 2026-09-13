@@ -44,4 +44,20 @@ public interface IWelcomeDocumentService
     /// release's text rather than being reloaded from underneath a moment later.
     /// </summary>
     Task<string?> PrepareAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Puts the user's copy in place if there is not one, and returns where it is.
+    ///
+    /// For Help, Welcome to Marqora, which is a request to read the document rather than to
+    /// be introduced to the release. An existing copy is handed back untouched - scribbles
+    /// and all - because a menu item that quietly discarded somebody's edits would be a trap.
+    /// Shift at startup remains the way to a clean one, and the document says so itself.
+    ///
+    /// Nothing is recorded either way. Whether this version has introduced itself is
+    /// <see cref="PrepareAsync"/>'s question, and reading the document by hand is not an
+    /// answer to it.
+    ///
+    /// Returns null only when there is no copy and the shipped master is missing too.
+    /// </summary>
+    Task<string?> EnsureAsync(CancellationToken cancellationToken = default);
 }

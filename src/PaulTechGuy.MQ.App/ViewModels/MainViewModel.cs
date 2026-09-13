@@ -6655,6 +6655,43 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Support() => SupportRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>
+    /// Help, Welcome to Marqora.
+    ///
+    /// Their copy, not a fresh one. The document invites the reader to scribble on it and save
+    /// it, so a menu item offering to show it has no business throwing that away. Shift at
+    /// startup is still the way back to the shipped text, and the document says so itself.
+    ///
+    /// A copy is put back only when there is none at all, because the same document tells its
+    /// reader that deleting anything in the data folder is safe - so this has to work after
+    /// somebody has taken it at its word.
+    ///
+    /// The view mode is left alone, unlike the once-per-release showing, which switches to
+    /// preview. That one happens before any work has started; this one can arrive in the middle
+    /// of some, and changing what the user's own document looks like afterwards is too much to
+    /// do to somebody who asked to read a page.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowWelcomeDocumentAsync()
+    {
+        string? path = await _welcome.EnsureAsync().ConfigureAwait(true);
+
+        if (path is null)
+        {
+            await _dialogs.ShowMessageAsync(
+                "Welcome document not available",
+                "The copy that ships with Marqora could not be found.").ConfigureAwait(true);
+
+            RestoreDocumentFocusAfterChrome();
+            return;
+        }
+
+        // Already open is the ordinary case for a second visit, and OpenPathAsync surfaces that
+        // tab rather than making a second one. It is also what takes the keyboard back off the
+        // menu and puts it in the document.
+        await OpenPathAsync(path).ConfigureAwait(true);
+    }
+
     // -------------------------------------------------------- update reminder
 
     /// <summary>

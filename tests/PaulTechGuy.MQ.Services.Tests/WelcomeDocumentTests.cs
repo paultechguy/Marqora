@@ -157,4 +157,51 @@ public sealed class WelcomeDocumentTests : IDisposable
         // Nothing shipped, so there is nothing to open however loudly it was asked for.
         (await RunRequestedAsync("1.0.0")).ShouldBeNull();
     }
+
+    // ------------------------------------------------------------- asked to read
+
+    /// <summary>Help, Welcome to Marqora.</summary>
+    private Task<string?> EnsureAsync(string version) =>
+        ServiceFor(version).EnsureAsync(TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task Asking_to_read_the_document_puts_a_copy_there_when_there_is_none()
+    {
+        Ship();
+
+        string? path = await EnsureAsync("1.0.0");
+
+        path.ShouldBe(_paths.WelcomeDocumentPath);
+        File.ReadAllText(path!).ShouldBe(Shipped);
+    }
+
+    [Fact]
+    public async Task Asking_to_read_the_document_hands_back_the_copy_that_is_there_untouched()
+    {
+        Ship();
+        await RunAsync("1.0.0");
+
+        File.WriteAllText(_paths.WelcomeDocumentPath, "Mine now.");
+
+        (await EnsureAsync("1.0.0")).ShouldBe(_paths.WelcomeDocumentPath);
+        File.ReadAllText(_paths.WelcomeDocumentPath).ShouldBe("Mine now.");
+    }
+
+    [Fact]
+    public async Task Asking_to_read_the_document_is_not_this_version_introducing_itself()
+    {
+        Ship();
+
+        await EnsureAsync("1.0.0");
+
+        // Still unrecorded, so the next launch of this version still offers the introduction.
+        _settings.Current.LastWelcomeVersion.ShouldBeNull();
+        (await RunAsync("1.0.0")).ShouldBe(_paths.WelcomeDocumentPath);
+    }
+
+    [Fact]
+    public async Task Asking_to_read_the_document_with_nothing_copied_and_nothing_shipped_offers_nothing()
+    {
+        (await EnsureAsync("1.0.0")).ShouldBeNull();
+    }
 }

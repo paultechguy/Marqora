@@ -779,19 +779,26 @@
                                               IsChecked="{x:Bind ViewModel.ShowWhitespaceEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleShowWhitespaceCommand}" />
 
+                        <!--
+                            These three name the scrollbar tick as well as the underline: the ticks are
+                            what a reader sees from across a document, and nothing else in the app says
+                            what a color means. Hue words rather than values, because the mq-tick tokens
+                            in webshell/app.css differ between the two themes. Re-tune one of those to a
+                            different hue and these three strings start lying.
+                        -->
                         <ToggleMenuFlyoutItem Text="Show Problems"
                                               IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
-                                              ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax" />
+                                              ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax; amber ticks in the scrollbar, gray for missing alt text" />
                         <ToggleMenuFlyoutItem Text="{x:Bind ViewModel.BlockedImagesMenuText, Mode=OneWay}"
                                               IsChecked="{x:Bind ViewModel.BlockedImagesEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleBlockedImagesCommand}"
-                                              ToolTipService.ToolTip="Underline pictures that will not appear in the preview" />
+                                              ToolTipService.ToolTip="Underline pictures that will not appear in the preview; violet ticks in the scrollbar" />
                         <ToggleMenuFlyoutItem Text="Spell Check"
                                               IsChecked="{x:Bind ViewModel.SpellCheckEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleSpellCheckCommand}"
                                               KeyboardAcceleratorTextOverride="F7"
-                                              ToolTipService.ToolTip="Underline words that are not in the dictionary" />
+                                              ToolTipService.ToolTip="Underline words that are not in the dictionary; red ticks in the scrollbar" />
                         <ToggleMenuFlyoutItem Text="Wrapped Line Markers"
                                               IsChecked="{x:Bind ViewModel.ShowWrapGlyphEnabled, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleWrapGlyphCommand}" />
@@ -892,11 +899,21 @@
                     </MenuBarItem>
 
                     <!--
-                        Reference first, then the two ways out to somewhere else. The
-                        cheatsheet lives here rather than under Tools because it teaches
-                        markdown; Tools is for the things that act on the document.
+                        The introduction and the reference first, then the two ways out to
+                        somewhere else. The cheatsheet lives here rather than under Tools
+                        because it teaches markdown; Tools is for the things that act on the
+                        document.
                     -->
                     <MenuBarItem x:Name="HelpMenu" Title="Help">
+                        <!--
+                            First, because it is where somebody who does not know the app yet
+                            should start. No ellipsis: it opens a tab rather than a dialog, the
+                            same as Open Log Folder below.
+                        -->
+                        <MenuFlyoutItem Text="Welcome to Marqora"
+                                        Command="{x:Bind ViewModel.ShowWelcomeDocumentCommand}"
+                                        ToolTipService.ToolTip="Open the document that introduces this release" />
+
                         <!--
                             A toggle item so the tick shows whether the cheatsheet is up. It
                             is bound to the window's actual visibility, not to this command,

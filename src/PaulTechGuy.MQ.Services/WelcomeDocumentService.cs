@@ -18,6 +18,10 @@ namespace PaulTechGuy.MQ.Services;
 /// The version is recorded as soon as the copy lands rather than after the tab opens. A
 /// document that was written to disk but could not be opened is a failure worth one entry in
 /// the log, not a document that reintroduces itself on every launch afterwards.
+///
+/// <see cref="EnsureAsync"/> is the third way in and the odd one out. Help, Welcome to
+/// Marqora asks for the document rather than for the introduction, so it neither refreshes a
+/// copy that is already there nor records that this version has been seen.
 /// </summary>
 public sealed class WelcomeDocumentService(
     IAppPaths paths,
@@ -69,6 +73,39 @@ public sealed class WelcomeDocumentService(
             "The welcome document is ready at {Path} ({Reason}).",
             destination,
             WasRequested ? "asked for with Shift" : $"first run of {appVersion}");
+
+        return destination;
+    }
+
+    public async Task<string?> EnsureAsync(CancellationToken cancellationToken = default)
+    {
+        string destination = paths.WelcomeDocumentPath;
+
+        // Theirs, in whatever state they left it. The interface says why this does not refresh.
+        if (File.Exists(destination))
+        {
+            return destination;
+        }
+
+        string source = paths.WelcomeTemplatePath;
+
+        if (!File.Exists(source))
+        {
+            logger.LogWarning("The welcome document is missing from the deployment: {Path}.", source);
+            return null;
+        }
+
+        try
+        {
+            await CopyAsync(source, destination, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Could not put the welcome document back at {Path}.", destination);
+            return null;
+        }
+
+        logger.LogInformation("The welcome document was put back at {Path}.", destination);
 
         return destination;
     }

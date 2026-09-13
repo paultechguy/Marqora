@@ -20,7 +20,7 @@ thing runs on your machine: no account, no sign-in, no network call, no telemetr
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
 - [ ] Press `Ctrl+Shift+H` and replace across all of them, in one step
-- [ ] Type a word wrong on purpose, then press `Ctrl+.` on it
+- [ ] Type a word wrong on purpose, watch the scrollbar, then press `Ctrl+.` on it
 
 > [!NOTE]
 > Nothing here is a demo mode. It is the app, and this is an ordinary Markdown file on your
@@ -90,6 +90,20 @@ reformat back in one step.
 **Problems, underlined.** A dead link renders exactly like a live one, so Marqora checks them
 for you — missing files, missing images, and anchors that point at no heading — along with the
 small style slips the formatter would fix.
+
+**And ticked in the scrollbar.** Every mark also leaves a tick in the source pane's scrollbar,
+so a long document can be scanned for problems without being scrolled through. Click a tick to
+jump to it. The color says what kind of mark it is:
+
+| Tick   | What it means                                       | Switch it off with           |
+| ------ | --------------------------------------------------- | ---------------------------- |
+| Red    | A misspelled or repeated word                       | `View > Spell Check`         |
+| Amber  | A broken link, a missing image or a dead anchor     | `View > Show Problems`       |
+| Gray   | A picture with no alt text — incomplete, not broken | `View > Show Problems`       |
+| Violet | A picture that will not appear in the preview       | `View > Show Blocked Images` |
+
+Those four are Marqora's own. The editor adds ticks of its own too — for find matches while
+`Ctrl+F` is open, and for the other places the word at the cursor appears.
 
 **Find All.** `Ctrl+Shift+F` answers "where does this appear?" in one window: every match at
 once, across every open document, grouped by the file it came from. Select a row and the
@@ -266,8 +280,9 @@ what the version in front of you can do. It is a copy kept in your own data fold
 you can scribble on it, save it, or close it and never think about it again — the next release
 brings a fresh one.
 
-**Want it back?** Hold `Shift` while starting Marqora. It opens again, replaced with the copy
-that shipped, however long ago this version introduced itself.
+**Want it back?** `Help > Welcome to Marqora` opens it again, exactly as you left it. To undo
+your scribbles as well, hold `Shift` while starting Marqora: that replaces the copy with the
+one that shipped, however long ago this version introduced itself.
 
 `Help > About Marqora` shows the version you are running, along with where everything lives and
 a **Copy details** button for when something needs reporting.
