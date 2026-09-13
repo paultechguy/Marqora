@@ -1,4 +1,28 @@
-﻿---
+---
+# =============================================================================
+# STOP. DO NOT AUTO-FORMAT THIS FILE. NOT EVER. NOT "JUST THE TABLES".
+#
+# This is a Markdown torture-test fixture. The things that look like mistakes
+# ARE THE TESTS. Prettier, markdownlint --fix, "Format Document", Format On
+# Save, and every other Markdown normalizer WILL destroy it -- silently, while
+# leaving a render that still looks plausible.
+#
+# This already happened once, in commit 4169e32. A single formatter pass:
+#   * turned the HTML comment below into three <h1> headings, so the document
+#     failed its own test #0 in its own first screenful;
+#   * converted both Setext heading tests to ATX, deleting the feature the
+#     Headings section claims to test;
+#   * made "#hashtag-at-line-start-is-not-a-heading" into a heading -- the
+#     exact failure that test asserts against;
+#   * renumbered a deliberate 1. / 1. / 1. list to 1. / 2. / 3.;
+#   * broke a Pandoc grid table, a Pandoc abbreviation block, and a LaTeX
+#     \begin{cases} block;
+#   * rewrote _italic_ and __bold__ test cells into asterisk form.
+# None of it was noticed for three commits.
+#
+# Before you touch this file: turn Format On Save OFF for it.
+# If you are an AI agent: hand-edit only. Do not run any formatter over docs/.
+# =============================================================================
 title: "The Ultimate Markdown Conversion Test"
 subtitle: "A self-documenting torture test for Markdown → HTML / PDF / DOCX / LaTeX converters"
 author: "Markdown Conversion QA"
@@ -18,18 +42,18 @@ abstract: |
   against reality without a separate answer key.
 ---
 
-# <!--
-
-# HOW TO USE THIS FILE
-
+<!--
+=============================================================================
+ HOW TO USE THIS FILE
+=============================================================================
  1. Render it with your converter (pandoc, marked, markdown-it, remark,
     Typora, Obsidian, VS Code preview, GitHub, GitLab, Quarto, mdBook...).
  2. Walk the document top to bottom. Each section has a "PASS IF" note.
  3. Score yourself with the scorecard in Appendix A at the bottom.
  4. Known-hostile constructs are flagged with the words HAZARD or EDGE CASE.
 
-# This HTML comment itself is test #0: it MUST NOT appear in rendered output.
-
+ This HTML comment itself is test #0: it MUST NOT appear in rendered output.
+=============================================================================
 -->
 
 # The Ultimate Markdown Conversion Test
@@ -96,9 +120,11 @@ surviving prose will still tell you what you were looking at.
 
 ###### H6 — Level Six Heading
 
-# Setext H1 — Underlined With Equals Signs
+Setext H1 — Underlined With Equals Signs
+========================================
 
-## Setext H2 — Underlined With Hyphens
+Setext H2 — Underlined With Hyphens
+-----------------------------------
 
 ### H3 containing `inline code`, **bold**, *italic*, [a link](https://example.com) and a symbol: →
 
@@ -150,24 +176,24 @@ boring and most important test in the file.
 > **What is under test.** The full inline formatting matrix, including the
 > combinations that trip naive regex-based converters.
 
-| Construct                   | Source               | Expected rendering                                  |
-| --------------------------- | -------------------- | --------------------------------------------------- |
-| Italic (asterisk)           | `*italic*`           | *italic*                                            |
-| Italic (underscore)         | `_italic_`           | *italic*                                            |
-| Bold (asterisk)             | `**bold**`           | **bold**                                            |
-| Bold (underscore)           | `__bold__`           | **bold**                                            |
-| Bold + italic               | `***both***`         | ***both***                                          |
-| Bold + italic mixed         | `**_both_**`         | ***both***                                          |
-| Strikethrough (GFM)         | `~~struck~~`         | ~~struck~~                                          |
-| Inline code                 | `` `code` ``         | `code`                                              |
-| Highlight (Obsidian/Quarto) | `==mark==`           | ==highlighted==                                     |
-| Subscript (Pandoc)          | `H~2~O`              | H~2~O                                               |
-| Superscript (Pandoc)        | `E=mc^2^`            | E=mc^2^                                             |
-| Small caps (Pandoc)         | `[text]{.smallcaps}` | [small caps]{.smallcaps}                            |
-| Underline (HTML)            | `<u>u</u>`           | <u>underlined</u>                                   |
-| Keyboard (HTML)             | `<kbd>Ctrl</kbd>`    | <kbd>Ctrl</kbd>+<kbd>C</kbd>                        |
-| Insert / delete (HTML)      | `<ins>` / `<del>`    | <ins>inserted</ins> <del>deleted</del>              |
-| Abbreviation (HTML)         | `<abbr>`             | <abbr title="HyperText Markup Language">HTML</abbr> |
+| Construct | Source | Expected rendering |
+|---|---|---|
+| Italic (asterisk) | `*italic*` | *italic* |
+| Italic (underscore) | `_italic_` | _italic_ |
+| Bold (asterisk) | `**bold**` | **bold** |
+| Bold (underscore) | `__bold__` | __bold__ |
+| Bold + italic | `***both***` | ***both*** |
+| Bold + italic mixed | `**_both_**` | **_both_** |
+| Strikethrough (GFM) | `~~struck~~` | ~~struck~~ |
+| Inline code | `` `code` `` | `code` |
+| Highlight (Obsidian/Quarto) | `==mark==` | ==highlighted== |
+| Subscript (Pandoc) | `H~2~O` | H~2~O |
+| Superscript (Pandoc) | `E=mc^2^` | E=mc^2^ |
+| Small caps (Pandoc) | `[text]{.smallcaps}` | [small caps]{.smallcaps} |
+| Underline (HTML) | `<u>u</u>` | <u>underlined</u> |
+| Keyboard (HTML) | `<kbd>Ctrl</kbd>` | <kbd>Ctrl</kbd>+<kbd>C</kbd> |
+| Insert / delete (HTML) | `<ins>` / `<del>` | <ins>inserted</ins> <del>deleted</del> |
+| Abbreviation (HTML) | `<abbr>` | <abbr title="HyperText Markup Language">HTML</abbr> |
 
 ### Nesting and adjacency torture
 
@@ -216,25 +242,25 @@ left as straight ASCII.
 
 ### Unicode stress
 
-| Script / class        | Sample                                           |
-| --------------------- | ------------------------------------------------ |
-| Latin + diacritics    | àéîõü ÿ ñ ç ø å æ œ ß                            |
-| Combining marks       | é (precomposed) vs e&#769; (e + combining acute) |
-| Greek                 | Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω  |
-| Cyrillic              | Привет, мир! Ёжик в тумане                       |
-| Chinese               | 你好，世界。这是一个测试。                                    |
-| Japanese              | こんにちは世界。日本語のテキスト、カタカナ、漢字。                        |
-| Korean                | 안녕하세요 세계. 한글 텍스트입니다.                             |
-| Arabic (RTL)          | مرحبا بالعالم — هذا نص تجريبي                    |
-| Hebrew (RTL)          | שלום עולם — זהו טקסט לבדיקה                      |
-| Devanagari            | नमस्ते दुनिया                                    |
-| Thai (no word spaces) | สวัสดีชาวโลก นี่คือการทดสอบ                      |
-| Math symbols          | ∀x∈ℝ ∃y ∮ ∇ ⊕ ⊗ ≅ ≈ ∴ ∵ ℵ                        |
-| Box drawing           | ┌───┬───┐ │ a │ b │ └───┴───┘                    |
-| Emoji (simple)        | 😀 🎉 🚀 ✅ ❌ ⚠️ 📊 🧪                            |
-| Emoji (ZWJ sequences) | 👩‍💻 👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍🚀                 |
-| Emoji (skin tone)     | 👍🏻 👍🏽 👍🏿                                   |
-| GFM short codes       | :smile: :rocket: :warning: :white_check_mark:    |
+| Script / class | Sample |
+|---|---|
+| Latin + diacritics | àéîõü ÿ ñ ç ø å æ œ ß |
+| Combining marks | é (precomposed) vs e&#769; (e + combining acute) |
+| Greek | Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω |
+| Cyrillic | Привет, мир! Ёжик в тумане |
+| Chinese | 你好，世界。这是一个测试。 |
+| Japanese | こんにちは世界。日本語のテキスト、カタカナ、漢字。 |
+| Korean | 안녕하세요 세계. 한글 텍스트입니다. |
+| Arabic (RTL) | مرحبا بالعالم — هذا نص تجريبي |
+| Hebrew (RTL) | שלום עולם — זהו טקסט לבדיקה |
+| Devanagari | नमस्ते दुनिया |
+| Thai (no word spaces) | สวัสดีชาวโลก นี่คือการทดสอบ |
+| Math symbols | ∀x∈ℝ ∃y ∮ ∇ ⊕ ⊗ ≅ ≈ ∴ ∵ ℵ |
+| Box drawing | ┌───┬───┐ │ a │ b │ └───┴───┘ |
+| Emoji (simple) | 😀 🎉 🚀 ✅ ❌ ⚠️ 📊 🧪 |
+| Emoji (ZWJ sequences) | 👩‍💻 👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍🚀 |
+| Emoji (skin tone) | 👍🏻 👍🏽 👍🏿 |
+| GFM shortcodes | :smile: :rocket: :warning: :white_check_mark: |
 
 > **HAZARD.** Emoji ZWJ sequences (👩‍💻 is *woman* + ZWJ + *laptop*) frequently
 > split into two separate glyphs in PDF/DOCX output. GFM `:shortcodes:` are only
@@ -347,15 +373,15 @@ this; GitHub does not.
 <!-- separator so the next list is not merged with the previous one -->
 
 1. All-ones numbering, first
-2. All-ones numbering, second
-3. All-ones numbering, third — renderers should output 1, 2, 3
+1. All-ones numbering, second
+1. All-ones numbering, third — renderers should output 1, 2, 3
 
 5. A list that **starts at five**
 6. Six
 7. Seven
 
-8) Parenthesis-style ordered marker
-9) Second item
+1) Parenthesis-style ordered marker
+2) Second item
 
 ### Nesting to five levels, mixing ordered and unordered
 
@@ -402,8 +428,8 @@ spacing):
 
    > A blockquote inside a list item.
 
-   | Col A | Col B              |
-   | ----- | ------------------ |
+   | Col A | Col B |
+   |---|---|
    | table | inside a list item |
 
    - A nested sub-list closing out the item.
@@ -460,7 +486,7 @@ newline-ish run of spaces: `a     b`. Empty-ish code: ` `.
 ### Fenced code with language hints (syntax-highlighting check)
 
 ```python
-# Python — check keyword, string, comment, decorator and f-string colouring
+# Python — check keyword, string, comment, decorator and f-string coloring
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -709,57 +735,57 @@ reference[^1].
 
 ### Basic GFM table
 
-| Feature      | Supported | Notes             |
-| ------------ | --------- | ----------------- |
-| Pipe tables  | Yes       | The GFM standard  |
-| Alignment    | Yes       | See below         |
-| Row spanning | No        | Requires raw HTML |
+| Feature | Supported | Notes |
+|---|---|---|
+| Pipe tables | Yes | The GFM standard |
+| Alignment | Yes | See below |
+| Row spanning | No | Requires raw HTML |
 
 ### Column alignment
 
-| Left aligned     |  Center aligned  |    Right aligned | Default          |
-| :--------------- | :--------------: | ---------------: | ---------------- |
-| left             |      center      |            right | default          |
-| a                |        b         |                c | d                |
-| 1                |        22        |              333 | 4444             |
+| Left aligned | Center aligned | Right aligned | Default |
+|:-------------|:--------------:|--------------:|---------|
+| left | center | right | default |
+| a | b | c | d |
+| 1 | 22 | 333 | 4444 |
 | longer cell text | longer cell text | longer cell text | longer cell text |
 
 ### Formatting inside cells
 
-| Element             | Example                                                           | Renders as                                                                                                                                          |
-| ------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bold                | `**bold**`                                                        | **bold**                                                                                                                                            |
-| Italic              | `*italic*`                                                        | *italic*                                                                                                                                            |
-| Code                | `` `code` ``                                                      | `code`                                                                                                                                              |
-| Link                | `[x](url)`                                                        | [example](https://example.com)                                                                                                                      |
-| Image               | `![a](data:...)`                                                  | ![dot](data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="5" fill="%23ef4444"/></svg>) |
-| Strikethrough       | `~~x~~`                                                           | ~~struck~~                                                                                                                                          |
-| Escaped pipe        | `a \| b`                                                          | a \| b                                                                                                                                              |
-| Inline math         | `$x^2$`                                                           | $x^2$                                                                                                                                               |
-| Line break          | `a<br>b`                                                          | a<br>b                                                                                                                                              |
-| Emoji               | `🚀`                                                              | 🚀                                                                                                                                                  |
-| Empty cell          |                                                                   |                                                                                                                                                     |
-| Long unbroken token | `supercalifragilisticexpialidocious_antidisestablishmentarianism` | wraps or overflows?                                                                                                                                 |
+| Element | Example | Renders as |
+|---|---|---|
+| Bold | `**bold**` | **bold** |
+| Italic | `*italic*` | *italic* |
+| Code | `` `code` `` | `code` |
+| Link | `[x](url)` | [example](https://example.com) |
+| Image | `![a](data:...)` | ![dot](data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><circle cx="6" cy="6" r="5" fill="%23ef4444"/></svg>) |
+| Strikethrough | `~~x~~` | ~~struck~~ |
+| Escaped pipe | `a \| b` | a \| b |
+| Inline math | `$x^2$` | $x^2$ |
+| Line break | `a<br>b` | a<br>b |
+| Emoji | `🚀` | 🚀 |
+| Empty cell | | |
+| Long unbroken token | `supercalifragilisticexpialidocious_antidisestablishmentarianism` | wraps or overflows? |
 
 ### Ragged / malformed rows (EDGE CASE)
 
-| A             | B     | C    |                         |
-| ------------- | ----- | ---- | ----------------------- |
-| only one cell |       |      |                         |
-| two           | cells |      |                         |
-| three         | cells | here |                         |
-| four          | cells | here | extra-should-be-dropped |
+| A | B | C |
+|---|---|---|
+| only one cell |
+| two | cells |
+| three | cells | here |
+| four | cells | here | extra-should-be-dropped |
 
 > **PASS IF** the table still renders with three columns and missing cells come
 > out empty. **FAIL IF** the table collapses into paragraphs of pipe characters.
 
 ### Unaligned source pipes (valid, just ugly)
 
-| Feature            | Value       |
-| ------------------ | ----------- |
-| No padding at all  | works       |
-| wildly             | uneven      |
-| spacing everywhere | still valid |
+|Feature|Value|
+|-|-|
+|No padding at all|works|
+| wildly     |     uneven     |
+|   spacing everywhere|still valid|
 
 ### Table without leading/trailing pipes
 
@@ -771,19 +797,13 @@ Trailing pipe omitted | also valid
 ### Pandoc grid table (non-GFM)
 
 +---------------+---------------+--------------------+
-
 | Fruit         | Price         | Advantages         |
-
-+ ===============+===============+====================+
-
++===============+===============+====================+
 | Bananas       | $1.34         | - built-in wrapper |
 |               |               | - bright color    |
-
 +---------------+---------------+--------------------+
-
 | Oranges       | $2.10         | - cures scurvy     |
 |               |               | - tasty            |
-
 +---------------+---------------+--------------------+
 
 : Table caption for the grid table, Pandoc style.
@@ -835,7 +855,8 @@ Many markers:
 > **EDGE CASE.** The line below `A paragraph immediately followed by hyphens` is
 > `-------`, which makes it a **Setext H2**, not a horizontal rule:
 
-## A paragraph immediately followed by hyphens
+A paragraph immediately followed by hyphens
+-------
 
 ---
 
@@ -929,10 +950,10 @@ Mermaid
 
 The HTML spec is maintained by the W3C and the WHATWG, and CSS is too.
 
-* [HTML]: HyperText Markup Language
-* [W3C]: World Wide Web Consortium
-* [WHATWG]: Web Hypertext Application Technology Working Group
-* [CSS]: Cascading Style Sheets
+*[HTML]: HyperText Markup Language
+*[W3C]: World Wide Web Consortium
+*[WHATWG]: Web Hypertext Application Technology Working Group
+*[CSS]: Cascading Style Sheets
 
 ### Fenced divs and bracketed spans (Pandoc attributes)
 
@@ -1046,7 +1067,7 @@ $$
 $$
 \operatorname{sgn}(x) =
 \begin{cases}
-  - 1, & \text{if } x < 0 \\
+  -1, & \text{if } x < 0 \\
   \;\;0, & \text{if } x = 0 \\
   \;\;1, & \text{if } x > 0
 \end{cases}
@@ -1252,7 +1273,7 @@ flowchart TD
     Z[Node styled inline with the ::: operator]:::danger
     N --> Z
 
-    %% ---- one-off style and edge colouring ----
+    %% ---- one-off style and edge coloring ----
     style INGEST fill:#f8fafc,stroke:#94a3b8,stroke-dasharray:4 4
     style TRANSFORM fill:#f8fafc,stroke:#94a3b8,stroke-dasharray:4 4
     style DELIVER fill:#f8fafc,stroke:#94a3b8,stroke-dasharray:4 4
@@ -2042,20 +2063,20 @@ flowchart TD
 
 ### Constructs that look like other constructs
 
-| Source text                             | Must render as                        |
-| --------------------------------------- | ------------------------------------- |
-| `1986. A great year.`                   | a paragraph, **not** an ordered list  |
-| `- - -` on its own line                 | a horizontal rule, **not** a list     |
-| `> not a quote` inside a code span      | literal text                          |
-| `#hashtag` at line start                | a paragraph (no space after `#`)      |
-| `|not|a|table|` without a delimiter row | a paragraph with pipes                |
-| `[not a link]` with no target           | literal bracketed text                |
-| `<notatag>`                             | literal text or a dropped unknown tag |
-| `http://example.com` in a code span     | plain text, **not** a link            |
+| Source text | Must render as |
+|---|---|
+| `1986. A great year.` | a paragraph, **not** an ordered list |
+| `- - -` on its own line | a horizontal rule, **not** a list |
+| `> not a quote` inside a code span | literal text |
+| `#hashtag` at line start | a paragraph (no space after `#`) |
+| `|not|a|table|` without a delimiter row | a paragraph with pipes |
+| `[not a link]` with no target | literal bracketed text |
+| `<notatag>` | literal text or a dropped unknown tag |
+| `http://example.com` in a code span | plain text, **not** a link |
 
 1986. A great year for parsers.
 
-# hashtag-at-line-start-is-not-a-heading
+#hashtag-at-line-start-is-not-a-heading
 
 |not|a|table|
 
@@ -2086,7 +2107,7 @@ A wide code block that should scroll horizontally rather than wrap:
 
 ### Whitespace and invisible-character hazards
 
-- A line with trailing spaces but no following line:  
+- A line with trailing spaces but no following line:   
 - A line containing a literal tab between words:	tab was here.
 - A line containing a non-breaking space: nbsp&nbsp;joined.
 - A line with a zero-width space between letters: a​b (looks like "ab").
@@ -2143,85 +2164,85 @@ English. And a Hebrew sentence with English inside: ‏זהו טקסט עם המ
 > Copy this table into your bug report and fill in the Result column with
 > **PASS**, **PARTIAL**, or **FAIL**.
 
-|   # | Feature area                              | Section     | Critical? | Result |
-| --: | ----------------------------------------- | ----------- | :-------: | ------ |
-|   0 | YAML front matter consumed/hidden         | top of file |    Yes    |        |
-|   1 | HTML comments hidden                      | top of file |    Yes    |        |
-|   2 | Heading levels H1–H6                      | §1          |    Yes    |        |
-|   3 | Setext headings                           | §1          |    No     |        |
-|   4 | Seven-hash line stays literal             | §1          |    No     |        |
-|   5 | Hard line breaks (2 spaces / backslash)   | §2          |    Yes    |        |
-|   6 | Bold / italic / nesting                   | §3          |    Yes    |        |
-|   7 | Strikethrough                             | §3          |    Yes    |        |
-|   8 | Highlight, sub, sup, small caps           | §3          |    No     |        |
-|   9 | `snake_case` not italicized               | §3          |    Yes    |        |
-|  10 | Backslash escapes                         | §4          |    Yes    |        |
-|  11 | HTML entities                             | §4          |    Yes    |        |
-|  12 | CJK / RTL / combining marks               | §4          |    Yes    |        |
-|  13 | Emoji incl. ZWJ sequences                 | §4          |    No     |        |
-|  14 | Blockquotes incl. nesting                 | §5          |    Yes    |        |
-|  15 | GFM alerts (`[!NOTE]` …)                  | §5          |    No     |        |
-|  16 | Fenced-div / `!!!` callouts               | §5          |    No     |        |
-|  17 | Ordered / unordered / start offsets       | §6          |    Yes    |        |
-|  18 | Five-level nesting                        | §6          |    Yes    |        |
-|  19 | Tight vs. loose spacing                   | §6          |    No     |        |
-|  20 | Multi-block list items                    | §6          |    Yes    |        |
-|  21 | Task list checkboxes                      | §6          |    No     |        |
-|  22 | Lazy continuation                         | §6          |    No     |        |
-|  23 | Inline code with backticks                | §7          |    Yes    |        |
-|  24 | Fenced code + language highlighting       | §7          |    Yes    |        |
-|  25 | Tilde fences                              | §7          |    No     |        |
-|  26 | Indented code blocks                      | §7          |    Yes    |        |
-|  27 | Nested (4-backtick) fences                | §7          |    Yes    |        |
-|  28 | Fence attributes / line numbers           | §7          |    No     |        |
-|  29 | Inline / reference / autolinks            | §8          |    Yes    |        |
-|  30 | Links with parens and queries             | §8          |    Yes    |        |
-|  31 | Wiki-links                                | §8          |    No     |        |
-|  32 | Images incl. data URIs and SVG            | §8          |    Yes    |        |
-|  33 | Broken-image alt-text fallback            | §8          |    Yes    |        |
-|  34 | Figure captions                           | §8          |    No     |        |
-|  35 | Footnotes (all dialects)                  | §8          |    No     |        |
-|  36 | GFM tables + alignment                    | §9          |    Yes    |        |
-|  37 | Formatting inside table cells             | §9          |    Yes    |        |
-|  38 | Ragged rows tolerated                     | §9          |    Yes    |        |
-|  39 | Grid tables / captions                    | §9          |    No     |        |
-|  40 | HTML tables with colspan/rowspan          | §9          |    No     |        |
-|  41 | Horizontal rules, all markers             | §10         |    Yes    |        |
-|  42 | Raw HTML block passthrough                | §11         |    No     |        |
-|  43 | `<details>` with markdown inside          | §11         |    No     |        |
-|  44 | Script/style/iframe sanitized             | §11         |    Yes    |        |
-|  45 | Definition lists                          | §12         |    No     |        |
-|  46 | Abbreviations                             | §12         |    No     |        |
-|  47 | Fenced divs / bracketed spans             | §12         |    No     |        |
-|  48 | Line blocks                               | §12         |    No     |        |
-|  49 | Custom heading ids                        | §12         |    No     |        |
-|  50 | Inline math `$…$`                         | §13         |    Yes    |        |
-|  51 | Display math `$$…$$`                      | §13         |    Yes    |        |
-|  52 | AMS `align`, `cases`, matrices            | §13         |    Yes    |        |
-|  53 | Math with underscores/asterisks intact    | §13         |    Yes    |        |
-|  54 | Currency `$` NOT treated as math          | §13         |    Yes    |        |
-|  55 | mhchem chemistry                          | §13         |    No     |        |
-|  56 | Raw LaTeX / HTML passthrough blocks       | §13         |    No     |        |
-|  57 | Mermaid flowchart + `classDef` color      | §14.1       |    Yes    |        |
-|  58 | Mermaid sequence diagram                  | §14.3       |    Yes    |        |
-|  59 | Mermaid class diagram                     | §14.4       |    No     |        |
-|  60 | Mermaid state diagram                     | §14.5       |    No     |        |
-|  61 | Mermaid ER diagram                        | §14.6       |    No     |        |
-|  62 | Mermaid journey / gantt / pie             | §14.7–9     |    No     |        |
-|  63 | Mermaid quadrant / requirement / gitGraph | §14.10–12   |    No     |        |
-|  64 | Mermaid C4 / mindmap / timeline           | §14.13–15   |    No     |        |
-|  65 | Mermaid sankey / xychart                  | §14.16–17   |    No     |        |
-|  66 | Mermaid block / packet / kanban           | §14.18–20   |    No     |        |
-|  67 | Mermaid architecture / radar / treemap    | §14.21–23   |    No     |        |
-|  68 | Mermaid inside details / list / quote     | §14.24      |    Yes    |        |
-|  69 | Broken diagram does not kill the page     | §14.24      |    Yes    |        |
-|  70 | Four-level nesting survives               | §15.1       |    Yes    |        |
-|  71 | Look-alike constructs not misparsed       | §15.2       |    Yes    |        |
-|  72 | Long lines / long tokens wrap sanely      | §15.3       |    No     |        |
-|  73 | Invisible characters preserved            | §15.4       |    No     |        |
-|  74 | Directives ignored harmlessly             | §15.5       |    No     |        |
-|  75 | Citations left intact                     | §15.6       |    No     |        |
-|  76 | Bidi text ordering correct                | §15.7       |    No     |        |
+| # | Feature area | Section | Critical? | Result |
+|---:|---|---|:---:|---|
+| 0 | YAML front matter consumed/hidden | top of file | Yes | |
+| 1 | HTML comments hidden | top of file | Yes | |
+| 2 | Heading levels H1–H6 | §1 | Yes | |
+| 3 | Setext headings | §1 | No | |
+| 4 | Seven-hash line stays literal | §1 | No | |
+| 5 | Hard line breaks (2 spaces / backslash) | §2 | Yes | |
+| 6 | Bold / italic / nesting | §3 | Yes | |
+| 7 | Strikethrough | §3 | Yes | |
+| 8 | Highlight, sub, sup, small caps | §3 | No | |
+| 9 | `snake_case` not italicized | §3 | Yes | |
+| 10 | Backslash escapes | §4 | Yes | |
+| 11 | HTML entities | §4 | Yes | |
+| 12 | CJK / RTL / combining marks | §4 | Yes | |
+| 13 | Emoji incl. ZWJ sequences | §4 | No | |
+| 14 | Blockquotes incl. nesting | §5 | Yes | |
+| 15 | GFM alerts (`[!NOTE]` …) | §5 | No | |
+| 16 | Fenced-div / `!!!` callouts | §5 | No | |
+| 17 | Ordered / unordered / start offsets | §6 | Yes | |
+| 18 | Five-level nesting | §6 | Yes | |
+| 19 | Tight vs. loose spacing | §6 | No | |
+| 20 | Multi-block list items | §6 | Yes | |
+| 21 | Task list checkboxes | §6 | No | |
+| 22 | Lazy continuation | §6 | No | |
+| 23 | Inline code with backticks | §7 | Yes | |
+| 24 | Fenced code + language highlighting | §7 | Yes | |
+| 25 | Tilde fences | §7 | No | |
+| 26 | Indented code blocks | §7 | Yes | |
+| 27 | Nested (4-backtick) fences | §7 | Yes | |
+| 28 | Fence attributes / line numbers | §7 | No | |
+| 29 | Inline / reference / autolinks | §8 | Yes | |
+| 30 | Links with parens and queries | §8 | Yes | |
+| 31 | Wiki-links | §8 | No | |
+| 32 | Images incl. data URIs and SVG | §8 | Yes | |
+| 33 | Broken-image alt-text fallback | §8 | Yes | |
+| 34 | Figure captions | §8 | No | |
+| 35 | Footnotes (all dialects) | §8 | No | |
+| 36 | GFM tables + alignment | §9 | Yes | |
+| 37 | Formatting inside table cells | §9 | Yes | |
+| 38 | Ragged rows tolerated | §9 | Yes | |
+| 39 | Grid tables / captions | §9 | No | |
+| 40 | HTML tables with colspan/rowspan | §9 | No | |
+| 41 | Horizontal rules, all markers | §10 | Yes | |
+| 42 | Raw HTML block passthrough | §11 | No | |
+| 43 | `<details>` with markdown inside | §11 | No | |
+| 44 | Script/style/iframe sanitized | §11 | Yes | |
+| 45 | Definition lists | §12 | No | |
+| 46 | Abbreviations | §12 | No | |
+| 47 | Fenced divs / bracketed spans | §12 | No | |
+| 48 | Line blocks | §12 | No | |
+| 49 | Custom heading ids | §12 | No | |
+| 50 | Inline math `$…$` | §13 | Yes | |
+| 51 | Display math `$$…$$` | §13 | Yes | |
+| 52 | AMS `align`, `cases`, matrices | §13 | Yes | |
+| 53 | Math with underscores/asterisks intact | §13 | Yes | |
+| 54 | Currency `$` NOT treated as math | §13 | Yes | |
+| 55 | mhchem chemistry | §13 | No | |
+| 56 | Raw LaTeX / HTML passthrough blocks | §13 | No | |
+| 57 | Mermaid flowchart + `classDef` color | §14.1 | Yes | |
+| 58 | Mermaid sequence diagram | §14.3 | Yes | |
+| 59 | Mermaid class diagram | §14.4 | No | |
+| 60 | Mermaid state diagram | §14.5 | No | |
+| 61 | Mermaid ER diagram | §14.6 | No | |
+| 62 | Mermaid journey / gantt / pie | §14.7–9 | No | |
+| 63 | Mermaid quadrant / requirement / gitGraph | §14.10–12 | No | |
+| 64 | Mermaid C4 / mindmap / timeline | §14.13–15 | No | |
+| 65 | Mermaid sankey / xychart | §14.16–17 | No | |
+| 66 | Mermaid block / packet / kanban | §14.18–20 | No | |
+| 67 | Mermaid architecture / radar / treemap | §14.21–23 | No | |
+| 68 | Mermaid inside details / list / quote | §14.24 | Yes | |
+| 69 | Broken diagram does not kill the page | §14.24 | Yes | |
+| 70 | Four-level nesting survives | §15.1 | Yes | |
+| 71 | Look-alike constructs not misparsed | §15.2 | Yes | |
+| 72 | Long lines / long tokens wrap sanely | §15.3 | No | |
+| 73 | Invisible characters preserved | §15.4 | No | |
+| 74 | Directives ignored harmlessly | §15.5 | No | |
+| 75 | Citations left intact | §15.6 | No | |
+| 76 | Bidi text ordering correct | §15.7 | No | |
 
 **Scoring.** Count only the rows marked *Critical = Yes* (43 of them) for a
 pass/fail verdict; the rest measure polish.
@@ -2234,28 +2255,28 @@ pass/fail verdict; the rest measure polish.
 
 ## Appendix B — Quick Reference of Flavor Ownership
 
-| Construct                     | CommonMark | GFM | Pandoc | Obsidian/Quarto |
-| ----------------------------- | :--------: | :-: | :----: | :-------------: |
-| Headings, lists, code, quotes |     ✅      |  ✅  |   ✅    |        ✅        |
-| Tables                        |     ❌      |  ✅  |   ✅    |        ✅        |
-| Strikethrough `~~x~~`         |     ❌      |  ✅  |   ✅    |        ✅        |
-| Task lists                    |     ❌      |  ✅  |   ✅    |        ✅        |
-| Autolink bare URLs            |     ❌      |  ✅  |   ✅    |        ✅        |
-| Footnotes                     |     ❌      |  ✅  |   ✅    |        ✅        |
-| Alerts `[!NOTE]`              |     ❌      |  ✅  |   ❌    |        ✅        |
-| Definition lists              |     ❌      |  ❌  |   ✅    |        ✅        |
-| Abbreviations                 |     ❌      |  ❌  |   ✅    |        ❌        |
-| Superscript / subscript       |     ❌      |  ❌  |   ✅    |        ✅        |
-| Highlight `==x==`             |     ❌      |  ❌  |   ❌    |        ✅        |
-| Fenced divs `:::`             |     ❌      |  ❌  |   ✅    |        ✅        |
-| Line blocks                   |     ❌      |  ❌  |   ✅    |        ❌        |
-| Grid tables                   |     ❌      |  ❌  |   ✅    |        ❌        |
-| Citations `@key`              |     ❌      |  ❌  |   ✅    |        ✅        |
-| YAML front matter             |     ❌      |  ~  |   ✅    |        ✅        |
-| LaTeX math                    |     ❌      |  ✅  |   ✅    |        ✅        |
-| Mermaid                       |     ❌      |  ✅  |   ~    |        ✅        |
-| Wiki-links `[[x]]`            |     ❌      |  ❌  |   ❌    |        ✅        |
-| Raw HTML                      |     ✅      |  ~  |   ✅    |        ✅        |
+| Construct | CommonMark | GFM | Pandoc | Obsidian/Quarto |
+|---|:---:|:---:|:---:|:---:|
+| Headings, lists, code, quotes | ✅ | ✅ | ✅ | ✅ |
+| Tables | ❌ | ✅ | ✅ | ✅ |
+| Strikethrough `~~x~~` | ❌ | ✅ | ✅ | ✅ |
+| Task lists | ❌ | ✅ | ✅ | ✅ |
+| Autolink bare URLs | ❌ | ✅ | ✅ | ✅ |
+| Footnotes | ❌ | ✅ | ✅ | ✅ |
+| Alerts `[!NOTE]` | ❌ | ✅ | ❌ | ✅ |
+| Definition lists | ❌ | ❌ | ✅ | ✅ |
+| Abbreviations | ❌ | ❌ | ✅ | ❌ |
+| Superscript / subscript | ❌ | ❌ | ✅ | ✅ |
+| Highlight `==x==` | ❌ | ❌ | ❌ | ✅ |
+| Fenced divs `:::` | ❌ | ❌ | ✅ | ✅ |
+| Line blocks | ❌ | ❌ | ✅ | ❌ |
+| Grid tables | ❌ | ❌ | ✅ | ❌ |
+| Citations `@key` | ❌ | ❌ | ✅ | ✅ |
+| YAML front matter | ❌ | ~ | ✅ | ✅ |
+| LaTeX math | ❌ | ✅ | ✅ | ✅ |
+| Mermaid | ❌ | ✅ | ~ | ✅ |
+| Wiki-links `[[x]]` | ❌ | ❌ | ❌ | ✅ |
+| Raw HTML | ✅ | ~ | ✅ | ✅ |
 
 ✅ supported ~ partial/plugin ❌ not supported
 
@@ -2317,7 +2338,7 @@ $T_{\text{max}} = \max_i x_i \cdot w_{i,\text{norm}}$
 
 **End of the Ultimate Markdown Conversion Test**
 
-* If you can read this centered, bold, italic line with the surrounding rules
+*If you can read this centered, bold, italic line with the surrounding rules
 intact, the document survived to the last byte.*
 
 </div>
