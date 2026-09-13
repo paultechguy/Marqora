@@ -249,7 +249,13 @@ internal sealed class BlockRenderer
         // writes it - and that was wrong for a document somebody is going to edit: the numbers
         // were correct when the file was written and stale from the first inserted section.
         // They come from the heading style's own numbering now, which Word maintains.
-        _inlines.Write(heading.Inline, paragraph, default, heading.Line);
+        //
+        // Plain, and that is the whole of the fix for a contents page that came out wearing
+        // bold words and shaded code: Word copies a heading's direct character formatting into
+        // the entry it builds from it. The text of the heading is untouched - only what it
+        // was going to wear is dropped, and the heading style dresses it instead. RunFormat.Plain
+        // has the reasoning and what the alternative cost.
+        _inlines.Write(heading.Inline, paragraph, new RunFormat { Plain = true }, heading.Line);
 
         if (bookmarkId >= 0)
         {
@@ -759,6 +765,14 @@ internal sealed class BlockRenderer
             "No picture for the diagram at line {Line}; writing its source instead.",
             block.Line);
 
+        // Reported here rather than where the pictures are fetched, which is the only place
+        // that knows the line and the definition. The fetch runs before the walk and over
+        // hashes, so all it could ever have said was that some diagram somewhere failed.
+        _report.Note(
+            block.Line,
+            "The diagram could not be drawn; its source is in the document instead",
+            ExportReport.Shorten(SourceOf(block)));
+
         WriteCode(block);
     }
 
@@ -957,21 +971,30 @@ internal sealed class BlockRenderer
             // The preview had an equation and the converter would not take it. Worth saying
             // which construct stopped it: that is how the converter grows to cover what real
             // documents actually contain.
-            _report.UnsupportedMath(unsupported);
+            _report.UnsupportedMath(math.Line, unsupported, SourceOf(math));
         }
 
         // No equation to be had: the preview has not run, or the expression uses something
         // the converter does not know. The TeX goes in instead - a reader can see what was
         // meant and can paste it into Word's own equation editor.
-        string tex = string.Join(
-            Environment.NewLine,
-            Enumerable.Range(0, math.Lines.Count).Select(i => math.Lines.Lines[i].Slice.ToString()));
+        string tex = SourceOf(math);
 
         _body.AppendChild(new Paragraph(
             new ParagraphProperties(
                 new Justification { Val = JustificationValues.Center }),
             default(RunFormat).WithCharacterStyle(StyleIds.CodeChar).ToRun(tex)));
     }
+
+    /// <summary>
+    /// The lines a fenced block was written as, which is both what a fallback writes into the
+    /// document and how the export report names the thing that could not be carried across.
+    /// </summary>
+    private static string SourceOf(LeafBlock block) =>
+        block.Lines.Count == 0
+            ? string.Empty
+            : string.Join(
+                Environment.NewLine,
+                Enumerable.Range(0, block.Lines.Count).Select(i => block.Lines.Lines[i].Slice.ToString()));
 
     /// <summary>
     /// A horizontal rule, drawn as a bottom border on an empty paragraph.

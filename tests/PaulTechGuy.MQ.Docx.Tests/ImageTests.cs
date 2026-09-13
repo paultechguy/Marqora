@@ -159,6 +159,129 @@ public class ImageTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// A picture written into the markdown itself rather than beside it.
+    ///
+    /// It used to fall through to the relative-path branch, where no file of that name exists,
+    /// and be reported as *not found* - a wrong reason as well as a missing picture. Nothing
+    /// was missing: the bytes were in the document, and embedding them needs no network call,
+    /// which is the whole reason a remote image cannot be embedded and this one can.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_written_into_the_markdown_is_embedded()
+    {
+        using var exported = await ExportAsync($"![Inline picture]({DataUri(96, 48)})\n");
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<w:drawing>");
+
+        // Read out of the decoded bytes: 96 pixels at 96 DPI is an inch, which is 914400 EMU.
+        xml.ShouldContain("cx=\"914400\"");
+        xml.ShouldContain("cy=\"457200\"");
+        exported.Skipped.ShouldBeEmpty();
+        ImagePartCount(exported.Path).ShouldBe(1);
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Keyed on the bytes, not on the URL: one icon pasted through a document is one part. The
+    /// middle one is wrapped in a link, which is the shape that made three separate lines of
+    /// the same picture in the export report.
+    /// </summary>
+    [Fact]
+    public async Task The_same_embedded_picture_three_times_is_stored_once()
+    {
+        string uri = DataUri(96, 48);
+
+        using var exported = await ExportAsync(
+            $"![One]({uri})\n\n[![Two]({uri})](https://example.com)\n\n![Three]({uri})\n");
+
+        ImagePartCount(exported.Path).ShouldBe(1);
+        exported.Skipped.ShouldBeEmpty();
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// An embedded picture does not need a folder to be found in, so it is answered before the
+    /// document is asked where it lives.
+    /// </summary>
+    [Fact]
+    public async Task An_embedded_picture_survives_a_document_that_has_never_been_saved()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            $"![Inline picture]({DataUri(96, 48)})\n");
+
+        ImagePartCount(exported.Path).ShouldBe(1);
+        exported.Skipped.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Word has drawn SVG since 2016 but wants a raster to fall back on, and producing one
+    /// would mean rendering it. What matters is that the reason is the true one: it is a
+    /// picture Word will not draw, not a file somebody has moved.
+    /// </summary>
+    [Fact]
+    public async Task An_embedded_picture_Word_cannot_draw_says_so_rather_than_not_found()
+    {
+        using var exported = await ExportAsync(
+            "![Blue circle](data:image/svg+xml;base64,PHN2Zy8+)\n");
+
+        exported.Skipped.Count.ShouldBe(1);
+        exported.Skipped[0].ShouldContain("not a picture Word can show");
+        exported.Skipped[0].ShouldNotContain("not found");
+        exported.PlainText().ShouldContain("Blue circle");
+    }
+
+    /// <summary>
+    /// The export report is read by a person in a dialog, and a data URI is thousands of
+    /// characters of base64. Without a label of its own, a picture with no alt text would
+    /// paste the entire thing into it.
+    /// </summary>
+    [Fact]
+    public async Task An_embedded_picture_that_cannot_be_shown_is_named_rather_than_quoted()
+    {
+        using var exported = await ExportAsync("![](data:image/svg+xml;base64,PHN2Zy8+)\n");
+
+        exported.Skipped.Count.ShouldBe(1);
+        exported.Skipped[0].ShouldContain("an embedded image");
+        exported.Skipped[0].ShouldNotContain("PHN2Zy8+");
+    }
+
+    /// <summary>
+    /// Where, not only what.
+    ///
+    /// Being told that a picture is missing is half of it; finding it in a document of two
+    /// thousand lines is the other half, and the report used to leave that half to the reader.
+    /// Counted from one, the way an editor counts.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_picture_says_which_line_it_was_on()
+    {
+        using var exported = await ExportAsync(
+            "First line.\n\nSecond line.\n\n![A picture](no-such-file.png)\n");
+
+        exported.Issues.Count.ShouldBe(1);
+        exported.Issues[0].Line.ShouldBe(5);
+        exported.Issues[0].Problem.ShouldBe("Not found");
+        exported.Issues[0].Item.ShouldBe("A picture");
+    }
+
+    /// <summary>
+    /// One row per place, not per sentence. Three copies of one picture are three things to
+    /// fix, and a reader working down the list has to be taken to each of them.
+    /// </summary>
+    [Fact]
+    public async Task The_same_missing_picture_twice_is_two_rows_at_two_lines()
+    {
+        using var exported = await ExportAsync(
+            "![Gone](no-such-file.png)\n\n![Gone](no-such-file.png)\n");
+
+        exported.Issues.Count.ShouldBe(2);
+        exported.Issues[0].Line.ShouldBe(1);
+        exported.Issues[1].Line.ShouldBe(3);
+    }
+
     private async Task<ExportedDocument> ExportAsync(string markdown)
     {
         string source = Path.Combine(_folder, "document.md");
@@ -179,7 +302,7 @@ public class ImageTests : IDisposable
     /// A real PNG: the signature, then an IHDR chunk carrying the dimensions. Nothing reads
     /// past the header, so the pixel data is left out.
     /// </summary>
-    private void WritePng(string name, uint width, uint height)
+    private static byte[] PngBytes(uint width, uint height)
     {
         byte[] png = new byte[33];
 
@@ -196,6 +319,13 @@ public class ImageTests : IDisposable
         png[24] = 8;  // bit depth
         png[25] = 6;  // truecolor with alpha
 
-        File.WriteAllBytes(Path.Combine(_folder, name), png);
+        return png;
     }
+
+    private void WritePng(string name, uint width, uint height) =>
+        File.WriteAllBytes(Path.Combine(_folder, name), PngBytes(width, height));
+
+    /// <summary>The same picture, written into the markdown instead of beside it.</summary>
+    private static string DataUri(uint width, uint height) =>
+        "data:image/png;base64," + Convert.ToBase64String(PngBytes(width, height));
 }

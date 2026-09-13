@@ -6,6 +6,13 @@ using PaulTechGuy.MQ.Domain;
 using Shouldly;
 using Xunit;
 
+// By name only: the Wordprocessing namespace has a PageMargin of its own, and importing it
+// whole would make this file's PageMargin - the export setting - ambiguous.
+using Hyperlink = DocumentFormat.OpenXml.Wordprocessing.Hyperlink;
+using Paragraph = DocumentFormat.OpenXml.Wordprocessing.Paragraph;
+using RunProperties = DocumentFormat.OpenXml.Wordprocessing.RunProperties;
+using Text = DocumentFormat.OpenXml.Wordprocessing.Text;
+
 namespace PaulTechGuy.MQ.Docx.Tests;
 
 /// <summary>
@@ -38,6 +45,54 @@ public class AppearanceTests
 
         // Based on Normal, in the body face and the body size - not the heading's.
         styles.ShouldContain("toc 1");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The other half of the same defect, and the half the TOC styles cannot reach.
+    ///
+    /// A contents entry is not just the heading's text: Word copies the heading's direct
+    /// character formatting into it as well, and direct formatting beats the style of the line
+    /// it lands in. So a heading holding inline code or a bold word put a shaded monospaced
+    /// word - or a bold one - in the middle of an otherwise ordinary contents line, with no
+    /// switch on the field to say otherwise.
+    ///
+    /// A heading is therefore written plain and dressed by its style, which is what a heading
+    /// in Word is anyway. The paragraph underneath is the control: the same markdown keeps
+    /// everything it asked for, so this is a rule about headings and not a loss everywhere.
+    /// </summary>
+    [Fact]
+    public async Task A_headings_own_emphasis_is_not_written_so_its_contents_entry_is_plain()
+    {
+        const string Line = "Run `--check` with **care**, ==stay== *sharp* "
+            + "and [read the docs](https://example.com)";
+
+        using var exported = await ExportedDocument.FromAsync(
+            $"# {Line}\n\n{Line}.\n",
+            new DocxExportSetup { IncludeTableOfContents = true });
+
+        using WordprocessingDocument file = WordprocessingDocument.Open(exported.Path, false);
+
+        Paragraph heading = file.MainDocumentPart!.Document!.Body!
+            .Descendants<Paragraph>()
+            .First(p => p.ParagraphProperties?.ParagraphStyleId?.Val?.Value == "Heading1");
+
+        heading.Descendants<RunProperties>().ShouldBeEmpty();
+
+        string text = string.Concat(heading.Descendants<Text>().Select(t => t.Text));
+
+        text.ShouldBe("Run --check with care, stay sharp and read the docs");
+
+        // The link still links. It is the blue underline that goes, with everything else the
+        // contents field would have copied.
+        heading.Descendants<Hyperlink>().ShouldNotBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("MarqoraCodeChar");
+        xml.ShouldContain("MarqoraMark");
+        xml.ShouldContain("<w:b ");
+        xml.ShouldContain("<w:i ");
         exported.ValidationErrors().ShouldBeEmpty();
     }
 

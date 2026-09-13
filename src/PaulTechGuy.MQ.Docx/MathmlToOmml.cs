@@ -122,6 +122,12 @@ internal static class MathmlToOmml
     /// Steps past the wrappers KaTeX puts round everything, and past the annotation that
     /// records the TeX - which is metadata about the equation rather than part of it, and
     /// would otherwise be written into the document as text.
+    ///
+    /// <c>mpadded</c> is in that list for the same reason <c>mspace</c> is dropped: it says
+    /// nothing about what the expression means, only how much room to leave round it or how
+    /// far to shift it, and OMML does its own spacing. It is what KaTeX reaches for on
+    /// <c>\raisebox</c>, <c>\smash</c> and the overlaps inside an mhchem reaction - so before
+    /// it was stepped past, one padded arrow declined an entire equation to its TeX source.
     /// </summary>
     private static IEnumerable<XElement> Unwrap(XElement element)
     {
@@ -132,6 +138,7 @@ internal static class MathmlToOmml
                 case "semantics":
                 case "mrow":
                 case "mstyle":
+                case "mpadded":
                     foreach (XElement inner in Unwrap(child))
                     {
                         yield return inner;
@@ -353,11 +360,13 @@ internal static class MathmlToOmml
                 return [Table(element)];
 
             case "mphantom":
-                return [new M.Phantom(new M.PhantomProperties(), Argument<M.Base>(element))];
+                return [new M.Phantom(new M.PhantomProperties(), ContentsAs<M.Base>(element))];
 
+            // Spacing and position only - see Unwrap for why mpadded is one of these.
             case "mrow":
             case "mstyle":
             case "semantics":
+            case "mpadded":
                 return Children(element);
 
             case "annotation":
@@ -463,10 +472,21 @@ internal static class MathmlToOmml
     };
 
     /// <summary>
-    /// One argument of a construct - a numerator, a base, a superscript - built from a single
-    /// MathML child.
+    /// An argument built from what is <b>inside</b> an element, the element itself
+    /// contributing nothing but its containment: the cell of a matrix, the body of a phantom.
+    ///
+    /// The pair with <see cref="NodeAs{T}"/> is the sharpest edge in this file. They differ by
+    /// one word at the call site and by everything in what they mean, and picking the wrong
+    /// one is silent: a matrix cell handed to <see cref="NodeAs{T}"/> asks for an
+    /// <c>mtd</c> to be converted, nothing converts an <c>mtd</c>, and the whole equation
+    /// declines to its TeX source. That is what happened to every matrix, aligned system and
+    /// set of cases until a test finally covered one.
+    ///
+    /// The rule: a <b>container</b> - <c>mtd</c>, <c>mphantom</c>, anything whose children are
+    /// the expression - takes this one. A <b>node</b> that is itself the expression takes the
+    /// other.
     /// </summary>
-    private static T Argument<T>(XElement source)
+    private static T ContentsAs<T>(XElement source)
         where T : OpenXmlCompositeElement, new()
     {
         var argument = new T();
@@ -479,7 +499,12 @@ internal static class MathmlToOmml
         return argument;
     }
 
-    private static T ArgumentOf<T>(XElement node)
+    /// <summary>
+    /// An argument built from the element <b>itself</b>: a numerator, a base, a superscript,
+    /// each of which is one MathML node to convert rather than a wrapper to open. See
+    /// <see cref="ContentsAs{T}"/> for the difference and what mixing them up costs.
+    /// </summary>
+    private static T NodeAs<T>(XElement node)
         where T : OpenXmlCompositeElement, new()
     {
         var argument = new T();
@@ -521,8 +546,8 @@ internal static class MathmlToOmml
 
         return new M.Fraction(
             properties,
-            ArgumentOf<M.Numerator>(parts[0]),
-            ArgumentOf<M.Denominator>(parts[1]));
+            NodeAs<M.Numerator>(parts[0]),
+            NodeAs<M.Denominator>(parts[1]));
     }
 
     /// <summary>
@@ -532,7 +557,7 @@ internal static class MathmlToOmml
     private static M.Radical SquareRoot(XElement element) => new(
         new M.RadicalProperties(new M.HideDegree { Val = M.BooleanValues.One }, new M.ControlProperties()),
         new M.Degree(),
-        Argument<M.Base>(element));
+        ContentsAs<M.Base>(element));
 
     /// <summary>
     /// An nth root. MathML puts the radicand first and the index second; OMML writes the index
@@ -544,8 +569,8 @@ internal static class MathmlToOmml
 
         return new M.Radical(
             new M.RadicalProperties(new M.HideDegree { Val = M.BooleanValues.Zero }, new M.ControlProperties()),
-            ArgumentOf<M.Degree>(parts[1]),
-            ArgumentOf<M.Base>(parts[0]));
+            NodeAs<M.Degree>(parts[1]),
+            NodeAs<M.Base>(parts[0]));
     }
 
     private static M.Subscript Sub(XElement element)
@@ -554,8 +579,8 @@ internal static class MathmlToOmml
 
         return new M.Subscript(
             new M.SubscriptProperties(new M.ControlProperties()),
-            ArgumentOf<M.Base>(parts[0]),
-            ArgumentOf<M.SubArgument>(parts[1]));
+            NodeAs<M.Base>(parts[0]),
+            NodeAs<M.SubArgument>(parts[1]));
     }
 
     private static M.Superscript Sup(XElement element)
@@ -564,8 +589,8 @@ internal static class MathmlToOmml
 
         return new M.Superscript(
             new M.SuperscriptProperties(new M.ControlProperties()),
-            ArgumentOf<M.Base>(parts[0]),
-            ArgumentOf<M.SuperArgument>(parts[1]));
+            NodeAs<M.Base>(parts[0]),
+            NodeAs<M.SuperArgument>(parts[1]));
     }
 
     private static OpenXmlElement SubSup(XElement element)
@@ -579,9 +604,9 @@ internal static class MathmlToOmml
 
         return new M.SubSuperscript(
             new M.SubSuperscriptProperties(new M.ControlProperties()),
-            ArgumentOf<M.Base>(parts[0]),
-            ArgumentOf<M.SubArgument>(parts[1]),
-            ArgumentOf<M.SuperArgument>(parts[2]));
+            NodeAs<M.Base>(parts[0]),
+            NodeAs<M.SubArgument>(parts[1]),
+            NodeAs<M.SuperArgument>(parts[2]));
     }
 
     /// <summary>
@@ -599,13 +624,13 @@ internal static class MathmlToOmml
                     new M.AccentChar { Val = parts[1].Value.Trim() },
                     new M.Position { Val = M.VerticalJustificationValues.Bottom },
                     new M.ControlProperties()),
-                ArgumentOf<M.Base>(parts[0]));
+                NodeAs<M.Base>(parts[0]));
         }
 
         return new M.LimitLower(
             new M.LimitLowerProperties(new M.ControlProperties()),
-            ArgumentOf<M.Base>(parts[0]),
-            ArgumentOf<M.Limit>(parts[1]));
+            NodeAs<M.Base>(parts[0]),
+            NodeAs<M.Limit>(parts[1]));
     }
 
     /// <summary>
@@ -622,13 +647,13 @@ internal static class MathmlToOmml
                 new M.AccentProperties(
                     new M.AccentChar { Val = parts[1].Value.Trim() },
                     new M.ControlProperties()),
-                ArgumentOf<M.Base>(parts[0]));
+                NodeAs<M.Base>(parts[0]));
         }
 
         return new M.LimitUpper(
             new M.LimitUpperProperties(new M.ControlProperties()),
-            ArgumentOf<M.Base>(parts[0]),
-            ArgumentOf<M.Limit>(parts[1]));
+            NodeAs<M.Base>(parts[0]),
+            NodeAs<M.Limit>(parts[1]));
     }
 
     private static OpenXmlElement UnderOver(XElement element)
@@ -646,9 +671,9 @@ internal static class MathmlToOmml
             new M.Base(
                 new M.LimitLower(
                     new M.LimitLowerProperties(new M.ControlProperties()),
-                    ArgumentOf<M.Base>(parts[0]),
-                    ArgumentOf<M.Limit>(parts[1]))),
-            ArgumentOf<M.Limit>(parts[2]));
+                    NodeAs<M.Base>(parts[0]),
+                    NodeAs<M.Limit>(parts[1]))),
+            NodeAs<M.Limit>(parts[2]));
     }
 
     /// <summary>
@@ -678,8 +703,8 @@ internal static class MathmlToOmml
                 new M.HideSubArgument { Val = M.BooleanValues.Zero },
                 new M.HideSuperArgument { Val = M.BooleanValues.Zero },
                 new M.ControlProperties()),
-            ArgumentOf<M.SubArgument>(lower),
-            ArgumentOf<M.SuperArgument>(upper),
+            NodeAs<M.SubArgument>(lower),
+            NodeAs<M.SuperArgument>(upper),
             new M.Base());
     }
 
@@ -703,11 +728,17 @@ internal static class MathmlToOmml
             new M.MatrixProperties(
                 new M.MatrixColumns(
                     new M.MatrixColumn(
-                        new M.MatrixColumnCount { Val = columns },
-                        new M.MatrixColumnJustification
-                        {
-                            Val = M.HorizontalAlignmentValues.Center,
-                        })),
+                        // The count and the justification belong to the column's own
+                        // properties element, not to the column. Word answers the flatter
+                        // shape the way it answers every other schema mistake - by offering
+                        // to repair the file - and no matrix had ever reached a document to
+                        // find out.
+                        new M.MatrixColumnProperties(
+                            new M.MatrixColumnCount { Val = columns },
+                            new M.MatrixColumnJustification
+                            {
+                                Val = M.HorizontalAlignmentValues.Center,
+                            }))),
                 new M.ControlProperties()));
 
         foreach (XElement row in rows)
@@ -716,7 +747,9 @@ internal static class MathmlToOmml
 
             foreach (XElement cell in row.Elements().Where(e => e.Name.LocalName == "mtd"))
             {
-                matrixRow.AppendChild(ArgumentOf<M.Base>(cell));
+                // The cell's contents, not the cell: an mtd is a container and nothing
+                // converts one. See ContentsAs.
+                matrixRow.AppendChild(ContentsAs<M.Base>(cell));
             }
 
             // A short row would leave the matrix ragged, and Word expects every row to be the

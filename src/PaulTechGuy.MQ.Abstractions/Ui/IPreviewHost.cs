@@ -446,8 +446,21 @@ public interface IPreviewHost
     /// in the results list and moving to the text.
     ///
     /// Line and column are zero-based, as everywhere else inside the app.
+    ///
+    /// <paramref name="revealAtTop"/> lifts the line to the top of the pane instead of
+    /// centering it, and the difference is what the caller is showing. A search result is read
+    /// with the text around it, so it is centered and a result already on screen does not move
+    /// at all. A place picked out of a report - a line an export could not carry across - is a
+    /// starting point rather than a match: what the reader wants is everything below it, which
+    /// is the same argument the outline makes for lifting a heading to the top.
     /// </summary>
-    Task SelectRangeAsync(Guid documentId, int line, int column, int length, bool focusEditor);
+    Task SelectRangeAsync(
+        Guid documentId,
+        int line,
+        int column,
+        int length,
+        bool focusEditor,
+        bool revealAtTop = false);
 
     /// <summary>Puts the keyboard in the source pane. <see cref="FocusPaneAsync"/> for Source.</summary>
     Task FocusEditorAsync();

@@ -42,6 +42,27 @@ internal readonly record struct RunFormat
     /// <summary>What is behind the text, as six hex digits.</summary>
     public string? Shading { get; init; }
 
+    /// <summary>
+    /// A run that wears nothing, whatever the markdown around it asked for.
+    ///
+    /// Headings are written this way, and the reason is the table of contents. Word does not
+    /// build a contents entry out of the heading's text alone - it copies the heading's
+    /// <b>direct</b> character formatting along with it, and direct formatting beats the TOC
+    /// style that sets the face and the size of the line. So a heading holding
+    /// <c>`--check`</c> or <c>**bold**</c> puts a bold shaded monospaced word in the middle of
+    /// an otherwise ordinary contents line, and there is no field switch that turns it off.
+    /// The only place to stop it is here, where the heading's runs are written.
+    ///
+    /// The alternative was a TC field per heading, holding the text the contents should show.
+    /// That text is a copy: right when the file is written and wrong from the first time
+    /// somebody renames a heading in Word - the same reason the heading numbers are Word's own
+    /// rather than written out - and TC entries lose those numbers as well.
+    ///
+    /// <see cref="Build"/> is the gate. Everything else is still carried down the inline tree
+    /// as it always was; none of it reaches the XML.
+    /// </summary>
+    public bool Plain { get; init; }
+
     public RunFormat WithBold() => this with { Bold = true };
 
     public RunFormat WithItalic() => this with { Italic = true };
@@ -76,7 +97,9 @@ internal readonly record struct RunFormat
     /// </summary>
     public RunProperties? Build()
     {
-        if (this == default)
+        // A plain run refuses the lot, and refuses it here rather than at each With - see
+        // Plain for what a heading's formatting does to the contents page.
+        if (Plain || this == default)
         {
             return null;
         }

@@ -655,6 +655,13 @@ out of Alt+Tab and the taskbar, paints its caption to match the theme, and remem
 left. Subclasses keep what is genuinely theirs — their content, when they show and hide, and what
 they do about a theme change beyond the caption.
 
+There are five: `CheatsheetWindow`, `FindAllWindow`, `PreferencesWindow`, `FolioWindow` and
+`ExportReportWindow`. They divide into two kinds, and which kind a new one is decides how it is
+built. The first three are **kept and hidden**, because what is in them is worth coming back to —
+the last search, the scroll position, a page of settings. The last two are **built per use and
+closed**, because each describes one particular thing that has already happened, and stale advice
+about a share or an export that has since been done again is worse than no window.
+
 **Placement is the base's job, not the subclass's.** `SavedPlacement` and `StorePlacement` are the
 two abstract members, and they are the whole of what a window has to say about where it lives;
 `RestorePlacement`, `CapturePlacement` and `TrackPlacementChanges` do the rest. The stored
@@ -681,6 +688,15 @@ example: it watches `IWorkspaceService.Changed`, marks its results out of date a
 again, because reshuffling rows under the reader would be worse than letting them ask. Any later
 window built on a snapshot of the workspace — a share preflight, an export set — has the same
 problem and should take the same answer.
+
+`ExportReportWindow` is the case that paragraph predicted, and it took the same answer with one
+addition. Its rows carry **line numbers from the document as it was exported**, and a row is
+clickable: picking one takes the caret there. An edit underneath it does not only make the list
+out of date, it makes every row an invitation to land the caret in the wrong place. So the first
+real edit to that document fades the rows, shows the amber notice, and **stops them navigating at
+all** — a row that cannot be trusted does not offer. The alternatives were both refused here:
+locking the editor while the window is up would be a read-only state the app has never had, and
+real modality is the cost above.
 
 Real modality would be a first for the app, and it is not free: the owner has to be disabled and
 re-enabled around the window's whole lifetime, and an exception escaping in between leaves the

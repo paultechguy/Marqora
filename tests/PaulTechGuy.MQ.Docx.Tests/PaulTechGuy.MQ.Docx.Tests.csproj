@@ -31,4 +31,13 @@
     <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Docx\PaulTechGuy.MQ.Docx.csproj" />
   </ItemGroup>
 
+  <!--
+    The math corpus: every display equation in docs/UltimateMarkdownContent.md, with the
+    MathML the app's own KaTeX produces for it. Written by build/Update-MathCorpus.js, not by
+    hand - see the header in either file.
+  -->
+  <ItemGroup>
+    <Content Include="Fixtures\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

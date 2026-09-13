@@ -177,6 +177,22 @@ public sealed record AppSettings
     public static WindowPlacement DefaultFindAllWindow { get; } = new() { Width = 760, Height = 560 };
 
     /// <summary>
+    /// Geometry of the export report window. Nullable for the same reason as
+    /// <see cref="CheatsheetWindow"/>; read it through <see cref="ExportReportPlacement"/>.
+    /// </summary>
+    public WindowPlacement? ExportReportWindow { get; set; }
+
+    /// <summary>The export report's geometry, safe to use whatever the settings file held.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WindowPlacement ExportReportPlacement => ExportReportWindow ?? DefaultExportReportWindow;
+
+    /// <summary>
+    /// Wide enough for a reason and the thing it happened to on one line, and short enough not
+    /// to cover the document it is describing - the reader works between the two.
+    /// </summary>
+    public static WindowPlacement DefaultExportReportWindow { get; } = new() { Width = 720, Height = 460 };
+
+    /// <summary>
     /// Geometry of the Folio preflight window. Nullable for the same reason as
     /// <see cref="CheatsheetWindow"/>; read it through <see cref="FolioPlacement"/>.
     /// </summary>
@@ -636,6 +652,7 @@ public sealed record AppSettings
             CheatsheetWindow = current.CheatsheetWindow,
             CheatsheetScrollTop = current.CheatsheetScrollTop,
             FindAllWindow = current.FindAllWindow,
+            ExportReportWindow = current.ExportReportWindow,
             FolioWindow = current.FolioWindow,
             FolioProblemsHeight = current.FolioProblemsHeight,
             PreferencesWindow = current.PreferencesWindow,

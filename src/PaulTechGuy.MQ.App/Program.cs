@@ -158,6 +158,7 @@ public static class Program
         builder.Services.AddSingleton<ICheatsheetService, CheatsheetService>();
         builder.Services.AddSingleton<IDiagramWindowService, DiagramWindowService>();
         builder.Services.AddSingleton<IFindAllWindowService, FindAllWindowService>();
+        builder.Services.AddSingleton<IExportReportService, ExportReportService>();
         builder.Services.AddSingleton<WindowContext>();
 
         // Windows-only COM, so it belongs here rather than in a library. Registered under both

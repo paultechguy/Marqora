@@ -1031,7 +1031,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public Task ScrollToLineAsync(int line) => SendAsync("scrollToLine", new { line });
 
-    public Task SelectRangeAsync(Guid documentId, int line, int column, int length, bool focusEditor)
+    public Task SelectRangeAsync(
+        Guid documentId,
+        int line,
+        int column,
+        int length,
+        bool focusEditor,
+        bool revealAtTop = false)
     {
         // Monaco's own focus() cannot do this half of it, for the reason FocusWebView spells
         // out: without XAML focus the page never sees a keystroke at all.
@@ -1040,7 +1046,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             FocusWebView();
         }
 
-        return SendAsync("selectRange", new { id = documentId, line, column, length, focus = focusEditor });
+        return SendAsync(
+            "selectRange",
+            new { id = documentId, line, column, length, focus = focusEditor, atTop = revealAtTop });
     }
 
     public Task FocusEditorAsync() => FocusPaneAsync(EditorPane.Source);

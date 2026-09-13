@@ -56,8 +56,11 @@ public interface IDocxExporter
     /// machine, a remote image that would need the network, a diagram that never rendered -
     /// so the caller can say so. An export with a hole in it is otherwise discovered by
     /// whoever opens the document, somewhere else, with no way to know what happened.
+    ///
+    /// In document order, and each one carries the line it was on, counted from one: being
+    /// told what is missing is half of it, and finding it in two thousand lines is the other.
     /// </returns>
-    Task<IReadOnlyList<string>> WriteAsync(
+    Task<IReadOnlyList<DocxExportIssue>> WriteAsync(
         string outputPath,
         string title,
         string markdown,

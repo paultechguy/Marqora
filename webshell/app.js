@@ -4853,7 +4853,24 @@
       };
 
       editor.setSelection(range);
-      editor.revealRangeInCenterIfOutsideViewport(range);
+
+      /*
+        Centered for a search result, at the top for a place picked out of a report.
+
+        A match is read with the text around it, and centering keeps that context on both
+        sides - it also leaves a match that was already on screen exactly where it was, which
+        is what makes stepping through results readable.
+
+        A row in the export report is not a match but a starting point: the reader is going
+        there to fix something, and what they need is everything from that line downwards. So
+        it is lifted to the top, the same way the outline lifts a heading - and for the same
+        reason, spelled out in scrollToLine above.
+      */
+      if (p.atTop) {
+        editor.revealRangeAtTop(range);
+      } else {
+        editor.revealRangeInCenterIfOutsideViewport(range);
+      }
 
       // Only when the user asked to be taken there. Stepping through a results list leaves
       // the keyboard in the Find All window, where the next arrow key belongs.

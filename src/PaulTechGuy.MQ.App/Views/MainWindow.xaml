@@ -1662,8 +1662,12 @@
                 The outline panel.
 
                 Shown only when there is a document to outline: with no tabs open the empty
-                state below fills the row, and a panel headed "Outline" beside a drop target
-                would be listing nothing on purpose.
+                state below fills the row, and a panel with nothing in it beside a drop
+                target would be listing nothing on purpose.
+
+                No "Outline" caption above the filter box: the panel's position, the drop
+                target beside it and the filter's own placeholder already say what it is,
+                and a label repeating that added nothing.
             -->
             <Border x:Name="OutlinePanel"
                     Grid.Column="0"
@@ -1675,33 +1679,32 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0"
-                               Text="Outline"
-                               Margin="12,10,12,6"
-                               Style="{StaticResource MqCaptionTextStyle}" />
 
                     <!--
                         The first editable field ever to live in this window, which is why
                         RegisterAccelerators now asks what has focus before running an Edit
                         command: Ctrl+A here has to select these few letters rather than the
                         whole document behind it.
+
+                        Hidden when the document has no headings at all - HasOutlineHeadings,
+                        not HasOutlineRows, because a real outline merely filtered down to
+                        nothing must keep the box on screen so the filter can be cleared.
                     -->
                     <TextBox x:Name="OutlineFilterBox"
-                             Grid.Row="1"
-                             Margin="8,0,8,8"
-                             PlaceholderText="Filter"
+                             Grid.Row="0"
+                             Margin="8,8,8,8"
+                             PlaceholderText="Filter outline"
                              Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Filter the outline" />
+                             AutomationProperties.Name="Filter the outline"
+                             Visibility="{x:Bind VisibleWhen(ViewModel.HasOutlineHeadings), Mode=OneWay}" />
 
                     <!--
                         The hint sits behind the list and shows through when it is empty,
                         exactly as the Find All results do.
                     -->
-                    <Grid Grid.Row="2">
+                    <Grid Grid.Row="1">
                         <TextBlock Text="{x:Bind ViewModel.OutlineEmptyMessage, Mode=OneWay}"
                                    Margin="16,4"
                                    Opacity="0.55"

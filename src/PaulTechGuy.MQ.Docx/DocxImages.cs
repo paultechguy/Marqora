@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Security.Cryptography;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Drawing.Wordprocessing;
 using DocumentFormat.OpenXml.Packaging;
@@ -59,7 +60,7 @@ internal sealed class DocxImages
     /// The picture as a run, or null when it could not be embedded - in which case the caller
     /// writes the alt text instead and the reason has already been recorded.
     /// </summary>
-    public Run? TryBuild(string url, string altText, int maximumWidthTwips)
+    public Run? TryBuild(string url, string altText, int maximumWidthTwips, int sourceLine)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -73,13 +74,22 @@ internal sealed class DocxImages
         if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            Skip(altText, url, "not on this machine");
+            Skip(sourceLine, altText, url, "Not on this machine");
             return null;
+        }
+
+        // A data URI carries the picture instead of pointing at it, so it is the one
+        // remote-looking form that needs nothing fetched - the bytes are already in the
+        // markdown. It is answered before the folder is asked for, because an unsaved document
+        // has no folder and an embedded picture does not need one.
+        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryBuildFromDataUri(url, altText, maximumWidthTwips, sourceLine);
         }
 
         if (_documentFolder is null)
         {
-            Skip(altText, url, "the document has not been saved, so its images cannot be found");
+            Skip(sourceLine, altText, url, "The document has not been saved, so its images cannot be found");
             return null;
         }
 
@@ -90,18 +100,18 @@ internal sealed class DocxImages
         if (PathContainment.ResolveWithin(_documentFolder, decoded) is not { } full
             || !File.Exists(full))
         {
-            Skip(altText, url, "not found");
+            Skip(sourceLine, altText, url, "Not found");
             return null;
         }
 
         try
         {
-            return Build(full, altText, maximumWidthTwips);
+            return Build(full, altText, maximumWidthTwips, sourceLine);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(ex, "The image {Path} could not be read.", full);
-            Skip(altText, url, "could not be read");
+            Skip(sourceLine, altText, url, "Could not be read");
 
             return null;
         }
@@ -159,13 +169,88 @@ internal sealed class DocxImages
             Math.Max(height, 1));
     }
 
-    private Run? Build(string path, string altText, int maximumWidthTwips)
+    /// <summary>
+    /// A picture written into the markdown itself, as <c>data:image/png;base64,…</c>.
+    ///
+    /// Base64 only, and only the types Word draws. The other form the same document uses -
+    /// <c>data:image/svg+xml;utf8,&lt;svg …&gt;</c> - is neither: Word has drawn SVG since
+    /// 2016 but wants a raster to fall back on, and producing one would mean rendering the
+    /// thing. Saying it is not a picture Word can show is the honest answer, and the alt text
+    /// goes in as it does for any other picture that cannot be embedded.
+    ///
+    /// The part is keyed on a hash of the bytes rather than on the URL, so the same small icon
+    /// pasted into a document twenty times is stored once - and so that two URIs differing
+    /// only in the case of their base64 cannot collide in a case-insensitive dictionary.
+    /// </summary>
+    private Run? TryBuildFromDataUri(string url, string altText, int maximumWidthTwips, int sourceLine)
+    {
+        string label = altText.Length > 0 ? altText : "an embedded image";
+        int comma = url.IndexOf(',', StringComparison.Ordinal);
+
+        // "data:" is five characters; everything up to the comma describes what follows it.
+        string header = comma > 5 ? url[5..comma] : string.Empty;
+
+        if (!header.Contains("base64", StringComparison.OrdinalIgnoreCase))
+        {
+            Skip(sourceLine, label, label, "Not a picture Word can show");
+            return null;
+        }
+
+        string mediaType = header.Split(';')[0].Trim().ToLowerInvariant();
+
+        if (EmbeddedTypeFor(mediaType) is not { } embedded)
+        {
+            Skip(sourceLine, label, label, "Not a picture Word can show");
+            return null;
+        }
+
+        byte[] bytes;
+
+        try
+        {
+            bytes = Convert.FromBase64String(url[(comma + 1)..]);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "An embedded {MediaType} image was not valid base64.", mediaType);
+            Skip(sourceLine, label, label, "Could not be read");
+
+            return null;
+        }
+
+        if (bytes.Length == 0)
+        {
+            Skip(sourceLine, label, label, "Could not be read");
+            return null;
+        }
+
+        string key = $"data:{Convert.ToHexString(SHA256.HashData(bytes))}";
+
+        if (!_parts.TryGetValue(key, out string? relationshipId))
+        {
+            ImagePart part = _main.AddImagePart(embedded.Type);
+
+            using (var source = new MemoryStream(bytes))
+            {
+                part.FeedData(source);
+            }
+
+            relationshipId = _main.GetIdOfPart(part);
+            _parts[key] = relationshipId;
+        }
+
+        (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips);
+
+        return BuildRun(relationshipId, altText, embedded.Name, width, height);
+    }
+
+    private Run? Build(string path, string altText, int maximumWidthTwips, int sourceLine)
     {
         if (!_parts.TryGetValue(path, out string? relationshipId))
         {
             if (PartTypeFor(path) is not { } contentType)
             {
-                Skip(altText, path, "not a picture Word can show");
+                Skip(sourceLine, altText, path, "Not a picture Word can show");
                 return null;
             }
 
@@ -193,10 +278,18 @@ internal sealed class DocxImages
     /// with its proportions kept, and anything taller than the page after that is scaled again
     /// - a tall narrow screenshot otherwise takes three pages to itself.
     /// </summary>
-    private static (long Width, long Height) SizeOf(string path, int maximumWidthTwips)
-    {
-        (uint Width, uint Height)? pixels = ReadPixelSize(path);
+    private static (long Width, long Height) SizeOf(string path, int maximumWidthTwips) =>
+        Scale(ReadPixelSize(path), maximumWidthTwips);
 
+    /// <summary>
+    /// The same arithmetic for a picture read from a file and one decoded out of the markdown,
+    /// in one place rather than two: a second copy of a scaling rule is a second answer to
+    /// "how big is this" waiting to disagree with the first.
+    /// </summary>
+    private static (long Width, long Height) Scale(
+        (uint Width, uint Height)? pixels,
+        int maximumWidthTwips)
+    {
         long maximumWidth = Measure.TwipsToEmu(maximumWidthTwips);
 
         if (pixels is not { } size || size.Width == 0 || size.Height == 0)
@@ -307,6 +400,22 @@ internal sealed class DocxImages
     /// the SDK has no part type for it. Naming it as unshowable is more honest than embedding
     /// something half the readers will see as a blank box.
     /// </summary>
+    /// <summary>
+    /// The part type and a name for a media type out of a data URI, or null for something Word
+    /// will not draw. The same five types as a file on disk, and WebP left out for the same
+    /// reason.
+    /// </summary>
+    private static (PartTypeInfo Type, string Name)? EmbeddedTypeFor(string mediaType) =>
+        mediaType switch
+        {
+            "image/png" => (ImagePartType.Png, "embedded.png"),
+            "image/jpeg" or "image/jpg" => (ImagePartType.Jpeg, "embedded.jpg"),
+            "image/gif" => (ImagePartType.Gif, "embedded.gif"),
+            "image/bmp" => (ImagePartType.Bmp, "embedded.bmp"),
+            "image/tiff" => (ImagePartType.Tiff, "embedded.tif"),
+            _ => null,
+        };
+
     private static PartTypeInfo? PartTypeFor(string path) =>
         Path.GetExtension(path).ToLowerInvariant() switch
         {
@@ -318,11 +427,18 @@ internal sealed class DocxImages
             _ => null,
         };
 
-    private void Skip(string altText, string url, string why)
+    /// <summary>
+    /// Records a picture the document did not get, and says where it was.
+    ///
+    /// The alt text names it when there is one; a path or a URL stands in when there is not.
+    /// Shortened either way, because a data URI is several thousand characters of base64 and
+    /// this is read by a person in a list.
+    /// </summary>
+    private void Skip(int sourceLine, string altText, string url, string problem)
     {
         string what = altText.Length > 0 ? altText : url;
 
-        _report.Note($"{what} ({why})");
-        _logger.LogDebug("Image {Url} was not embedded: {Why}.", url, why);
+        _report.Note(sourceLine, problem, ExportReport.Shorten(what));
+        _logger.LogDebug("Image {Url} was not embedded: {Why}.", url, problem);
     }
 }

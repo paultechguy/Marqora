@@ -31,7 +31,12 @@ internal sealed class ExportedDocument : IDisposable
     public string Path { get; }
 
     /// <summary>What the exporter said it could not carry into the file.</summary>
-    public IReadOnlyList<string> Skipped { get; private init; } = [];
+    public IReadOnlyList<DocxExportIssue> Issues { get; private init; } = [];
+
+    /// <summary>
+    /// The same report as the lines a person reads, which is what most assertions are about.
+    /// </summary>
+    public IReadOnlyList<string> Skipped => [.. Issues.Select(i => i.ToString())];
 
     public static async Task<ExportedDocument> FromAsync(
         string markdown,
@@ -50,7 +55,7 @@ internal sealed class ExportedDocument : IDisposable
 
         var exporter = new DocxExporter(NullLogger<DocxExporter>.Instance);
 
-        IReadOnlyList<string> skipped = await exporter.WriteAsync(
+        IReadOnlyList<DocxExportIssue> issues = await exporter.WriteAsync(
             path,
             "Test document",
             markdown,
@@ -60,7 +65,7 @@ internal sealed class ExportedDocument : IDisposable
             renderedPreviewHtml,
             diagramPng).ConfigureAwait(false);
 
-        return new ExportedDocument(root, path) { Skipped = skipped };
+        return new ExportedDocument(root, path) { Issues = issues };
     }
 
     /// <summary>The whole document part as XML, which is what most assertions read.</summary>

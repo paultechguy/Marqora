@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using PaulTechGuy.MQ.Domain;
+
 namespace PaulTechGuy.MQ.Docx;
 
 /// <summary>
@@ -11,24 +13,51 @@ namespace PaulTechGuy.MQ.Docx;
 /// thing and nothing else. The trade is that the reader has to be told, or the document has a
 /// hole in it that only the person it was sent to will find.
 ///
-/// Deduplicating is the point of having a type rather than a list. A document with twenty
-/// equations that all use the same unmapped construct has one thing wrong with it, not twenty,
-/// and a dialog listing the same sentence twenty times says less than one saying it once.
+/// Every entry carries the line it happened on, so the report can be worked through rather
+/// than only read. Deduplicating is per place, not per sentence: three copies of the same
+/// picture in one document are three things to fix in three places, and collapsing them to
+/// one line would hide two of them. What is still collapsed is the same problem reported
+/// twice about the same line, which is one thing however many times the walk met it.
 /// </summary>
 internal sealed class ExportReport
 {
-    private readonly List<string> _messages = [];
-    private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
+    private readonly List<DocxExportIssue> _issues = [];
+    private readonly HashSet<(int Line, string Problem, string Item)> _seen = [];
 
-    public IReadOnlyList<string> Messages => _messages;
+    /// <summary>
+    /// Everything that could not be carried across, in document order.
+    ///
+    /// Sorted here rather than by the caller because the walk does not produce them in order:
+    /// diagrams are fetched before it starts, and Markdig relocates footnote definitions to
+    /// the end of the tree, so an issue inside a note arrives last and belongs in the middle.
+    /// </summary>
+    public IReadOnlyList<DocxExportIssue> Issues =>
+        [.. _issues.OrderBy(i => i.Line).ThenBy(i => i.Problem, StringComparer.Ordinal)];
 
-    /// <summary>Records something the document did not get, unless it has been said already.</summary>
-    public void Note(string message)
+    /// <summary>
+    /// Records something the document did not get.
+    /// </summary>
+    /// <param name="sourceLine">
+    /// The line as Markdig counts it, from zero, or -1 for something with no place in the
+    /// document. Converted to the line a reader sees here, once, so that nothing downstream
+    /// has to know which of the two conventions it is holding.
+    /// </param>
+    public void Note(int sourceLine, string problem, string item)
     {
-        if (!string.IsNullOrWhiteSpace(message) && _seen.Add(message))
+        if (string.IsNullOrWhiteSpace(problem))
         {
-            _messages.Add(message);
+            return;
         }
+
+        int line = sourceLine >= 0 ? sourceLine + 1 : 0;
+        string what = string.IsNullOrWhiteSpace(item) ? "(unnamed)" : item.Trim();
+
+        if (!_seen.Add((line, problem, what)))
+        {
+            return;
+        }
+
+        _issues.Add(new DocxExportIssue { Line = line, Problem = problem, Item = what });
     }
 
     /// <summary>
@@ -40,8 +69,36 @@ internal sealed class ExportReport
     /// actually use - and that only happens if each miss says what it was rather than quietly
     /// falling back.
     /// </summary>
-    public void UnsupportedMath(string? element) =>
-        Note(element is { Length: > 0 }
-            ? $"An equation used <{element}>, which has no Word form - its source is in the document instead"
-            : "An equation could not be converted - its source is in the document instead");
+    /// <param name="tex">
+    /// The equation's own source, so the report names the equation as well as the element.
+    /// One unmapped element can be met by several equations, and "an equation used
+    /// &lt;mtd&gt;" six times over says nothing about which six.
+    /// </param>
+    public void UnsupportedMath(int sourceLine, string? element, string? tex) =>
+        Note(
+            sourceLine,
+            element is { Length: > 0 }
+                ? $"No Word form for <{element}>; its source is in the document instead"
+                : "Could not be converted; its source is in the document instead",
+            Shorten(tex) is { Length: > 0 } source ? source : "An equation");
+
+    /// <summary>
+    /// The first line of something, cut to what a list can show.
+    ///
+    /// An equation can be twenty lines of TeX and a diagram a hundred of mermaid. The report
+    /// is read in a column beside a line number; what earns its place there is enough to
+    /// recognize the thing by.
+    /// </summary>
+    public static string Shorten(string? text, int limit = 60)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string first = text.ReplaceLineEndings("\n").Split('\n')
+            .FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim() ?? string.Empty;
+
+        return first.Length <= limit ? first : first[..limit].TrimEnd() + "…";
+    }
 }

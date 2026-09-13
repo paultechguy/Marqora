@@ -93,9 +93,11 @@ public sealed partial class MainWindow
         // once ItemsSource is bound is a detail of the control; the collection this window
         // filled is not in any doubt.
         //
-        // Nothing listed: an empty outline still has a filter box, which is the only thing
-        // in the panel worth landing on.
-        bool focused = ViewModel.OutlineRows.Count == 0
+        // Nothing listed but a filter is still possible: a real outline narrowed to nothing
+        // has a filter box worth landing on. A document with no headings at all has no
+        // filter box either - it is hidden along with everything else there is nothing to
+        // narrow - so the list is the only thing left to take the keyboard.
+        bool focused = ViewModel.OutlineRows.Count == 0 && ViewModel.HasOutlineHeadings
             ? OutlineFilterBox.Focus(FocusState.Programmatic)
 
             // No row is pre-selected when none is already followed, which happens only where

@@ -52,19 +52,19 @@ Two consequences worth knowing when testing:
 
 | File | Lines | What it owns |
 | --- | --- | --- |
-| `BlockRenderer.cs` | 1011 | the Markdig block walk — headings, paragraphs, lists, quotes, callouts, code, tables, diagrams, footnotes |
+| `BlockRenderer.cs` | 1034 | the Markdig block walk — headings, paragraphs, lists, quotes, callouts, code, tables, diagrams, footnotes |
 | `DocxStyles.cs` | 898 | `styles.xml`: docDefaults, latent styles, every built-in and Marqora style |
-| `MathmlToOmml.cs` | 734 | MathML to OMML, with TeX source as the fallback |
+| `MathmlToOmml.cs` | 767 | MathML to OMML, with TeX source as the fallback |
 | `NumberingPlan.cs` | 563 | `numbering.xml`: one instance per markdown list, plus the heading multilevel definition |
 | `InlineRenderer.cs` | 463 | the inline walk — emphasis, code, links, marks, sub/sup, task boxes |
-| `DocxExporter.cs` | 345 | `IDocxExporter`; parses, pre-fetches diagrams, writes the parts in order, builds `sectPr` |
-| `DocxImages.cs` | 328 | relationships, `Drawing`/`inline`/`pic`, EMU sizing, part dedupe |
+| `DocxExporter.cs` | 346 | `IDocxExporter`; parses, pre-fetches diagrams, writes the parts in order, builds `sectPr` |
+| `DocxImages.cs` | 444 | relationships, `Drawing`/`inline`/`pic`, EMU sizing, part dedupe |
 | `PreviewHarvest.cs` | 302 | the scanner over rendered HTML; keys everything on `data-src-line` |
 | `DocxFurniture.cs` | 293 | header, footer, title page, contents field, section breaks |
 | `DocxTables.cs` | 246 | table properties, grid widths, alignment |
 | `InlineHtml.cs` | 225 | raw `<kbd>`, `<sub>`, `<br>` and friends, built from the AST |
 | `DocxFootnotes.cs` | 181 | `FootnotesPart` and the mandatory separator notes |
-| `RunFormat.cs` | 164 | the formatting a run accumulates down the inline tree; owns `w:rPr` child order |
+| `RunFormat.cs` | 187 | the formatting a run accumulates down the inline tree; owns `w:rPr` child order, and refuses the lot for a heading |
 | `DocxFrontMatter.cs` | 119 | the YAML keys Word has somewhere to put, plus `version` |
 | `HighlightPalette.cs` | 117 | hljs class to GitHub-light hex |
 | `BookmarkTable.cs` | 112 | heading bookmarks and internal anchor links |
@@ -73,7 +73,7 @@ Two consequences worth knowing when testing:
 | `DocxSettings.cs` | 84 | `settings.xml`, including `updateFields` |
 | `XmlSafeText.cs` | 83 | strips what XML cannot carry |
 | `StyleIds.cs` | 72 | every style id in one place |
-| `ExportReport.cs` | 47 | what could not be carried across |
+| `ExportReport.cs` | 103 | what could not be carried across, each with the line it was on |
 | `Resources/theme1.xml` | — | the stock Office theme, patched at write time |
 
 Contract and wiring:
@@ -100,16 +100,17 @@ MainViewModel.ExportWordCommand
      -> IFileDialogService.PickExportFileAsync()
      -> IPreviewHost.GetRenderedHtmlAsync()          may be empty; never fatal
      -> Task.Run(() => IDocxExporter.WriteAsync(...))          off the UI thread
-     -> AnnounceExport(path) + a dialog listing anything skipped
+     -> AnnounceExport(path) + IExportReportService.Show(...)   the report window
 ```
 
 `WriteAsync` takes: output path, title, markdown, `DocxExportSetup`, `HeadingNumbering`, the
 source document path (for relative images), the rendered preview HTML, and a
 `Func<string, Task<byte[]?>>` that turns a diagram hash into PNG bytes.
 
-It returns `IReadOnlyList<string>` — everything that could not be carried across. The view model
-shows the first ten. **An export with a hole in it is otherwise discovered by whoever opens the
-document, somewhere else, with no way to know what happened.**
+It returns `IReadOnlyList<DocxExportIssue>` — everything that could not be carried across, each
+with the line it was on, which the view model hands to the report window. **An export with a hole
+in it is otherwise discovered by whoever opens the document, somewhere else, with no way to know
+what happened.** See §10 for the window.
 
 ### Part write order, and why it is that order
 
@@ -199,6 +200,29 @@ The "Contents" heading itself uses Word's built-in **TOC Heading** style — bas
 it looks like one, `outlineLvl` 9 so it appears in neither the contents nor the navigation pane.
 It also sets `numId 0` **when numbering starts at Heading 1**, because a style based on Heading 1
 inherits its numbering instance and the word "Contents" would otherwise become section 1.
+
+#### A heading is written plain, and the contents page is why
+
+Word does not build a contents entry out of the heading's text alone. It copies the heading's
+**direct** character formatting with it, and direct formatting beats the `TOC1`..`TOC3` style
+that sets the face and size of the line. A heading holding `` `--check` `` or `**care**`
+therefore put a shaded monospaced word, or a bold one, in the middle of an otherwise ordinary
+contents line — and no switch on the field turns that off. The `TOC1..3` styles fix the line;
+they cannot reach inside it.
+
+So `WriteHeading` walks the inlines with `new RunFormat { Plain = true }`, and `RunFormat.Build`
+returns no properties for a plain run. The text is untouched and the heading style dresses it,
+which is what a heading in Word is anyway.
+
+**The cost is real and it is stated here rather than hidden:** emphasis, inline code, a
+highlight, sub/superscript or a color *inside a heading* is dropped from the body too, not only
+from the contents. It is the one place the export knowingly drops formatting the markdown asked
+for. A link inside a heading still links — only the blue underline goes.
+
+The alternative was a `TC` field per heading holding the text the contents should show. It is
+rejected for the same reason heading numbers are Word's own rather than written out: that text
+is a copy, right when the file is written and wrong from the first time somebody renames a
+heading in Word. A contents built from `TC` fields loses the heading numbers as well.
 
 ### Title page
 
@@ -338,7 +362,26 @@ character style inside `\( … \)` — copy-pasteable into Word's own equation e
 KaTeX's visible output is HTML spans, not SVG, so the diagram rasterizer cannot help.
 
 `ExportReport.UnsupportedMath` names the element that could not be mapped, so a gap is
-discoverable rather than silent.
+discoverable rather than silent. **One unmapped element costs the whole equation**, not the part
+it sits in — `Node` throws, `Convert` declines, and the equation becomes TeX source. So a
+single line in the export dialog can be six equations in the document, and a wrapper that means
+nothing is worth stepping past rather than declining.
+
+**Opened or converted — the sharpest edge in the file.** `ContentsAs<T>` builds an argument from
+what is *inside* an element; `NodeAs<T>` builds one from the element *itself*. A container — a
+matrix cell, a phantom's body — takes the first; a numerator, a base, a superscript takes the
+second. They were once called `Argument` and `ArgumentOf`, which reads as the opposite of what
+they do, and a matrix cell was handed to the wrong one: the converter was asked to turn an
+`mtd` into OMML, nothing does, and **every matrix, aligned system and set of cases in the app's
+own test document had always declined to its TeX source.** Nothing caught it because no test
+covered a table. The first one that did also found the `m:mc` the schema had never accepted.
+
+**Transparent wrappers.** `mrow`, `mstyle`, `semantics` and `mpadded` contribute their contents
+and nothing else. `mpadded` is on that list for the same reason `mspace` is dropped: it says how
+much room to leave or how far to shift, never what the expression means, and OMML spaces itself.
+It is what KaTeX reaches for on `\raisebox`, `\smash` and the overlaps an mhchem reaction is
+built from — so before it was stepped past, one padded arrow sent every `\ce{}` in the document
+to its TeX source and reported `mpadded` once for the lot.
 
 **N-ary operators.** MathML does not group an integrand with its integral: KaTeX writes
 `\int_0^\infty e^{-x^2}\,dx` as a sub-superscripted operator followed by six unrelated siblings.
@@ -431,8 +474,40 @@ than copying them, so skipping it drops every footnote body. What to skip is `Ya
 | Menu item | `Views/MainWindow.xaml`, Tools menu, after Export to HTML |
 | Context menu | `Views/MainWindow.ContextMenus.cs`, preview right-click |
 | Dialog | `Views/WordExportDialog.cs` — paper, orientation, margins, three checkboxes |
+| Report | `Views/ExportReportWindow.cs`, shown through `IExportReportService` |
 | Preferences | `Views/PreferencesWindow.cs`, *Export & Print* page, WORD section |
 | Settings | `AppSettings.DocxSetup`, with `[JsonIgnore] DocxDefaults => DocxSetup ?? DocxExportSetup.SeededFrom(PdfDefaults)` |
+| Report placement | `AppSettings.ExportReportWindow` / `ExportReportPlacement` |
+
+### The report
+
+`WriteAsync` returns `IReadOnlyList<DocxExportIssue>` — a line, a problem and the thing it
+happened to, in document order, **one row per place**. It used to return sentences, which a
+`ContentDialog` showed ten of and then stopped.
+
+Three things changed together, and they are one thing: a list of what is missing from a document
+is a task list, not a message.
+
+- **It is a window** (`PaletteWindow`, modeless like everything else), so it stays up while the
+  reader fixes the document behind it, and it scrolls rather than stopping at ten.
+- **Every row carries its line**, counted from one. `DocxExportIssue.Line` converts from
+  Markdig's zero-based count once, where the issue is recorded. `IPreviewHost.SelectRangeAsync`
+  counts from zero again, so `MainViewModel.GoToExportedLine` subtracts one at that boundary —
+  the two conversions are deliberate and each is the only one in its direction.
+- **Picking a row goes there**, and lands the line at the **top** of the source pane rather than
+  the middle. `SelectRangeAsync` grew a `revealAtTop` flag for it: a Find All match is read with
+  its context and stays centered, while an export issue is a starting point and what the reader
+  needs is everything below it — the same argument the outline already makes for a heading.
+  Which is also why an edit underneath the report matters: see *Nothing in the app is modal* in
+  `docs/Architecture.md` for what it does about that.
+
+Deduplication is per `(line, problem, item)`, not per sentence. Three copies of one picture are
+three things to fix in three places; collapsing them to one line would hide two of them. The old
+rule — "twenty equations using one unmapped construct is one thing wrong" — was right for a
+sentence in a dialog and wrong the moment a row became somewhere to go.
+
+Copy to clipboard writes the whole report as aligned plain text, with the document, the `.docx`
+it was written to and the time at the top, because the place it gets pasted has none of that.
 
 `DocxExportSetup` lives in Domain. Properties are `{ get; set; }` and **never `init`** — the JSON
 source generator turns init-only properties into constructor parameters and assigns every one, so
@@ -464,6 +539,10 @@ pwsh ./build/Test-DocumentColors.ps1 -Check
 
 # the fast loop while iterating on the exporter
 dotnet test tests/PaulTechGuy.MQ.Docx.Tests/PaulTechGuy.MQ.Docx.Tests.csproj -c Debug
+
+# the math corpus - after changing the fixture document's math, or taking a new KaTeX
+node build/Update-MathCorpus.js
+node build/Update-MathCorpus.js --check
 
 # the full check before calling anything done
 dotnet build PaulTechGuy.MQ.slnx --no-incremental -c Debug
@@ -507,7 +586,8 @@ exported.Path;                      // open it in Word if you need to look
 | File | Facts |
 | --- | --- |
 | `FurnitureTests.cs` | 22 — header, footer, contents field and range, sections, title page, package properties |
-| `MathTests.cs` | 16 — OMML shapes, n-ary, fences, fallback |
+| `MathCorpusTests.cs` | 3 — every display equation in `docs/UltimateMarkdownContent.md`, against real KaTeX output |
+| `MathTests.cs` | 19 — OMML shapes, n-ary, matrices, fences, transparent wrappers, fallback |
 | `BlockTests.cs` | 14 — headings, paragraphs, quotes, rules, code |
 | `ListTests.cs` | 13 — instances, levels, task items, tight vs loose, indent |
 | `InlineTests.cs` | 13 — emphasis, links, marks, sub/sup |
@@ -516,11 +596,11 @@ exported.Path;                      // open it in Word if you need to look
 | `AwkwardDocumentTests.cs` | 12 — the third fixture: grid tables, custom containers, nomnoml, raw HTML, a heading inside a callout, code inside a footnote |
 | `TableTests.cs` | 11 — pipe and grid, widths, alignment, header repeat |
 | `PreviewHarvestTests.cs` | 11 — line keying, staleness guards, diagram sizing |
-| `AppearanceTests.cs` | 10 — margins, TOC styles, code spacing, fence seams |
-| `ImageTests.cs` | 9 — EMU sizing, dedupe, missing and remote images |
+| `AppearanceTests.cs` | 11 — margins, TOC styles, plain headings, code spacing, fence seams |
+| `ImageTests.cs` | 16 — EMU sizing, dedupe, data URIs, line numbers, missing and remote images |
 | `PageSetupTests.cs` | 6 — paper, orientation, twips |
 
-**181 tests in the Docx project; 11 test projects pass overall.**
+**195 tests in the Docx project; 11 test projects pass overall.**
 
 ### Corpus
 
@@ -553,6 +633,7 @@ does not spend time re-finding them, and so a regression is recognizable.
 | --- | --- | --- |
 | Heading numbers | literal text; Word would not renumber | real multilevel numbering linked to heading styles |
 | Contents entries | wore the formatting of their headings | `TOC1..3` styles, ordinary body text |
+| Contents entries, the half the styles cannot reach | a heading's own `**bold**` and `` `code` `` were copied into the entry | headings are written with no direct character formatting at all — *A heading is written plain* in §4 |
 | Contents listing itself | "Contents" was `Heading1`, inside the field range | `TOCHeading`, `outlineLvl` 9 |
 | Contents listing the title | range fixed at `1-3` | range follows `HeadingNumbering` |
 | Margins | Normal meant 0.5" (the PDF's meaning) | Word's 1"; PDF unified onto the same enum |
@@ -570,6 +651,12 @@ does not spend time re-finding them, and so a regression is recognizable.
 | Sections | one section, `titlePg` | three sections, roman front matter, body restarts at 1 |
 | Integrals | dotted rectangle from an empty `m:e` | integrand absorbed into the n-ary base |
 | Footnotes in the preview | two horizontal rules at the end of every document | `app.css` hides Markdig's `<hr>`; the styled `border-top` stays |
+| `data:` images | fell through to the path branch and were reported *"not found"* — a wrong reason and a missing picture | decoded and embedded, deduped on a hash of the bytes; no folder needed, so an unsaved document keeps them |
+| `<mpadded>` | declined the equation, so every `\ce{}` came out as TeX source | a transparent wrapper, like `mrow` and `mstyle` |
+| `<mtd>` | every matrix, aligned system and set of cases declined to TeX source — a cell was converted *as an element* instead of *opened* | `ContentsAs` rather than `NodeAs`; the two are renamed so the difference is readable |
+| `m:mc` | the count and justification sat directly in the column — schema-invalid, and Word would have offered to repair it | wrapped in `m:mcPr`, caught by the validator the moment a matrix first reached a document |
+| Math fixtures | hand-written MathML only, which is what the author expected KaTeX to emit rather than what it emits | `MathCorpusTests` runs the real thing: `build/Update-MathCorpus.js` renders the fixture document with the app's own KaTeX |
+| The export report | a `ContentDialog` of up to ten sentences, no line numbers, dismissed and gone | `ExportReportWindow`: a scrolling list, a line per row, click to go there, copy as text |
 
 ---
 
@@ -592,7 +679,14 @@ does not spend time re-finding them, and so a regression is recognizable.
   order of magnitude larger than this converter. Unmapped elements are named in the export report
   rather than dropped silently.
 - **Remote images cannot be embedded** — no network calls at runtime, a stated product rule. They
-  are reported as skipped. The preview cannot load them either, so nothing is lost visually.
+  are reported as skipped. The preview cannot load them either, so nothing is lost visually. A
+  **`data:` URI is not remote**: it carries its own bytes, needs nothing fetched, and is embedded
+  — base64 only, and only the five types Word draws. `data:image/svg+xml` is reported as not a
+  picture Word can show, because Word wants a raster to fall back on and producing one would mean
+  rendering it.
+- **Aligned equations become a matrix**, because Word has no aligned-equation construct of its
+  own. The alignment points are the columns, which keeps the parts lined up; it is not an
+  `eqArr`, and Word's equation editor will describe it as a matrix.
 
 ---
 

@@ -275,11 +275,16 @@ public class MathTests
     }
 
     /// <summary>
-    /// A document with twenty equations using the same unmapped construct has one thing wrong
-    /// with it, not twenty. A dialog listing the same sentence twenty times says less.
+    /// Two equations with the same gap are two things to fix, in two places.
+    ///
+    /// This used to collapse to a single line, on the reasoning that a document with twenty
+    /// equations using one unmapped construct has one thing wrong with it. That was right
+    /// while the report was a sentence in a dialog, and wrong the moment it carried a line
+    /// number: the report is now a list to work through, and nineteen of those twenty would
+    /// never be visited. What is still collapsed is the same problem met twice at one line.
     /// </summary>
     [Fact]
-    public async Task The_same_gap_in_several_equations_is_reported_once()
+    public async Task The_same_gap_in_two_equations_is_reported_against_each_of_them()
     {
         using var exported = await ExportedDocument.FromAsync(
             "$$\n\\a\n$$\n\nText.\n\n$$\n\\b\n$$\n",
@@ -290,9 +295,110 @@ public class MathTests
                 + "<div class=\"math\" data-src-line=\"6\">"
                 + Mathml("<munknownthing><mi>y</mi></munknownthing>", "\\b") + "</div>");
 
-        exported.Skipped.Count.ShouldBe(1);
+        exported.Skipped.Count.ShouldBe(2);
+
+        // Counted from one, and in document order: the first block opens the file, the second
+        // is six lines further down.
+        exported.Issues[0].Line.ShouldBe(1);
+        exported.Issues[1].Line.ShouldBe(7);
+
+        // Each names its own equation rather than the element alone, so the two rows are
+        // telling the reader about two different places.
+        exported.Issues[0].Item.ShouldBe("\\a");
+        exported.Issues[1].Item.ShouldBe("\\b");
+
         exported.PlainText().ShouldContain("\\a");
         exported.PlainText().ShouldContain("\\b");
+    }
+
+    /// <summary>
+    /// A matrix, and the test that should have existed from the start.
+    ///
+    /// <c>mtable</c> was handled and read its own rows and cells, and not one of them ever
+    /// reached a document: each cell was handed to the helper that converts an element rather
+    /// than the one that opens it, so the converter was asked to turn an <c>mtd</c> into OMML,
+    /// nothing does, and the whole equation declined to its TeX source. Every matrix, every
+    /// aligned system and every set of cases, silently, for as long as the feature existed -
+    /// because no test covered a table.
+    ///
+    /// The cells carry the <c>mstyle</c> KaTeX really wraps them in, so this fails if that
+    /// wrapper stops being stepped past as well.
+    /// </summary>
+    [Fact]
+    public async Task A_matrix_becomes_a_matrix_rather_than_its_source()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "$$\n\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}\n$$\n",
+            renderedPreviewHtml: Display(
+                "<mrow><mo fence=\"true\">[</mo>"
+                + "<mtable rowspacing=\"0.16em\" columnalign=\"center center\">"
+                + Row("1", "0") + Row("0", "1")
+                + "</mtable><mo fence=\"true\">]</mo></mrow>",
+
+                // The annotation is serialized markup, so the ampersand is an entity in it -
+                // a raw one makes the equation unparseable, which is a fixture mistake worth
+                // not making twice.
+                "\\begin{bmatrix} 1 &amp; 0 \\\\ 0 &amp; 1 \\end{bmatrix}"));
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<m:m>");
+        xml.ShouldContain("<m:mr>");
+        exported.Skipped.ShouldBeEmpty();
+        exported.PlainText().ShouldNotContain("bmatrix");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// An aligned system arrives as the same table, with more cells - the alignment points are
+    /// columns. Word has no aligned-equation construct of its own, so a matrix is what it
+    /// becomes, and the columns keep the parts lined up.
+    /// </summary>
+    [Fact]
+    public async Task An_aligned_system_arrives_as_the_table_it_is()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "$$\n\\begin{align}\na &= b \\\\\nc &= d\n\\end{align}\n$$\n",
+            renderedPreviewHtml: Display(
+                "<mtable rowspacing=\"0.25em\" columnalign=\"right left\">"
+                + Row("a", "b") + Row("c", "d")
+                + "</mtable>",
+                "\\begin{align} a &amp;= b \\\\ c &amp;= d \\end{align}"));
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<m:m>");
+        exported.Skipped.ShouldBeEmpty();
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Padding is not meaning. KaTeX wraps anything it has to shift or squeeze in
+    /// <c>mpadded</c> - <c>\raisebox</c>, <c>\smash</c>, and the overlapped arrows an mhchem
+    /// reaction is built from - and OMML has no equivalent because it spaces itself. Before it
+    /// was stepped past, a single padded arrow cost the whole equation: every <c>\ce{}</c> in
+    /// a document came out as TeX source, and the dialog said <c>mpadded</c> once for the lot.
+    /// </summary>
+    [Fact]
+    public async Task Padding_round_a_symbol_does_not_cost_the_equation()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "$$\n\\ce{CO2 + C -> 2 CO}\n$$\n",
+            renderedPreviewHtml: Display(
+                "<mrow><mi>CO</mi><msub><mi>C</mi><mn>2</mn></msub>"
+                + "<mpadded width=\"0\" lspace=\"-1em\"><mo>+</mo></mpadded>"
+                + "<mi>C</mi><mpadded height=\"0\"><mo>→</mo></mpadded><mn>2</mn><mi>CO</mi></mrow>",
+                "\\ce{CO2 + C -> 2 CO}"));
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("oMath");
+        xml.ShouldContain("→");
+
+        // Converted, so nothing to report and no source in the body.
+        exported.Skipped.ShouldBeEmpty();
+        exported.PlainText().ShouldNotContain("\\ce{");
+        exported.ValidationErrors().ShouldBeEmpty();
     }
 
     [Fact]
@@ -318,6 +424,18 @@ public class MathTests
         exported.DocumentXml().ShouldContain("oMath");
         exported.ValidationErrors().ShouldBeEmpty();
     }
+
+    /// <summary>
+    /// One row of a table, in the shape KaTeX writes it: every cell's content wrapped in the
+    /// <c>mstyle</c> that carries the script level.
+    /// </summary>
+    private static string Row(params string[] cells) =>
+        "<mtr>"
+        + string.Concat(cells.Select(cell =>
+            "<mtd><mstyle scriptlevel=\"0\" displaystyle=\"false\">"
+            + $"<mi>{cell}</mi>"
+            + "</mstyle></mtd>"))
+        + "</mtr>";
 
     /// <summary>KaTeX's own wrapper: the MathML, then the TeX it was written as.</summary>
     private static string Mathml(string inner, string tex) =>

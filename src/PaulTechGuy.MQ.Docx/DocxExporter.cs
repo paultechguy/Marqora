@@ -37,7 +37,7 @@ public sealed class DocxExporter : IDocxExporter
         _pipeline = MarqoraMarkdownPipeline.CreateBuilder().Build();
     }
 
-    public async Task<IReadOnlyList<string>> WriteAsync(
+    public async Task<IReadOnlyList<DocxExportIssue>> WriteAsync(
         string outputPath,
         string title,
         string markdown,
@@ -61,6 +61,13 @@ public sealed class DocxExporter : IDocxExporter
             markdown.Length,
             outputPath);
 
+        // Timed in three parts because the export is three very different jobs, and only one
+        // of them is this library's own work. A document with two dozen diagrams spends most
+        // of an export waiting on the shell to rasterize them, one round trip each - which is
+        // a wait the user experiences as the app doing nothing after the file dialog closes.
+        // Knowing which part is slow is the difference between fixing it and guessing at it.
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+
         var report = new ExportReport();
 
         PreviewHarvest preview = PreviewHarvest.From(renderedPreviewHtml);
@@ -71,6 +78,8 @@ public sealed class DocxExporter : IDocxExporter
         // would otherwise be able to spend four minutes waiting one at a time.
         IReadOnlyDictionary<string, byte[]> diagrams =
             await FetchDiagramsAsync(document, preview, diagramPng, report).ConfigureAwait(false);
+
+        long diagramsMs = elapsed.ElapsedMilliseconds;
 
         using (WordprocessingDocument file =
             WordprocessingDocument.Create(outputPath, WordprocessingDocumentType.Document))
@@ -190,7 +199,15 @@ public sealed class DocxExporter : IDocxExporter
         // await the shell once the walker reaches them.
         await Task.CompletedTask.ConfigureAwait(false);
 
-        return report.Messages;
+        _logger.LogInformation(
+            "Wrote {Path} in {Total} ms: {Diagrams} ms fetching {Count} diagrams, {Document} ms writing.",
+            outputPath,
+            elapsed.ElapsedMilliseconds,
+            diagramsMs,
+            diagrams.Count,
+            elapsed.ElapsedMilliseconds - diagramsMs);
+
+        return report.Issues;
     }
 
     /// <summary>
@@ -239,10 +256,11 @@ public sealed class DocxExporter : IDocxExporter
             {
                 pictures[hash] = png;
             }
-            else
-            {
-                report.Note("A diagram could not be drawn (its source is in the document instead)");
-            }
+
+            // A diagram that did not come back is not reported here. This runs before the
+            // walk and knows only hashes, so the most it could say was that one of them
+            // failed; the walk meets the fence itself, and says which line and which
+            // definition. See BlockRenderer.WriteDiagram.
         }
 
         return pictures;

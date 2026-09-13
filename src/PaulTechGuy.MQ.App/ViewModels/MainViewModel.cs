@@ -62,6 +62,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ICheatsheetService _cheatsheet;
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
+    private readonly IExportReportService _exportReports;
     private readonly IWelcomeDocumentService _welcome;
     private readonly IUpdateReminderService _updates;
     private readonly IDocumentAssetStore _assets;
@@ -568,6 +569,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ICheatsheetService cheatsheet,
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
+        IExportReportService exportReports,
         IWelcomeDocumentService welcome,
         IUpdateReminderService updates,
         IDocumentAssetStore assets,
@@ -602,6 +604,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _cheatsheet = cheatsheet;
         _diagramWindows = diagramWindows;
         _findAll = findAll;
+        _exportReports = exportReports;
         _welcome = welcome;
         _updates = updates;
         _assets = assets;
@@ -4675,6 +4678,65 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _ui.Post(() => _workspaceChain = RevealAfterAsync(_workspaceChain, e));
     }
 
+    /// <summary>
+    /// Takes the editor to a line named in an export report.
+    ///
+    /// The line arrives counted from one, which is how the report shows it and how a reader
+    /// reads it; everything inside the app counts from zero, and <c>SelectRangeAsync</c> says
+    /// so in its own contract. The conversion happens here, once, at the boundary between the
+    /// two - which is the only place that knows it is a boundary.
+    ///
+    /// Nothing is selected: an export issue is a place rather than a span, and the column and
+    /// length would be a guess. The caret lands at the start of the line and the pane scrolls
+    /// to it, which is what "take me there" means.
+    /// </summary>
+    private void GoToExportedLine(Guid documentId, int line)
+    {
+        if (line <= 0 || _workspace.Find(documentId) is null)
+        {
+            StatusText = "That document is no longer open";
+            return;
+        }
+
+        if (_workspace.Active?.Id != documentId)
+        {
+            _workspace.Activate(documentId);
+        }
+
+        // Queued behind whatever the activation queued, for the reason the Find All path
+        // gives: the shell drops a selection aimed at a tab it has not been given yet.
+        _ui.Post(() => _workspaceChain = RevealLineAfterAsync(_workspaceChain, documentId, line - 1));
+    }
+
+    /// <summary>Swallows its own failures, so the workspace chain can never fault.</summary>
+    private async Task RevealLineAfterAsync(Task previous, Guid documentId, int line)
+    {
+        await previous.ConfigureAwait(true);
+
+        if (_host is null || _workspace.Find(documentId) is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ViewMode == ViewMode.Preview)
+            {
+                await ApplyViewModeAsync(ViewMode.SideBySide, persist: true, takeFocus: false).ConfigureAwait(true);
+            }
+
+            // At the top of the pane, not centered. The reader is going there to fix something,
+            // and what is under the line matters more than what is above it.
+            await _host
+                .SelectRangeAsync(documentId, line, 0, 0, focusEditor: true, revealAtTop: true)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not go to line {Line} from an export report.", line);
+        }
+    }
+
     /// <summary>Swallows its own failures, so the workspace chain can never fault.</summary>
     private async Task RevealAfterAsync(Task previous, FindMatchActivatedEventArgs e)
     {
@@ -5866,11 +5928,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = "Exporting Word document...";
 
+            // Timed end to end. Everything from here until the report window appears is dead
+            // air to whoever is watching - the file dialog has closed and nothing else has
+            // happened yet - so when that wait is long enough to notice, the log has to be
+            // able to say which part of it was slow.
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+
             // Whatever the preview has, or nothing at all. A document that has never been
             // previewed, or one typed into a second ago, still exports.
             string rendered = _host is null
                 ? string.Empty
                 : await _host.GetRenderedHtmlAsync().ConfigureAwait(true);
+
+            long renderedMs = elapsed.ElapsedMilliseconds;
 
             string markdown = document.Text;
             string title = document.DisplayName;
@@ -5881,7 +5951,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // there are images to re-encode and a whole part graph to assemble - and the HTML
             // export freezing the window on a picture-heavy document is the mistake not to
             // repeat.
-            IReadOnlyList<string> skipped = await Task.Run(
+            IReadOnlyList<DocxExportIssue> issues = await Task.Run(
                 () => _docxExporter.WriteAsync(
                     path,
                     title,
@@ -5893,16 +5963,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     RequestDiagramPngAsync))
                 .ConfigureAwait(true);
 
+            _logger.LogInformation(
+                "Word export of {Document} took {Total} ms: {Preview} ms collecting the preview, "
+                + "{Export} ms in the exporter ({Characters} characters, {Rendered} of preview HTML).",
+                title,
+                elapsed.ElapsedMilliseconds,
+                renderedMs,
+                elapsed.ElapsedMilliseconds - renderedMs,
+                markdown.Length,
+                rendered.Length);
+
             AnnounceExport(path);
 
-            if (skipped.Count > 0)
-            {
-                await _dialogs.ShowMessageAsync(
-                    "Some things could not be carried across",
-                    "The document was written, and these are not in it:\n\n"
-                    + string.Join(Environment.NewLine, skipped.Take(10)))
-                    .ConfigureAwait(true);
-            }
+            // A window rather than a prompt, and it stays up while the reader works through it.
+            // The text that was exported travels with the report: it is how the window notices
+            // that the document has moved on and its line numbers have stopped being true.
+            _exportReports.Show(
+                new ExportIssueReport
+                {
+                    DocumentName = title,
+                    DocumentId = document.Id,
+                    ExportedText = markdown,
+                    OutputPath = path,
+                    Issues = issues,
+                },
+                line => GoToExportedLine(document.Id, line));
         }
         catch (Exception ex)
             when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -6943,6 +7028,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool HasOutlineRows => OutlineRows.Count > 0;
 
     /// <summary>
+    /// Whether the active document has any headings at all, ignoring the filter.
+    ///
+    /// Distinct from <see cref="HasOutlineRows"/>, which reflects what survives filtering:
+    /// the filter box is hidden when this is false, since there is nothing it could ever
+    /// narrow down, but it must stay visible whenever a real outline has merely been
+    /// filtered down to nothing - hiding it then would trap whoever typed the filter with
+    /// no way to clear it.
+    /// </summary>
+    public bool HasOutlineHeadings =>
+        _workspace.Active is { } document
+        && _outlines.TryGetValue(document.Id, out IReadOnlyList<OutlineHeading>? cached)
+        && cached.Count > 0;
+
+    /// <summary>
     /// What the panel says when it has nothing to list, which is two different situations
     /// and would be a puzzle if they read the same.
     /// </summary>
@@ -7133,6 +7232,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             && _outlines.TryGetValue(document.Id, out IReadOnlyList<OutlineHeading>? cached)
                 ? cached
                 : [];
+
+        // Ahead of the early return below: a document can gain or lose its only heading
+        // while a filter hides it either way, which would leave filtered unchanged even
+        // though this has not.
+        OnPropertyChanged(nameof(HasOutlineHeadings));
 
         IReadOnlyList<OutlineHeading> filtered =
             OutlineNavigation.Filter(source, OutlineFilter, OutlineMaxDepth);

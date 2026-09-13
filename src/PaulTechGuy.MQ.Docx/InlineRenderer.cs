@@ -207,7 +207,7 @@ internal sealed class InlineRenderer
     {
         string alt = AltTextOf(image);
 
-        if (_images.TryBuild(image.Url ?? string.Empty, alt, _maximumImageWidthTwips) is { } run)
+        if (_images.TryBuild(image.Url ?? string.Empty, alt, _maximumImageWidthTwips, _sourceLine) is { } run)
         {
             paragraph.AppendChild(run);
             return;
@@ -331,7 +331,7 @@ internal sealed class InlineRenderer
                 return;
             }
 
-            _report.UnsupportedMath(unsupported);
+            _report.UnsupportedMath(_sourceLine, unsupported, math.Content.ToString());
         }
 
         Append(
