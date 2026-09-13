@@ -54,6 +54,31 @@
      because they answer different questions - one fills a block in the preview, this one draws
      a hairline in the source pane. */
   --mq-blocked: #a259ff;
+
+  /* Ticks in the overview ruler, which are not the squiggles they stand for.
+
+     A squiggle is a wavy line under a word: several pixels tall, sitting next to the text it
+     marks, read at leisure and with that text to compare against. A tick is two pixels wide on
+     a strip of empty background with nothing beside it, and the eye has only hue and lightness
+     to go on. The two jobs want different numbers - which is what --mq-blocked worked out on
+     its own, a few lines up, and what this pair now says out loud.
+
+     What was wrong: --mq-danger (#b3261e) and --mq-warning (#9a6700) are both dark, and their
+     relative luminances land within a hair of each other - 0.15 and 0.16. Side by side under
+     words they read as red and amber; as two-pixel ticks on a white ruler they read as two
+     dark smudges, and a reader scanning for misspellings could not tell which smudge was one.
+     These separate by lightness as well as hue: the red stays deep, the amber comes up to
+     0.29, and the pair is now roughly two to one rather than a photo finish.
+
+     Both are still above the 3:1 an indicator owes its background, which is what stops the
+     lighter amber becoming a tick nobody sees.
+
+     Only two. Blocked keeps --mq-blocked, which was tuned for exactly this measurement and
+     would only be copied here, and alt text keeps --mq-text-tertiary, because grey beside three
+     hues is unmistakable at any size. A color is chosen in one place or it drifts. */
+  --mq-tick-spelling: #d1242f;
+  --mq-tick-link: #bf8700;
+
   --mq-mark: #fff3a3;
   /* Whitespace marks in the source pane: present enough to read, quiet enough to ignore. */
   --mq-whitespace: #7fb0da;
@@ -101,6 +126,14 @@
     --mq-blocked: #c9a6ff;
     --mq-warning: #e0b341;
     --mq-warning-soft: rgba(224, 179, 65, 0.12);
+
+    /* See the light theme for why the ruler carries its own two. Dark needed less work: the
+       amber was already bright against the dark surface and moves a shade only to match the
+       red's saturation. The red is the change - --mq-danger is a pale salmon chosen to be
+       readable under a word without shouting, and at two pixels that pale reads as pink, or
+       as nothing. This one is a red that is still a red at two pixels. */
+    --mq-tick-spelling: #f85149;
+    --mq-tick-link: #e3b341;
     --mq-mark: #5c4a00;
     --mq-whitespace: #4d7ea6;
     /* --mq-selection and --mq-selection-text are the two exceptions to the rule above:

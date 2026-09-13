@@ -574,8 +574,7 @@ Special characters must not be interpreted: **bold** _italic_ <b>html</b> | pipe
 ~~~text
 A block fenced with TILDES instead of backticks.
 This is valid CommonMark and is the easiest way to embed ``` inside a block.
-```
-```
+~~~
 
     This is an INDENTED code block (four spaces, no fence).
     It is the oldest form of Markdown code block.

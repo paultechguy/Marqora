@@ -2203,7 +2203,7 @@
         'editorWhitespace.foreground': token('--mq-whitespace'),
 
         /*
-          The spelling red, and the one place it is chosen.
+          The spelling tick, and the one place it is chosen.
 
           Misspellings are drawn as decorations rather than markers, so this key no longer
           colors a squiggle - the stylesheet does that. What it still colors is the tick each
@@ -2212,26 +2212,32 @@
 
           Nothing else in the app publishes an Info marker, so the key is free for this.
 
-          --mq-danger rather than a color of its own: it is already the app's red and already
-          has a dark-mode value, and a second token holding the same color is a second thing
-          to keep in step.
+          --mq-tick-spelling rather than the --mq-danger the squiggle uses, which is the part
+          that changed. The two are the same claim at two sizes, and a color that reads as red
+          under a word does not necessarily read as red on a two-pixel tick with nothing beside
+          it. app.css sets out the measurements; the short version is that the squiggle reds and
+          ambers were the same darkness, so their ticks were two dark smudges.
         */
-        'editorInfo.foreground': token('--mq-danger'),
+        'editorInfo.foreground': token('--mq-tick-spelling'),
 
         /*
-          The dead-link squiggle's tick in the overview ruler, borrowing --mq-warning the way
-          the line above borrows --mq-danger. Monaco has a default for this and it is not the
-          app's amber and does not follow a theme change, so it is named here rather than left
-          to be inherited. app.css draws the underline from the same token, which is what keeps
-          the ruler and the squiggle the same color.
+          The tick for a missing image, a broken link or a dead anchor - one color for the three,
+          because they make one claim: the document promises something that is not there.
+
+          Monaco has a default for this and it is not the app's amber and does not follow a theme
+          change, so it is named here rather than left to be inherited. --mq-tick-link rather
+          than the squiggle's --mq-warning, for the reason the line above gives.
         */
-        'editorWarning.foreground': token('--mq-warning'),
+        'editorWarning.foreground': token('--mq-tick-link'),
 
         /*
-          The missing-alt-text tick, borrowing --mq-text-tertiary the way the two lines above
-          borrow their colors. Quieter than either on purpose: this one reports a description
-          nobody has written yet, not a link that leads nowhere, and the ruler should say which
-          is which at a glance. app.css draws its dotted underline from the same token.
+          The missing-alt-text tick. Quieter than either on purpose: this one reports a
+          description nobody has written yet, not a link that leads nowhere, and the ruler should
+          say which is which at a glance.
+
+          The one tick that still takes the squiggle's own token. Grey beside three hues is
+          unmistakable at any size, so there was nothing to tune and a second token would only
+          be somewhere else for the same value to drift from.
         */
         'editorHint.foreground': token('--mq-text-tertiary'),
 
@@ -2280,12 +2286,12 @@
       // Show Whitespace actually readable without competing with the text.
       'editorWhitespace.foreground': token('--mq-whitespace'),
 
-      // The spelling squiggle. See the light theme above for why info means misspelling and
-      // why it borrows --mq-danger rather than carrying a color of its own.
-      'editorInfo.foreground': token('--mq-danger'),
+      // The spelling tick. See the light theme above for why info means misspelling, and why
+      // the ruler has a red of its own rather than borrowing the squiggle's.
+      'editorInfo.foreground': token('--mq-tick-spelling'),
 
-      // The dead-link squiggle's ruler tick. See the light theme above.
-      'editorWarning.foreground': token('--mq-warning'),
+      // Missing images, broken links and dead anchors - one claim, one tick. See above.
+      'editorWarning.foreground': token('--mq-tick-link'),
 
       // The missing-alt-text tick, quieter than either. See the light theme above.
       'editorHint.foreground': token('--mq-text-tertiary'),
@@ -4439,8 +4445,16 @@
 
               Named as a theme color rather than given a hex value, so Monaco resolves it
               against whichever theme is in force and the ticks follow a theme change with no
-              re-check. editorInfo.foreground is set from --mq-danger in defineThemes, which is
-              also where the squiggle's red comes from - one place chooses the color.
+              re-check. editorInfo.foreground is set from --mq-tick-spelling in defineThemes -
+              the ruler's red rather than the squiggle's, which app.css explains: the same claim
+              at two sizes does not want the same number, and the squiggle reds and ambers were
+              near enough the same darkness that their ticks read as two dark smudges.
+
+              The right lane, and it keeps it. Blocked pictures have the left and the link
+              findings have the center, so nothing this app draws can hide a misspelling. See the
+              note in setLinkFindings for why spelling is the one that does not move: the center
+              lane is shared with Monaco's find matches and word-occurrence highlights, and
+              clicking a misspelling to fix it is exactly what fills that lane.
             */
             overviewRuler: {
               color: { id: 'editorInfo.foreground' },
@@ -4495,9 +4509,9 @@
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
 
-        // Alt text is the odd kind: nothing is broken, so it wears a quieter mark and earns no
-        // tick in the scrollbar. A document of illustrations would otherwise stripe the ruler
-        // with something that is a suggestion rather than a fault.
+        // Alt text is the odd kind: nothing is broken, so it wears a quieter mark - grey and
+        // dotted rather than colored. It does earn a tick, in that same grey; the note by the
+        // overviewRuler block below says why that argument was reversed.
         var isHint = link.kind === 'MissingAltText';
 
         /*
@@ -4542,7 +4556,12 @@
             these in a thousand-line document is to scroll the whole thing looking for an
             underline, and a mark nobody can find explains nothing. The right fix is the separate
             color - a tick has no texture, so dotted and wavy are identical at two pixels wide and
-            the hue is the only thing that can tell the reader which claim a tick is making.
+            hue is nearly all the reader has to tell one claim from another.
+
+            Nearly all, and no longer quite all: the lanes below now say as much as the color
+            does, and between them a tick is placed as well as painted. The colors themselves are
+            the ruler's own rather than the squiggles' - see --mq-tick-spelling in app.css for the
+            measurement that forced that, and note that this violet was the first to discover it.
           */
           overviewRuler: {
             color: {
@@ -4552,26 +4571,33 @@
             },
 
             /*
-              Blocked pictures ride in the left lane, everything else in the right.
+              Blocked pictures ride in the left lane, these in the center, spelling in the right.
 
               The ruler is three lanes wide and the whole app had been using one of them, so two
               findings a couple of lines apart landed on the same few pixels and whichever was
               drawn second won. A misspelling on line 887 was enough to hide a blocked picture on
               889 completely - not crowd it, hide it, with nothing on screen to say a second mark
-              was ever there.
+              was ever there. Blocked pictures took the left lane first, which fixed that one
+              collision and left the other two claims sharing the right.
 
-              Lanes separate them horizontally instead, so both are visible at the same height.
-              Left is free: the right lane has carried the squiggle marks since they existed, and
-              Monaco's own find matches take the center.
+              One lane each now, which is the whole ruler spent: three categories, three lanes,
+              and no mark of this app's can hide another at any distance. Spelling stays where it
+              has always been rather than moving to the free lane, and that is the choice worth
+              defending. The center is not really free - Monaco draws its own find matches and
+              word-occurrence highlights there - so whoever takes it gets a lane that floods the
+              moment the Find widget opens or a word is selected. Misspellings are the numerous
+              kind, the kind somebody scans the ruler for, and the kind whose ticks you click one
+              after another - which selects a word, which fills the center. Handing them the
+              contested lane would have been a lane they could not use at the one moment they
+              were being used. These three are few by comparison, so they pay the rent.
 
-              This does not fix the general case. Two misspellings two lines apart still collide,
-              as they always have, because they share a lane and a color and there are only three
-              lanes to go round. What it fixes is the collision between two different claims,
-              which is the one that loses information rather than just precision.
+              Alt text rides here too, in its own grey. It is the fourth color and the only
+              passenger: it can lose a collision to a broken link, which is the cheapest pair in
+              the set to lose, and it can hide neither a misspelling nor a blocked picture.
             */
             position: isBlocked
               ? state.monaco.editor.OverviewRulerLane.Left
-              : state.monaco.editor.OverviewRulerLane.Right
+              : state.monaco.editor.OverviewRulerLane.Center
           }
         };
 

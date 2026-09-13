@@ -1063,10 +1063,32 @@ same violet.
 **The ruler has three lanes, and this uses the left one.** Everything had been in the right lane,
 so two findings a few lines apart landed on the same few pixels and whichever was drawn second
 won outright — a misspelling on line 887 hid a blocked picture on 889 completely, with nothing on
-screen to say a second mark existed. Blocked pictures moved to the left lane; the right keeps the
-squiggle marks it has always carried, and Monaco's own find matches take the center. Two
-misspellings close together still collide, as they always have — three lanes only go so far — but
-that costs precision rather than information, because both ticks are making the same claim.
+screen to say a second mark existed. Blocked pictures moved to the left lane, which fixed that
+pair and left spelling and the link findings sharing the right.
+
+> **One lane each now, which spends the whole ruler.** Blocked left, link findings center,
+> spelling right — three categories, three lanes, and no mark this app draws can hide another at
+> any distance. Spelling stays put rather than taking the free lane, and that is the part worth
+> defending: the center is not really free, because Monaco's find matches and word-occurrence
+> highlights draw there. Whoever takes it gets a lane that floods the moment the Find widget
+> opens or a word is selected — and misspellings are the numerous kind, the kind somebody scans
+> the ruler for, and the kind whose ticks get clicked one after another, which selects a word,
+> which fills the center. Handing them the contested lane would have been a lane they could not
+> use at the one moment they were being used. Alt text rides in the center as a fourth color,
+> the only passenger: it can lose to a broken link, which is the cheapest pair to lose, and it
+> can hide neither a misspelling nor a blocked picture.
+>
+> A fifth category would have nowhere to go. `OverviewRulerLane.Full` exists but overlaps
+> everything, so the next one needs a filter — show one category at a time — rather than a lane.
+
+**The ticks are painted for their own size.** They take `--mq-tick-*` colors rather than the
+squiggle tokens — the same discovery `--mq-blocked` made alone, now applied to the rest. A squiggle
+is several pixels tall with the text it marks beside it, a tick is two pixels on empty background
+with nothing to compare against, and the two want different numbers. `--mq-danger` and
+`--mq-warning` have relative luminances of 0.15 and 0.16 — under words they read as red and
+amber, as ticks they read as two dark smudges. The ruler pair separates by lightness as well as
+hue and both clear 3:1 against their background. Only two exist: blocked was already tuned, and
+grey beside three hues needs no tuning.
 
 **Raw HTML needed its own reader.** `ReadLinks` walks `LinkInline`, so `<img>` and `<iframe>`
 reached no check at all — and pinning a width is exactly why people reach for the tag.
