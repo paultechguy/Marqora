@@ -13,9 +13,12 @@ namespace PaulTechGuy.MQ.App.Services;
 /// Puts an export's warnings on screen.
 ///
 /// A new window each time, like the Folio preflight and unlike Find All: a report describes one
-/// particular export of one particular document, and there is nothing in it worth carrying into
-/// the next one. Stale advice about a file that has since been exported again is worse than no
-/// window at all.
+/// particular export, and there is nothing in it worth carrying into the next one. Stale advice
+/// about a file that has since been exported again is worse than no window at all.
+///
+/// Two things arrive here. A Word export names one document; a Folio names as many as the author
+/// ticked, and its rows carry a document each so that editing one of twelve fades that one's rows
+/// and leaves the rest working. The window does not otherwise care which it is holding.
 ///
 /// Nothing waits on it. The export has already finished and the file is already written by the
 /// time this is called - the window is there to be worked through afterwards, at whatever pace
@@ -30,7 +33,7 @@ public sealed class ExportReportService(
     ILoggerFactory loggerFactory,
     ILogger<ExportReportService> logger) : IExportReportService
 {
-    public void Show(ExportIssueReport report, Action<int> goToLine)
+    public void Show(ExportIssueReport report, Action<Guid, int> goToLine)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(goToLine);

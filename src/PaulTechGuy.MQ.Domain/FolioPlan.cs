@@ -36,6 +36,70 @@ public enum FolioWarningKind
     /// size, so the round trip does not return what went in.
     /// </summary>
     WillBeShrunk,
+
+    /// <summary>
+    /// A picture named by web address that is not being fetched, so it will not travel.
+    ///
+    /// This is the case that was silent before any of this existed, and saying it out loud is
+    /// worth as much as the fetching is: the address goes into the Folio exactly as written, and
+    /// the person who opens it has <em>their</em> browser reach out to that site. The author is
+    /// the only one who can weigh that, and they could not weigh what they were never told.
+    /// </summary>
+    RemoteImageNotIncluded,
+
+    /// <summary>
+    /// Something other than a picture that the document loads from the web - an iframe, a video,
+    /// a subtitle track.
+    ///
+    /// Reported for the same reason as a picture left on the web, and never offered for
+    /// fetching for a reason of its own: a live page cannot be carried inside a file. It works
+    /// perfectly well in the Folio exactly as written, and the reader's browser is what goes and
+    /// gets it - which is the part worth knowing before sending it to somebody.
+    /// </summary>
+    RemoteMediaNotIncluded,
+
+    /// <summary>
+    /// A picture the author asked to have fetched, that did not come back.
+    ///
+    /// Raised by the fetcher and merged into the plan afterwards, never by the planner: by the
+    /// time a plan is built, a picture that failed and a picture nobody asked for look exactly
+    /// alike - both are simply absent from the map. Reporting this from the planner would tell
+    /// an author they had made a choice when in fact a server returned an error.
+    /// </summary>
+    RemoteImageFailed,
+}
+
+/// <summary>
+/// A picture a document names by web address.
+///
+/// Collected whether or not anything is going to be fetched, because the preflight has to be
+/// able to say which sites are involved <em>before</em> the author decides - naming them
+/// afterwards would be asking permission for something already done. Nothing here costs a
+/// network call: it is what the text said, read off the parse that already happened.
+/// </summary>
+public sealed record FolioRemoteImage
+{
+    /// <summary>Exactly as written, suffix and query intact.</summary>
+    public required string Url { get; init; }
+
+    /// <summary>The document it was found in, so the preflight can name a file.</summary>
+    public required string DocumentPath { get; init; }
+
+    /// <summary>Zero-based, as <see cref="LinkReference.SourceLine"/> is.</summary>
+    public required int Line { get; init; }
+
+    /// <summary>
+    /// The host, for the preflight's "from 2 sites" line, or the whole address when it cannot be
+    /// parsed as one - a protocol-relative "//host/path" included, which <see cref="Uri"/> will
+    /// not take on its own.
+    /// </summary>
+    public string Host =>
+        Uri.TryCreate(
+            Url.StartsWith("//", StringComparison.Ordinal) ? "https:" + Url : Url,
+            UriKind.Absolute,
+            out Uri? parsed)
+            ? parsed.Host
+            : Url;
 }
 
 /// <summary>Something the author should see before anything is written.</summary>
@@ -52,6 +116,24 @@ public sealed record FolioWarning
     public required string Url { get; init; }
 
     public required string Message { get; init; }
+
+    /// <summary>
+    /// Worth knowing, but nothing is broken.
+    ///
+    /// The test is whether anything went wrong. A picture that is not on the machine, a link
+    /// that will not resolve, a reference nobody could repoint, a fetch that was asked for and
+    /// did not arrive - those are faults. The rest are the Folio working as designed: an iframe
+    /// could never have travelled inside a file, a picture left on the web was left there
+    /// because nobody ticked the box, and a reduced picture was reduced on purpose.
+    ///
+    /// Here rather than in either window, because both of them ask. The preflight counts these
+    /// before the share and the report counts them after, and the two disagreeing about what
+    /// counts as a problem is worse than either answer on its own.
+    /// </summary>
+    public bool IsAdvisory => Kind
+        is FolioWarningKind.RemoteMediaNotIncluded
+        or FolioWarningKind.RemoteImageNotIncluded
+        or FolioWarningKind.WillBeShrunk;
 }
 
 /// <summary>A file that travels beside the documents.</summary>
@@ -78,6 +160,17 @@ public sealed record FolioAsset
     /// already worked and was left exactly as it was, which is the common and preferable case.
     /// </summary>
     public required bool Relocated { get; init; }
+
+    /// <summary>
+    /// Where this picture came from, when it came from the web. Null for everything on disk,
+    /// which is every picture unless the author asked for the other thing.
+    ///
+    /// Kept so the result can say what was fetched and from where. By the time an asset exists
+    /// it is an ordinary file in a scratch folder and nothing downstream can tell the
+    /// difference - which is the point, and also why the fact has to be written down here or it
+    /// is lost.
+    /// </summary>
+    public string? RemoteUrl { get; init; }
 }
 
 /// <summary>A document as it will appear in the Folio.</summary>
@@ -110,6 +203,21 @@ public sealed record FolioPlan
 
     public required IReadOnlyList<FolioWarning> Warnings { get; init; }
 
+    /// <summary>
+    /// Every picture named by a web address, whether or not any of them are being fetched.
+    ///
+    /// Always populated. The preflight reads this to say how many there are and which sites they
+    /// sit on, which it has to be able to do before the author has decided anything.
+    /// </summary>
+    public IReadOnlyList<FolioRemoteImage> RemoteImages { get; init; } = [];
+
+    /// <summary>The sites the pictures in <see cref="RemoteImages"/> sit on, each named once.</summary>
+    public IReadOnlyList<string> RemoteHosts =>
+        [.. RemoteImages.Select(i => i.Host).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>Pictures that came from the web rather than off the disk.</summary>
+    public int FetchedCount => Assets.Count(a => a.RemoteUrl is not null);
+
     /// <summary>Images that kept the path the author wrote.</summary>
     public int KeptCount => Assets.Count(a => !a.Relocated);
 
@@ -128,6 +236,12 @@ public sealed record FolioPlan
         + Documents.Sum(d => (long)Encoding.UTF8.GetByteCount(d.Text));
 
     public IEnumerable<FolioWarning> WarningsOf(FolioWarningKind kind) => Warnings.Where(w => w.Kind == kind);
+
+    /// <summary>Things that are genuinely missing or broken.</summary>
+    public int FailureCount => Warnings.Count(w => !w.IsAdvisory);
+
+    /// <summary>Things worth knowing that are not faults.</summary>
+    public int AdvisoryCount => Warnings.Count(w => w.IsAdvisory);
 
     public static FolioPlan Empty { get; } = new()
     {

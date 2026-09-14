@@ -50,6 +50,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly FolioWriter _folioWriter;
     private readonly FolioHtmlWriter _folioHtml;
     private readonly FolioShrinker _folioShrinker;
+    private readonly FolioFetcher _folioFetcher;
     private readonly IPrintDialogService _printDialogs;
     private readonly IMarkdownFormatter _formatter;
     private readonly IMarkdownEditor _editor;
@@ -557,6 +558,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         FolioWriter folioWriter,
         FolioHtmlWriter folioHtml,
         FolioShrinker folioShrinker,
+        FolioFetcher folioFetcher,
         IPrintDialogService printDialogs,
         IMarkdownFormatter formatter,
         IMarkdownEditor editor,
@@ -592,6 +594,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _folioWriter = folioWriter;
         _folioHtml = folioHtml;
         _folioShrinker = folioShrinker;
+        _folioFetcher = folioFetcher;
         _printDialogs = printDialogs;
         _formatter = formatter;
         _editor = editor;
@@ -4690,6 +4693,53 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// length would be a guess. The caret lands at the start of the line and the pane scrolls
     /// to it, which is what "take me there" means.
     /// </summary>
+    /// <summary>
+    /// A Folio warning as the report's left-hand phrase: what went wrong, in a form somebody can
+    /// act on, sentence case because it reads as a heading of its own.
+    ///
+    /// Deliberately not the warning's own message. That sentence is written for the preflight,
+    /// where it argues for a decision the author has not made yet; by the time this window is up
+    /// the decision is made and the file is written, so the row says what the artifact lacks.
+    /// </summary>
+    private static string FolioProblem(FolioWarningKind kind) => kind switch
+    {
+        FolioWarningKind.MissingImage => "Not on this machine",
+        FolioWarningKind.OutsideLink => "Points outside the Folio",
+        FolioWarningKind.NotRewritable => "Reference could not be repointed",
+        FolioWarningKind.WillBeShrunk => "Sent smaller than the original",
+        FolioWarningKind.RemoteImageNotIncluded => "Left on the web",
+        FolioWarningKind.RemoteImageFailed => "Could not be fetched",
+        // Names the person and the consequence, because the earlier wording - "loads from the
+        // web when opened" - left both to be guessed at: loads what, opened by whom. A reader
+        // of this report is deciding whether to send the file to somebody, and the thing they
+        // need to know is that the somebody will end up fetching from that site.
+        FolioWarningKind.RemoteMediaNotIncluded => "Whoever opens this fetches it from the web",
+        _ => "Not carried across",
+    };
+
+    /// <summary>
+    /// What it happened to. The address for anything on the web, because that is the thing a
+    /// reader has to go and look at - and unlike a Word export these are never data URIs, so
+    /// they are short enough to read.
+    /// </summary>
+    private static string ExportReportItem(FolioWarning warning) =>
+        warning.Kind == FolioWarningKind.RemoteImageFailed
+            ? $"{warning.Url} - {FailureReason(warning.Message)}"
+            : warning.Url;
+
+    /// <summary>
+    /// The tail of a fetch failure's message, which is the half that says why.
+    ///
+    /// The message is built for a list read on its own and leads with the address; repeating it
+    /// beside the address column would be noise.
+    /// </summary>
+    private static string FailureReason(string message)
+    {
+        int colon = message.IndexOf(": ", StringComparison.Ordinal);
+
+        return colon > 0 && colon + 2 < message.Length ? message[(colon + 2)..] : message;
+    }
+
     private void GoToExportedLine(Guid documentId, int line)
     {
         if (line <= 0 || _workspace.Find(documentId) is null)
@@ -5515,7 +5565,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IReadOnlyList<string> Documents() =>
             [.. _workspace.Documents.Where(d => d.Path is not null).Select(d => d.Path!)];
 
-        FolioPlan PlanFor(IReadOnlyList<string> chosen, int maxImageWidth)
+        FolioPlan PlanFor(
+            IReadOnlyList<string> chosen,
+            int maxImageWidth,
+            IReadOnlyDictionary<string, string>? fetched = null)
         {
             Dictionary<string, MarkdownDocument> open = _workspace.Documents
                 .Where(d => d.Path is not null)
@@ -5542,11 +5595,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 sources.Add(new FolioSource(document.Path!, cached.Text, cached.Links));
             }
 
-            return FolioPlanner.Plan(sources, maxImageWidth);
+            return FolioPlanner.Plan(sources, maxImageWidth, fetched);
         }
 
+        // Explicitly without a fetched map, and not merely by default: the preflight is what the
+        // author reads before deciding, so the plan behind it has to be the one where nothing has
+        // been fetched yet. Naming the sites after going to them would be asking permission for
+        // something already done.
         FolioChoice? choice = await _folioDialogs
-            .RequestFolioAsync(Documents, PlanFor)
+            .RequestFolioAsync(Documents, (chosen, width) => PlanFor(chosen, width))
             .ConfigureAwait(true);
 
         if (choice is null || choice.DocumentPaths.Count == 0)
@@ -5583,10 +5640,130 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Reduced copies live here and nowhere else: a share must not edit what it is sharing.
         string scratch = Path.Combine(Path.GetTempPath(), "marqora-folio", Guid.NewGuid().ToString("n"));
 
+        // The report is built from the plan afterwards, so nothing needs holding here - but the
+        // preflight has closed by then, and if the plan's warnings are not shown again they are
+        // never shown at all. A Folio that quietly lacks what the author asked for is the one
+        // outcome this feature must not produce.
+        void ShowFolioReport(FolioPlan built, string output)
+        {
+            // What the Folio was actually made from, which is the question the heading asks.
+            //
+            // Not the suggested file name: that is a proposal for the save dialog, its last
+            // resort is "Folio-<timestamp>" when the documents share no folder, and the author
+            // may well have typed something else over it. Naming it as the source produced
+            // "written from Folio-2026-09-14-100417" - a thing the reader has never seen, which
+            // is not a document, and which is not even the file that was written.
+            string source = built.Documents.Count == 1
+                ? Path.GetFileName(built.Documents[0].SourcePath)
+                : $"{built.Documents.Count.ToString(CultureInfo.CurrentCulture)} documents";
+
+            List<ExportIssue> issues = [];
+
+            foreach (FolioWarning warning in built.Warnings)
+            {
+                MarkdownDocument? document = _workspace.Documents
+                    .FirstOrDefault(d => string.Equals(
+                        d.Path,
+                        warning.DocumentPath,
+                        StringComparison.OrdinalIgnoreCase));
+
+                if (document is null)
+                {
+                    continue;
+                }
+
+                issues.Add(new ExportIssue
+                {
+                    // Folio counts lines from zero, the editor from one. Converted here, once,
+                    // so nothing downstream has to remember which convention it is holding.
+                    Line = warning.Line + 1,
+                    DocumentId = document.Id,
+
+                    // Named on the row only when there is more than one document to tell apart.
+                    DocumentName = built.Documents.Count > 1
+                        ? Path.GetFileName(warning.DocumentPath)
+                        : string.Empty,
+                    Problem = FolioProblem(warning.Kind),
+                    Item = ExportReportItem(warning),
+                    IsAdvisory = warning.IsAdvisory,
+                });
+            }
+
+            if (issues.Count == 0)
+            {
+                return;
+            }
+
+            // The buffer texts the plan was actually built from, taken from the parse cache
+            // rather than read back off the workspace: an edit made while the Folio was being
+            // written has already happened, and looking it up now would capture the new text
+            // and quietly decide nothing had changed.
+            Dictionary<Guid, string> exported = [];
+
+            foreach (FolioDocumentPlan planned in built.Documents)
+            {
+                MarkdownDocument? document = _workspace.Documents
+                    .FirstOrDefault(d => string.Equals(
+                        d.Path,
+                        planned.SourcePath,
+                        StringComparison.OrdinalIgnoreCase));
+
+                if (document is not null && parsed.TryGetValue(planned.SourcePath, out var cached))
+                {
+                    exported[document.Id] = cached.Text;
+                }
+            }
+
+            _exportReports.Show(
+                new ExportIssueReport
+                {
+                    DocumentName = source,
+                    ExportedText = exported,
+                    OutputPath = output,
+                    Outcome = "Folio created",
+
+                    // Faults first, then the notes. Somebody scanning this is looking for what
+                    // needs doing, and a list that opens with things needing nothing teaches
+                    // them to stop reading.
+                    Issues = [.. issues
+                        .OrderBy(i => i.IsAdvisory)
+                        .ThenBy(i => i.DocumentName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(i => i.Line)],
+                },
+                GoToExportedLine);
+        }
+
         try
         {
             IsBusy = true;
             StatusText = "Building the Folio...";
+
+            if (choice.FetchRemoteImages && plan.RemoteImages.Count > 0)
+            {
+                StatusText = "Fetching pictures...";
+
+                // Fetched first, then planned again, and only then shrunk. Planning again is what
+                // puts a fetched picture through the same hashing, de-duplication and relocation
+                // as every other one - and shrinking last means an oversized picture from the web
+                // is reduced like any other rather than slipping past the cap.
+                FolioFetchResult fetch = await _folioFetcher
+                    .FetchAsync(
+                        plan.RemoteImages,
+                        scratch,
+                        new Progress<string>(text => StatusText = text))
+                    .ConfigureAwait(true);
+
+                plan = PlanFor(choice.DocumentPaths, choice.MaxImageWidth, fetch.Files);
+
+                // Merged here rather than raised by the planner, which cannot tell a picture that
+                // failed from one nobody asked for: both are simply absent from the map. Reporting
+                // this from there would tell an author they had made a choice when in fact a
+                // server returned an error.
+                if (fetch.Failures.Count > 0)
+                {
+                    plan = plan with { Warnings = [.. plan.Warnings, .. fetch.Failures] };
+                }
+            }
 
             if (choice.MaxImageWidth > 0)
             {
@@ -5627,6 +5804,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (written)
             {
                 AnnounceExport(destination);
+
+                // The same window the Word export uses, for the same reason: a list of things
+                // to fix is worked through rather than read once and dismissed. A prompt could
+                // not take the caret to the line, could not be copied as text, and would have
+                // had to cap itself at a handful of rows.
+                ShowFolioReport(plan, destination);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -5725,14 +5908,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (unresolved.Count > 0)
         {
-            // Said rather than swallowed: a Folio with a broken picture in it should not be
-            // the first the author hears of the problem.
-            await _dialogs.ShowMessageAsync(
-                "Some images could not be included",
-                string.Join(
-                    Environment.NewLine,
-                    unresolved.Distinct(StringComparer.OrdinalIgnoreCase).Take(10)))
-                .ConfigureAwait(true);
+            // Logged rather than shown. Every one of these is a local reference the page could
+            // not match to a planned asset - remote addresses are skipped by the embedder - so
+            // the planner has already reported it as a missing image, and the report window
+            // says so with a line number and a way to get there. A dialog on top of that was
+            // the third telling of the same thing, and the first two are better.
+            _logger.LogInformation(
+                "The Folio page left {Count} reference(s) unembedded: {Entries}.",
+                unresolved.Count,
+                string.Join(", ", unresolved.Distinct(StringComparer.OrdinalIgnoreCase).Take(10)));
         }
 
         return true;
@@ -5951,7 +6135,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // there are images to re-encode and a whole part graph to assemble - and the HTML
             // export freezing the window on a picture-heavy document is the mistake not to
             // repeat.
-            IReadOnlyList<DocxExportIssue> issues = await Task.Run(
+            IReadOnlyList<ExportIssue> issues = await Task.Run(
                 () => _docxExporter.WriteAsync(
                     path,
                     title,
@@ -5982,12 +6166,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 new ExportIssueReport
                 {
                     DocumentName = title,
-                    DocumentId = document.Id,
-                    ExportedText = markdown,
+                    ExportedText = new Dictionary<Guid, string> { [document.Id] = markdown },
                     OutputPath = path,
-                    Issues = issues,
+                    Outcome = "Word document exported",
+
+                    // Every issue names the one document, so no row shows a name - a column
+                    // repeating the same value on every line is read once and then ignored.
+                    Issues = [.. issues.Select(i => i with { DocumentId = document.Id })],
                 },
-                line => GoToExportedLine(document.Id, line));
+                GoToExportedLine);
         }
         catch (Exception ex)
             when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)

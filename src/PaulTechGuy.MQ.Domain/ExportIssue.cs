@@ -16,13 +16,43 @@ namespace PaulTechGuy.MQ.Domain;
 /// reads. Markdig counts from zero, so the conversion happens once, where the issue is
 /// recorded, and nothing downstream has to remember which convention it is holding.
 /// </summary>
-public sealed record DocxExportIssue
+public sealed record ExportIssue
 {
     /// <summary>
     /// The line in the markdown, counted from one - or zero for something the document has no
     /// single place for, which sorts to the top and shows no line at all.
     /// </summary>
     public int Line { get; init; }
+
+    /// <summary>
+    /// Which document the line belongs to.
+    ///
+    /// A Word export has one document and every issue carries the same id. A Folio has as many
+    /// as the author ticked, so the id has to travel per issue rather than per report - it is
+    /// what a row navigates by, and what decides whether that row has gone stale while its
+    /// neighbors are still good.
+    /// </summary>
+    public Guid DocumentId { get; init; }
+
+    /// <summary>
+    /// The document's name, shown on the row only when a report spans more than one. Empty for
+    /// a single-document report, where repeating it on every line would say nothing.
+    /// </summary>
+    public string DocumentName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Worth knowing, but nothing went wrong.
+    ///
+    /// The distinction is whether anything is <em>broken</em>. A picture that is not on the
+    /// machine is a fault; an iframe that stays on the web is not - it could never have been
+    /// carried inside a file, it works perfectly in the artifact, and the only reason to
+    /// mention it is that the person who opens the file will fetch it themselves.
+    ///
+    /// Counted apart from the rest, so a heading cannot announce four failures when two of them
+    /// are the feature behaving exactly as designed. False by default: a Word export's issues
+    /// are all genuine, and so is anything added later that forgets to think about this.
+    /// </summary>
+    public bool IsAdvisory { get; init; }
 
     /// <summary>
     /// What went wrong, as a phrase a reader can act on: "Not on this machine", "No Word form

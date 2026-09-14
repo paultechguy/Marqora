@@ -48,4 +48,19 @@ public sealed record FolioChoice
     /// into it - so a reduced picture is reduced for good.
     /// </summary>
     public int MaxImageWidth { get; init; }
+
+    /// <summary>
+    /// Whether to fetch the pictures this Folio references by web address, and carry them inside
+    /// it rather than leaving the address for the reader's browser to chase.
+    ///
+    /// False is the default, and the default is the product: Marqora does not go to the network
+    /// unless somebody standing at this dialog, looking at a list of the sites involved, asks it
+    /// to. Nothing here is remembered between Folios - like <see cref="MaxImageWidth"/> this is
+    /// answered once per share, which is what keeps it a decision rather than a mode.
+    ///
+    /// Note what the false case does <em>not</em> mean. The addresses still travel, written
+    /// exactly as the author wrote them, and whoever opens the Folio has their browser fetch
+    /// them. Off moves the network call onto the reader; it does not remove it.
+    /// </summary>
+    public bool FetchRemoteImages { get; init; }
 }

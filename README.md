@@ -8,7 +8,7 @@
 
 <p>
 Source and preview live side by side with synchronized scrolling, mermaid diagrams render<br>
-inline, and everything runs locally: no network calls, no telemetry, no account.
+inline, and everything runs locally: offline by default, no telemetry, no account.
 </p>
 
 <p>
@@ -38,7 +38,7 @@ zip, around 84 MB. Extract it into a folder of its own and double-click `Install
 
 Everything is per-user: no administrator, no UAC prompt, nothing written outside `HKCU` and
 your own profile. The .NET runtime and the Windows App SDK travel inside the zip, so the
-machine needs neither, and Marqora makes no network calls at runtime. It is not code-signed,
+machine needs neither, and Marqora contacts nothing on its own at runtime. It is not code-signed,
 so Windows warns the first time; the release page says what you will see and why.
 
 **Staying current.** Marqora does not check for updates, because checking would be a network
@@ -192,7 +192,7 @@ would rather not reach for the mouse.
 
 |     | Feature                                  | What you get                                                                                                                                                                                                                             |
 | --- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔒  | **Yours alone**                          | No network calls, no telemetry, no account, no sign-in. Your documents never leave the machine                                                                                                                                           |
+| 🔒  | **Yours alone**                          | Offline by default: no telemetry, no account, no sign-in, and nothing sent anywhere on its own. Your documents never leave the machine unless you send them                                                                                                                                           |
 | 📑  | **Tabbed workspace**                     | Every document in its own tab, each with its own undo history, cursor and scroll position. Open a whole folder at once, drag tabs to reorder, and pick up exactly where you left off next launch                                         |
 | ⚡   | **Live side-by-side preview**            | Source and rendered output together, scrolling in lockstep — mapped through line numbers, so tall diagrams never throw the alignment off                                                                                                 |
 | ✍️  | **Monaco editing**                       | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom                                                                                                                  |
@@ -821,8 +821,9 @@ Like every other change in the dialog, an import is undone by **Cancel**.
 
 **The update reminder**
 
-Marqora never asks GitHub whether a newer release exists, so it cannot tell you — and saying
-otherwise would make "no network calls" a claim with an asterisk on it. What it has instead is
+Marqora never asks GitHub whether a newer release exists, so it cannot tell you — not because a
+version number is precious, but because nobody asked it to, and the app does nothing on its own.
+What it has instead is
 a clock, set on the Advanced page: after this many days a line appears in the status bar
 suggesting you look, and clicking it hands the releases page to your browser. Zero never
 reminds you.

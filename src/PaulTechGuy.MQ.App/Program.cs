@@ -150,6 +150,9 @@ public static class Program
         builder.Services.AddSingleton<IHtmlExporter, HtmlExporter>();
         builder.Services.AddSingleton<FolioHtmlWriter>();
         builder.Services.AddSingleton<FolioShrinker>();
+        builder.Services.AddSingleton(sp => new FolioFetcher(
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FolioFetcher>>(),
+            AppVersion.Current));
         builder.Services.AddSingleton<IExportDialogService, ExportDialogService>();
         builder.Services.AddSingleton<IFolioDialogService, FolioDialogService>();
         builder.Services.AddSingleton<IPrintDialogService, PrintDialogService>();

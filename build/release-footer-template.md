@@ -6,7 +6,7 @@
 
 Self-contained in every sense. The .NET runtime and the Windows App SDK are inside the zip, so
 the target machine needs neither. The installer is per-user and writes nothing outside `HKCU`
-and your own profile, so it needs no administrator. And Marqora makes no network calls at
+and your own profile, so it needs no administrator. And Marqora contacts nothing on its own at
 runtime, so it needs no connection.
 
 ## Install

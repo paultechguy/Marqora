@@ -44,7 +44,22 @@ public static partial class FolioPlanner
     /// picture as it is. Only reported here - the planner never touches bytes - but reported
     /// before anything is written, because shrinking is the single lossy thing a Folio does.
     /// </param>
-    public static FolioPlan Plan(IReadOnlyList<FolioSource> sources, int maxImageWidth = 0)
+    /// <param name="fetched">
+    /// Pictures already pulled down from the web, as the address the author wrote mapped to a
+    /// local file holding the bytes. Null, or missing an address, means the ordinary thing
+    /// happens: the reference is left exactly as written and nothing is collected for it.
+    ///
+    /// The planner still makes no network call and knows nothing about how this was filled in.
+    /// A mapped address is treated as though the author had written that local path all along,
+    /// which is what puts a fetched picture through the same hashing, de-duplication, name
+    /// collision and relocation as every other one. It also means a fetch that failed needs no
+    /// handling here at all - the address is simply absent, and absent is what the planner has
+    /// always done with a web address.
+    /// </param>
+    public static FolioPlan Plan(
+        IReadOnlyList<FolioSource> sources,
+        int maxImageWidth = 0,
+        IReadOnlyDictionary<string, string>? fetched = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
 
@@ -63,6 +78,7 @@ public static partial class FolioPlanner
         List<FolioAsset> assets = [];
         List<FolioWarning> warnings = [];
         List<FolioDocumentPlan> documents = [];
+        List<FolioRemoteImage> remoteImages = [];
 
         // Named first and all together, because a link from the first document to the last has to
         // know what the last one will be called.
@@ -95,10 +111,91 @@ public static partial class FolioPlanner
                     continue;
                 }
 
-                // A scheme, or protocol-relative: somebody else's file, and checking it would
-                // mean going to the network, which this app never does.
+                // A scheme, or protocol-relative: somebody else's file.
                 if (Scheme().IsMatch(url) || url.StartsWith("//", StringComparison.Ordinal))
                 {
+                    // Only a picture, and only one actually on the web. Both halves matter and
+                    // neither is obvious from here.
+                    //
+                    // This test sits above the IsImage branch below, so without the first half
+                    // every ordinary link out of the document would be counted as a picture -
+                    // and a README of build badges and reference links would announce thirty
+                    // pictures on the web, which is the fastest possible way to have the whole
+                    // feature switched off.
+                    //
+                    // And Scheme() is not an http test: mailto:, file: and data: all match it.
+                    // A data: URI picture is already inside the document, so offering to go and
+                    // fetch it would be nonsense. MediaTarget draws that line once, for the
+                    // whole application, and this asks it rather than keeping a second opinion.
+                    if (link.IsImage && MediaTarget.Classify(url) == MediaTargetKind.Remote)
+                    {
+                        // An iframe, a video, a subtitle track. Every one of these is something
+                        // the reader's browser will go and get, so it is worth saying - but none
+                        // of them is a picture that could be carried inside the file instead, so
+                        // none is ever offered for fetching. Asking the web for a live page and
+                        // then complaining it was not a picture is a question we should not have
+                        // asked.
+                        if (link.MediaKind != MediaKind.Picture)
+                        {
+                            warnings.Add(new FolioWarning
+                            {
+                                Kind = FolioWarningKind.RemoteMediaNotIncluded,
+                                DocumentPath = documentFull,
+                                Line = link.SourceLine,
+                                Url = url,
+                                Message =
+                                    $"\"{url}\" is not a picture, so it cannot travel inside "
+                                    + "the Folio. Whoever opens the Folio will fetch it from "
+                                    + "that site.",
+                            });
+
+                            continue;
+                        }
+
+                        remoteImages.Add(new FolioRemoteImage
+                        {
+                            Url = url,
+                            DocumentPath = documentFull,
+                            Line = link.SourceLine,
+                        });
+
+                        // Fetched already? Then it is a file like any other from here on, and
+                        // everything below - hashing, de-duplication, renaming, relocation - runs
+                        // for it unchanged.
+                        //
+                        // Keyed on the address exactly as written. Not the split target: a badge
+                        // carries its meaning in the query string, so "...badge/build?style=flat"
+                        // and "...badge/build" are different pictures, and cutting at the "?"
+                        // here would fetch one and display the other.
+                        if (fetched is not null && fetched.TryGetValue(url, out string? local))
+                        {
+                            PlanImage(
+                                link, url, string.Empty, local, folder, documentFull, maxImageWidth,
+                                taken, byContent, relocatedNames, assets, warnings, edits, url);
+
+                            continue;
+                        }
+
+                        // Only when no fetch was attempted. A null map means nobody asked for
+                        // these, so saying they stay behind is the whole point; a map that
+                        // simply lacks this address means the fetch was tried and failed, and
+                        // the fetcher reports that with the reason. Saying both produced two
+                        // rows for one picture, which is how this was found.
+                        if (fetched is null)
+                        {
+                            warnings.Add(new FolioWarning
+                            {
+                                Kind = FolioWarningKind.RemoteImageNotIncluded,
+                                DocumentPath = documentFull,
+                                Line = link.SourceLine,
+                                Url = url,
+                                Message =
+                                    $"\"{url}\" is on the web and will not travel. Whoever opens "
+                                    + "this Folio will have their browser fetch it.",
+                            });
+                        }
+                    }
+
                     continue;
                 }
 
@@ -157,6 +254,7 @@ public static partial class FolioPlanner
             Documents = documents,
             Assets = assets,
             Warnings = warnings,
+            RemoteImages = remoteImages,
         };
     }
 
@@ -173,7 +271,8 @@ public static partial class FolioPlanner
         HashSet<string> relocatedNames,
         List<FolioAsset> assets,
         List<FolioWarning> warnings,
-        List<Edit> edits)
+        List<Edit> edits,
+        string? remoteUrl = null)
     {
         if (!File.Exists(resolved))
         {
@@ -274,6 +373,7 @@ public static partial class FolioPlanner
             Bytes = size,
             Relocated = relocated,
             PixelWidth = width,
+            RemoteUrl = remoteUrl,
         };
 
         assets.Add(asset);

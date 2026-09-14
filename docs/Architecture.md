@@ -1121,9 +1121,12 @@ repairs something to replace, which an attribute otherwise lacks — `LinkTarget
 > failure: a mark in the wrong place explains nothing and costs the reader their trust in the
 > marks that are right.
 
-**Two things are never done, and both are load-bearing.** A web address is never fetched, not
-even to build a hover thumbnail — a hover that tried would be the very network call the mark
-exists to say never happens. And a UNC path is never probed, because `File.Exists` on a share
+**Two things are never done, and both are load-bearing.** A web address is never fetched here,
+not even to build a hover thumbnail — nobody asked for it, and a fetch the reader did not ask
+for is the thing the mark exists to say never happens. (A Folio *does* fetch, when the author
+ticks the box in its preflight and after it has named the sites. That is the same rule, not an
+exception to it: the difference is a decision somebody made.) And a UNC path is never probed,
+because `File.Exists` on a share
 blocks until the other machine answers and this runs while somebody is typing; what can be said
 without asking is that it is not beside the document, which is the part that decides whether it
 appears.

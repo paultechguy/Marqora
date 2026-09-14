@@ -98,7 +98,7 @@ public class ImageTests : IDisposable
     }
 
     /// <summary>
-    /// Marqora makes no network calls at runtime, so a remote image cannot be fetched. The
+    /// Word export asks nobody whether to fetch, so a remote image is not fetched here. The
     /// document gets the alt text and the caller is told, rather than the picture silently
     /// going missing.
     /// </summary>

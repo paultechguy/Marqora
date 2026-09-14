@@ -80,6 +80,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot 'PaulTechGuy.MQ.slnx'
 $buildProps = Join-Path $repoRoot 'Directory.Build.props'
 $headerScript = Join-Path $PSScriptRoot 'Add-FileHeaders.ps1'
+$claimScript = Join-Path $PSScriptRoot 'Test-NetworkClaim.ps1'
 $releaseScript = Join-Path $PSScriptRoot 'New-Release.ps1'
 $notesTemplate = Join-Path $PSScriptRoot 'release-notes-template.md'
 $footerTemplate = Join-Path $PSScriptRoot 'release-footer-template.md'
@@ -220,6 +221,7 @@ try {
     Test-GateNotesReady -NotesPath $notesPath -TemplatePath $notesTemplate -Version $Version
     Test-GateTests -Solution $solution -Configuration $configuration -Stream:$ShowBuildOutput
     Test-GateHeaders -ScriptPath $headerScript
+    Test-GateNetworkClaim -ScriptPath $claimScript
     Test-GateBuild -Solution $solution -Configuration $configuration -Stream:$ShowBuildOutput
 
     Write-Host ''

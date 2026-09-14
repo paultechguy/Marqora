@@ -60,7 +60,7 @@ public interface IDocxExporter
     /// In document order, and each one carries the line it was on, counted from one: being
     /// told what is missing is half of it, and finding it in two thousand lines is the other.
     /// </returns>
-    Task<IReadOnlyList<DocxExportIssue>> WriteAsync(
+    Task<IReadOnlyList<ExportIssue>> WriteAsync(
         string outputPath,
         string title,
         string markdown,

@@ -21,7 +21,7 @@ namespace PaulTechGuy.MQ.Docx;
 /// </summary>
 internal sealed class ExportReport
 {
-    private readonly List<DocxExportIssue> _issues = [];
+    private readonly List<ExportIssue> _issues = [];
     private readonly HashSet<(int Line, string Problem, string Item)> _seen = [];
 
     /// <summary>
@@ -31,7 +31,7 @@ internal sealed class ExportReport
     /// diagrams are fetched before it starts, and Markdig relocates footnote definitions to
     /// the end of the tree, so an issue inside a note arrives last and belongs in the middle.
     /// </summary>
-    public IReadOnlyList<DocxExportIssue> Issues =>
+    public IReadOnlyList<ExportIssue> Issues =>
         [.. _issues.OrderBy(i => i.Line).ThenBy(i => i.Problem, StringComparer.Ordinal)];
 
     /// <summary>
@@ -57,7 +57,7 @@ internal sealed class ExportReport
             return;
         }
 
-        _issues.Add(new DocxExportIssue { Line = line, Problem = problem, Item = what });
+        _issues.Add(new ExportIssue { Line = line, Problem = problem, Item = what });
     }
 
     /// <summary>

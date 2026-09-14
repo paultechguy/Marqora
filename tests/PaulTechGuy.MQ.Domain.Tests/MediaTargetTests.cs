@@ -31,8 +31,8 @@ public class MediaTargetTests
     [Fact]
     public void Loopback_is_not_an_exemption()
     {
-        // Still a request leaving the process. "No network calls" does not grow an asterisk for
-        // the machine you happen to be sitting at.
+        // Still a request leaving the process, so it is still something to be asked about. The
+        // rule does not grow an exemption for the machine you happen to be sitting at.
         MediaTarget.Classify("http://localhost/x.png").ShouldBe(MediaTargetKind.Remote);
     }
 

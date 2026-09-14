@@ -661,6 +661,23 @@ function Test-GateHeaders {
     Write-Done
 }
 
+function Test-GateNetworkClaim {
+    param([Parameter(Mandatory)][string] $ScriptPath)
+
+    Write-Check 'network claim'
+
+    $output = & pwsh -NoProfile -File $ScriptPath -Check 2>&1
+    $code = $LASTEXITCODE
+
+    if ($code -ne 0) {
+        Write-Failed
+        Write-CapturedOutput $output
+        throw 'The retired network claim is still somewhere it should not be. Run: pwsh .\build\Test-NetworkClaim.ps1'
+    }
+
+    Write-Done
+}
+
 function Test-GateBuild {
     param(
         [Parameter(Mandatory)][string] $Solution,

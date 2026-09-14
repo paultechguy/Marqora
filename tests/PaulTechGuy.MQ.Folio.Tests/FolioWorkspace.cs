@@ -59,7 +59,20 @@ internal sealed class FolioWorkspace : IDisposable
         return this;
     }
 
+    /// <summary>The documents added so far, for a test that needs to call the planner itself.</summary>
+    public IReadOnlyList<FolioSource> Sources => _sources;
+
     public FolioPlan Plan() => FolioPlanner.Plan(_sources);
+
+    /// <summary>
+    /// The plan as it would be after a fetch, given what came back.
+    ///
+    /// The map stands in for the fetcher, which is tested on its own against a loopback
+    /// listener. Nothing here goes near a network, and a test that needed one would be the
+    /// wrong test.
+    /// </summary>
+    public FolioPlan Plan(IReadOnlyDictionary<string, string> fetched) =>
+        FolioPlanner.Plan(_sources, 0, fetched);
 
     /// <summary>The planned text of one document, by the name it was added under.</summary>
     public static string TextOf(FolioPlan plan, string fileName) =>

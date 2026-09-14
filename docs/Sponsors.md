@@ -5,7 +5,7 @@ Where the GitHub links live, and what has to be true outside the repository for 
 
 The feature is deliberately small: a menu item, a dialog with three buttons, and two URLs
 handed to the shell. Nothing is fetched, nothing is authenticated, and nothing about who
-clicked what is recorded — the About box states outright that Marqora makes no network calls
+clicked what is recorded — the About box states outright that Marqora is offline by default
 and carries no telemetry, and that has to stay true.
 
 ---

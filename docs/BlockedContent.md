@@ -11,7 +11,7 @@ decides, and what to look at when the marks stop showing up.
 
 ## The claim
 
-Marqora makes no network calls at runtime, and the preview serves files only from the
+Marqora contacts nothing on its own at runtime, and the preview serves files only from the
 document's own folder. Both are properties of the product, not omissions. The cost is that
 some perfectly correct documents render a hole, and for a long time nothing explained it: an
 absolute URL was left exactly as written, the content policy killed the fetch, and the reader
@@ -332,9 +332,11 @@ missing from the artifact, and the artifact is the only place that fact is still
 **The picture is never in the artifact Marqora builds; the address always can be.** PDF and
 Word are not "somewhere else" the way GitHub or a browser opening an HTML export are — Marqora
 itself produces both, by painting its own DOM for one and walking Markdig into OpenXML for the
-other, and "Marqora never goes to the network" binds both exactly as it binds the live preview.
-Embedding the actual picture in either would mean *this app* fetching it at export time, which
-is the one thing ruled out. A clickable address is a different claim: it is text, not a fetch,
+other, and the rule binds both exactly as it binds the live preview: nothing is fetched that the
+person exporting was not asked about. Embedding the actual picture in either would mean *this
+app* fetching it at export time, having asked nobody — and neither exporter asks. A Folio does
+ask, in its preflight, which is why it may collect a picture where these two may not; if Word
+or PDF ever grow the same question, this paragraph changes with them and not before. A clickable address is a different claim: it is text, not a fetch,
 so both the PDF chip and the Word placeholder carry one when the reference is a web address —
 `RemoteMedia`, not `OutsideFolder`, since a file elsewhere on the machine has no address to send
 a reader to and stays a plain mark in both places. `InlineRenderer.WriteImage` checks

@@ -30,6 +30,26 @@ public sealed record OutlineHeading
 }
 
 /// <summary>
+/// What sort of thing a reference loads, for the questions where that matters.
+///
+/// <see cref="LinkReference.IsImage"/> answers "would the renderer fetch this by itself", which
+/// is the right question for marking blocked content and is true of an iframe. It is the wrong
+/// question for a Folio, which asks "could this be downloaded and carried inside the file" - and
+/// a live page cannot be. Told apart here rather than by guessing from a file extension.
+/// </summary>
+public enum MediaKind
+{
+    /// <summary>A still picture: markdown's own syntax, img, a source set, a video poster.</summary>
+    Picture = 0,
+
+    /// <summary>A whole document loaded in place: iframe, embed, object.</summary>
+    Frame,
+
+    /// <summary>Timed media: video, audio, a subtitle track.</summary>
+    Timed,
+}
+
+/// <summary>
 /// A link or image found while rendering, with where it came from in the source.
 ///
 /// Collected during the same parse that produces the HTML, so checking a document's links
@@ -42,6 +62,15 @@ public sealed record LinkReference
 
     /// <summary>True for an image, false for a link. Markdig models both the same way.</summary>
     public required bool IsImage { get; init; }
+
+    /// <summary>
+    /// What this actually loads, when <see cref="IsImage"/> is true.
+    ///
+    /// Defaulted to <see cref="MediaKind.Picture"/> so markdown's own image syntax, and every
+    /// construction site that predates this, keep meaning exactly what they did. Only the raw
+    /// HTML reader has a tag to read, and only it says otherwise.
+    /// </summary>
+    public MediaKind MediaKind { get; init; } = MediaKind.Picture;
 
     /// <summary>Zero-based line in the markdown source.</summary>
     public required int SourceLine { get; init; }

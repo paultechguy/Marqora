@@ -678,7 +678,11 @@ does not spend time re-finding them, and so a regression is recognizable.
 - **MathML to OMML is the one part with unbounded scope.** Microsoft's own `MML2OMML.XSL` is an
   order of magnitude larger than this converter. Unmapped elements are named in the export report
   rather than dropped silently.
-- **Remote images cannot be embedded** — no network calls at runtime, a stated product rule. They
+- **Remote images cannot be embedded** — Word export fetches nothing, and nothing here asks the
+  author whether it should. A Folio does ask, in its preflight; this does not, so the rule for
+  this exporter is unchanged, and the reasoning is now "nobody was asked" rather than an
+  absolute ban. Whether Word export should grow the same question is open, and is
+  a decision to make on purpose rather than let fall out of a neighboring feature. They
   are reported as skipped. The preview cannot load them either, so nothing is lost visually. A
   **`data:` URI is not remote**: it carries its own bytes, needs nothing fetched, and is embedded
   — base64 only, and only the five types Word draws. `data:image/svg+xml` is reported as not a
