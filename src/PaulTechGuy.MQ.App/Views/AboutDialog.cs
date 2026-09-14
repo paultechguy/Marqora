@@ -96,14 +96,19 @@ internal sealed class AboutDialog : ContentDialog
 
         panel.Children.Add(new TextBlock
         {
-            // The last sentence earns its place now that a menu item one line above this
-            // dialog offers to open GitHub. Marqora still opens no socket of its own - a
-            // link is handed to the shell, the same as the folder rows below - but the
-            // claim reads better with the one thing that could look like an exception
-            // stated rather than left for a sceptical reader to catch.
-            Text = "A Markdown viewer and editor for Windows 11. Everything runs locally: "
-                + "no network calls, no telemetry, no account. Links you open are handed "
-                + "to your browser rather than fetched here.",
+            // Both exceptions are stated rather than left for a sceptical reader to catch,
+            // which is the whole point of the sentence. A link is handed to the shell, the
+            // same as the folder rows below. And a Folio fetches only what somebody ticked
+            // a box to ask for, at a dialog naming the sites first.
+            //
+            // "Offline by default" rather than the absolute phrasing this used to carry: that
+            // one is no longer literally true, and a claim with a quiet exception behind it is
+            // worth less than a smaller one that holds. What has not moved is the part people
+            // actually care about - nothing happens on its own.
+            Text = "A Markdown viewer and editor for Windows 11. Offline by default: "
+                + "no telemetry, no account, and nothing sent anywhere on its own. Links you "
+                + "open are handed to your browser rather than fetched here, and a Folio "
+                + "collects pictures from the web only when you ask it to.",
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.8,
         });

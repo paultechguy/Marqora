@@ -122,7 +122,7 @@ archive's root holds the five entries it should.
 
 ## The gates
 
-All nine run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`.
+All ten run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`.
 Every one is read-only, which is what makes it safe to run them before deciding whether a
 release should happen at all.
 
@@ -136,6 +136,7 @@ release should happen at all.
 | release notes | Missing, still carrying placeholders, or saying nothing the template did not |
 | tests | `dotnet test` fails |
 | licence headers | `Add-FileHeaders.ps1 -Check` fails |
+| network claim | `Test-NetworkClaim.ps1 -Check` fails — something still carries the retired absolute claim, or says it somewhere new |
 | build, no warnings | `dotnet build -warnaserror` fails |
 
 Two are worth explaining.

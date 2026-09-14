@@ -45,6 +45,42 @@ public sealed class FolioWriterTests
     }
 
     [Fact]
+    public async Task Every_form_carries_a_picture_fetched_from_the_web()
+    {
+        // The reason all three forms came along for free: by the time a writer sees it, a fetched
+        // picture is an ordinary asset with an ordinary SourcePath, and nothing downstream knows
+        // or needs to know where the bytes came from.
+        using var workspace = new FolioWorkspace();
+
+        string fetched = workspace.File("elsewhere/scratch/badge.svg", "<svg></svg>");
+        workspace.Document("docs/guide.md", "![](https://img.shields.io/badge.svg)");
+
+        FolioPlan plan = FolioPlanner.Plan(
+            workspace.Sources,
+            fetched: new Dictionary<string, string> { ["https://img.shields.io/badge.svg"] = fetched });
+
+        plan.FetchedCount.ShouldBe(1);
+
+        string folder = Path.Combine(workspace.Elsewhere, "out", "folder");
+        await Writer.WriteFolderAsync(plan, FolioManifest.For(plan, "1.0", "TESTBOX"), folder, Ct);
+
+        File.Exists(Path.Combine(folder, "media", "badge.svg")).ShouldBeTrue();
+        (await File.ReadAllTextAsync(Path.Combine(folder, "guide.md"), Ct))
+            .ShouldBe("![](media/badge.svg)");
+
+        string zipPath = Path.Combine(workspace.Elsewhere, "out", "folio.zip");
+        await Writer.WriteZipAsync(plan, FolioManifest.For(plan, "1.0", "TESTBOX"), zipPath, Ct);
+
+        using ZipArchive zip = ZipFile.OpenRead(zipPath);
+        zip.GetEntry("media/badge.svg").ShouldNotBeNull();
+
+        // The single-file form embeds from the same SourcePath the other two copy from, so what it
+        // would inline is exactly these bytes. That path is covered by FolioRoundTripTests.
+        plan.Assets[0].SourcePath.ShouldBe(fetched);
+        plan.Assets[0].RemoteUrl.ShouldBe("https://img.shields.io/badge.svg");
+    }
+
+    [Fact]
     public async Task The_folder_form_refuses_to_write_into_somewhere_that_holds_work()
     {
         using var workspace = new FolioWorkspace();

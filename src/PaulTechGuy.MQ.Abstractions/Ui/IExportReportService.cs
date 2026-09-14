@@ -15,26 +15,46 @@ namespace PaulTechGuy.MQ.Abstractions.Ui;
 /// </summary>
 public sealed class ExportIssueReport
 {
-    /// <summary>The document as it was exported, for the window's caption and its report.</summary>
+    /// <summary>
+    /// What was exported, for the window's caption and its report: a document's name, or a
+    /// Folio's.
+    /// </summary>
     public required string DocumentName { get; init; }
 
-    /// <summary>Which open document the line numbers belong to.</summary>
-    public required Guid DocumentId { get; init; }
-
     /// <summary>
-    /// The text that was exported.
+    /// The text of every document this report describes, by id.
     ///
-    /// Held for one purpose: to notice when the document has moved on beneath the report. An
-    /// edit allocates a new string, so reference equality is the whole test - and an edit that
-    /// put the text back as it was leaves nothing to say. The same test Find All uses.
+    /// Held for one purpose: to notice when a document has moved on beneath the report. An edit
+    /// allocates a new string, so reference equality is the whole test - and an edit that put
+    /// the text back as it was leaves nothing to say. The same test Find All uses.
+    ///
+    /// A map rather than a single string because a Folio names several documents at once, and
+    /// editing one of twelve must not stop the other eleven's rows from working. Each row goes
+    /// stale on its own, by the id it carries.
     /// </summary>
-    public required string ExportedText { get; init; }
+    public required IReadOnlyDictionary<Guid, string> ExportedText { get; init; }
 
     /// <summary>Where the file was written, named in the report so a copy of it is self-contained.</summary>
     public required string OutputPath { get; init; }
 
+    /// <summary>
+    /// What happened, as the heading: "Folio created", "Word document exported".
+    ///
+    /// The heading used to open with "Unable to export these items", which is a poor first
+    /// sentence for a window that appears only after a perfectly good file has been written -
+    /// the reader's first conclusion is that nothing was produced. The outcome leads; what is
+    /// missing from it follows underneath.
+    /// </summary>
+    public required string Outcome { get; init; }
+
+    /// <summary>Things that are genuinely missing or broken.</summary>
+    public int FailureCount => Issues.Count(i => !i.IsAdvisory);
+
+    /// <summary>Things worth knowing that are not faults.</summary>
+    public int AdvisoryCount => Issues.Count(i => i.IsAdvisory);
+
     /// <summary>What could not be carried across, in document order.</summary>
-    public required IReadOnlyList<DocxExportIssue> Issues { get; init; }
+    public required IReadOnlyList<ExportIssue> Issues { get; init; }
 }
 
 /// <summary>
@@ -52,10 +72,10 @@ public interface IExportReportService
     /// nothing in Marqora is modal.
     /// </summary>
     /// <param name="goToLine">
-    /// Takes the editor to a line, counted from one. Called when the reader picks a row, and
-    /// not called at all once the document has changed underneath the report: the line numbers
-    /// describe the document as it was exported, and a click that landed on whatever had since
-    /// moved into that line would be worse than no click at all.
+    /// Takes the editor to a line in a named document, counted from one. Called when the reader
+    /// picks a row, and not called at all once <em>that</em> document has changed underneath the
+    /// report: the line numbers describe the documents as they were exported, and a click that
+    /// landed on whatever had since moved into that line would be worse than no click at all.
     /// </param>
-    void Show(ExportIssueReport report, Action<int> goToLine);
+    void Show(ExportIssueReport report, Action<Guid, int> goToLine);
 }

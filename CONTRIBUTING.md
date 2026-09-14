@@ -70,9 +70,16 @@ your editor.
 written to make this easy — see the Tests section of the README. A project dropped under
 `tests\` is picked up automatically.
 
-**Marqora makes no network calls at runtime.** No telemetry, no update checks, no account,
-no fetching anything. This is the point of the application rather than an implementation
-detail, and a change that adds one will not be merged.
+**Marqora does nothing on its own.** No telemetry, no update checks, no account, and nothing
+fetched that the person using it did not ask for. This is the point of the application rather
+than an implementation detail, and a change that quietly adds a call will not be merged.
+
+There is exactly one thing that goes to the network, and its shape is the standard every
+future one has to meet: a Folio can collect the pictures a document names by web address, and
+only when the author ticks a box in the preflight that has already named the sites involved.
+Off by default, nothing remembered between shares, and the `HttpClient` is built inside the
+one method that needs it and nowhere else - so with the box unticked the machinery does not
+exist rather than sitting idle behind a flag.
 
 **The layering holds.** No concrete layer references another; they meet at the composition
 root in `src/PaulTechGuy.MQ.App/Program.cs`. There is one documented exception — `Docx`

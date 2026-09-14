@@ -37,7 +37,7 @@ public sealed class DocxExporter : IDocxExporter
         _pipeline = MarqoraMarkdownPipeline.CreateBuilder().Build();
     }
 
-    public async Task<IReadOnlyList<DocxExportIssue>> WriteAsync(
+    public async Task<IReadOnlyList<ExportIssue>> WriteAsync(
         string outputPath,
         string title,
         string markdown,

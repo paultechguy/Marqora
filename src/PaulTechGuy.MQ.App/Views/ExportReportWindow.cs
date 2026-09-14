@@ -48,6 +48,12 @@ public sealed partial class ExportReportWindow : PaletteWindow
     /// </summary>
     private const string WarningGlyph = "\uE7BA";
 
+    /// <summary>For a report where nothing is broken and everything is only worth knowing.</summary>
+    private const string InfoGlyph = "\uE946";
+
+    /// <summary>The mark column, wide enough for either glyph and narrow enough to stay a margin.</summary>
+    private const int MarkWidth = 18;
+
     /// <summary>Room for five digits: more lines than a markdown file is ever likely to have.</summary>
     private const int LineNumberWidth = 56;
 
@@ -58,7 +64,7 @@ public sealed partial class ExportReportWindow : PaletteWindow
     private const int DefaultMinimumHeight = 320;
 
     private readonly ExportIssueReport _report;
-    private readonly Action<int> _goToLine;
+    private readonly Action<Guid, int> _goToLine;
     private readonly IWorkspaceService _workspace;
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
@@ -74,12 +80,21 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
     private readonly List<FontIcon> _warningGlyphs = [];
 
-    private bool _isStale;
+    /// <summary>
+    /// The documents that have moved on since the export, by id.
+    ///
+    /// Per document rather than one flag for the whole report, because a Folio names as many
+    /// documents as the author ticked. Editing one of twelve dims that one's rows and leaves the
+    /// other eleven working - which is the only honest answer, since the other eleven really are
+    /// still where the report says they are.
+    /// </summary>
+    private readonly HashSet<Guid> _staleDocuments = [];
+
     private bool _isShuttingDown;
 
     public ExportReportWindow(
         ExportIssueReport report,
-        Action<int> goToLine,
+        Action<Guid, int> goToLine,
         IWorkspaceService workspace,
         ISettingsService settings,
         IThemeService theme,
@@ -156,12 +171,16 @@ public sealed partial class ExportReportWindow : PaletteWindow
     }
 
     /// <summary>
-    /// The heading, which says three things in order: that this is a warning, what it is about,
-    /// and that the document was nonetheless written.
+    /// The heading, which leads with what happened and follows with what is missing from it.
     ///
-    /// That last part is not padding. An export that produced a perfectly good file is being
-    /// reported on, and a reader who has just been handed a window headed "Unable to export
-    /// these items" will otherwise reasonably conclude that nothing was written at all.
+    /// That order is the whole point. This window only ever appears after a file has been
+    /// written, and it used to open with "Unable to export these items" - so a reader's first
+    /// conclusion was that nothing had been produced at all. The outcome goes first; the count
+    /// goes underneath, where it can be read as a qualification rather than a verdict.
+    ///
+    /// The glyph follows the same rule. A warning sign for something actually broken, and a
+    /// quieter mark when every row is only worth knowing - an iframe that stays on the web is
+    /// not a fault, and a triangle beside it says otherwise.
     /// </summary>
     private StackPanel BuildHeading()
     {
@@ -169,7 +188,7 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
         var title = new TextBlock
         {
-            Text = "Unable to export these items",
+            Text = _report.Outcome,
             FontSize = 18,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
@@ -181,7 +200,7 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
         FillSummary();
 
-        heading.Children.Add(WithWarningGlyph(title, glyphSize: 18));
+        heading.Children.Add(WithWarningGlyph(title, glyphSize: 18, caution: _report.FailureCount > 0));
         heading.Children.Add(_summary);
 
         return heading;
@@ -196,7 +215,13 @@ public sealed partial class ExportReportWindow : PaletteWindow
     /// line and runs off the edge of the window, where it is clipped rather than wrapped. Both
     /// notices in this window were built that way and both were truncated.
     /// </summary>
-    private Grid WithWarningGlyph(FrameworkElement text, double glyphSize)
+    /// <param name="caution">
+    /// Whether this is a warning. Passed in rather than read from the report, because the two
+    /// callers are not asking the same question: the heading reflects whether any row is a real
+    /// fault, while the staleness notice is a warning whatever the rows say - line numbers that
+    /// have stopped being true are wrong regardless of what they point at.
+    /// </param>
+    private Grid WithWarningGlyph(FrameworkElement text, double glyphSize, bool caution)
     {
         var row = new Grid { ColumnSpacing = 8 };
 
@@ -207,14 +232,24 @@ public sealed partial class ExportReportWindow : PaletteWindow
         // centered one drifts down the block as the text wraps to two lines and three.
         var glyph = new FontIcon
         {
-            Glyph = WarningGlyph,
+            Glyph = caution ? WarningGlyph : InfoGlyph,
             FontSize = glyphSize,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 2, 0, 0),
-            Foreground = CautionBrush(_theme.Effective),
         };
 
-        _warningGlyphs.Add(glyph);
+        // Only a real fault gets the caution color. A report made entirely of things worth
+        // knowing is not a warning, and coloring it as one trains the reader to ignore the
+        // ones that are.
+        if (caution)
+        {
+            glyph.Foreground = CautionBrush(_theme.Effective);
+            _warningGlyphs.Add(glyph);
+        }
+        else
+        {
+            glyph.Opacity = 0.7;
+        }
 
         Grid.SetColumn(glyph, 0);
         Grid.SetColumn(text, 1);
@@ -235,10 +270,6 @@ public sealed partial class ExportReportWindow : PaletteWindow
     /// </summary>
     private void FillSummary()
     {
-        string count = _report.Issues.Count == 1
-            ? "1 item is not in it."
-            : $"{_report.Issues.Count.ToString(CultureInfo.CurrentCulture)} items are not in it.";
-
         _summary.Inlines.Clear();
 
         _summary.Inlines.Add(new Run
@@ -255,7 +286,42 @@ public sealed partial class ExportReportWindow : PaletteWindow
             FontWeight = FontWeights.SemiBold,
         });
 
-        _summary.Inlines.Add(new Run { Text = $". {count} Everything else came across." });
+        _summary.Inlines.Add(new Run { Text = $". {Tally()}" });
+    }
+
+    /// <summary>
+    /// What is missing and what is merely worth knowing, counted apart.
+    ///
+    /// A report of three faults and an iframe used to read "4 items are not in it", which
+    /// overstates the first number and misfiles the iframe - it is not missing, it is working
+    /// exactly as an iframe works. The two are counted separately here and everywhere else that
+    /// says a number, including the text this window copies to the clipboard.
+    /// </summary>
+    private string Tally()
+    {
+        int failures = _report.FailureCount;
+        int advisories = _report.AdvisoryCount;
+
+        string missing = failures == 1
+            ? "1 item could not be included"
+            : $"{failures.ToString(CultureInfo.CurrentCulture)} items could not be included";
+
+        string worth = advisories == 1
+            ? "1 more is worth knowing about"
+            : $"{advisories.ToString(CultureInfo.CurrentCulture)} more are worth knowing about";
+
+        if (failures == 0)
+        {
+            // Nothing is wrong with it at all, and the reader should not have to work that out
+            // by noticing the absence of a complaint.
+            return advisories == 1
+                ? "Everything came across. One thing below is worth knowing about."
+                : $"Everything came across. {advisories.ToString(CultureInfo.CurrentCulture)} things below are worth knowing about.";
+        }
+
+        return advisories == 0
+            ? $"{missing}. Everything else came across."
+            : $"{missing}, and {worth}.";
     }
 
     /// <summary>
@@ -269,15 +335,24 @@ public sealed partial class ExportReportWindow : PaletteWindow
     {
         _staleNotice.Visibility = Visibility.Collapsed;
 
+        // Two wordings, because "the document" is a lie about a Folio of twelve - and the rows
+        // that faded are the only ones affected, which is worth saying rather than leaving the
+        // reader to infer it from the ones that still light up.
         var text = new TextBlock
         {
-            Text = "The document has changed since it was exported, so these line numbers no "
-                + "longer point at the right places. Export again to bring them up to date.",
+            Text = _report.ExportedText.Count > 1
+                ? "Some of these documents have changed since they were exported, so the faded "
+                    + "rows no longer point at the right places. The rest are still good."
+                : "The document has changed since it was exported, so these line numbers no "
+                    + "longer point at the right places. Export again to bring them up to date.",
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        _staleNotice.Children.Add(WithWarningGlyph(text, glyphSize: 14));
+        // Always a warning. Whether any row is a fault has nothing to do with it: the line
+        // numbers have stopped being true, and a row that takes the caret to the wrong place is
+        // wrong whatever it was trying to say.
+        _staleNotice.Children.Add(WithWarningGlyph(text, glyphSize: 14, caution: true));
 
         return _staleNotice;
     }
@@ -343,20 +418,24 @@ public sealed partial class ExportReportWindow : PaletteWindow
         container.MinHeight = 0;
         container.ContentTemplate = null;
 
-        if (args.Item is not DocxExportIssue issue)
+        if (args.Item is not ExportIssue issue)
         {
             container.Content = null;
             return;
         }
 
-        container.Opacity = _isStale ? StaleOpacity : 1;
+        bool stale = IsStale(issue);
+
+        container.Opacity = stale ? StaleOpacity : 1;
         container.Content = BuildRow(issue);
 
         ToolTipService.SetToolTip(
             container,
-            _isStale
+            stale
                 ? "The document has changed since the export, so this line number may be wrong"
-                : $"Go to line {issue.Line.ToString(CultureInfo.CurrentCulture)}");
+                : issue.IsAdvisory
+                    ? $"Nothing is wrong with this - go to line {issue.Line.ToString(CultureInfo.CurrentCulture)}"
+                    : $"Go to line {issue.Line.ToString(CultureInfo.CurrentCulture)}");
 
         args.Handled = true;
     }
@@ -368,12 +447,44 @@ public sealed partial class ExportReportWindow : PaletteWindow
     /// line up and the list can be read down. An issue with no line - there are none today, but
     /// the type allows it - simply leaves the column empty rather than inventing a zero.
     /// </summary>
-    private static Grid BuildRow(DocxExportIssue issue)
+    private Grid BuildRow(ExportIssue issue)
     {
+        // Only when the report actually holds both. A Word export's issues are every one of them
+        // a fault, and a column of identical amber triangles down the side of it distinguishes
+        // nothing - it is decoration that trains the eye to skip the very mark it is there to
+        // catch. The marks earn their place exactly when there is something to tell apart.
+        bool marked = _report.FailureCount > 0 && _report.AdvisoryCount > 0;
+
         var grid = new Grid { ColumnSpacing = 10 };
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = marked ? new GridLength(MarkWidth) : new GridLength(0),
+        });
 
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LineNumberWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // The same distinction the copied text makes with "!" and "-", drawn. Two signals, not
+        // one: the glyph carries it on its own, so the row still reads correctly to somebody who
+        // cannot tell the amber from the grey. Color only ever emphasizes what the shape says.
+        var mark = new FontIcon
+        {
+            Glyph = issue.IsAdvisory ? InfoGlyph : WarningGlyph,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 3, 0, 0),
+            Visibility = marked ? Visibility.Visible : Visibility.Collapsed,
+        };
+
+        if (issue.IsAdvisory)
+        {
+            mark.Opacity = 0.5;
+        }
+        else
+        {
+            mark.Foreground = CautionBrush(_theme.Effective);
+        }
 
         var line = new TextBlock
         {
@@ -389,7 +500,11 @@ public sealed partial class ExportReportWindow : PaletteWindow
         text.Children.Add(new TextBlock
         {
             Text = issue.Problem,
-            FontWeight = FontWeights.SemiBold,
+
+            // A third signal, and the quietest - and only where it says something. A fault is
+            // worth the extra weight against a note beside it; on a report that is all faults,
+            // dropping the weight everywhere would just make the list flatter.
+            FontWeight = marked && issue.IsAdvisory ? FontWeights.Normal : FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         });
 
@@ -400,9 +515,25 @@ public sealed partial class ExportReportWindow : PaletteWindow
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        Grid.SetColumn(line, 0);
-        Grid.SetColumn(text, 1);
+        // Only when a report spans more than one document, which the issue itself says by
+        // carrying a name at all. On a Word report every row would say the same thing, and a
+        // column that repeats is a column that is read once and then ignored.
+        if (!string.IsNullOrEmpty(issue.DocumentName))
+        {
+            text.Children.Add(new TextBlock
+            {
+                Text = issue.DocumentName,
+                FontSize = 11.5,
+                Opacity = 0.55,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+        }
 
+        Grid.SetColumn(mark, 0);
+        Grid.SetColumn(line, 1);
+        Grid.SetColumn(text, 2);
+
+        grid.Children.Add(mark);
         grid.Children.Add(line);
         grid.Children.Add(text);
 
@@ -411,22 +542,23 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is not DocxExportIssue issue || issue.Line <= 0)
+        if (e.ClickedItem is not ExportIssue issue || issue.Line <= 0)
         {
             return;
         }
 
         // A stale row does not navigate. The line it names describes a document that no longer
         // exists, and landing the caret on whatever has since moved into that line would be a
-        // worse answer than doing nothing.
-        if (_isStale)
+        // worse answer than doing nothing. Judged per row: the document this one names may be
+        // untouched even when another in the same report has been edited.
+        if (IsStale(issue))
         {
             return;
         }
 
         try
         {
-            _goToLine(issue.Line);
+            _goToLine(issue.DocumentId, issue.Line);
         }
         catch (Exception ex)
         {
@@ -447,37 +579,45 @@ public sealed partial class ExportReportWindow : PaletteWindow
     {
         var text = new StringBuilder();
 
-        text.AppendLine("Marqora export warnings");
-        text.AppendLine(CultureInfo.CurrentCulture, $"Document:   {_report.DocumentName}");
+        // The outcome, not "warnings". This is pasted into a message to somebody, and the file
+        // having been written is the first thing they need to know.
+        text.AppendLine(CultureInfo.CurrentCulture, $"Marqora - {_report.Outcome}");
+        // "Source" rather than "Document": a Folio's is "3 documents", and "Document: 3
+        // documents" reads like a mistake. Works for a single document either way.
+        text.AppendLine(CultureInfo.CurrentCulture, $"Source:     {_report.DocumentName}");
         text.AppendLine(CultureInfo.CurrentCulture, $"Written to: {_report.OutputPath}");
         text.AppendLine(
             CultureInfo.CurrentCulture,
             $"Exported:   {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture)}");
         text.AppendLine();
 
-        foreach (DocxExportIssue issue in _report.Issues)
+        foreach (ExportIssue issue in _report.Issues)
         {
             string where = issue.Line > 0
                 ? $"Line {issue.Line.ToString(CultureInfo.CurrentCulture)}"
                 : string.Empty;
 
             // The line column padded to a fixed width, so the reasons line up in a monospaced
-            // window and still read as a list in one that is not.
-            text.AppendLine(CultureInfo.CurrentCulture, $"  {where,-10} {issue.Problem}");
+            // window and still read as a list in one that is not. A leading mark tells a fault
+            // from a note, which the pasted text has no other way of showing.
+            string mark = issue.IsAdvisory ? "-" : "!";
+
+            text.AppendLine(CultureInfo.CurrentCulture, $"{mark} {where,-10} {issue.Problem}");
             text.AppendLine(CultureInfo.CurrentCulture, $"  {string.Empty,-10} {issue.Item}");
         }
 
-        string total = _report.Issues.Count == 1
-            ? "1 item could not be carried across."
-            : $"{_report.Issues.Count.ToString(CultureInfo.CurrentCulture)} items could not be carried across.";
+        string total = Tally();
 
         text.AppendLine();
         text.AppendLine(total);
 
-        if (_isStale)
+        if (_staleDocuments.Count > 0)
         {
             text.AppendLine();
-            text.AppendLine("The document was edited after this export, so the line numbers may have moved.");
+            text.AppendLine(
+                _report.ExportedText.Count > 1
+                    ? "Some of these documents were edited after this export, so their line numbers may have moved."
+                    : "The document was edited after this export, so the line numbers may have moved.");
         }
 
         try
@@ -530,7 +670,12 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
     private void NoteWorkspaceChange(WorkspaceChangedEventArgs e)
     {
-        if (_isStale || _isShuttingDown || e.DocumentId != _report.DocumentId)
+        // Only the documents this report actually describes, and only the ones still good. A
+        // Folio watches several at once, so "already stale" is asked per document rather than
+        // of the report as a whole.
+        if (_isShuttingDown
+            || _staleDocuments.Contains(e.DocumentId)
+            || !_report.ExportedText.TryGetValue(e.DocumentId, out string? exported))
         {
             return;
         }
@@ -538,12 +683,12 @@ public sealed partial class ExportReportWindow : PaletteWindow
         switch (e.Change)
         {
             case WorkspaceChange.Closed:
-                MarkStale();
+                MarkStale(e.DocumentId);
                 break;
 
             case WorkspaceChange.Edited or WorkspaceChange.ReloadedFromDisk
-                when !ReferenceEquals(e.Document?.Text, _report.ExportedText):
-                MarkStale();
+                when !ReferenceEquals(e.Document?.Text, exported):
+                MarkStale(e.DocumentId);
                 break;
 
             default:
@@ -551,16 +696,20 @@ public sealed partial class ExportReportWindow : PaletteWindow
         }
     }
 
-    private void MarkStale()
+    /// <summary>Whether this row's document has moved on since the export.</summary>
+    private bool IsStale(ExportIssue issue) => _staleDocuments.Contains(issue.DocumentId);
+
+    private void MarkStale(Guid documentId)
     {
-        _isStale = true;
+        _staleDocuments.Add(documentId);
         _staleNotice.Visibility = Visibility.Visible;
 
-        // Redraw the rows so each one fades and stops offering to take anybody anywhere.
+        // Redraw the rows so the ones that named this document fade and stop offering to take
+        // anybody anywhere. The rest are untouched, because the rest are still true.
         _list.ItemsSource = null;
         _list.ItemsSource = _report.Issues;
 
-        _logger.LogDebug("The export report went stale: its document changed.");
+        _logger.LogDebug("An export report row went stale: {Document} changed.", documentId);
     }
 
     // --------------------------------------------------------------------------- chrome
@@ -584,6 +733,16 @@ public sealed partial class ExportReportWindow : PaletteWindow
         foreach (FontIcon glyph in Warnings())
         {
             glyph.Foreground = CautionBrush(theme);
+        }
+
+        // The row marks are not in that list and must not be: containers are made and unmade as
+        // the list scrolls, so keeping every glyph ever realized would be a list that only grows
+        // and mostly points at rows that no longer exist. Rebuilding the rows repaints them, and
+        // a theme change is rare enough to afford it.
+        if (_list.ItemsSource is not null)
+        {
+            _list.ItemsSource = null;
+            _list.ItemsSource = _report.Issues;
         }
 
         ApplyTitleBarTheme(theme);

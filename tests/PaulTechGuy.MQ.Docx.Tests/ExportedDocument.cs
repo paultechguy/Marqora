@@ -31,7 +31,7 @@ internal sealed class ExportedDocument : IDisposable
     public string Path { get; }
 
     /// <summary>What the exporter said it could not carry into the file.</summary>
-    public IReadOnlyList<DocxExportIssue> Issues { get; private init; } = [];
+    public IReadOnlyList<ExportIssue> Issues { get; private init; } = [];
 
     /// <summary>
     /// The same report as the lines a person reads, which is what most assertions are about.
@@ -55,7 +55,7 @@ internal sealed class ExportedDocument : IDisposable
 
         var exporter = new DocxExporter(NullLogger<DocxExporter>.Instance);
 
-        IReadOnlyList<DocxExportIssue> issues = await exporter.WriteAsync(
+        IReadOnlyList<ExportIssue> issues = await exporter.WriteAsync(
             path,
             "Test document",
             markdown,

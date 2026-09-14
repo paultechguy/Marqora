@@ -5,7 +5,8 @@ everything in between.**
 
 Marqora pairs a full code editor with a rendered preview that keeps pace as you type.
 Diagrams draw themselves, equations typeset themselves, links check themselves, and the whole
-thing runs on your machine: no account, no sign-in, no network call, no telemetry.
+thing runs on your machine: no account, no sign-in, no telemetry, and nothing sent anywhere
+on its own.
 
 > Write in Markdown. See the finished page. Send it anywhere.
 

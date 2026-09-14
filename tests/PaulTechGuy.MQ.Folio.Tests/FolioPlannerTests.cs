@@ -225,8 +225,14 @@ public sealed class FolioPlannerTests
         FolioPlan plan = workspace.Plan();
 
         plan.Assets.ShouldBeEmpty();
-        plan.Warnings.ShouldBeEmpty();
         plan.Documents[0].Rewritten.ShouldBeFalse();
+
+        // The text is still untouched, which is what this test has always been about. What is
+        // no longer true is that nothing is said: a picture on the web now reports that it will
+        // not travel, because the reader's browser is the one that ends up fetching it. The
+        // link beside it reports nothing, and that distinction has its own tests in
+        // FolioRemoteImageTests.
+        plan.Warnings.ShouldHaveSingleItem().Kind.ShouldBe(FolioWarningKind.RemoteImageNotIncluded);
     }
 
     [Fact]

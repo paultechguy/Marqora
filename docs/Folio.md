@@ -47,7 +47,7 @@ the copy opens somewhere else**. Marqora does the third step for nothing today.
 |---|---|
 | One file, or a folder of files? | **One `.html` file.** A `.zip` is offered as the second form, for a set too large to be one page |
 | What can the recipient do with it? | **Read it with no software, or open it in Marqora and get the sources back.** The same file does both |
-| Where does it get shared? | **Nowhere.** A Folio is a file. Marqora makes no network calls, and this feature does not become the first one |
+| Where does it get shared? | **Nowhere.** A Folio is a file. Nothing is uploaded, and no server is involved at any point - the one thing that reaches the network is collecting the pictures a document already names, and only when asked |
 | A new file extension? | **No.** `.html` and `.zip`, which every machine already understands |
 
 The second is the one that carries weight. Everything else follows from refusing to choose
@@ -140,7 +140,7 @@ The rule is Resolve's: preserve structure where it already works, relocate only 
 | An image that is not there | Named in the preflight. Nothing is written and nothing is invented |
 | A link to a document that is in the Folio | Kept; in the reading copy it becomes `#doc-n` |
 | A link to a document that is not | Named in the preflight, and left alone |
-| `http://`, `https://` | Left alone, and never checked. Checking would be a network call |
+| `http://`, `https://` | Left alone unless the author ticked *Fetch them and include them* in the preflight, in which case the picture is collected and the reference repointed like any other. Never checked otherwise - checking would be a call nobody asked for |
 
 **Leaving working paths untouched matters more than it sounds.** Flattening everything into
 `media/` would rename files that were fine, destroy the `guide.assets/` convention that
@@ -316,11 +316,41 @@ tests are extracted so that there is one copy rather than two.
 
 ---
 
+## After the share: the report
+
+The preflight argues for a decision. Once the decision is made and the file is written it is
+gone — and everything it warned about is still true of the artifact, which is the thing that
+persists and gets sent to somebody.
+
+So a share that produced any warning ends in `ExportReportWindow`, the same window the Word
+export uses, for the same reasons: a list of things to fix is worked through rather than read
+once and dismissed. It stays up beside the editor, each row takes the caret to the line it is
+about, and the whole report copies to the clipboard as text. A prompt could do none of that, and
+would have had to cap itself at a handful of rows.
+
+Two things differ from the Word report, and both fall out of a Folio naming several documents
+at once:
+
+- **Every row carries its own document**, and shows its name when the report spans more than
+  one. On a single-document report the name is left off, because a column repeating the same
+  value on every line is read once and then ignored.
+- **Staleness is per row.** Editing one document of twelve fades that one's rows and stops them
+  navigating; the other eleven keep working, because the other eleven really are still where the
+  report says they are.
+
+The phrasing changes too. A warning's own message is written for the preflight, where it argues
+for a choice nobody has made yet; the report says what the artifact *lacks* — "Left on the web",
+"Could not be fetched", "Not on this machine".
+
+---
+
 ## Deliberately left out
 
-- **A hosted viewer, an upload, or a share link.** It would be the first network call in the
-  product's history, against a promise defended everywhere else, including at the cost of a real
-  update check. The self-contained file *is* the share link.
+- **A hosted viewer, an upload, or a share link.** A document would leave the machine on its
+  own account, which is the thing the product exists not to do - a promise defended everywhere
+  else, including at the cost of a real update check. The self-contained file *is* the share
+  link. Note this is a different question from fetching a picture the document already points
+  at: that one sends nothing, and the author asks for it by name.
 - **A `.folio` extension and a ProgId.** Argued above. `build/Register-FileAssociation.ps1` is
   where it would go if this is ever revisited.
 - **Recursive folder collection.** `Open Folder` is deliberately not recursive, so that pointing
@@ -346,6 +376,11 @@ set; and a link to one outside it.
 2. Opened on a machine that has never had Marqora: every image present, diagrams and math drawn,
    the contents list navigates, the `</script>` document renders as text rather than breaking the
    page, and the browser's network tab stays empty.
+
+   That last one holds only for a document with no pictures on the web, and it is worth running
+   both ways. Left unfetched, those addresses travel as written and the reader's browser goes and
+   gets them - the network tab fills up, which is the behavior this feature exists to make
+   visible. Fetched, the tab is empty again and the page is genuinely self-contained.
 3. Dragged back into Marqora: the unpacked documents match what went in, byte for byte wherever
    nothing needed rewriting, and the relocated paths resolve.
 4. Sharing that unpacked copy again does not churn the paths a second time.

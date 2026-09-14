@@ -50,6 +50,7 @@ internal sealed class FolioWindow : PaletteWindow
     /// <summary>Always leave this much for the document list, however hard the splitter is pulled.</summary>
     private const double MinimumListHeight = 140;
 
+
     /// <summary>
     /// Past this the recalculation on every tick would be felt. Hashing a few dozen images is
     /// nothing; hashing several hundred on the UI thread is a stutter, so beyond this the
@@ -106,13 +107,45 @@ internal sealed class FolioWindow : PaletteWindow
 
     private const string WarningSign = "⚠";
 
+    /// <summary>
+    /// For something worth knowing that is not a fault, matching the report window's mark.
+    ///
+    /// Both windows describe the same warnings - one before the share and one after - so a thing
+    /// marked as a note in one and a problem in the other would leave the author working out
+    /// which of them to believe.
+    /// </summary>
+    private const string InfoSign = "ⓘ";
+
+    /// <summary>
+    /// The headings the problems pane groups under, in the order they appear.
+    ///
+    /// Every kind has to be here. The count above the list is the plan's whole warning count,
+    /// so a kind missing from this list is counted and never drawn - the pane says "4 problems"
+    /// and shows two, which is exactly what happened when the web-picture kinds were added and
+    /// this was not. <see cref="OtherProblems"/> is the backstop, so the next one to be added
+    /// appears under a dull heading instead of vanishing.
+    /// </summary>
+    /// <summary>
+    /// Faults first, then the things that are only worth knowing. Somebody reading this is
+    /// looking for what needs doing, and a list opening with items needing nothing teaches them
+    /// to stop reading - the same order the report window uses, for the same reason.
+    /// </summary>
     private static readonly (FolioWarningKind Kind, string Heading)[] Groups =
     [
         (FolioWarningKind.MissingImage, "Images that are not there"),
-        (FolioWarningKind.WillBeShrunk, "Images that will be reduced"),
+        (FolioWarningKind.RemoteImageFailed, "Pictures that could not be fetched"),
         (FolioWarningKind.OutsideLink, "Links that leave the Folio"),
         (FolioWarningKind.NotRewritable, "References to repoint by hand"),
+
+        (FolioWarningKind.RemoteImageNotIncluded, "Pictures left on the web"),
+        (FolioWarningKind.RemoteMediaNotIncluded, "Fetched by whoever opens the Folio"),
+        (FolioWarningKind.WillBeShrunk, "Images that will be reduced"),
     ];
+
+    /// <summary>Where a warning kind nobody listed above ends up, rather than nowhere.</summary>
+    private const string OtherProblems = "Other problems";
+
+    private static readonly HashSet<FolioWarningKind> Grouped = [.. Groups.Select(g => g.Kind)];
 
     /// <summary>The width the shrink box opens on, and what most screens are no wider than.</summary>
     private const int DefaultMaxImageWidth = 1600;
@@ -175,11 +208,31 @@ internal sealed class FolioWindow : PaletteWindow
     private readonly TextBlock _problemsCount = new();
     private readonly StackPanel _warnings = new() { Spacing = 4 };
     private readonly Border _problems;
+
+    /// <summary>
+    /// What the preflight says when it has nothing to warn about.
+    ///
+    /// It takes the problems pane's place rather than leaving a hole, and it is not decoration:
+    /// a preflight that shows nothing is indistinguishable from a preflight that has not run,
+    /// and the author is about to send this to somebody. "No pictures on the web" is the answer
+    /// to a question they would otherwise have to take on trust.
+    /// </summary>
+    private readonly Border _status;
+    private readonly TextBlock _statusTitle = new();
+    private readonly StackPanel _statusLines = new() { Spacing = 3 };
+    private int _statusRow;
+
+    /// <summary>How to change the order, said once, directly above the list it applies to.</summary>
+    private readonly TextBlock _moveHint = new();
     private readonly RowSplitter _splitter;
     private readonly InfoBar _stale;
     private readonly InfoBar _weight;
     private readonly CheckBox _shrink;
     private readonly NumberBox _shrinkWidth;
+    private readonly CheckBox _fetch;
+    private readonly TextBlock _fetchText;
+    private readonly TextBlock _fetchDetail;
+    private readonly StackPanel _fetchRow;
     private readonly Button _useZip;
     private readonly Button _shrinkLarge;
 
@@ -256,12 +309,17 @@ internal sealed class FolioWindow : PaletteWindow
         _splitter.HeightChanged += (_, height) => ResizeProblems(height);
 
         _problems = BuildProblemsPane();
+        _status = BuildStatusPanel();
 
+        // A warning, not a note. Everything on screen - the counts, the sizes, the problems -
+        // describes a set of documents that is no longer the set that would be shared, and
+        // pressing Share anyway produces something other than what is being shown. That is the
+        // one state in this window where acting on what you can see gives the wrong answer.
         _stale = new InfoBar
         {
             IsOpen = false,
             IsClosable = false,
-            Severity = InfoBarSeverity.Informational,
+            Severity = InfoBarSeverity.Warning,
             Title = "The open documents have changed",
             Message = "This plan was built from the set as it was.",
         };
@@ -286,6 +344,33 @@ internal sealed class FolioWindow : PaletteWindow
         _shrink.Checked += (_, _) => OnShrinkChanged();
         _shrink.Unchecked += (_, _) => OnShrinkChanged();
         _shrinkWidth.ValueChanged += (_, _) => Refresh();
+
+        // The label is a TextBlock rather than a string because a string handed to Content
+        // reaches a presenter with nothing to wrap with, and this label is the long one - it
+        // names every site involved, which is the whole point of it.
+        _fetchText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        _fetch = new CheckBox
+        {
+            Content = _fetchText,
+            MinWidth = 0,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+
+        _fetchDetail = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.65,
+            TextWrapping = TextWrapping.Wrap,
+
+            // Indented to sit under the label rather than under the box, so the sentence reads
+            // as part of the same thought.
+            Margin = new Thickness(30, 0, 0, 0),
+        };
+
+        _fetch.Checked += (_, _) => OnFetchChanged();
+        _fetch.Unchecked += (_, _) => OnFetchChanged();
+
+        _fetchRow = new StackPanel { Spacing = 4, Visibility = Visibility.Collapsed };
 
         _weight = new InfoBar { IsOpen = false, IsClosable = false, Title = "This will be a big file" };
 
@@ -546,6 +631,11 @@ internal sealed class FolioWindow : PaletteWindow
         {
             _summary.Text = "Nothing selected.";
             _weight.IsOpen = false;
+
+            SetStatusNote(
+                "Nothing selected",
+                "Tick a document above to see what would travel with it.");
+
             ShowProblems(false);
 
             return;
@@ -558,6 +648,14 @@ internal sealed class FolioWindow : PaletteWindow
                 $"{Count(included.Count, "document")} selected. "
                 + "Too many to total up as you go; the Folio is built from what is ticked.";
 
+            // Not an all-clear. Nothing has been checked at this size, and saying so is the
+            // only honest thing the panel can do - the Folio is still built from what is
+            // ticked, and it may well carry problems nobody has been shown.
+            SetStatusNote(
+                "Not checked",
+                "There are more documents here than this window totals up as you go, so nothing "
+                    + "has been looked over. The Folio still builds from what is ticked.");
+
             ShowProblems(false);
 
             return;
@@ -567,16 +665,30 @@ internal sealed class FolioWindow : PaletteWindow
 
         _summary.Text = Describe(plan);
 
+        RefreshFetchRow(plan);
+        RefreshStatus(plan);
         UpdateWeightAdvice(plan);
 
         Dictionary<string, FolioDocumentRow> byPath = _rows.ToDictionary(
             r => r.FullPath, r => r, StringComparer.OrdinalIgnoreCase);
 
+        // A document whose only finding is an iframe has nothing wrong with it, and a warning
+        // triangle beside its name says otherwise. The mark follows the worst thing found, so a
+        // fault anywhere in the document wins over any number of notes.
         foreach (FolioWarning warning in plan.Warnings)
         {
-            if (byPath.TryGetValue(warning.DocumentPath, out FolioDocumentRow? row))
+            if (!byPath.TryGetValue(warning.DocumentPath, out FolioDocumentRow? row))
+            {
+                continue;
+            }
+
+            if (!warning.IsAdvisory)
             {
                 row.WarningGlyph = WarningSign;
+            }
+            else if (row.WarningGlyph != WarningSign)
+            {
+                row.WarningGlyph = InfoSign;
             }
         }
 
@@ -587,35 +699,81 @@ internal sealed class FolioWindow : PaletteWindow
             return;
         }
 
-        _problemsCount.Text = $"{WarningSign}  {Count(plan.Warnings.Count, "problem")}";
+        _problemsCount.Text = ProblemsHeader(plan);
+
+        bool mixed = plan.FailureCount > 0 && plan.AdvisoryCount > 0;
 
         foreach ((FolioWarningKind kind, string heading) in Groups)
         {
-            FolioWarning[] found = [.. plan.WarningsOf(kind)];
+            AddGroup(heading, [.. plan.WarningsOf(kind)], mixed);
+        }
 
-            if (found.Length == 0)
-            {
-                continue;
-            }
+        // Anything the list above does not name. Normally empty, and worth the few lines it
+        // costs: the count is the plan's whole warning count, so a kind nobody grouped would
+        // otherwise be counted and never shown - a pane claiming four problems and listing two.
+        FolioWarning[] ungrouped = [.. plan.Warnings.Where(w => !Grouped.Contains(w.Kind))];
 
+        AddGroup(OtherProblems, ungrouped, mixed);
+    }
+
+    /// <summary>
+    /// The line above the list: how much of this is wrong, and how much is only worth knowing.
+    ///
+    /// It used to call every warning a problem, which overstated a set where two of four were
+    /// the Folio behaving exactly as designed - and contradicted the report window, which says
+    /// the same thing properly once the file is written. The two describe the same warnings and
+    /// have to agree.
+    /// </summary>
+    private static string ProblemsHeader(FolioPlan plan)
+    {
+        int failures = plan.FailureCount;
+        int advisories = plan.AdvisoryCount;
+
+        if (failures == 0)
+        {
+            return $"{InfoSign}  {Count(advisories, "thing")} worth knowing";
+        }
+
+        return advisories == 0
+            ? $"{WarningSign}  {Count(failures, "problem")}"
+            : $"{WarningSign}  {Count(failures, "problem")}, and {Count(advisories, "thing")} worth knowing";
+    }
+
+    private void AddGroup(string heading, FolioWarning[] found, bool marked)
+    {
+        if (found.Length == 0)
+        {
+            return;
+        }
+
+        // Marked only when the pane holds both sorts. A column of identical signs down a list
+        // where everything is the same kind distinguishes nothing, and teaches the eye to skip
+        // the very mark it is there to catch - the report window draws the line in the same
+        // place, for the same reason.
+        string mark = marked ? (found[0].IsAdvisory ? InfoSign + "  " : WarningSign + "  ") : string.Empty;
+
+        _warnings.Children.Add(new TextBlock
+        {
+            Text = $"{mark}{heading} ({found.Length})",
+            FontWeight = found[0].IsAdvisory && marked ? FontWeights.Normal : FontWeights.SemiBold,
+            FontSize = 12,
+            Margin = new Thickness(0, _warnings.Children.Count == 0 ? 0 : 6, 0, 0),
+        });
+
+        foreach (FolioWarning warning in found)
+        {
             _warnings.Children.Add(new TextBlock
             {
-                Text = $"{heading} ({found.Length})",
-                FontWeight = FontWeights.SemiBold,
+                Text = $"{Path.GetFileName(warning.DocumentPath)}:{warning.Line + 1}  {warning.Message}",
+                TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
-                Margin = new Thickness(0, _warnings.Children.Count == 0 ? 0 : 6, 0, 0),
-            });
+                Opacity = 0.85,
 
-            foreach (FolioWarning warning in found)
-            {
-                _warnings.Children.Add(new TextBlock
-                {
-                    Text = $"{Path.GetFileName(warning.DocumentPath)}:{warning.Line + 1}  {warning.Message}",
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    Opacity = 0.85,
-                });
-            }
+                // Indented under their heading rather than flush with it. Three levels - the
+                // total, the groups, the findings - were all sitting on the same left edge,
+                // which left the eye nothing to follow down the pane.
+                Margin = new Thickness(marked ? 20 : 14, 1, 0, 0),
+            });
         }
     }
 
@@ -768,6 +926,12 @@ internal sealed class FolioWindow : PaletteWindow
         // rather than only hidden, so a collapsed pane leaves no gap behind it.
         _root.RowDefinitions[_splitterRow].Height = visible ? GridLength.Auto : new GridLength(0);
         _root.RowDefinitions[_problemsRow].Height = visible ? GridLength.Auto : new GridLength(0);
+
+        // One or the other, never both and never neither. The area under the options always
+        // says something, so the window keeps its shape as documents are ticked and unticked -
+        // and an author who sees nothing there knows it is because there is nothing to see.
+        _status.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        _root.RowDefinitions[_statusRow].Height = visible ? new GridLength(0) : GridLength.Auto;
     }
 
     /// <summary>
@@ -786,19 +950,129 @@ internal sealed class FolioWindow : PaletteWindow
         _settings.Update(s => s with { FolioProblemsHeight = _problemsHeight });
     }
 
+    /// <summary>
+    /// How to change the order, said once, above the thing it is about.
+    ///
+    /// It sits between the "Documents" caption and the list rather than beneath them both,
+    /// because it is an instruction for using the list and an instruction is no use arriving
+    /// after the fact. Two earlier attempts put it below - one floating in the list's empty
+    /// space, one in the row under it - and both had the same defect: the reader met the
+    /// control before they met the advice.
+    ///
+    /// Alt is what the accelerators actually use (VirtualKeyModifiers.Menu). Naming the
+    /// modifier is the difference between advice somebody can follow and advice they have to
+    /// guess at - and the bare arrow keys move the selection, so "the arrows" was wrong.
+    /// </summary>
+    private TextBlock BuildReorderHint()
+    {
+        _moveHint.Text = "Drag a row, or use Alt with the arrow keys, to set the order documents appear in.";
+        _moveHint.FontSize = 12;
+        _moveHint.Opacity = 0.65;
+        _moveHint.TextWrapping = TextWrapping.Wrap;
+        _moveHint.Margin = new Thickness(0, -4, 0, 0);
+
+        return _moveHint;
+    }
+
+    /// <summary>
+    /// What the preflight says when there is nothing wrong: the checks ran, and here is what
+    /// they found nothing of.
+    ///
+    /// Deliberately not a green wall. Only the two facts that carry a decision appear - whether
+    /// anything is on the web, and whether anything else is worth reporting - because an empty
+    /// state that lists everything it did not find is the thing people rightly complain about.
+    /// </summary>
+    private Border BuildStatusPanel()
+    {
+        var stack = new StackPanel { Padding = new Thickness(10, 8, 10, 9), Spacing = 5 };
+
+        _statusTitle.FontWeight = FontWeights.SemiBold;
+        _statusTitle.FontSize = 12.5;
+
+        stack.Children.Add(_statusTitle);
+        stack.Children.Add(_statusLines);
+
+        return new Border
+        {
+            Child = stack,
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray) { Opacity = 0.35 },
+        };
+    }
+
+    /// <summary>
+    /// Fills the resting panel in, one line per thing the author would otherwise have to take
+    /// on trust.
+    /// </summary>
+    private void RefreshStatus(FolioPlan plan)
+    {
+        _statusTitle.Text = "Ready to share";
+        _statusLines.Children.Clear();
+
+        if (plan.RemoteImages.Count == 0)
+        {
+            _statusLines.Children.Add(StatusLine(
+                "No pictures on the web - everything it needs travels inside it", checkedOff: true));
+        }
+
+        _statusLines.Children.Add(StatusLine("Nothing else to report", checkedOff: true));
+    }
+
+    /// <summary>
+    /// The panel when there is nothing to be ready about, or nothing has been checked.
+    ///
+    /// A separate state rather than an empty version of the other one, and the distinction is
+    /// the point: "nothing to report" and "nothing was looked at" are different sentences, and
+    /// only one of them is a reason to press Share. A panel that said the first while meaning
+    /// the second would be worse than the blank space it replaced.
+    /// </summary>
+    private void SetStatusNote(string title, string line)
+    {
+        _statusTitle.Text = title;
+        _statusLines.Children.Clear();
+        _statusLines.Children.Add(StatusLine(line, checkedOff: false));
+    }
+
+    /// <summary>
+    /// One line. The tick is only for something actually confirmed - a note about why nothing
+    /// has been confirmed does not get to wear one.
+    /// </summary>
+    private static TextBlock StatusLine(string text, bool checkedOff) => new()
+    {
+        Text = checkedOff ? "✓  " + text : text,
+        FontSize = 12,
+        Opacity = 0.75,
+        TextWrapping = TextWrapping.Wrap,
+    };
+
     private Border BuildProblemsPane()
     {
+        // Bigger, and with a rule under it. Once the groups below started carrying marks of
+        // their own, this line had the same glyph, weight and size as the first heading beneath
+        // it and read as one more row rather than as the total. A title has to sit apart from
+        // what it is counting - the rule does most of that work, and the size does the rest.
         _problemsCount.FontWeight = FontWeights.SemiBold;
-        _problemsCount.FontSize = 12.5;
+        _problemsCount.FontSize = 14;
 
-        var header = new Grid { Padding = new Thickness(10, 6, 10, 6) };
+        var header = new Border
+        {
+            Child = _problemsCount,
+            Padding = new Thickness(10, 7, 10, 8),
+            BorderThickness = new Thickness(0, 0, 0, 1),
 
-        header.Children.Add(_problemsCount);
+            // The same gray at the same opacity as the pane's own outline, so the rule reads as
+            // part of the frame rather than as a line somebody drew across the middle of it.
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray) { Opacity = 0.35 },
+        };
 
         var body = new ScrollViewer
         {
             Content = _warnings,
-            Padding = new Thickness(10, 0, 10, 8),
+
+            // Clear of the rule above, which the old padding of zero left the first heading
+            // pressed against.
+            Padding = new Thickness(10, 8, 10, 8),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
 
@@ -836,11 +1110,14 @@ internal sealed class FolioWindow : PaletteWindow
         [
             DialogFields.Labelled("Share as", _form),
             BuildListHeader(),
+            BuildReorderHint(),
             _list,
             BuildMoveRow(),
             BuildShrinkRow(),
+            BuildFetchRow(),
             _splitter,
             _problems,
+            _status,
             _stale,
             _weight,
             BuildFooter(),
@@ -870,6 +1147,7 @@ internal sealed class FolioWindow : PaletteWindow
 
         _splitterRow = Array.IndexOf(children, _splitter);
         _problemsRow = Array.IndexOf(children, _problems);
+        _statusRow = Array.IndexOf(children, _status);
 
         _rows.CollectionChanged += OnRowsMoved;
 
@@ -944,17 +1222,8 @@ internal sealed class FolioWindow : PaletteWindow
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // The handle on each row is an affordance nobody is obliged to notice, and the order
-        // matters more here than in most lists - it is the order of the finished document.
-        var hint = new TextBlock
-        {
-            Text = "Drag a row, or use the arrows, to set the order documents appear in.",
-            FontSize = 12,
-            Opacity = 0.65,
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
+        // Buttons only. The advice they are about is above the list, where somebody reads it
+        // before using the thing rather than after.
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -965,10 +1234,8 @@ internal sealed class FolioWindow : PaletteWindow
         buttons.Children.Add(_up);
         buttons.Children.Add(_down);
 
-        Grid.SetColumn(hint, 0);
         Grid.SetColumn(buttons, 1);
 
-        line.Children.Add(hint);
         line.Children.Add(buttons);
 
         return line;
@@ -982,28 +1249,106 @@ internal sealed class FolioWindow : PaletteWindow
     /// Which images it would touch is named in the problems panel, beside the missing ones -
     /// this is a thing worth seeing before it happens, not after.
     /// </summary>
-    private StackPanel BuildShrinkRow()
+    private Grid BuildShrinkRow()
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        // A Grid rather than a horizontal StackPanel, and the difference is not cosmetic: a
+        // horizontal StackPanel measures its children with unbounded width, so the explanation
+        // on the end never meets an edge to wrap at and runs off the window however wide the
+        // TextBlock says it wraps. The star column is what gives it a width to wrap inside.
+        var row = new Grid { ColumnSpacing = 8 };
 
-        row.Children.Add(_shrink);
-        row.Children.Add(_shrinkWidth);
-        row.Children.Add(new TextBlock
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        _shrink.VerticalAlignment = VerticalAlignment.Center;
+        _shrinkWidth.VerticalAlignment = VerticalAlignment.Center;
+
+        var note = new TextBlock
         {
             Text = "px.  A photo already saved as a JPEG may not get smaller, and is left alone when it would not.",
             FontSize = 12,
             Opacity = 0.65,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+
+        Grid.SetColumn(_shrink, 0);
+        Grid.SetColumn(_shrinkWidth, 1);
+        Grid.SetColumn(note, 2);
+
+        row.Children.Add(_shrink);
+        row.Children.Add(_shrinkWidth);
+        row.Children.Add(note);
 
         return row;
     }
+
+    /// <summary>
+    /// The pictures this Folio names by web address, and what happens to them.
+    ///
+    /// Hidden entirely when there are none, which is most Folios - an option about a situation
+    /// that does not apply is noise, and this dialog already asks the author enough questions.
+    ///
+    /// Off by default, and not remembered between shares. Marqora does not go to the network
+    /// unless somebody standing here, reading which sites are involved, asks it to; a setting
+    /// that persisted would turn that decision into a mode, which is the thing it must not be.
+    ///
+    /// The unchecked text is the half that earns this feature. Leaving the addresses alone has
+    /// never meant no fetch happens - it means the reader's browser does the fetching, from
+    /// sites they never saw named. That was always true and the app never said so.
+    /// </summary>
+    private StackPanel BuildFetchRow()
+    {
+        // Both go straight into the vertical panel. A horizontal StackPanel was the first
+        // attempt and it cannot work: it measures its children with unbounded width, so a
+        // TextBlock inside one never reaches the edge it would wrap at and simply runs off the
+        // window. Stacked vertically, each child is handed the panel's width and wraps.
+        _fetchRow.Children.Add(_fetch);
+        _fetchRow.Children.Add(_fetchDetail);
+
+        return _fetchRow;
+    }
+
+    /// <summary>
+    /// Says how many pictures are on the web and which sites they sit on, before the author has
+    /// decided anything - naming them afterwards would be asking about something already done.
+    /// </summary>
+    private void RefreshFetchRow(FolioPlan plan)
+    {
+        if (plan.RemoteImages.Count == 0)
+        {
+            _fetchRow.Visibility = Visibility.Collapsed;
+
+            // Unticked as it goes, so a set that no longer has any cannot leave the answer
+            // behind for a set that does.
+            _fetch.IsChecked = false;
+
+            return;
+        }
+
+        _fetchRow.Visibility = Visibility.Visible;
+
+        int count = plan.RemoteImages.Count;
+        IReadOnlyList<string> hosts = plan.RemoteHosts;
+
+        string pictures = count == 1 ? "1 picture is" : $"{count} pictures are";
+        string sites = hosts.Count == 1 ? "1 site" : $"{hosts.Count} sites";
+
+        // Named in full up to a point, because "3 sites" tells the author nothing they can weigh.
+        string named = hosts.Count <= 3
+            ? string.Join(", ", hosts)
+            : string.Join(", ", hosts.Take(3)) + $" and {hosts.Count - 3} more";
+
+        _fetchText.Text = $"{pictures} on the web, from {sites}: {named}";
+
+        _fetchDetail.Text = _fetch.IsChecked == true
+            ? "They will be fetched while the Folio is built and carried inside it."
+            : "They will not travel. Whoever opens this Folio will have their browser fetch them "
+                + "from those sites.";
+    }
+
+    private void OnFetchChanged() => Refresh();
 
     private (Button Up, Button Down) BuildMoveButtons()
     {
@@ -1082,6 +1427,7 @@ internal sealed class FolioWindow : PaletteWindow
                 _ => FolioForm.SingleFile,
             },
             MaxImageWidth = MaxImageWidth,
+            FetchRemoteImages = _fetch.IsChecked == true,
         });
 
         Close();

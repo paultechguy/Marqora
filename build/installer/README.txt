@@ -68,7 +68,7 @@ as it treats anything else it has not seen before:
 The installer removes the downloaded-file marker from the installed copy, so
 once Marqora is installed it starts normally with no warnings at all. Every
 file here came out of the build in the project's repository, and the app
-makes no network calls at runtime.
+contacts nothing on its own at runtime.
 
 
 ---------------------------------------------------------------------------

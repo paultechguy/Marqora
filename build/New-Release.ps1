@@ -13,7 +13,7 @@
     What comes out is self-contained in every sense. The .NET runtime and the Windows App
     SDK are inside it, so the target machine needs neither. The installer is per-user and
     writes nothing outside HKCU and the user's profile, so it needs no administrator. And
-    the app makes no network calls at runtime, so it needs no connection.
+    the app contacts nothing on its own at runtime, so it needs no connection.
 
     The zip has no wrapper folder. Its contents sit at the root, so extracting it into a
     folder you already made does not bury everything a level deeper, and Explorer's Extract

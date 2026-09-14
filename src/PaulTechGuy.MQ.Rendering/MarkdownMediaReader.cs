@@ -142,16 +142,22 @@ internal static partial class MarkdownMediaReader
                 // attribute block's offset inside the tag, plus the value's offset inside that.
                 int start = column + attributes.Index + value.Index;
 
-                bool isSrcset = attribute.Groups["key"].Value.Equals("srcset", StringComparison.OrdinalIgnoreCase);
+                string key = attribute.Groups["key"].Value;
+                bool isSrcset = key.Equals("srcset", StringComparison.OrdinalIgnoreCase);
 
                 if (isSrcset)
                 {
+                    // A srcset only ever lists pictures, whichever tag carries it.
                     AddSrcSet(value.Value, line, start, into);
 
                     continue;
                 }
 
-                into.Add(Reference(value.Value, line, start));
+                into.Add(Reference(
+                    value.Value,
+                    line,
+                    start,
+                    KindOf(tag.Groups["tag"].Value, key)));
             }
         }
     }
@@ -200,11 +206,33 @@ internal static partial class MarkdownMediaReader
         }
     }
 
-    private static LinkReference Reference(string url, int line, int column) =>
+    /// <summary>
+    /// What a tag and one of its attributes actually loads.
+    ///
+    /// The tag alone is not enough: a video's "poster" is a still picture while its "src" is not,
+    /// and treating the two alike is how a Folio ends up offering to download a film.
+    /// </summary>
+    private static MediaKind KindOf(string tag, string attribute) => tag.ToLowerInvariant() switch
+    {
+        "img" or "source" => MediaKind.Picture,
+        "video" => attribute.Equals("poster", StringComparison.OrdinalIgnoreCase)
+            ? MediaKind.Picture
+            : MediaKind.Timed,
+        "audio" or "track" => MediaKind.Timed,
+        "iframe" or "embed" or "object" => MediaKind.Frame,
+        _ => MediaKind.Picture,
+    };
+
+    private static LinkReference Reference(
+        string url,
+        int line,
+        int column,
+        MediaKind kind = MediaKind.Picture) =>
         new()
         {
             Url = url,
             IsImage = true,
+            MediaKind = kind,
             SourceLine = line,
             SourceColumn = column,
             Length = url.Length,
