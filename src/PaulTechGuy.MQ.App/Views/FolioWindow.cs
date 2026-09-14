@@ -231,8 +231,8 @@ internal sealed class FolioWindow : PaletteWindow
     private readonly NumberBox _shrinkWidth;
     private readonly CheckBox _fetch;
     private readonly TextBlock _fetchText;
-    private readonly TextBlock _fetchDetail;
-    private readonly StackPanel _fetchRow;
+    private readonly TextBlock _fetchOutcome;
+    private readonly InfoBar _fetchBar;
     private readonly Button _useZip;
     private readonly Button _shrinkLarge;
 
@@ -346,8 +346,8 @@ internal sealed class FolioWindow : PaletteWindow
         _shrinkWidth.ValueChanged += (_, _) => Refresh();
 
         // The label is a TextBlock rather than a string because a string handed to Content
-        // reaches a presenter with nothing to wrap with, and this label is the long one - it
-        // names every site involved, which is the whole point of it.
+        // reaches a presenter with nothing to wrap with, and a narrow window has to be able to
+        // wrap this one rather than run it off the edge.
         _fetchText = new TextBlock { TextWrapping = TextWrapping.Wrap };
         _fetch = new CheckBox
         {
@@ -356,13 +356,14 @@ internal sealed class FolioWindow : PaletteWindow
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
 
-        _fetchDetail = new TextBlock
+        // What this choice means, in one paragraph at one weight. It was two blocks for a
+        // while, the mechanics set smaller under the outcome, and the split did nothing except
+        // invite the second half to be skipped - which is the half about the network.
+        _fetchOutcome = new TextBlock
         {
-            FontSize = 12,
-            Opacity = 0.65,
             TextWrapping = TextWrapping.Wrap,
 
-            // Indented to sit under the label rather than under the box, so the sentence reads
+            // Indented to sit under the label rather than under the box, so the sentences read
             // as part of the same thought.
             Margin = new Thickness(30, 0, 0, 0),
         };
@@ -370,7 +371,24 @@ internal sealed class FolioWindow : PaletteWindow
         _fetch.Checked += (_, _) => OnFetchChanged();
         _fetch.Unchecked += (_, _) => OnFetchChanged();
 
-        _fetchRow = new StackPanel { Spacing = 4, Visibility = Visibility.Collapsed };
+        /*
+            A bar rather than another checkbox row, because it is not another checkbox.
+
+            Everything else in this dialog rearranges what is already on the machine. This one
+            decides whether the machine reaches a site, in a product whose whole claim is that
+            it does nothing you did not ask for - and it sat between "Shrink images wider than"
+            and the splitter, in the same weight, reading like a formatting option.
+
+            Informational rather than Warning: nothing is wrong either way. Ticked or not, the
+            bar states the consequence, because the unticked case has one too and is the half
+            nobody knew about.
+        */
+        _fetchBar = new InfoBar
+        {
+            IsOpen = false,
+            IsClosable = false,
+            Severity = InfoBarSeverity.Informational,
+        };
 
         _weight = new InfoBar { IsOpen = false, IsClosable = false, Title = "This will be a big file" };
 
@@ -1289,36 +1307,53 @@ internal sealed class FolioWindow : PaletteWindow
     ///
     /// Hidden entirely when there are none, which is most Folios - an option about a situation
     /// that does not apply is noise, and this dialog already asks the author enough questions.
+    /// That is also why a third bar in this window is affordable: it is never on screen beside
+    /// the other two unless a document really does point at a picture on the web.
     ///
     /// Off by default, and not remembered between shares. Marqora does not go to the network
     /// unless somebody standing here, reading which sites are involved, asks it to; a setting
     /// that persisted would turn that decision into a mode, which is the thing it must not be.
     ///
     /// The unchecked text is the half that earns this feature. Leaving the addresses alone has
-    /// never meant no fetch happens - it means the reader's browser does the fetching, from
+    /// never meant nothing is fetched - it means the reader's browser does the fetching, from
     /// sites they never saw named. That was always true and the app never said so.
     /// </summary>
-    private StackPanel BuildFetchRow()
+    private InfoBar BuildFetchRow()
     {
-        // Both go straight into the vertical panel. A horizontal StackPanel was the first
-        // attempt and it cannot work: it measures its children with unbounded width, so a
-        // TextBlock inside one never reaches the edge it would wrap at and simply runs off the
-        // window. Stacked vertically, each child is handed the panel's width and wraps.
-        _fetchRow.Children.Add(_fetch);
-        _fetchRow.Children.Add(_fetchDetail);
+        // Both go into a vertical panel. A horizontal StackPanel was the first attempt and it
+        // cannot work: it measures its children with unbounded width, so a TextBlock inside one
+        // never reaches the edge it would wrap at and simply runs off the window. Stacked
+        // vertically, each child is handed the panel's width and wraps.
+        var inside = new StackPanel
+        {
+            Spacing = 4,
 
-        return _fetchRow;
+            // An InfoBar gives its content no room of its own; without the bottom margin the
+            // last line sits hard against the border.
+            Margin = new Thickness(0, 4, 0, 12),
+        };
+
+        inside.Children.Add(_fetch);
+        inside.Children.Add(_fetchOutcome);
+
+        _fetchBar.Content = inside;
+
+        return _fetchBar;
     }
 
     /// <summary>
     /// Says how many pictures are on the web and which sites they sit on, before the author has
     /// decided anything - naming them afterwards would be asking about something already done.
+    ///
+    /// The count and the sites are the bar's own title and message, so they are read before the
+    /// checkbox rather than through it: the box then says one short thing, which is what it is
+    /// being asked to decide.
     /// </summary>
     private void RefreshFetchRow(FolioPlan plan)
     {
         if (plan.RemoteImages.Count == 0)
         {
-            _fetchRow.Visibility = Visibility.Collapsed;
+            _fetchBar.IsOpen = false;
 
             // Unticked as it goes, so a set that no longer has any cannot leave the answer
             // behind for a set that does.
@@ -1327,25 +1362,51 @@ internal sealed class FolioWindow : PaletteWindow
             return;
         }
 
-        _fetchRow.Visibility = Visibility.Visible;
-
         int count = plan.RemoteImages.Count;
         IReadOnlyList<string> hosts = plan.RemoteHosts;
+        bool one = count == 1;
 
-        string pictures = count == 1 ? "1 picture is" : $"{count} pictures are";
-        string sites = hosts.Count == 1 ? "1 site" : $"{hosts.Count} sites";
+        string pictures = one ? "1 picture in this Folio is" : $"{count} pictures in this Folio are";
 
         // Named in full up to a point, because "3 sites" tells the author nothing they can weigh.
         string named = hosts.Count <= 3
             ? string.Join(", ", hosts)
             : string.Join(", ", hosts.Take(3)) + $" and {hosts.Count - 3} more";
 
-        _fetchText.Text = $"{pictures} on the web, from {sites}: {named}";
+        // The count of sites is left out when there is one, because the line underneath names
+        // it - "from 1 site: commons.wikimedia.org" says the same thing twice.
+        _fetchBar.Title = hosts.Count == 1
+            ? $"{pictures} on the web"
+            : $"{pictures} on the web, from {hosts.Count} sites";
 
-        _fetchDetail.Text = _fetch.IsChecked == true
-            ? "They will be fetched while the Folio is built and carried inside it."
-            : "They will not travel. Whoever opens this Folio will have their browser fetch them "
-                + "from those sites.";
+        _fetchBar.Message = named;
+
+        _fetchText.Text = one
+            ? "Fetch it now and carry it inside the Folio"
+            : "Fetch them now and carry them inside the Folio";
+
+        // Each state says what it means and what it costs in the same breath. Ticked, that is
+        // the complete file first and the sites contacted second; unticked, what the reader's
+        // browser ends up doing - the surprise - and then that Marqora itself stays put.
+        if (_fetch.IsChecked == true)
+        {
+            _fetchOutcome.Text = "If checked, the Folio will open complete on any machine, with "
+                + "nothing left for the reader's browser to go and get. Marqora contacts "
+                + $"{(hosts.Count == 1 ? "that site" : "those sites")} while the Folio is built, "
+                + "and nothing else. Your answer here is not remembered for the next share.";
+        }
+        else
+        {
+            _fetchOutcome.Text = one
+                ? "If unchecked, the address travels as written. Whoever opens this Folio has "
+                    + "their browser fetch the picture from that site, and sees a hole if it "
+                    + "has moved. Marqora itself contacts nothing while the Folio is built."
+                : "If unchecked, the addresses travel as written. Whoever opens this Folio has "
+                    + "their browser fetch the pictures from those sites, and sees holes where "
+                    + "any have moved. Marqora itself contacts nothing while the Folio is built.";
+        }
+
+        _fetchBar.IsOpen = true;
     }
 
     private void OnFetchChanged() => Refresh();

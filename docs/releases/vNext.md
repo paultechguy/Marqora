@@ -21,6 +21,21 @@ Ask for both and the file comes out as three Word sections, the way a report is 
 the title page carries no header or page number, the contents number themselves i, ii, iii,
 and the body starts again at 1. The footer is the number on its own. Your answers are remembered separately from the PDF ones.
 
+## Pictures from the web in a Folio
+
+A Folio gathers the pictures a document keeps on this machine. The ones it names by web address
+used to travel as addresses and nothing else, which meant the file was self-contained for
+everybody except the reader — whose browser went and fetched them, from sites they never saw
+named, assuming the pictures were still there at all.
+
+`Tools > Share as Folio...` now offers to collect those too. When a document points at a picture
+on the web, the preflight says how many there are and which sites they sit on, and a checkbox
+brings them into the Folio alongside everything else — so the file really does carry everything
+it needs, and opens complete on a machine that has no way of reaching those sites at all. It is
+off unless you tick it, and it is not remembered from one share to the next: Marqora goes to
+those sites because you said so, having been shown which ones they are. Anything that could not
+be fetched is named in the report afterward, beside the pictures that were missing from disk.
+
 ## Replace All
 
 `Edit > Replace All...` (`Ctrl+Shift+H`) is Find All with a **Replace with** box folded out —
