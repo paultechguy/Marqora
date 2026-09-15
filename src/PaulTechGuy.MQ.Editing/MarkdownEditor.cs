@@ -45,6 +45,9 @@ public sealed class MarkdownEditor : IMarkdownEditor
             MarkdownEditCommand.HeadingIncrease => LinePrefixToggle.Shift(context, 1),
             MarkdownEditCommand.HeadingDecrease => LinePrefixToggle.Shift(context, -1),
 
+            MarkdownEditCommand.IncreaseIndent => ListIndent.Apply(context, 1),
+            MarkdownEditCommand.DecreaseIndent => ListIndent.Apply(context, -1),
+
             MarkdownEditCommand.CodeBlock => BlockInsert.CodeBlock(context),
             MarkdownEditCommand.Table => BlockInsert.Table(context),
             MarkdownEditCommand.HorizontalRule => BlockInsert.HorizontalRule(context),

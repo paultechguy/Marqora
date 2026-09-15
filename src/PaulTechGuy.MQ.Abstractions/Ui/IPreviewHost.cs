@@ -557,23 +557,26 @@ public interface IPreviewHost
     // ----------------------------------------------------------------- authoring
 
     /// <summary>
-    /// The selection with column precision, together with the text of the lines it covers
-    /// and one line either side. Null when there is no editor to ask.
+    /// The selection with column precision, together with the text of the lines
+    /// <paramref name="scope"/> asks for. Null when there is no editor to ask.
     ///
     /// The lines come back with the selection rather than being read from the workspace,
     /// which trails the editor by a debounce interval: typing a word and immediately
     /// pressing Ctrl+B would otherwise act on text that is a keystroke out of date.
     /// </summary>
-    Task<EditContext?> GetEditContextAsync();
+    Task<EditContext?> GetEditContextAsync(EditContextScope scope = EditContextScope.Selection);
 
     /// <summary>
     /// Applies a batch of edits as one undoable step and leaves the caret where the
     /// command asked for it.
     ///
     /// Every edit is addressed against the document as <see cref="GetEditContextAsync"/>
-    /// reported it, so they are applied together rather than in sequence.
+    /// reported it, so they are applied together rather than in sequence — and for the same
+    /// reason the whole batch is dropped if the document has changed since. Nothing here can
+    /// stop a keystroke landing between reading the selection and applying the result; what it
+    /// can do is refuse to write at offsets that have stopped meaning anything.
     /// </summary>
-    Task ApplyEditsAsync(EditResult result);
+    Task ApplyEditsAsync(EditResult result, int version = 0);
 
     /// <summary>
     /// Replaces a document's text as a single undoable edit, rather than resetting the model.

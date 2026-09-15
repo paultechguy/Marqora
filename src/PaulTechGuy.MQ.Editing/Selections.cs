@@ -33,4 +33,33 @@ internal static class Selections
     /// <summary>The span covering a whole line, for commands that rewrite one outright.</summary>
     public static TextRange WholeLine(int line, string text) =>
         new(new TextPosition(line, 0), new TextPosition(line, text.Length));
+
+    /// <summary>
+    /// The lines a command should act on: those the selection touches, minus the blank ones,
+    /// which separate blocks rather than belonging to them. A selection that is entirely blank
+    /// falls back to the caret's own line, so the command still does something in an empty
+    /// document.
+    /// </summary>
+    public static List<(int Line, string Text)> Targets(EditContext context, out TextRange selection)
+    {
+        selection = Normalize(context);
+
+        List<(int Line, string Text)> targets = [];
+        for (int i = selection.Start.Line; i <= selection.End.Line; i++)
+        {
+            if (context.LineAt(i) is { } text)
+            {
+                targets.Add((i, text));
+            }
+        }
+
+        if (targets.Count == 0)
+        {
+            return targets;
+        }
+
+        List<(int Line, string Text)> content = targets.FindAll(t => t.Text.Trim().Length > 0);
+
+        return content.Count > 0 ? content : [targets[0]];
+    }
 }

@@ -863,7 +863,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <summary>Outstanding edit-context requests, keyed the same way as the others.</summary>
     private readonly Dictionary<Guid, TaskCompletionSource<EditContext?>> _editContextRequests = [];
 
-    public async Task<EditContext?> GetEditContextAsync()
+    public async Task<EditContext?> GetEditContextAsync(EditContextScope scope = EditContextScope.Selection)
     {
         if (!IsReady)
         {
@@ -877,7 +877,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
         try
         {
-            await SendAsync("requestEditContext", new { requestId = id }).ConfigureAwait(true);
+            // The shell speaks the enum's own names; anything it does not know reads as the
+            // selection, which is the window every command but list indenting wants.
+            await SendAsync("requestEditContext", new
+            {
+                requestId = id,
+                scope = scope == EditContextScope.Document ? "document" : "selection",
+            }).ConfigureAwait(true);
 
             Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(5)))
                 .ConfigureAwait(true);
@@ -896,7 +902,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    public Task ApplyEditsAsync(EditResult result)
+    public Task ApplyEditsAsync(EditResult result, int version = 0)
     {
         ArgumentNullException.ThrowIfNull(result);
 
@@ -922,6 +928,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         return SendAsync("applyEdits", new
         {
             edits,
+            version,
             selection = result.Selection is { } selection
                 ? new
                 {
@@ -1830,7 +1837,11 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             new TextPosition(ReadInt(payload, "startLine", 0), ReadInt(payload, "startColumn", 0)),
             new TextPosition(ReadInt(payload, "endLine", 0), ReadInt(payload, "endColumn", 0)));
 
-        return new EditContext(text, ReadInt(payload, "firstLine", 0), selection);
+        return new EditContext(
+            text,
+            ReadInt(payload, "firstLine", 0),
+            selection,
+            ReadInt(payload, "version", 0));
     }
 
     /// <summary>

@@ -161,7 +161,68 @@ when Enter is pressed** is on — with that off, Enter is left alone entirely.
 carry one number is now left carrying it. A list that has lost count — or one you had begun
 fixing by hand, so that it agrees only in part — is renumbered as before.
 
+## Increase and decrease indent
+
+Nesting a list used to mean counting spaces, and how many is not a round number — it depends on
+the marker above. Get it wrong and nothing tells you: the source looks nested, and the preview
+shows two separate lists where you meant one inside the other.
+
+**Tab** and **Shift+Tab** now move a list item in and out a level. `Ctrl+]` and `Ctrl+[` do the
+same and work from the toolbar as well as the editor, there are two new buttons on the format
+bar beside the list ones, and **Format | Increase Indent** and **Decrease Indent** are on the
+menu.
+
+Put the cursor anywhere in the second item here and press Tab:
+
+```markdown
+1. Preheat the oven
+2. Butter the tin
+3. Beat the eggs
+```
+
+and it becomes:
+
+```markdown
+1. Preheat the oven
+   1. Butter the tin
+2. Beat the eggs
+```
+
+Three spaces, because three is where `1. ` puts its own text — a `- ` item would take two and a
+`10. ` item four. That column is what markdown actually reads to decide what is inside what,
+which is why the item nests for real rather than just moving right. Both lists sort their
+numbering out: the new one begins at 1, and the list the item left closes its gap.
+
+Anything underneath the item comes with it — nested items, wrapped lines, even a code block
+inside the item — so a branch keeps its shape instead of being flattened a level. Select several
+items and Tab moves the whole selection in together, the depths inside it unchanged. Select a
+whole list, first item and all, and the rest of it nests under that first item — the one case
+where an item that cannot move is left behind rather than stopping the others. Press again and
+nothing happens, because the block cannot go deeper as a block; it does not turn into a
+staircase.
+
+Shift+Tab is the half that flattens. Select a nested set and press it: every item steps out a
+level, and one already at the left margin stays where it is rather than holding the rest back.
+Press again and the next level goes. Two presses take a three-level nest flat, with no need to
+select each level on its own and work inward.
+
+A list written with the same number on every line keeps it, as it does everywhere else now.
+
+Nothing happens where nothing sensibly could. The first item of a list has nothing above it to
+become a child of, so Tab leaves it where it is rather than adding spaces the preview will
+ignore. Off a list altogether — in a paragraph, or inside a fenced code block, where `- like
+this` is a line of code and not a list — Tab is simply the Tab key, because indenting a
+paragraph in markdown makes a code block and nobody means that.
+
 ## Fixes
+
+**A nested checkbox list no longer renders beside its parent.** A task item was laid out as a
+row — box, then text — which meant a list nested inside one became a third column sitting next to
+the text rather than a block underneath it: a five-item list read as one item with a block of
+three alongside. A long web address in a task item was worse, broken into a column one word wide.
+Both are ordinary lines now, and a task item can carry a second paragraph or a code block without
+its box sliding out of place. This was there for any nested checkbox list, however it was typed;
+the new indent commands just made one easy to produce.
 
 **A table of contents now lands where GitHub's would.** A heading whose title loses a word to
 punctuation — "Escaping, Entities & Unicode" — used to get an anchor with one hyphen where

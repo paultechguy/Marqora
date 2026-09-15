@@ -593,6 +593,13 @@ public sealed partial class MainWindow : Window
         Add((VirtualKey)221, ctrlShift, () => RunMarkdown("HeadingIncrease"));
         Add((VirtualKey)219, ctrlShift, () => RunMarkdown("HeadingDecrease"));
 
+        // List depth. 221 is VK_OEM_6 and 219 VK_OEM_4, which are ] and [ on a US layout and
+        // whatever those keys carry elsewhere - the same pair the heading levels above use with
+        // Shift. Tab and Shift+Tab do this as well, but only inside the editor: Tab is the focus
+        // key, and an accelerator here would take it from every control in the window.
+        Add((VirtualKey)221, ctrl, () => RunMarkdown("IncreaseIndent"));
+        Add((VirtualKey)219, ctrl, () => RunMarkdown("DecreaseIndent"));
+
         // Print. Ctrl+P reaches XAML rather than the WebView because the browser's own
         // accelerators are off, so this is the only thing bound to it.
         Add(VirtualKey.P, ctrl, () => ViewModel.PrintCommand.Execute(null));
@@ -2002,18 +2009,20 @@ public sealed partial class MainWindow : Window
     ///
     /// Its own numbers rather than the chrome row's. That row holds a menu, a segmented
     /// switcher and a zoom cluster and needs about 630 effective pixels; this bar carries the
-    /// file group and sixteen formatting controls and needs nearer 955, so shedding at the
+    /// file group and eighteen formatting controls and needs nearer 1030, so shedding at the
     /// same widths would leave one row overcrowded while the other still had room.
     /// </summary>
-    /// Measured rather than guessed. The full bar draws to about 953 pixels: the file group
+    /// Measured rather than guessed. The full bar draws to about 1029 pixels: the file group
     /// added 163, the code block and table gave back 83 on their way into the Insert
-    /// dropdown, and blockquote kept its button. Below the compact width the two insert
-    /// dropdowns go, leaving about 758; below the minimal width the file group, the heading
-    /// and the lists go with them, leaving about 375. The minimal width covers that 758 with
-    /// a little to spare - set below it there would be a band where the compact bar did not
-    /// fit and nothing had shed yet, which is what 650 used to leave.
-    private const double FormatBarCompactWidth = 990;
-    private const double FormatBarMinimalWidth = 780;
+    /// dropdown, blockquote kept its button, and the two indent buttons added 76 - 36 apiece
+    /// plus the group's 2 of spacing each. Below the compact width the two insert dropdowns
+    /// go, leaving about 834; below the minimal width the file group, the heading and the
+    /// lists go with them, leaving about 375 - the indent buttons travel with the lists, which
+    /// is why the minimal figure did not move. Each threshold keeps the same headroom over the
+    /// bar it has to fit as the pair before it did: set the minimal one below 834 and there
+    /// would be a band where the compact bar did not fit and nothing had shed yet.
+    private const double FormatBarCompactWidth = 1066;
+    private const double FormatBarMinimalWidth = 856;
 
     /// <summary>
     /// Moves whole groups into the overflow menu as the window narrows, worst-used first.
@@ -2045,7 +2054,9 @@ public sealed partial class MainWindow : Window
             OverflowBulletList,
             OverflowNumberedList,
             OverflowTaskList,
-            OverflowBlockquote);
+            OverflowBlockquote,
+            OverflowDecreaseIndent,
+            OverflowIncreaseIndent);
 
         Visibility files = minimal ? Visibility.Collapsed : Visibility.Visible;
         FileActionsGroup.Visibility = files;

@@ -617,6 +617,30 @@
                                         CommandParameter="TaskList"
                                         />
 
+                        <!--
+                            Depth rather than marker, and the only two items here that do nothing
+                            at all off a list: indenting a paragraph in markdown makes a code
+                            block. Tab and Shift+Tab do the same thing inside a list; they cannot
+                            be shown here because Tab is the focus key and XAML would take it.
+                        -->
+                        <MenuFlyoutItem Text="Increase Indent"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="IncreaseIndent"
+                                        KeyboardAcceleratorTextOverride="Ctrl+]">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE291;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Decrease Indent"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="DecreaseIndent"
+                                        KeyboardAcceleratorTextOverride="Ctrl+[">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE290;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
                         <MenuFlyoutItem Text="Blockquote"
                                         Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                         CommandParameter="Blockquote"
@@ -1361,6 +1385,29 @@
                                   AutomationProperties.Name="Blockquote">
                         <FontIcon Glyph="&#xE134;" Style="{StaticResource MqIconStyle}" />
                     </ToggleButton>
+
+                    <!--
+                        Buttons rather than toggles, and the only two on the bar that are not.
+                        Everything else here answers "is the caret inside one of these"; depth is
+                        not a state a line is in, so there is nothing to light up. Decrease sits
+                        left of increase the way it does on every toolbar that has the pair - the
+                        arrows point the way the text moves.
+                    -->
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                            CommandParameter="DecreaseIndent"
+                            ToolTipService.ToolTip="Decrease list indent (Shift+Tab or Ctrl+[)"
+                            AutomationProperties.Name="Decrease list indent">
+                        <FontIcon Glyph="&#xE290;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
+
+                    <Button Style="{StaticResource MqToolButtonStyle}"
+                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                            CommandParameter="IncreaseIndent"
+                            ToolTipService.ToolTip="Increase list indent (Tab or Ctrl+])"
+                            AutomationProperties.Name="Increase list indent">
+                        <FontIcon Glyph="&#xE291;" Style="{StaticResource MqIconStyle}" />
+                    </Button>
                 </StackPanel>
 
                 <Rectangle x:Name="HeadingSeparator" Width="1" Height="20" Margin="6,0"
@@ -1478,6 +1525,12 @@
                             <MenuFlyoutItem x:Name="OverflowBlockquote" Text="Blockquote"
                                             Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                             CommandParameter="Blockquote" />
+                            <MenuFlyoutItem x:Name="OverflowDecreaseIndent" Text="Decrease Indent"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="DecreaseIndent" />
+                            <MenuFlyoutItem x:Name="OverflowIncreaseIndent" Text="Increase Indent"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="IncreaseIndent" />
 
                             <!--
                                 No Code Block and no Table here any more, for opposite reasons.

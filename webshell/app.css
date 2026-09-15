@@ -617,7 +617,37 @@ a.mq-blocked-media {
 
 .mq-preview ul.contains-task-list { list-style: none; padding-left: 0.2em; }
 
-.mq-preview .task-list-item { display: flex; align-items: baseline; gap: 0.6em; }
+/*
+  A task item hangs its text off the box rather than laying the two out as a flex row.
+
+  Flex was the obvious way to put a box on the first line's baseline and keep wrapped text out
+  from under it, and it did both - but an item's children are the box, the text, and any list
+  nested inside it, so a nested list became a third column sitting beside the text. A five-item
+  list read as one item with a block of three next to it. A long URL was worse: flex kept the
+  whole text run at its natural width and broke it into one word per line to make room.
+
+  Indenting the item and pulling the box back into that indent gives the same hanging text from
+  ordinary inline layout, where a nested list is simply the next block down and a long URL wraps
+  the way it does everywhere else in the preview.
+*/
+.mq-preview .task-list-item { padding-left: 1.6em; }
+
+/*
+  A descendant rather than a child: a loose list - one with blank lines between its items - puts
+  each item's own text in a paragraph, so the box is inside a <p> rather than directly in the
+  item. Either way it is pulled back into the indent above.
+*/
+.mq-preview .task-list-item input[type="checkbox"] { margin-left: -1.6em; margin-right: 0.6em; }
+
+/*
+  A list nested inside a task item. The base rule already indents it 1.6em, which is where the
+  parent's own text starts; a task list needs no more, because its boxes are content rather than
+  markers drawn outside the padding box.
+*/
+.mq-preview li.task-list-item > ul,
+.mq-preview li.task-list-item > ol { margin: 0.28em 0 0; }
+
+.mq-preview li.task-list-item > ul.contains-task-list { padding-left: 0; }
 
 .mq-preview .task-list-item input[type="checkbox"] {
   accent-color: var(--mq-accent);

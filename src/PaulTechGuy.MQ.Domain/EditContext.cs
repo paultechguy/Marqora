@@ -6,9 +6,11 @@ namespace PaulTechGuy.MQ.Domain;
 /// <summary>
 /// The slice of a document an editing command needs to do its work.
 ///
-/// Only the lines the selection touches are carried, plus one either side where the
-/// document has one, because block commands need to know whether they are already sitting
-/// next to a blank line. Everything is addressed in absolute document coordinates:
+/// How much is carried depends on what the command asked for — see
+/// <see cref="EditContextScope"/>. Usually it is the lines the selection touches plus one either
+/// side, because block commands need to know whether they are already sitting next to a blank
+/// line; a command that reads structure rather than text gets the whole document instead.
+/// Everything is addressed in absolute document coordinates:
 /// <see cref="FirstLine"/> is the document line number of <c>Lines[0]</c>, so a command can
 /// place its edits without knowing the window exists.
 ///
@@ -17,7 +19,17 @@ namespace PaulTechGuy.MQ.Domain;
 /// immediately pressing Ctrl+B would otherwise compute against text that is one keystroke
 /// out of date.
 /// </summary>
-public sealed record EditContext(IReadOnlyList<string> Lines, int FirstLine, TextRange Selection)
+/// <param name="Version">
+/// What the editor called this revision of the document when it answered. Handed straight back
+/// when the edits are applied, so a batch computed against text the user has since typed over is
+/// dropped rather than written at offsets that have stopped meaning anything. Zero when the
+/// editor did not say, which asks for no check.
+/// </param>
+public sealed record EditContext(
+    IReadOnlyList<string> Lines,
+    int FirstLine,
+    TextRange Selection,
+    int Version = 0)
 {
     /// <summary>The document line number one past the last line carried.</summary>
     public int EndLine => FirstLine + Lines.Count;

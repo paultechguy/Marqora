@@ -120,11 +120,28 @@ host -> shell   openTab, activateTab, closeTab, updatePreview, setTabText, clear
                 setViewMode, setTheme, setZoom, setScrollSync, setWordWrap,
                 setLineNumbers, setShowWhitespace, setWrapGlyph, setSplitterPosition,
                 scrollToLine, focusPane, editorCommand, requestSelection, insertText,
+                replaceText, requestEditContext, applyEdits,
                 setDiagnostics, clearDiagnostics, setSpelling, clearSpelling,
                 setLinkFindings, clearLinkFindings, setLinkTargets
 shell -> host   ready, editorTextChanged, zoomChanged, splitterMoved, linkActivated,
-                command, paneFocused, stats, selectionCopied, contextMenu, imagePaste, log
+                command, paneFocused, stats, selectionCopied, contextMenu, imagePaste,
+                editContext, caretState, log
 ```
+
+`requestEditContext` and `editContext` are the authoring pair: the host asks for the live
+selection and gets it back with the lines around it, because its own copy of the document trails
+the editor by a debounce interval. How many lines is the request's `scope` — the selection and a
+line either side, or the whole document for a command that has to read structure rather than
+text. List indenting is the only thing that asks for the second: the parent item, the subtree
+that travels with a move, and the fences that say which lines are code are all at unknown
+distances, and a window a scan can run off the edge of is worse than none, because reaching that
+edge is indistinguishable from reaching the end of the file.
+
+The reply carries Monaco's version id, and `applyEdits` hands it back. A batch computed against
+text the user has since typed over is dropped rather than written at offsets that have stopped
+meaning anything — every edit is an absolute range against the document the host was shown, and
+the keyboard does not wait for a round trip. That stayed theoretical while every authoring
+command was a deliberate chord; `Tab` auto-repeats.
 
 `imagePaste` is the odd one: it carries no payload at all. The shell sees a paste it decides is
 an image, stands down, and says so; the host then reads the Windows clipboard itself. What the

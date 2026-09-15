@@ -6583,7 +6583,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await RunEditAsync(context => _editor.Apply(parsed, context), command).ConfigureAwait(true);
+        await RunEditAsync(context => _editor.Apply(parsed, context), command, EditContextScopes.For(parsed))
+            .ConfigureAwait(true);
     }
 
     /// <summary>Puts a snippet in at the caret.</summary>
@@ -6682,7 +6683,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Shared between the markdown commands and snippet insertion so the focus handling
     /// and the error handling exist once rather than twice.
     /// </summary>
-    private async Task RunEditAsync(Func<EditContext, EditResult> compute, string what)
+    private async Task RunEditAsync(
+        Func<EditContext, EditResult> compute,
+        string what,
+        EditContextScope scope = EditContextScope.Selection)
     {
         // Checked here rather than trusting CanExecute: the accelerators call Execute
         // directly, and ICommand.Execute does not consult it. One predicate, four entry
@@ -6692,9 +6696,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Every authoring command is a round trip, so two of them overlapping would each compute
+        // against a document the other is about to change. That never came up while these were
+        // all on deliberate chords; Tab auto-repeats, and holding it would otherwise open a fresh
+        // request every few milliseconds. The version check in the shell is the backstop, but
+        // dropping the overlap here is what makes a held key do one predictable thing.
+        if (_editInFlight)
+        {
+            return;
+        }
+
+        _editInFlight = true;
+
         try
         {
-            if (await _host.GetEditContextAsync().ConfigureAwait(true) is not { } context)
+            if (await _host.GetEditContextAsync(scope).ConfigureAwait(true) is not { } context)
             {
                 return;
             }
@@ -6703,7 +6719,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             if (!result.IsEmpty)
             {
-                await _host.ApplyEditsAsync(result).ConfigureAwait(true);
+                await _host.ApplyEditsAsync(result, context.Version).ConfigureAwait(true);
             }
             else
             {
@@ -6717,7 +6733,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             _logger.LogError(ex, "{What} failed.", what);
         }
+        finally
+        {
+            _editInFlight = false;
+        }
     }
+
+    /// <summary>Whether an authoring round trip is already out; see <see cref="RunEditAsync"/>.</summary>
+    private bool _editInFlight;
 
     /// <summary>
     /// Matches a menu parameter or shortcut name against the command enum. The names line
@@ -7526,7 +7549,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public const int MaximumHeadingLevel = 6;
 
     /// <summary>Called by the panel as focus arrives. See <see cref="OutlineHasFocus"/>.</summary>
-    public void NotifyOutlineFocused() => OutlineHasFocus = true;
+    public void NotifyOutlineFocused()
+    {
+        // The list taking the keyboard back after a click handed it to the editor. This is the
+        // bounce GoToOutlineRowAsync describes, and the answer is to hand it over again, not to
+        // record it: the click is finished, so this time the editor keeps it. Once only - the
+        // flag goes down here, so a later, genuine return to the panel is believed.
+        if (_leavingOutline)
+        {
+            _leavingOutline = false;
+
+            if (_host is not null)
+            {
+                _ = _host.FocusEditorAsync();
+            }
+
+            return;
+        }
+
+        OutlineHasFocus = true;
+    }
 
     /// <summary>
     /// Sets the panel's width, clamped, and remembers it.
@@ -7670,15 +7712,49 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OutlineSelectedIndex = index;
         _followedLine = row.SourceLine;
 
+        if (!focusEditor)
+        {
+            await _host.ScrollToLineAsync(row.SourceLine).ConfigureAwait(true);
+
+            return;
+        }
+
+        /*
+            Going, not looking - so the keyboard is leaving the panel.
+
+            It does not leave cleanly. The list takes it back: about three milliseconds after this
+            has asked the WebView for focus, the ListView raises GotFocus on itself, and it does so
+            whether this ran inside the tap or was queued behind it - it is not part of the click's
+            own processing, so nothing here can be ordered after it. Left alone, that re-latches
+            OutlineHasFocus, and with it CanFormat, and the whole format bar draws itself disabled.
+
+            It looked intermittent because of what rescued it. The shell reports a pane focus
+            change from Monaco's own focus-gained event, and SetActivePane is the one thing that
+            clears the latch - so the bar recovered only when Monaco happened to fire that event,
+            and stayed quiet when it already believed it had focus.
+
+            So the bounce is answered rather than raced. The flag marks a hand-off in progress, and
+            NotifyOutlineFocused - the very event that says the list took the keyboard back - hands
+            it to the editor a second time instead of latching. The click is over by then, so that
+            one sticks. It is not cleared here: it is cleared by the bounce it exists to catch, or
+            by a pane reporting focus, whichever comes first.
+        */
+        _leavingOutline = true;
+
         await _host.ScrollToLineAsync(row.SourceLine).ConfigureAwait(true);
 
-        if (focusEditor)
-        {
-            OutlineHasFocus = false;
+        OutlineHasFocus = false;
 
-            await _host.FocusEditorAsync().ConfigureAwait(true);
-        }
+        await _host.FocusEditorAsync().ConfigureAwait(true);
     }
+
+    /// <summary>
+    /// A click has handed the keyboard from the panel to the editor and the list has not yet
+    /// taken it back. Raised by <see cref="GoToOutlineRowAsync"/>; lowered by the first
+    /// <see cref="NotifyOutlineFocused"/> after it, which is that bounce and is answered with a
+    /// second hand-off, or by <see cref="SetActivePane"/>, which is the hand-off having landed.
+    /// </summary>
+    private bool _leavingOutline;
 
     /// <summary>
     /// Escape in the panel, and Alt+Shift+4 from inside it: hands the keyboard back to the
@@ -8234,6 +8310,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ActivePane = pane;
         OutlineHasFocus = false;
+
+        // A pane holding the keyboard is the hand-off complete, whichever way it got there.
+        _leavingOutline = false;
 
         AppSettings current = _settings.Current;
         ActiveZoomPercent = pane == EditorPane.Source

@@ -451,9 +451,11 @@ The `Format` menu applies markdown constructs so you do not have to type the pun
 | Blockquote                                     | `Ctrl+Shift+.`                  |
 | Bullet / numbered list                         | `Ctrl+Shift+8` / `Ctrl+Shift+7` |
 | Heading level up / down                        | `Ctrl+Shift+]` / `Ctrl+Shift+[` |
+| List indent in / out                           | `Tab` / `Shift+Tab` in a list, or `Ctrl+]` / `Ctrl+[` |
 | Heading 1–6, task list, table, horizontal rule | Menu only                       |
 
-Everything toggles. `Ctrl+B` with nothing selected wraps the word under the cursor, and
+Everything toggles except the two indent commands, which change a list item's depth rather than
+marking it. `Ctrl+B` with nothing selected wraps the word under the cursor, and
 pressing it again takes the markers off. Applied to several lines at once, a list or quote
 marks every line the selection touches, and clears them only when all of them already carry
 it — a part-marked selection gets finished rather than emptied. Switching between bullets,
@@ -466,15 +468,26 @@ the cursor between the brackets.
 Pressing Enter inside a list carries the list on to the next line, numbering as it goes.
 Pressing it on an item you have not written anything in ends the list instead.
 
+`Tab` and `Shift+Tab` move a list item in and out a level. The marker lands on the column its
+parent's text starts in, which is what actually nests it — two spaces under a `-`, four under a
+`10.` — and everything underneath the item comes with it, so a branch keeps its shape. Numbered
+lists renumber on both sides of the move. Select a nested set and `Shift+Tab` peels a level off
+it each press — an item already at the margin stays there rather than holding the rest back — so
+flattening is repeated presses on one selection, not one selection per level. The first item of a
+list has nothing to nest under, so it stays put; anywhere that is not a list, a fenced code block
+included, `Tab` is the Tab key.
+
 Explicit heading levels are on the menu without shortcuts. `Ctrl`+digit belongs to tab
 selection, and `Ctrl+Alt`+digit is indistinguishable from `AltGr`+digit on European
 keyboards, where it types a character.
 
 The same commands sit on a toolbar under the menu bar, which is live: the buttons light up
 for whatever the caret is inside, and the heading control reads `H2` on an H2. Each says
-what it would *do* rather than what the text is, so a lit button always turns itself off.
+what it would *do* rather than what the text is, so a lit button always turns itself off. The
+two indent buttons are the exception and never light: depth is not a state a line is in.
 The bar runs **Open · Open Folder · Save · Save All | undo · redo | bold · italic ·
-strikethrough · code · link · code block · rule | lists · blockquote | Heading ▾ | Snippet ▾**,
+strikethrough · code · link · code block · rule | lists · blockquote · outdent · indent |
+Heading ▾ | Snippet ▾**,
 where **Snippet** holds the catalogue in name order, broken once under a **Your snippets**
 heading where your own files start. It is the one dropdown left on the bar, and it is here
 because snippets are the one thing on it you extend yourself — everything else the bar can do
@@ -488,7 +501,8 @@ the Format menu and the shortcuts go quiet with it — but the four file command
 because opening and saving are as reasonable while reading as while writing.
 
 As the window narrows the bar hands whole groups to a `»` button rather than clipping: the
-snippet menu goes first, then the file commands, the lists and the heading control. Undo,
+snippet menu goes first, then the file commands, the lists with the indent pair, and the
+heading control. Undo,
 bold, italic, code, link, code block and rule never leave, the `»` appears only when something
 is actually hidden, and nothing becomes unreachable — the file commands have no `»` entry,
 because Open and Save don't belong under "More formatting", but the File menu and `Ctrl+O` /

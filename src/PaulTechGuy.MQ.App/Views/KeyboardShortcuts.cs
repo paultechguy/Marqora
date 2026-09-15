@@ -99,6 +99,8 @@ internal static class KeyboardShortcuts
             new("Numbered list", "Ctrl+Shift+7"),
             new("Increase heading level", "Ctrl+Shift+]"),
             new("Decrease heading level", "Ctrl+Shift+["),
+            new("Increase list indent", "Tab or Ctrl+]"),
+            new("Decrease list indent", "Shift+Tab or Ctrl+["),
         ]),
 
         new("View",

@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Markdown;
 
 namespace PaulTechGuy.MQ.Editing;
 
@@ -24,7 +25,7 @@ internal static partial class LinePrefixToggle
 {
     public static EditResult Apply(EditContext context, LinePrefixKind kind, int headingLevel = 1)
     {
-        List<(int Line, string Text)> content = Targets(context, out TextRange selection);
+        List<(int Line, string Text)> content = Selections.Targets(context, out TextRange selection);
         if (content.Count == 0)
         {
             return EditResult.None;
@@ -47,7 +48,7 @@ internal static partial class LinePrefixToggle
     /// </summary>
     public static bool WouldRemove(EditContext context, LinePrefixKind kind, int headingLevel = 1)
     {
-        List<(int Line, string Text)> content = Targets(context, out _);
+        List<(int Line, string Text)> content = Selections.Targets(context, out _);
 
         return content.Count > 0 && content.TrueForAll(t => HasPrefix(t.Text, kind, headingLevel));
     }
@@ -62,7 +63,7 @@ internal static partial class LinePrefixToggle
     /// </summary>
     public static int HeadingLevelOf(EditContext context)
     {
-        List<(int Line, string Text)> content = Targets(context, out _);
+        List<(int Line, string Text)> content = Selections.Targets(context, out _);
 
         if (content.Count == 0)
         {
@@ -80,7 +81,7 @@ internal static partial class LinePrefixToggle
     /// <summary>Moves headings a level up or down, leaving plain lines alone.</summary>
     public static EditResult Shift(EditContext context, int direction)
     {
-        List<(int Line, string Text)> content = Targets(context, out TextRange selection);
+        List<(int Line, string Text)> content = Selections.Targets(context, out TextRange selection);
         if (content.Count == 0)
         {
             return EditResult.None;
@@ -102,35 +103,6 @@ internal static partial class LinePrefixToggle
 
             return indent + new string('#', Math.Clamp(current + direction, 1, 6)) + " " + body;
         });
-    }
-
-    /// <summary>
-    /// The lines a command should act on: those the selection touches, minus the blank
-    /// ones, which separate blocks rather than belonging to them. A selection that is
-    /// entirely blank falls back to the caret's own line, so the command still does
-    /// something in an empty document.
-    /// </summary>
-    private static List<(int Line, string Text)> Targets(EditContext context, out TextRange selection)
-    {
-        selection = Selections.Normalize(context);
-
-        List<(int Line, string Text)> targets = [];
-        for (int i = selection.Start.Line; i <= selection.End.Line; i++)
-        {
-            if (context.LineAt(i) is { } text)
-            {
-                targets.Add((i, text));
-            }
-        }
-
-        if (targets.Count == 0)
-        {
-            return targets;
-        }
-
-        List<(int Line, string Text)> content = targets.FindAll(t => t.Text.Trim().Length > 0);
-
-        return content.Count > 0 ? content : [targets[0]];
     }
 
     private static EditResult Rewrite(
@@ -180,13 +152,13 @@ internal static partial class LinePrefixToggle
 
     private static bool HasPrefix(string text, LinePrefixKind kind, int headingLevel)
     {
-        Match bullet = BulletMarker().Match(text);
+        bool item = ListStructure.TryRead(text, out ListStructure.ListItem list);
 
         return kind switch
         {
-            LinePrefixKind.Bullet => bullet.Success && !bullet.Groups["task"].Success,
-            LinePrefixKind.Task => bullet.Success && bullet.Groups["task"].Success,
-            LinePrefixKind.Numbered => OrderedMarker().IsMatch(text),
+            LinePrefixKind.Bullet => item && !list.Ordered && list.TaskBox.Length == 0,
+            LinePrefixKind.Task => item && !list.Ordered && list.TaskBox.Length > 0,
+            LinePrefixKind.Numbered => item && list.Ordered,
             LinePrefixKind.Blockquote => Blockquote().IsMatch(text),
             LinePrefixKind.Heading => Heading().Match(text) is { Success: true } h
                 && h.Groups["hashes"].Value.Length == headingLevel,
@@ -241,14 +213,12 @@ internal static partial class LinePrefixToggle
     /// </summary>
     private static (string Indent, string Body) StripMarkers(string text)
     {
-        if (BulletMarker().Match(text) is { Success: true } bullet)
+        // The task box goes with the marker here even though ListStructure counts it as content.
+        // The two are answering different questions: nesting is decided by where an item's text
+        // starts, but switching a task item to a bullet has to take the box off with the dash.
+        if (ListStructure.TryRead(text, out ListStructure.ListItem list))
         {
-            return (bullet.Groups["indent"].Value, text[bullet.Length..]);
-        }
-
-        if (OrderedMarker().Match(text) is { Success: true } ordered)
-        {
-            return (ordered.Groups["indent"].Value, text[ordered.Length..]);
+            return (text[..list.IndentWidth], list.Content);
         }
 
         if (Heading().Match(text) is { Success: true } heading)
@@ -260,12 +230,6 @@ internal static partial class LinePrefixToggle
 
         return (text[..indentLength], text[indentLength..]);
     }
-
-    [GeneratedRegex(@"^(?<indent>[ \t]*)[-*+][ \t]+(?<task>\[[ xX]\][ \t]+)?")]
-    private static partial Regex BulletMarker();
-
-    [GeneratedRegex(@"^(?<indent>[ \t]*)\d+[.)][ \t]+")]
-    private static partial Regex OrderedMarker();
 
     [GeneratedRegex(@"^(?<indent>[ \t]*)>[ \t]?")]
     private static partial Regex Blockquote();

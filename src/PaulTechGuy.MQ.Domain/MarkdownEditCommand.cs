@@ -35,6 +35,11 @@ public enum MarkdownEditCommand
     HeadingIncrease,
     HeadingDecrease,
 
+    // List depth. Unlike everything above, these do nothing at all off a list: the markdown for
+    // an indented paragraph is a code block, and nobody reaching for this means that.
+    IncreaseIndent,
+    DecreaseIndent,
+
     // Whole blocks inserted at the caret, with the blank lines they need around them.
     CodeBlock,
     Table,

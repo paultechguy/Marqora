@@ -2686,6 +2686,11 @@
     { ctrl: true, shift: true, code: 'BracketRight', run: 'md.headingIncrease' },
     { ctrl: true, shift: true, code: 'BracketLeft', run: 'md.headingDecrease' },
 
+    // List depth. Tab and Shift+Tab do this too, bound separately further down because they
+    // have to hand the key back to the editor when the caret is not on a list item.
+    { ctrl: true, code: 'BracketRight', run: 'md.increaseIndent' },
+    { ctrl: true, code: 'BracketLeft', run: 'md.decreaseIndent' },
+
     // Opening the menus. Format takes O because File has F, the way Windows menus have
     // always split those two. Alt on its own is watched separately, further down.
     { alt: true, code: 'KeyF', run: 'menu.file' },
@@ -3169,10 +3174,32 @@
 
     // The precondition leaves Enter alone wherever a widget owns it, so accepting a find
     // result or a suggestion still works.
-    state.editor.addCommand(
-      monaco.KeyCode.Enter,
-      continueList,
-      'editorTextFocus && !suggestWidgetVisible && !renameInputVisible && !inSnippetMode');
+    var authoringKey = 'editorTextFocus && !suggestWidgetVisible && !renameInputVisible && !inSnippetMode';
+
+    state.editor.addCommand(monaco.KeyCode.Enter, continueList, authoringKey);
+
+    /*
+      Tab and Shift+Tab change list depth, and do whatever they always did everywhere else.
+
+      Unlike Enter, these replace a real keybinding rather than intercepting the input path -
+      a dynamic binding outranks the built-in tab and outdent commands - so the work can go to
+      the host like every other formatting command. What cannot go to the host is the decision:
+      the round trip returns long after the key would have acted, so whether to hand Tab back
+      has to be answered here and now.
+
+      The rule has to be the one the host uses, or the two disagree about the same selection.
+      Falling through is the dangerous direction: Monaco's own tab indents every line of a
+      multi-line selection, so a selection holding a paragraph and a list item would get tabs
+      inserted where the command promises to do nothing. Swallowing the key when the host then
+      declines costs nothing, so single-line non-list is the only case that falls through.
+    */
+    state.editor.addCommand(monaco.KeyCode.Tab, function () {
+      indentList('md.increaseIndent', 'tab');
+    }, authoringKey);
+
+    state.editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Tab, function () {
+      indentList('md.decreaseIndent', 'outdent');
+    }, authoringKey);
 
     /*
       Alt on its own puts the keyboard on the menu bar, the way a Windows menu has always
@@ -3416,7 +3443,7 @@
   }
 
   /*
-    The selection with column precision, plus the lines it covers and one either side.
+    The selection with column precision, plus as much of the document as the command asked for.
 
     The host's copy of the document trails the editor by a debounce interval, so an
     authoring command that computed against it would act on text one keystroke out of
@@ -3424,17 +3451,27 @@
     either side is what the block commands need to tell whether they already have a blank
     line to sit beside.
 
+    A "document" scope sends the whole thing. List indenting needs it: the parent item, the
+    subtree that travels with a move and the fences that say which lines are code are all at
+    unknown distances. A wider margin would not do - a scan that ran off the edge of one cannot
+    tell that from reaching the end of the file, so it would half-move a subtree and say nothing.
+
+    The version id goes along too. It comes back with the edits, and applyEdits refuses a batch
+    whose document has moved on since; see there for why that matters more than it used to.
+
     Monaco counts lines and columns from one; the host counts from zero throughout.
   */
-  function editContext(requestId) {
+  function editContext(payload) {
+    var requestId = payload && payload.requestId;
     var editor = state.editor;
     var model = editor && editor.getModel();
     var selection = editor && editor.getSelection();
 
     if (!model || !selection) { return { requestId: requestId }; }
 
-    var first = Math.max(1, selection.startLineNumber - 1);
-    var last = Math.min(model.getLineCount(), selection.endLineNumber + 1);
+    var whole = payload && payload.scope === 'document';
+    var first = whole ? 1 : Math.max(1, selection.startLineNumber - 1);
+    var last = whole ? model.getLineCount() : Math.min(model.getLineCount(), selection.endLineNumber + 1);
     var lines = [];
 
     for (var i = first; i <= last; i++) {
@@ -3445,6 +3482,7 @@
       requestId: requestId,
       firstLine: first - 1,
       lines: lines,
+      version: model.getVersionId(),
       startLine: selection.startLineNumber - 1,
       startColumn: selection.startColumn - 1,
       endLine: selection.endLineNumber - 1,
@@ -3459,11 +3497,26 @@
     once rather than one after another. The undo stops either side collapse the batch into
     a single Ctrl+Z, the same way a reformat does.
   */
-  function applyEdits(edits, selection) {
+  function applyEdits(edits, selection, version) {
     var editor = state.editor;
     var model = editor && editor.getModel();
 
     if (!model || !edits || !edits.length) { return; }
+
+    /*
+      Every edit is an absolute range against the document the host was shown, so a batch that
+      arrives after the user has typed would write in the wrong places. The host cannot prevent
+      that - it is a round trip, and the keyboard does not wait - but it can be told to drop the
+      result instead of corrupting the line.
+
+      It stayed theoretical while every authoring command was a deliberate chord. Tab is not:
+      it auto-repeats, so a held key would otherwise open a fresh request every few milliseconds,
+      each one computed against text its predecessor was about to change.
+    */
+    if (version && model.getVersionId() !== version) {
+      editor.focus();
+      return;
+    }
 
     var eol = model.getEOL();
     var operations = [];
@@ -3606,6 +3659,67 @@
       text: model.getEOL() + prefix,
       forceMoveMarkers: true
     }]);
+  }
+
+  /*
+    Whether the selection touches a list item, which is the question Tab has to answer before
+    it decides whether to act or to behave like a tab key.
+
+    The host is the authority on this - it has the whole document and the same fence scanner the
+    style checks use - but the gate cannot wait for a round trip, so this is the cheap version of
+    the same rule: count fences on the way down, then read the lines the selection covers. The
+    worst a disagreement costs is a swallowed Tab or a stray one, never a wrong edit.
+
+    Fences are worth the walk rather than reading the line alone. A markdown editor is full of
+    code blocks containing markdown, and "- foo" inside one is a line of code; without this the
+    host would decline and the key would vanish instead of inserting a tab.
+  */
+  function selectionOnList(model, selection) {
+    // A selection ending at column 1 stops before that line rather than on it.
+    var last = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
+      ? selection.endLineNumber - 1
+      : selection.endLineNumber;
+    var fence = null;
+
+    for (var n = 1; n <= last; n++) {
+      var text = model.getLineContent(n);
+      var rule = /^\s{0,3}(```+|~~~+)/.exec(text);
+
+      if (fence) {
+        if (rule && rule[1].charAt(0) === fence) { fence = null; }
+        continue;
+      }
+
+      if (rule) { fence = rule[1].charAt(0); continue; }
+
+      if (n >= selection.startLineNumber && LIST_ITEM.test(text)) { return true; }
+    }
+
+    return false;
+  }
+
+  /*
+    Tab and Shift+Tab: change list depth, or hand the key back.
+
+    Handing it back is the dangerous direction, which is why the test is "does the selection
+    touch a list item" and not "is the caret on one". Monaco's own tab indents every line of a
+    multi-line selection, so a selection holding a paragraph and a list item would come back with
+    tabs inserted where the command promises to do nothing at all. Swallowing a key the host then
+    declines costs nothing by comparison.
+  */
+  function indentList(command, fallback) {
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+    var selection = editor && editor.getSelection();
+
+    if (!model || !selection) { return; }
+
+    if (!selectionOnList(model, selection)) {
+      editor.trigger('keyboard', fallback, {});
+      return;
+    }
+
+    post('command', { name: command });
   }
 
   /*
@@ -4478,7 +4592,7 @@
     },
 
     requestEditContext: function (p) {
-      post('editContext', editContext(p.requestId));
+      post('editContext', editContext(p));
     },
 
     /*
@@ -4731,7 +4845,7 @@
     },
 
     applyEdits: function (p) {
-      applyEdits(p.edits, p.selection);
+      applyEdits(p.edits, p.selection, p.version);
     },
 
     /*
