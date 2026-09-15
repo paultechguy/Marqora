@@ -29,25 +29,53 @@ public static class HeadingNumbers
     /// reader has said about this document in particular.
     ///
     /// <paramref name="documentOverride"/> is null for a document nobody has spoken for,
-    /// which is nearly all of them: the preference stands. True and false are a reader having
-    /// decided, for this one document, that it should or should not carry numbers. A document
-    /// that writes its own section numbers into its heading text is the case this exists for,
-    /// where Marqora's numbers and the author's are both shown and disagree.
+    /// which is nearly all of them: the preference stands. Any other value is a reader having
+    /// decided, for this one document, where its count starts - including
+    /// <see cref="HeadingNumbering.Off"/>, which is them deciding it should not be numbered at
+    /// all. A document that writes its own section numbers into its heading text is the case
+    /// this exists for, where Marqora's numbers and the author's are both shown and disagree.
     ///
-    /// An override that turns numbering on borrows the level from the preference rather than
-    /// freezing one, so a document switched on reads like every other document in the app and
-    /// follows if the preference later starts at a different level. There is one level it
-    /// cannot borrow: <see cref="HeadingNumbering.Off"/> names no level at all, so a reader
-    /// asking for numbers while the preference is off gets them from the first heading down,
-    /// which is what "number this" means with nothing else to go on.
+    /// The override names a level rather than a yes or no, because a document that disagrees
+    /// usually disagrees about where the count starts rather than about whether to count:
+    /// someone else's chapter numbering its own "##" sections is read correctly by moving the
+    /// start down, and only has to be stood down entirely when nothing lines up. An override
+    /// therefore does not follow the preference afterwards - a reader who named a level named
+    /// it for this document, and a preference moving under them would take it away again.
+    ///
+    /// Which is why rejoining the preference is done by dropping the entry rather than by
+    /// copying the preference's current value into one. The two look identical the moment they
+    /// happen and stop agreeing the next time the preference moves.
+    ///
+    /// The whole of the rule is this one line. It is a named seam rather than a bare "??" at
+    /// the call site because it is the single place that answers "which numbering is this
+    /// document rendered with", and the preview, the outline panel, a Word export and a Folio
+    /// all have to get the same answer from it.
     /// </summary>
-    public static HeadingNumbering Effective(HeadingNumbering preference, bool? documentOverride) =>
-        documentOverride switch
+    public static HeadingNumbering Effective(HeadingNumbering preference, HeadingNumbering? documentOverride) =>
+        documentOverride ?? preference;
+
+    /// <summary>
+    /// The level a document is numbered from when a reader switches its numbers back on
+    /// without naming one - the "on" half of View &gt; Heading Numbers, which is Alt+5.
+    ///
+    /// <paramref name="chosen"/> is the level this reader last named for this document, or
+    /// null if they never have. Naming one is what Alt+Shift+1 to Alt+Shift+3 do, and it is
+    /// remembered across an off so that switching back on returns to where they were rather
+    /// than somewhere else: a reader who set a document to start at "##", looked at it with
+    /// the numbers off, and pressed the key again has asked for what they had.
+    ///
+    /// With nothing named, the preference is borrowed rather than frozen, so a document
+    /// switched on reads like every other document in the app. There is one value it cannot
+    /// borrow: <see cref="HeadingNumbering.Off"/> names no level at all, so a reader asking
+    /// for numbers while the preference is off gets them from the first heading down, which
+    /// is what "number this" means with nothing else to go on.
+    /// </summary>
+    public static HeadingNumbering SwitchedOn(HeadingNumbering preference, HeadingNumbering? chosen) =>
+        (chosen, preference) switch
         {
-            null => preference,
-            false => HeadingNumbering.Off,
-            true when preference == HeadingNumbering.Off => HeadingNumbering.FromHeading1,
-            true => preference,
+            (HeadingNumbering.Off or null, HeadingNumbering.Off) => HeadingNumbering.FromHeading1,
+            (HeadingNumbering.Off or null, _) => preference,
+            _ => chosen.Value,
         };
 
     /// <summary>

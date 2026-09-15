@@ -538,6 +538,25 @@ public sealed partial class MainWindow : Window
         // but the caret is in Monaco either way and this accelerator never sees the key then.
         Add(VirtualKey.Number5, alt, () => ViewModel.ToggleHeadingNumbersCommand.Execute(null));
 
+        // Alt+Shift+1 to Alt+Shift+3 say where this document's count starts, which is the
+        // question Alt+5 on its own could not answer. Someone else's document that numbers its
+        // own headings from "##" disagrees with a preference that starts at "#" on every
+        // heading, and turning the numbers off is a blunt answer to a mismatch of one level.
+        //
+        // Three keys and no more, because the preference offers three levels and no more; the
+        // keys mirror it rather than inventing a fourth. Alt+Shift+4 is taken by the outline
+        // above and stays taken - the digits here are heading levels, the digit there is the
+        // fourth member of the Alt+1 to Alt+4 run, and only one of those two can have it.
+        for (int level = 1; level <= 3; level++)
+        {
+            string name = $"FromHeading{level}";
+
+            Add(
+                (VirtualKey)((int)VirtualKey.Number0 + level),
+                alt | VirtualKeyModifiers.Shift,
+                () => ViewModel.SetHeadingNumbersCommand.Execute(name));
+        }
+
         Add(VirtualKey.Z, alt, () => ViewModel.ToggleWordWrapCommand.Execute(null));
 
         // F7 is the spell-check key everywhere else - Word, LibreOffice - so it needs no

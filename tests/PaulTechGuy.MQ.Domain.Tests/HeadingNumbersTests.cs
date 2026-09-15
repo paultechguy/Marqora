@@ -115,12 +115,30 @@ public class HeadingNumbersTests
     [InlineData(HeadingNumbering.FromHeading3)]
     public void A_document_stood_down_is_not_numbered_whatever_the_preference(HeadingNumbering preference)
     {
-        HeadingNumbers.Effective(preference, false).ShouldBe(HeadingNumbering.Off);
+        HeadingNumbers.Effective(preference, HeadingNumbering.Off).ShouldBe(HeadingNumbering.Off);
     }
 
     /// <summary>
-    /// Switched on for one document, it numbers from wherever the preference starts - so the
-    /// document reads like every other one in the app rather than like a third setting.
+    /// The far commoner repair, and what Alt+Shift+1 to Alt+Shift+3 are for: the author did
+    /// number their headings, but started at a different level, so the two sets sit a component
+    /// apart on every heading. A named level wins over the preference outright - having said
+    /// where this document starts, a reader is not then overruled by a setting they left alone.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.Off, HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading1, HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading1, HeadingNumbering.FromHeading3)]
+    [InlineData(HeadingNumbering.FromHeading3, HeadingNumbering.FromHeading1)]
+    public void A_document_given_a_level_is_numbered_from_it_whatever_the_preference(
+        HeadingNumbering preference,
+        HeadingNumbering chosen)
+    {
+        HeadingNumbers.Effective(preference, chosen).ShouldBe(chosen);
+    }
+
+    /// <summary>
+    /// Switched on without a level being named, it numbers from wherever the preference starts
+    /// - so the document reads like every other one in the app rather than like a third setting.
     /// </summary>
     [Theory]
     [InlineData(HeadingNumbering.FromHeading1)]
@@ -128,7 +146,7 @@ public class HeadingNumbersTests
     [InlineData(HeadingNumbering.FromHeading3)]
     public void A_document_switched_on_borrows_the_level_from_the_preference(HeadingNumbering preference)
     {
-        HeadingNumbers.Effective(preference, true).ShouldBe(preference);
+        HeadingNumbers.SwitchedOn(preference, null).ShouldBe(preference);
     }
 
     /// <summary>
@@ -138,6 +156,38 @@ public class HeadingNumbersTests
     [Fact]
     public void Switched_on_against_a_preference_of_off_numbers_from_the_first_level()
     {
-        HeadingNumbers.Effective(HeadingNumbering.Off, true).ShouldBe(HeadingNumbering.FromHeading1);
+        HeadingNumbers.SwitchedOn(HeadingNumbering.Off, null).ShouldBe(HeadingNumbering.FromHeading1);
+    }
+
+    /// <summary>
+    /// What makes Alt+5 a toggle rather than a reset once the level keys exist. A reader who
+    /// moved this document to "##", looked at it with the numbers off, and pressed the key
+    /// again asked for what they had - not for the preference, which is the thing they were
+    /// disagreeing with in the first place.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.Off, HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading1, HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading1, HeadingNumbering.FromHeading3)]
+    [InlineData(HeadingNumbering.FromHeading3, HeadingNumbering.FromHeading1)]
+    public void Switched_on_again_returns_to_the_level_the_reader_named(
+        HeadingNumbering preference,
+        HeadingNumbering chosen)
+    {
+        HeadingNumbers.SwitchedOn(preference, chosen).ShouldBe(chosen);
+    }
+
+    /// <summary>
+    /// Off is never what a reader "named": it is the state Alt+5 toggles out of, and treating
+    /// it as a remembered level would leave the key switching Off on to Off.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.Off, HeadingNumbering.FromHeading1)]
+    [InlineData(HeadingNumbering.FromHeading2, HeadingNumbering.FromHeading2)]
+    public void Off_is_not_a_level_to_switch_back_on_to(
+        HeadingNumbering preference,
+        HeadingNumbering expected)
+    {
+        HeadingNumbers.SwitchedOn(preference, HeadingNumbering.Off).ShouldBe(expected);
     }
 }

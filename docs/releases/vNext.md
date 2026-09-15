@@ -1,5 +1,24 @@
 ﻿# Marqora vNext - What's New
 
+## New
+
+**Heading numbers can start where the author's do.** `Alt+5` has always let you drop Marqora's
+numbers from one document without touching the preference or any other tab — the answer to
+someone else's file that writes "1.2 Scope" into the heading text itself. It was a blunt answer
+to the usual complaint, though. More often than not the author numbered their headings perfectly
+well and simply began counting at `##` while your preference begins at `#`, so the two sets sit a
+component apart on every heading and there was nothing to do but switch yours off.
+
+**`Alt+Shift+1`, `Alt+Shift+2` and `Alt+Shift+3`** now say where this document's count starts —
+the same three levels the preference offers, for the tab in front of you only. `View > Heading
+Numbers` has grown into those four rows, so the menu says which one a document is on rather than
+only whether it is numbered.
+
+`Alt+5` still turns the numbers off and back on, and now toggles against the level you named: set
+a document to start at `##`, press `Alt+5` to read the author's numbering on its own, press it
+again and you are back at `##` rather than somewhere you have to set again. Nothing here is
+written to your file or to your preferences, and it lasts as long as the tab does.
+
 ## Fixes
 
 **A diagram in an exported file now does something when you click it.** Hovering a diagram in an

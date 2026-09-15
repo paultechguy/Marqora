@@ -357,10 +357,16 @@ written into your markdown; the numbers live in the rendered copy.
 
 Someone else's document often numbers its own headings in the text, though, and then you are
 reading two sets at once that stop agreeing the moment the author skips a section. **`View >
-Heading Numbers` (`Alt+5`)** settles it for that document alone: the preview and the panel drop
-Marqora's numbers and leave the author's, every other tab carries on as it was, and the
-preference is untouched. It works the other way too — with numbering off, `Alt+5` numbers just
-the document in front of you.
+Heading Numbers`** settles it for that document alone, and every other tab carries on as it was
+with the preference untouched. **`Alt+5`** drops Marqora's numbers and leaves the author's — and
+turns them back on again, which is how you compare the two.
+
+Often the author has simply started counting somewhere else: their numbers begin at `##` while
+yours begin at `#`, so the two are a component apart on every heading and dropping yours is more
+than you wanted. **`Alt+Shift+1`, `Alt+Shift+2` and `Alt+Shift+3`** say where this document's
+count starts, the same three levels the preference offers. Having named one, `Alt+5` toggles
+against it, so you can flick the numbers off to read the author's and back on to where you had
+them.
 
 It lasts as long as the tab does, because it is a reading convenience rather than a setting.
 What you see is what you export: a Word document or a Folio carries whatever the tab was

@@ -766,15 +766,55 @@
                             Preview page - and it reads as a pair with Line Numbers further
                             down this same menu.
 
-                            The only toggle in this menu that is not a preference: the check
-                            mark describes the document in front, and switching tabs moves it.
+                            The only group in this menu that is not a preference: the checked
+                            row describes the document in front, and switching tabs moves it.
                             See MainViewModel._numberingOverrides.
+
+                            Four rows rather than one check mark, because the thing a reader
+                            usually disagrees with someone else's document about is where the
+                            count starts, not whether to count at all. A document that writes
+                            "1.2 Scope" into its own heading text and starts at "##" is read
+                            correctly by moving the start down; standing the numbers down
+                            entirely is the answer only when nothing lines up.
+
+                            Toggles rather than RadioMenuFlyoutItems, matching the Theme
+                            submenu in this same menu - the group is exclusive either way,
+                            because the view model only ever has one of the four true.
                         -->
-                        <ToggleMenuFlyoutItem Text="Heading Numbers"
-                                              IsChecked="{x:Bind ViewModel.HeadingNumbersEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleHeadingNumbersCommand}"
-                                              KeyboardAcceleratorTextOverride="Alt+5"
-                                              ToolTipService.ToolTip="Number this document's headings, for as long as its tab is open; the file is not changed" />
+                        <MenuFlyoutSubItem Text="Heading Numbers"
+                                           ToolTipService.ToolTip="Number this document's headings, for as long as its tab is open; the file is not changed">
+                            <!--
+                                Alt+5 is a toggle and this row is not: the key turns the
+                                numbers off and back on again, while the row only turns them
+                                off. The text is here because off is where the key lands from
+                                everywhere else, and because a reader looking for the shortcut
+                                looks at the row that matches what they want.
+                            -->
+                            <ToggleMenuFlyoutItem Text="Off"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersOff, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="Off"
+                                                  KeyboardAcceleratorTextOverride="Alt+5"
+                                                  ToolTipService.ToolTip="Show this document's headings as the author wrote them; Alt+5 turns the numbers off and on again" />
+                            <ToggleMenuFlyoutItem Text="From Heading 1"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading1, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading1"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+1"
+                                                  ToolTipService.ToolTip="Count from the first heading level: 1, 1.1, 1.1.1" />
+                            <ToggleMenuFlyoutItem Text="From Heading 2"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading2, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading2"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+2"
+                                                  ToolTipService.ToolTip="Count from the second heading level, leaving the document's title unnumbered" />
+                            <ToggleMenuFlyoutItem Text="From Heading 3"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading3, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading3"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+3"
+                                                  ToolTipService.ToolTip="Count from the third heading level, leaving the two above it unnumbered" />
+                        </MenuFlyoutSubItem>
 
                         <MenuFlyoutSeparator />
 

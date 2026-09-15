@@ -2736,8 +2736,19 @@
       about the document in front rather than a preference. The host answers it, because the
       numbers are written into the HTML by the renderer and only the host can ask for another
       one.
+
+      Alt+Shift+1 to Alt+Shift+3 say where that document's count starts instead of only
+      whether it counts. A document whose author numbered from "##" against a preference that
+      starts at "#" disagrees on every heading, and moving the start is the answer to that
+      rather than switching the numbers off. Three, because the preference offers three.
+
+      Alt+Shift+4 belongs to the outline just above and is not a fourth level - the digits in
+      this pair of runs mean two different things, and that is the seam between them.
     */
     { alt: true, code: 'Digit5', run: 'toggleHeadingNumbers' },
+    { alt: true, shift: true, code: 'Digit1', run: 'headingNumbers.FromHeading1' },
+    { alt: true, shift: true, code: 'Digit2', run: 'headingNumbers.FromHeading2' },
+    { alt: true, shift: true, code: 'Digit3', run: 'headingNumbers.FromHeading3' },
 
     { alt: true, code: 'KeyZ', run: 'wordWrap' },
 

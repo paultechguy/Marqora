@@ -194,14 +194,36 @@ markdown, and the outline panel reads the outline that same render produced — 
 section called "2.3" in the preview is called "2.3" in the panel without either of them
 asking the other.
 
-The level to number from is a preference, but *whether this document is numbered* is not.
+The level to number from is a preference, but *what this document is numbered with* is not.
 `MainViewModel._numberingOverrides` holds an answer per document id, and
 `HeadingNumbers.Effective` combines the two: no entry means the preference stands, and an
 entry is a reader having decided about one document. The case it exists for is someone else's
 document that writes "1.2 Scope" into the heading text itself, where Marqora's numbers appear
-beside the author's and the two disagree from the first skipped section onward. *View, Section
-Numbers* (Alt+5) stands that one document down. It is a reading convenience rather than a
-preference, so nothing is written to disk and `RemoveTabAsync` drops it with the tab.
+beside the author's and the two disagree from the first skipped section onward. It is a
+reading convenience rather than a preference, so nothing is written to disk and
+`RemoveTabAsync` drops it with the tab.
+
+The override names a level rather than a yes or no, because the disagreement is usually about
+one level rather than about numbering at all: an author who started counting at `##` against a
+preference that starts at `#` is off by a component on every heading, and the repair is to move
+where the count starts. *View, Heading Numbers* is four rows — Off, and one per level — with
+Alt+Shift+1 to Alt+Shift+3 naming a level directly and Alt+5 toggling the numbers off and back
+on. Three levels and no more, mirroring the preference; Alt+Shift+4 keeps its older meaning of
+*go to the outline*, so the digit in one run is a heading level and the digit in the other is
+the fourth member of Alt+1 to Alt+4.
+
+Alt+5's *on* is the one part that needs state beyond the current answer. `DocumentNumbering`
+carries a `Chosen` level beside the `Current` one, set only when a reader names a level, so a
+document moved to `##` and then switched off returns to `##` rather than to the preference —
+`HeadingNumbers.SwitchedOn` holds that rule.
+
+With no `Chosen` level, *on* drops the dictionary entry rather than writing the preference's
+value into one. Those two are identical at the moment they happen and stop agreeing the next
+time the preference moves: copying would freeze the document at whatever the preference said
+during an off-and-on round trip, which is a document that has silently stopped following a
+setting nobody touched. Dropping it leaves the document where it began. The exception is a
+preference of `Off`, which names no level to rejoin, so `SwitchedOn` starts that document's
+count at the first heading and it is an override from then on.
 
 Everything flows from `RenderAsync` asking `NumberingFor(documentId)` instead of the
 preference, so the preview and the outline move together. The exports that take their markup

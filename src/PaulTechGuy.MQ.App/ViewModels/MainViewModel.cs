@@ -182,6 +182,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleHeadingNumbersCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SetHeadingNumbersCommand))]
     [NotifyPropertyChangedFor(nameof(CanFormat))]
     [NotifyPropertyChangedFor(nameof(CanUndo))]
     [NotifyPropertyChangedFor(nameof(CanRedo))]
@@ -339,15 +340,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public partial bool SpellCheckEnabled { get; set; }
 
     /// <summary>
-    /// Whether the document on screen is being numbered - the View menu's check mark.
+    /// How the document on screen is being numbered - which item the View menu's Heading
+    /// Numbers submenu has checked.
     ///
     /// The effective answer for this one document rather than the preference, so a tab whose
-    /// numbers have been switched off shows the item unchecked while the preference stays on.
-    /// Moved by <see cref="UpdateActiveDocumentState"/> as tabs are switched, because the menu
-    /// is global and this is not.
+    /// numbers have been switched off shows Off checked while the preference stays on. Moved
+    /// by <see cref="UpdateActiveDocumentState"/> as tabs are switched, because the menu is
+    /// global and this is not.
+    ///
+    /// A level rather than a yes or no, because the submenu has four rows and a bool could
+    /// only tell three of them apart. See <see cref="_numberingOverrides"/>.
     /// </summary>
     [ObservableProperty]
-    public partial bool HeadingNumbersEnabled { get; set; }
+    [NotifyPropertyChangedFor(nameof(IsHeadingNumbersOff))]
+    [NotifyPropertyChangedFor(nameof(IsHeadingNumbersFromHeading1))]
+    [NotifyPropertyChangedFor(nameof(IsHeadingNumbersFromHeading2))]
+    [NotifyPropertyChangedFor(nameof(IsHeadingNumbersFromHeading3))]
+    public partial HeadingNumbering ActiveHeadingNumbering { get; set; }
+
+    // One property per row of the submenu, as the Theme submenu above it does, because
+    // x:Bind takes a bool and the alternative is a converter that has to be told which
+    // member it is comparing against in markup.
+    public bool IsHeadingNumbersOff => ActiveHeadingNumbering == HeadingNumbering.Off;
+
+    public bool IsHeadingNumbersFromHeading1 => ActiveHeadingNumbering == HeadingNumbering.FromHeading1;
+
+    public bool IsHeadingNumbersFromHeading2 => ActiveHeadingNumbering == HeadingNumbering.FromHeading2;
+
+    public bool IsHeadingNumbersFromHeading3 => ActiveHeadingNumbering == HeadingNumbering.FromHeading3;
 
     // What the formatting toolbar shows. Each of these says what its button would *do*
     // rather than what the text *is* -- see MarkdownMarkState for why the distinction
@@ -3238,17 +3258,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private HeadingNumbering NumberingFor(Guid documentId) => HeadingNumbers.Effective(
         _settings.Current.HeadingNumbering,
-        _numberingOverrides.TryGetValue(documentId, out bool over) ? over : null);
+        _numberingOverrides.TryGetValue(documentId, out DocumentNumbering over) ? over.Current : null);
 
     /// <summary>
-    /// Points the View menu's check mark at whichever document is now in front.
+    /// The level this reader has named for one document, or null if they never have. Feeds
+    /// <see cref="HeadingNumbers.SwitchedOn"/>, which is what makes Alt+5 return a document to
+    /// the level it was on rather than to the preference.
+    /// </summary>
+    private HeadingNumbering? ChosenNumberingFor(Guid documentId) =>
+        _numberingOverrides.TryGetValue(documentId, out DocumentNumbering over) ? over.Chosen : null;
+
+    /// <summary>
+    /// Points the View menu's Heading Numbers submenu at whichever document is now in front.
     ///
     /// Two things move it: switching tabs, and the preference changing under a document that
     /// has no override of its own. Both end here rather than setting the property themselves,
-    /// so there is one answer to what the check mark means.
+    /// so there is one answer to what the checked row means.
     /// </summary>
-    private void RefreshHeadingNumbersState() => HeadingNumbersEnabled =
-        _workspace.Active is { } active && NumberingFor(active.Id) != HeadingNumbering.Off;
+    private void RefreshHeadingNumbersState() => ActiveHeadingNumbering =
+        _workspace.Active is { } active ? NumberingFor(active.Id) : HeadingNumbering.Off;
 
     /// <summary>
     /// Turns this document's heading numbers on or off, for as long as its tab is open.
@@ -3267,6 +3295,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Both ways, rather than a suppressor: with numbering off in preferences, this adds
     /// numbers to the document in front without turning them on for everything else.
     ///
+    /// Which level "on" means has three answers, in this order. The level the reader named for
+    /// this document, if they named one - that is what stops a document set to start at "##"
+    /// with Alt+Shift+2, looked at with the numbers off, and switched back on from silently
+    /// returning to "#". Failing that, the preference, by dropping the override entirely rather
+    /// than by copying today's value out of it: a document nobody has named a level for goes
+    /// back to following the preference, as it did before it was ever switched off, instead of
+    /// quietly freezing at whatever the preference happened to say during the round trip.
+    /// Failing both - a preference of Off, which names no level to rejoin -
+    /// <see cref="HeadingNumbers.SwitchedOn"/> starts the count at the first heading.
+    ///
     /// Only the document on screen, and only its own tab. The eleven other documents in the
     /// workspace are not what the reader is looking at, and the next document opened is a
     /// fresh question.
@@ -3279,10 +3317,95 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        bool numbered = !HeadingNumbersEnabled;
+        // Asked of the override rather than read off ActiveHeadingNumbering, which is a
+        // property the menu binds to and tab switching moves. The document is the thing being
+        // toggled, so the document is what decides which way.
+        if (NumberingFor(document.Id) != HeadingNumbering.Off)
+        {
+            await ApplyHeadingNumbersAsync(document, HeadingNumbering.Off, named: false).ConfigureAwait(true);
 
-        _numberingOverrides[document.Id] = numbered;
-        HeadingNumbersEnabled = numbered;
+            return;
+        }
+
+        HeadingNumbering preference = _settings.Current.HeadingNumbering;
+        HeadingNumbering? chosen = ChosenNumberingFor(document.Id);
+
+        // Null is "rejoin the preference", which is the second of the three answers above.
+        HeadingNumbering? level = chosen is null && preference != HeadingNumbering.Off
+            ? null
+            : HeadingNumbers.SwitchedOn(preference, chosen);
+
+        await ApplyHeadingNumbersAsync(document, level, named: false).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Numbers this document from the level named, for as long as its tab is open - the three
+    /// rows of the Heading Numbers submenu that are not Off, and Alt+Shift+1 to Alt+Shift+3.
+    ///
+    /// Alt+5 alone was not enough once a document arrived with its own numbers written into
+    /// the heading text. Standing Marqora's numbers down is only the right answer when nothing
+    /// lines up; far more often the author started counting at "##" and the preference starts
+    /// at "#", so the two disagree on every heading and the fix is to move where the count
+    /// starts rather than to stop counting. These keys are that move.
+    ///
+    /// The level is remembered as well as applied - see <see cref="DocumentNumbering"/> - so
+    /// Alt+5 afterwards toggles against it rather than against the preference.
+    ///
+    /// Takes the level as a string because XAML CommandParameter values arrive untyped, as
+    /// SetViewModeAsync does for the same reason.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnDocument))]
+    private async Task SetHeadingNumbersAsync(string? levelName)
+    {
+        if (!Enum.TryParse(levelName, ignoreCase: true, out HeadingNumbering level))
+        {
+            _logger.LogWarning("Ignoring unknown heading numbering level {Level}.", levelName);
+
+            return;
+        }
+
+        if (_workspace.Active is not { } document)
+        {
+            return;
+        }
+
+        await ApplyHeadingNumbersAsync(document, level, named: true).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Records what one document is numbered with, re-renders it, and says so.
+    /// </summary>
+    /// <param name="level">
+    /// The numbering this document is to carry, or null to drop the override so that it
+    /// follows the preference again - which is a state the three level keys can never ask for
+    /// and only Alt+5 reaches. See <see cref="ToggleHeadingNumbersAsync"/>.
+    /// </param>
+    /// <param name="named">
+    /// Whether the reader named this level, which decides if it is remembered as the one Alt+5
+    /// switches back on to. True for the level keys and the submenu's three level rows; false
+    /// for Alt+5 itself, whose "on" is a restoration of an earlier answer rather than a new
+    /// one. Off is never remembered either way - it is the state being toggled out of, so
+    /// remembering it would leave Alt+5 toggling Off against Off.
+    /// </param>
+    private async Task ApplyHeadingNumbersAsync(MarkdownDocument document, HeadingNumbering? level, bool named)
+    {
+        if (level is null)
+        {
+            _numberingOverrides.Remove(document.Id);
+        }
+        else
+        {
+            HeadingNumbering? chosen = named && level != HeadingNumbering.Off
+                ? level
+                : ChosenNumberingFor(document.Id);
+
+            _numberingOverrides[document.Id] = new DocumentNumbering(level.Value, chosen);
+        }
+
+        // Read back rather than assigned from the level above, because a null level is a
+        // removal and the answer is then the preference's rather than this method's.
+        HeadingNumbering applied = NumberingFor(document.Id);
+        ActiveHeadingNumbering = applied;
 
         if (_host is not null)
         {
@@ -3293,12 +3416,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         // Said out loud because the keyboard route has nothing else to show for itself: the
-        // View menu's check mark is the standing answer, and nobody who pressed Alt+5 is
+        // View menu's checked row is the standing answer, and nobody who pressed Alt+Shift+2 is
         // looking at it. A document with no headings is the case this saves - the key would
-        // otherwise appear to have done nothing at all.
-        StatusText = numbered
-            ? "Heading numbers on for this document"
-            : "Heading numbers off for this document";
+        // otherwise appear to have done nothing at all. The level is named rather than implied,
+        // because with three keys next to each other "on" no longer says which one landed.
+        StatusText = applied switch
+        {
+            HeadingNumbering.Off => "Heading numbers off for this document",
+            _ => $"Heading numbers from heading {(int)applied} for this document",
+        };
 
         RestoreDocumentFocusAfterChrome();
     }
@@ -7308,7 +7434,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// author's, and turning them on does not write Marqora's into the file - the numbers live
     /// in the rendered copy, which is what makes a per-document answer safe to offer at all.
     /// </summary>
-    private readonly Dictionary<Guid, bool> _numberingOverrides = [];
+    private readonly Dictionary<Guid, DocumentNumbering> _numberingOverrides = [];
+
+    /// <summary>
+    /// One entry in <see cref="_numberingOverrides"/>: what a document is numbered with now,
+    /// and what it goes back to when switched on again.
+    /// </summary>
+    /// <param name="Current">
+    /// The numbering this document is rendered with, <see cref="HeadingNumbering.Off"/>
+    /// included. This is the whole of the override - the preference is not consulted once an
+    /// entry exists.
+    /// </param>
+    /// <param name="Chosen">
+    /// The level this reader last named for this document with Alt+Shift+1 to Alt+Shift+3, or
+    /// null if they never named one. Kept beside <paramref name="Current"/> rather than being
+    /// the same field because it has to survive an Off: the point of it is that Alt+5 puts the
+    /// document back where the reader had it, and Off is exactly when there is no level in
+    /// <paramref name="Current"/> left to read that from.
+    ///
+    /// Null means "no answer of their own", which <see cref="HeadingNumbers.SwitchedOn"/>
+    /// resolves to the preference. That keeps a document switched off and on without ever
+    /// naming a level following the preference afterwards, as it did before these keys
+    /// existed.
+    /// </param>
+    private readonly record struct DocumentNumbering(HeadingNumbering Current, HeadingNumbering? Chosen);
 
     /// <summary>
     /// The headings the panel is currently showing, after filtering.
@@ -8174,6 +8323,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 case "toggleHeadingNumbers" when ToggleHeadingNumbersCommand.CanExecute(null):
                     await ToggleHeadingNumbersCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                // "headingNumbers.FromHeading2" and its two neighbours. Dotted as the tab
+                // commands above are, because the level is a value the shell is passing rather
+                // than three commands that happen to look alike; the name after the dot is the
+                // enum member, so the parse on the other side is the mapping.
+                case not null when command.StartsWith("headingNumbers.", StringComparison.Ordinal)
+                    && SetHeadingNumbersCommand.CanExecute(null):
+                    await SetHeadingNumbersCommand
+                        .ExecuteAsync(command["headingNumbers.".Length..])
+                        .ConfigureAwait(true);
                     break;
 
                 case "formatDocument" when FormatDocumentCommand.CanExecute(null):
