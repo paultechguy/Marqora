@@ -7,6 +7,7 @@ using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Markdown;
 using MarkdigDocument = Markdig.Syntax.MarkdownDocument;
 
 namespace PaulTechGuy.MQ.Rendering;
@@ -44,7 +45,7 @@ internal static class MarkdownHeadingReader
                 // GitHubHeadingSlug.FixIdentifiers has already assigned an id to every heading
                 // that needed one; the fallback is only for a heading it would also skip - see
                 // there - so anchors still work rather than the outline entry losing its link.
-                Slug = heading.GetAttributes().Id ?? GitHubHeadingSlug.Slugify(text),
+                Slug = heading.GetAttributes().Id ?? GitHubSlug.Slugify(text),
                 SourceLine = heading.Line,
                 Number = numbers is not null && numbers.TryGetValue(heading, out string? number)
                     ? number

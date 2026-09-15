@@ -594,6 +594,27 @@
                                             Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                             CommandParameter="HeadingDecrease"
                                             KeyboardAcceleratorTextOverride="Ctrl+Shift+[" />
+
+                            <MenuFlyoutSeparator />
+
+                            <!--
+                                These two write into the markdown; View > Heading Numbers only
+                                changes what is shown. They live here rather than beside that
+                                submenu precisely so the two are not mistaken for each other -
+                                this menu is where a command that rewrites the document belongs,
+                                and the Heading submenu already collects the heading ones.
+
+                                The reason to want them at all is markdown that leaves Marqora:
+                                the preview, the exports and the printed page are numbered
+                                already, and a pull request or a wiki will not be.
+                            -->
+                            <MenuFlyoutItem Text="Number Headings..."
+                                            Command="{x:Bind ViewModel.NumberHeadingsCommand}"
+                                            ToolTipService.ToolTip="Write section numbers into the markdown itself, so they travel with the text" />
+
+                            <MenuFlyoutItem Text="Remove Heading Numbers"
+                                            Command="{x:Bind ViewModel.RemoveHeadingNumbersCommand}"
+                                            ToolTipService.ToolTip="Take the author's hard-coded section numbers out of the heading text" />
                         </MenuFlyoutSubItem>
 
                         <MenuFlyoutSeparator />

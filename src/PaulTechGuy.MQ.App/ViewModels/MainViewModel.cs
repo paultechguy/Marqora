@@ -18,6 +18,7 @@ using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Finding;
 using PaulTechGuy.MQ.Folio;
+using PaulTechGuy.MQ.Formatting;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -2527,6 +2528,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             switch (e.Change)
             {
                 case WorkspaceChange.Opened when e.Document is { } opened:
+
+                    // Before the tab is added, because adding it renders: a document that
+                    // numbers its own headings has to arrive already standing Marqora's numbers
+                    // down, or the first frame the reader sees is "1  1.2  Scope".
+                    ApplyDocumentNumberingDefault(opened, reloaded: false);
+
                     await AddTabAsync(opened).ConfigureAwait(true);
                     break;
 
@@ -2631,6 +2638,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                     FindTab(reloaded.Id)?.Update(reloaded);
                     UpdateActiveDocumentState();
+
+                    // The file is not the one that was read a moment ago, so whether it numbers
+                    // its own headings is asked again - unless the reader has since answered it
+                    // themselves, in which case their answer stands.
+                    ApplyDocumentNumberingDefault(reloaded, reloaded: true);
 
                     if (_host is not null)
                     {
@@ -3427,6 +3439,311 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         };
 
         RestoreDocumentFocusAfterChrome();
+    }
+
+    // ------------------------------------------- heading numbers in the document
+
+    /*
+        The two commands below are the other half of the submenu above, and the difference
+        between them and it is the whole point: everything above changes what is shown, and
+        these two change the file.
+
+        Marqora numbers the preview, the PDF, the HTML export, the printed page and the rich
+        text on the clipboard already, so nothing the app produces needs this. What needs it is
+        markdown that leaves Marqora - into a pull request, a wiki, an issue, an email - where
+        the source text is the whole artifact and nothing will number it on the way.
+
+        Both run through HeadingNumberDetector, so "which of these leading numbers is section
+        numbering" is answered once and the same way for the preview's open-time check, the
+        removal summary and the rewrite itself.
+    */
+
+    /// <summary>
+    /// Writes this document's section numbers into its markdown, replacing any it already has.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    private async Task NumberHeadingsAsync()
+    {
+        if (_workspace.Active is not { } document || _host is null)
+        {
+            return;
+        }
+
+        HeadingNumberDetector.Scan scan = HeadingNumberRewriter.Read(document.Text);
+
+        if (scan.Headings.Count == 0)
+        {
+            StatusText = "Nothing to number: this document has no headings";
+
+            return;
+        }
+
+        // An empty heading keeps its place in the count but never receives a number, so it is
+        // left out of the total the dialog quotes as well.
+        int[] levels = [.. scan.Headings.Where(h => h.Text.Length > 0).Select(h => h.Level)];
+
+        // Where to start, in the order the answers are worth having: what this document is
+        // showing right now, then what it already numbers itself with, then the first level.
+        // The first of those is what makes the command mean "make the numbers I am looking at
+        // real" rather than asking a question the reader already answered with Alt+Shift+2.
+        HeadingNumbering suggested = NumberingFor(document.Id);
+
+        if (suggested == HeadingNumbering.Off)
+        {
+            suggested = scan.IsNumbered ? scan.StartLevel : HeadingNumbering.FromHeading1;
+        }
+
+        HeadingNumberChoice? chosen = await _formatDialogs
+            .RequestHeadingNumbersAsync(
+                suggested, _settings.Current.HeadingNumberStyle, levels, scan.IsNumbered)
+            .ConfigureAwait(true);
+
+        if (chosen is not { } choice)
+        {
+            return;
+        }
+
+        _settings.Update(s => s with { HeadingNumberStyle = choice.Style });
+
+        HeadingNumberRewriter.Result result =
+            HeadingNumberRewriter.Apply(document.Text, choice.Start, choice.Style);
+
+        if (result.IsUnchanged)
+        {
+            StatusText = "Nothing to change: these headings already carry those numbers";
+
+            return;
+        }
+
+        // Stood down before the render rather than after it, or the first frame shows Marqora's
+        // numbers beside the ones just written into the text. The reader's own level, if they
+        // ever named one, is kept so Alt+5 still has somewhere to go back to.
+        _numberingOverrides[document.Id] = new DocumentNumbering(
+            HeadingNumbering.Off, ChosenNumberingFor(document.Id), Automatic: true);
+
+        ActiveHeadingNumbering = HeadingNumbering.Off;
+
+        if (!await ApplyHeadingRewriteAsync(document.Id, result).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        StatusText = RewriteStatus(
+            result.Changed == 1 ? "Numbered 1 heading" : $"Numbered {result.Changed} headings",
+            result);
+    }
+
+    /// <summary>
+    /// Takes the author's hard-coded section numbers out of the heading text.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    private async Task RemoveHeadingNumbersAsync()
+    {
+        if (_workspace.Active is not { } document || _host is null)
+        {
+            return;
+        }
+
+        HeadingNumberDetector.Scan scan = HeadingNumberRewriter.Read(document.Text);
+
+        if (!scan.IsNumbered)
+        {
+            // Said plainly, because the other reading of a command that does nothing is that it
+            // is broken. A document whose headings merely open with digits lands here.
+            StatusText = "Nothing to remove: this document does not number its own headings";
+
+            return;
+        }
+
+        // Destructive, so Cancel takes the Enter key: this rewrites heading text the user did
+        // not write, and a document whose numbering was recognized wrongly loses words rather
+        // than numbers. Ctrl+Z is the safety net, but it is a worse one than not doing it.
+        ConfirmResult answer = await _dialogs.ConfirmAsync(
+            "Remove heading numbers?",
+            RemovalSummary(scan),
+            "Remove",
+            destructivePrimary: true).ConfigureAwait(true);
+
+        if (answer != ConfirmResult.Primary)
+        {
+            return;
+        }
+
+        HeadingNumberRewriter.Result result = HeadingNumberRewriter.Remove(document.Text);
+
+        if (result.IsUnchanged)
+        {
+            StatusText = "Nothing to change: these headings carry no numbers";
+
+            return;
+        }
+
+        // The author's numbers are gone, so Marqora's can take the job back: the entry is
+        // dropped rather than set, which returns the document to the preference. Dropping it is
+        // not the same as writing the preference's value into it - see HeadingNumbers.Effective.
+        _numberingOverrides.Remove(document.Id);
+        RefreshHeadingNumbersState();
+
+        if (!await ApplyHeadingRewriteAsync(document.Id, result).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        StatusText = RewriteStatus(
+            result.Changed == 1
+                ? "Removed the number from 1 heading"
+                : $"Removed the numbers from {result.Changed} headings",
+            result);
+    }
+
+    /// <summary>
+    /// One line about what a heading rewrite did, including the links it moved and the ones it
+    /// deliberately would not guess at.
+    ///
+    /// The uncertain count is said out loud rather than swallowed. A heading carrying a link or
+    /// its own emphasis has an anchor the rewriter cannot work out from the source text, so
+    /// anything pointing at it was left alone - and a reader who is not told that has no reason
+    /// to look.
+    /// </summary>
+    private static string RewriteStatus(string done, HeadingNumberRewriter.Result result)
+    {
+        string moved = result.LinksMoved switch
+        {
+            0 => string.Empty,
+            1 => " and moved 1 link",
+            _ => $" and moved {result.LinksMoved} links",
+        };
+
+        string check = result.UncertainHeadings switch
+        {
+            0 => string.Empty,
+            1 => " One heading carries a link or formatting of its own, so check anything that "
+                + "points at it.",
+            _ => $" {result.UncertainHeadings} headings carry links or formatting of their own, "
+                + "so check anything that points at them.",
+        };
+
+        return $"{done}{moved}.{check} Ctrl+Z undoes it";
+    }
+
+    /// <summary>
+    /// What the removal is about to do, in the words of the document itself.
+    ///
+    /// Three examples rather than a list: the point is to show that the right thing was
+    /// recognized, which three lines do as well as forty. The headings left alone are counted
+    /// rather than shown, because they are the ones nothing happens to.
+    /// </summary>
+    private static string RemovalSummary(HeadingNumberDetector.Scan scan)
+    {
+        string[] examples =
+        [
+            .. scan.Headings
+                .Where((_, i) => scan.Numbered[i])
+                .Take(3)
+                .Select(h => $"    “{h.Text}”  →  “{h.Title}”"),
+        ];
+
+        int numbered = scan.NumberedCount;
+        int untouched = scan.Headings.Count - numbered;
+
+        string headline = numbered == scan.Headings.Count
+            ? $"All {numbered} headings will change:"
+            : $"{numbered} of {scan.Headings.Count} headings will change:";
+
+        string kept = untouched switch
+        {
+            0 => string.Empty,
+            1 => "\n\n1 heading keeps what it has: its leading number is not the one the count "
+                + "would have given it, so it is a year or a quantity rather than a section number.",
+            _ => $"\n\n{untouched} headings keep what they have: their leading numbers are not the "
+                + "ones the count would have given them, so they are years or quantities rather "
+                + "than section numbers.",
+        };
+
+        // Said in the same words as the numbering dialog, deliberately. The two commands are
+        // inverses and carry exactly the same risk to anything linking in from outside: one
+        // turns "#scope" into "#1--scope" and the other turns it back.
+        return $"{headline}\n\n{string.Join('\n', examples)}{kept}\n\n"
+            + "Removing a number changes the anchor that heading answers to. Links inside this "
+            + "document are moved to match, but a link from anywhere else - another document, a "
+            + "wiki page, a bookmark - still points at the old anchor and will stop resolving.\n\n"
+            + "Ctrl+Z takes the whole thing back in one step.";
+    }
+
+    /// <summary>
+    /// Pushes a rewritten document into the editor, the way a reformat does.
+    /// </summary>
+    /// <returns>False when something went wrong and the document was left alone.</returns>
+    private async Task<bool> ApplyHeadingRewriteAsync(Guid documentId, HeadingNumberRewriter.Result result)
+    {
+        if (_host is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _workspace.ApplyEdit(documentId, result.Text);
+
+            RenderedMarkdown rendered = await RenderAsync(documentId, result.Text).ConfigureAwait(true);
+            await _host.ReplaceTextAsync(documentId, result.Text, rendered).ConfigureAwait(true);
+
+            await PublishChecksAsync(
+                documentId, result.Text, _workspace.Find(documentId)?.Path, rendered).ConfigureAwait(true);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Same promise the formatter makes: a fault in here must never cost the user their
+            // document.
+            _logger.LogError(ex, "Rewriting heading numbers failed; the document was left unchanged.");
+
+            await _dialogs.ShowMessageAsync(
+                "Could not change the heading numbers",
+                "Something went wrong, so the document was left alone.").ConfigureAwait(true);
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Stands Marqora's numbering down for a document that numbers its own headings.
+    ///
+    /// Runs when a document is opened and when one is replaced from disk, and at no other time.
+    /// Not on a keystroke, deliberately: a reader halfway through typing "# 1" has not turned
+    /// their document into a numbered one, and numbering that flickered while they typed would
+    /// be worse than the problem this solves.
+    ///
+    /// Never overrules a reader. An entry they made is left exactly as it is, which is what
+    /// keeps View, Heading Numbers the last word on any document they disagree about.
+    /// </summary>
+    private void ApplyDocumentNumberingDefault(MarkdownDocument document, bool reloaded)
+    {
+        if (!_settings.Current.NumberingDefersToDocument)
+        {
+            return;
+        }
+
+        if (_numberingOverrides.TryGetValue(document.Id, out DocumentNumbering existing))
+        {
+            // A reader's answer stands. The app's own answer was a reading of content that has
+            // just been replaced, so on a reload it is dropped and taken again.
+            if (!existing.Automatic || !reloaded)
+            {
+                return;
+            }
+
+            _numberingOverrides.Remove(document.Id);
+        }
+
+        if (!HeadingNumberRewriter.Read(document.Text).IsNumbered)
+        {
+            return;
+        }
+
+        _numberingOverrides[document.Id] =
+            new DocumentNumbering(HeadingNumbering.Off, Chosen: null, Automatic: true);
     }
 
     [RelayCommand]
@@ -7457,7 +7774,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// naming a level following the preference afterwards, as it did before these keys
     /// existed.
     /// </param>
-    private readonly record struct DocumentNumbering(HeadingNumbering Current, HeadingNumbering? Chosen);
+    /// <param name="Automatic">
+    /// True when the app set this entry rather than the reader — which today means the
+    /// open-time check found a document numbering its own headings and stood Marqora's numbers
+    /// down. It decides one thing: whether a later reload from disk may reconsider.
+    ///
+    /// A reader's answer is never reconsidered, because they made it about this document and a
+    /// file changing underneath them is not them changing their mind. The app's own answer is,
+    /// because it was a reading of content that has just been replaced.
+    /// </param>
+    private readonly record struct DocumentNumbering(
+        HeadingNumbering Current,
+        HeadingNumbering? Chosen,
+        bool Automatic = false);
 
     /// <summary>
     /// The headings the panel is currently showing, after filtering.

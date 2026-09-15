@@ -13,6 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+
+    <!-- For GitHubSlug: the anchor rule, shared with the heading rewriter that moves links. -->
+    <ProjectReference Include="..\PaulTechGuy.MQ.Markdown\PaulTechGuy.MQ.Markdown.csproj" />
   </ItemGroup>
 
   <ItemGroup>

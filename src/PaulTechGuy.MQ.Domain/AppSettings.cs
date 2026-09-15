@@ -443,6 +443,40 @@ public sealed record AppSettings
     public HeadingNumbering HeadingNumbering { get; set; }
 
     /// <summary>
+    /// What <c>Number Headings</c> writes between a number and the words after it.
+    ///
+    /// Unlike <see cref="HeadingNumbering"/> this one does reach the document, because that
+    /// command writes real text into the markdown. Member zero is two spaces, which is what the
+    /// preview inserts, so a document numbered by the command reads the way the screen did.
+    ///
+    /// The level to count from is deliberately not stored beside it. The dialog starts from
+    /// whatever the document in front of the user is showing, which is a better answer than any
+    /// remembered one — and a remembered level would quietly fight it.
+    /// </summary>
+    public HeadingNumberStyle HeadingNumberStyle { get; set; }
+
+    /// <summary>
+    /// Whether opening a document that already numbers its own headings turns Marqora's
+    /// numbering off for it.
+    ///
+    /// On by default. Without it a document carrying "1.2 Scope" in its heading text is rendered
+    /// with Marqora's numbers beside the author's, and the reader meets "1  1.2  Scope" before
+    /// finding Alt+5. Nothing is written to disk either way: this only sets the per-document
+    /// override the reader could have set themselves, and View, Heading Numbers still overrules
+    /// it for any document they disagree about.
+    ///
+    /// Stored nullable so a settings file written before this existed is not read as a decision
+    /// to switch it off; read it through <see cref="NumberingDefersToDocument"/>.
+    /// </summary>
+    public bool? DeferToDocumentNumbering { get; set; }
+
+    /// <summary>
+    /// <see cref="DeferToDocumentNumbering"/> with its default applied. Read this rather than
+    /// the stored property.
+    /// </summary>
+    public bool NumberingDefersToDocument => DeferToDocumentNumbering ?? true;
+
+    /// <summary>
     /// Whether double-clicking a diagram in the preview opens its window maximized, with the
     /// diagram fitted to it.
     ///

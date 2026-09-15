@@ -14,6 +14,13 @@
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+
+    <!--
+      For HeadingScanner and the protected-line scan under it. The heading rewriter must skip
+      fences and front matter exactly as the formatter's own line classifier does, and the
+      foundation project is where that knowledge already lives in read-only form.
+    -->
+    <ProjectReference Include="..\PaulTechGuy.MQ.Markdown\PaulTechGuy.MQ.Markdown.csproj" />
   </ItemGroup>
 
   <ItemGroup>

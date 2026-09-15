@@ -38,4 +38,32 @@ public sealed class FormatDialogService(WindowContext window, ILogger<FormatDial
             return null;
         }
     }
+
+    public async Task<HeadingNumberChoice?> RequestHeadingNumbersAsync(
+        HeadingNumbering suggested,
+        HeadingNumberStyle style,
+        IReadOnlyList<int> headingLevels,
+        bool renumbering,
+        CancellationToken cancellationToken = default)
+    {
+        if (window.XamlRoot is null)
+        {
+            logger.LogWarning("Cannot show the heading numbering dialog: no window is available yet.");
+            return null;
+        }
+
+        try
+        {
+            var dialog = new HeadingNumberDialog(suggested, style, headingLevels, renumbering).AnchorTo(window.Root);
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary
+                ? new HeadingNumberChoice(dialog.Start, dialog.NumberStyle)
+                : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The heading numbering dialog failed.");
+            return null;
+        }
+    }
 }

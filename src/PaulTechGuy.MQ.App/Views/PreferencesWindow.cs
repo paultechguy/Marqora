@@ -199,6 +199,8 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _maximizeDiagrams;
     private readonly ComboBox _headingNumbers;
 
+    private readonly CheckBox _deferToDocumentNumbering;
+
     private readonly CheckBox _showOutline;
 
     private readonly ComboBox _outlineDepth;
@@ -439,6 +441,11 @@ internal sealed class PreferencesWindow : PaletteWindow
             {
                 HeadingNumbering = (HeadingNumbering)Math.Max(0, _headingNumbers.SelectedIndex),
             }));
+
+        _deferToDocumentNumbering = BuildCheck("Stand down for documents that number themselves");
+        Bind(
+            _deferToDocumentNumbering,
+            v => _vm.UpdateAsync(s => s with { DeferToDocumentNumbering = v }));
 
         // -------------------------------------------------------------------- files
         _startup = BuildCombo(
@@ -1144,6 +1151,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("HEADING NUMBERS"));
         panel.Children.Add(Field("Number headings", _headingNumbers));
+        panel.Children.Add(_deferToDocumentNumbering);
 
         panel.Children.Add(Note(
             "Numbers are added to the preview and the outline, and never written into your "
@@ -1153,7 +1161,14 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "A heading above that level is left unnumbered but still starts a new section, "
             + "so its sub-headings begin again at one. A document that skips a level - a "
             + "\"###\" directly under a \"#\" - is numbered by what is actually there rather "
-            + "than being given a zero for the level it left out."));
+            + "than being given a zero for the level it left out.\n\n"
+            + "Standing down applies to a document whose author wrote the numbers into the "
+            + "heading text themselves, where showing Marqora's as well reads as \"1  1.2  "
+            + "Scope\". It is a reading decision and nothing is saved: View → Heading "
+            + "Numbers turns them back on for any document you disagree about.\n\n"
+            + "To write numbers into the markdown itself - for text going somewhere that will "
+            + "not number it, such as a pull request or a wiki - use Format → Heading → "
+            + "Number Headings. That one does change the file, and Ctrl+Z takes it back."));
 
         return panel;
     }
@@ -1767,6 +1782,7 @@ internal sealed class PreferencesWindow : PaletteWindow
                 Math.Clamp(s.OutlineMaxDepth, 0, MainViewModel.MaximumHeadingLevel);
 
             _headingNumbers.SelectedIndex = (int)s.HeadingNumbering;
+            _deferToDocumentNumbering.IsChecked = s.NumberingDefersToDocument;
 
             _startup.SelectedIndex = (int)s.Startup;
             _reloadOnChange.IsChecked = s.ReloadOnExternalChange;

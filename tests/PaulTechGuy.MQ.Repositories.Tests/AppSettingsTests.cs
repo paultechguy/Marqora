@@ -151,6 +151,17 @@ public sealed class AppSettingsTests : IDisposable
         settings.PdfSetup.ShouldBeNull();
         settings.PdfDefaults.ShouldBe(PdfPageSetup.Default);
 
+        // The exception to "nothing arrives switched on", and it earns it by changing nothing
+        // outside the preview: standing Marqora's numbering down for a document that numbers
+        // its own headings is a reading decision, is never written to disk, and is one Alt+5
+        // from being undone. Left off, the reader meets "1  1.2  Scope" instead.
+        settings.DeferToDocumentNumbering.ShouldBeNull();
+        settings.NumberingDefersToDocument.ShouldBeTrue();
+
+        // Two spaces, which is what the preview inserts, so numbering a document produces a
+        // file that reads the way the screen did a moment earlier.
+        settings.HeadingNumberStyle.ShouldBe(HeadingNumberStyle.TwoSpaces);
+
         // The Word setup arrived later still, and starts from the PDF one so that somebody
         // who already works in A4 does not have to say so twice. A file written before Word
         // export existed has neither key, and must still answer with Letter rather than with
