@@ -88,4 +88,56 @@ public class HeadingNumbersTests
         Number(HeadingNumbering.FromHeading1, 1, 2, 3, 4, 5, 6)
             .ShouldBe(["1", "1.1", "1.1.1", "1.1.1.1", "1.1.1.1.1", "1.1.1.1.1.1"]);
     }
+
+    /// <summary>
+    /// What one document is numbered with, which is the preference until a reader says
+    /// otherwise about that document. The View menu's Heading Numbers item is this rule, and
+    /// so is what a Word export or a Folio writes for that document.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.Off)]
+    [InlineData(HeadingNumbering.FromHeading1)]
+    [InlineData(HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading3)]
+    public void A_document_nobody_has_spoken_for_follows_the_preference(HeadingNumbering preference)
+    {
+        HeadingNumbers.Effective(preference, null).ShouldBe(preference);
+    }
+
+    /// <summary>
+    /// The case the whole thing exists for: someone else's document that writes its own
+    /// section numbers into the heading text, read with the preference left switched on for
+    /// every other document.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.FromHeading1)]
+    [InlineData(HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading3)]
+    public void A_document_stood_down_is_not_numbered_whatever_the_preference(HeadingNumbering preference)
+    {
+        HeadingNumbers.Effective(preference, false).ShouldBe(HeadingNumbering.Off);
+    }
+
+    /// <summary>
+    /// Switched on for one document, it numbers from wherever the preference starts - so the
+    /// document reads like every other one in the app rather than like a third setting.
+    /// </summary>
+    [Theory]
+    [InlineData(HeadingNumbering.FromHeading1)]
+    [InlineData(HeadingNumbering.FromHeading2)]
+    [InlineData(HeadingNumbering.FromHeading3)]
+    public void A_document_switched_on_borrows_the_level_from_the_preference(HeadingNumbering preference)
+    {
+        HeadingNumbers.Effective(preference, true).ShouldBe(preference);
+    }
+
+    /// <summary>
+    /// The one level that cannot be borrowed. Off names no level, and a reader asking for
+    /// numbers has to be given some, so the count starts at the first heading.
+    /// </summary>
+    [Fact]
+    public void Switched_on_against_a_preference_of_off_numbers_from_the_first_level()
+    {
+        HeadingNumbers.Effective(HeadingNumbering.Off, true).ShouldBe(HeadingNumbering.FromHeading1);
+    }
 }

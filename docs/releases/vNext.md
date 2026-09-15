@@ -85,7 +85,7 @@ at the new size rather than stretched. `Fit to Window` in the diagram menu follo
 Right-clicking a diagram in the preview pane now offers `Open in Window` and `Open Maximized`
 alongside the two copy items. Neither reads the preference: each does what it says.
 
-## Numbered headings in the outline
+## Heading numbers in the outline
 
 With **Number headings** on, the outline panel (`View > Outline`, `Alt+4`) now shows the same
 numbers the preview does, dimmed ahead of each heading — so a section reading `2.3` on the page
@@ -104,6 +104,31 @@ is the preview's rather than the document's. Copying a row with `Ctrl+C` brings 
 with the heading.
 
 As before, none of this is written into your markdown.
+
+## Heading numbers, for one document only
+
+Somebody else's document often numbers its own headings — `## 1.2 Scope`, typed into the text.
+Open it with **Number headings** on and you are reading two sets of numbers at once, and they
+stop agreeing the moment the author skips a section or starts somewhere other than one.
+
+**`View > Heading Numbers` (`Alt+5`)** settles it for that document alone. The preview and the
+outline drop Marqora's numbers and leave the author's, every other tab carries on numbered, and
+the preference is not touched. The status bar says which way it went, because the shortcut is
+worth pressing without opening the menu to check. The menu's check mark describes whichever
+document is in front, so it moves as you switch tabs.
+
+It works the other way too. With **Number headings** off, `Alt+5` numbers just the document you
+are reading, from its top-level headings down — useful for a long document that arrived with
+none.
+
+This is a reading convenience rather than a setting, and it lasts as long as the tab does:
+close it and the document follows the preference again, because the next document you open from
+that folder is a different question. Nothing about it is written to disk — not into your
+markdown, which keeps the author's numbering exactly as it was, and not into your preferences.
+
+What you see is what you export. An HTML file, a PDF, a printed page, rich text on the
+clipboard, a Word document and a Folio all carry whatever the tab was showing. A Folio settles
+it per document, so one contributor's self-numbered chapter does not unnumber the other eleven.
 
 ## Fixes
 

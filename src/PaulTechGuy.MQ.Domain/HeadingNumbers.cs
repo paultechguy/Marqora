@@ -25,6 +25,32 @@ public static class HeadingNumbers
     private const int MaxLevel = 6;
 
     /// <summary>
+    /// What one document is actually numbered with, given the preference and whatever the
+    /// reader has said about this document in particular.
+    ///
+    /// <paramref name="documentOverride"/> is null for a document nobody has spoken for,
+    /// which is nearly all of them: the preference stands. True and false are a reader having
+    /// decided, for this one document, that it should or should not carry numbers. A document
+    /// that writes its own section numbers into its heading text is the case this exists for,
+    /// where Marqora's numbers and the author's are both shown and disagree.
+    ///
+    /// An override that turns numbering on borrows the level from the preference rather than
+    /// freezing one, so a document switched on reads like every other document in the app and
+    /// follows if the preference later starts at a different level. There is one level it
+    /// cannot borrow: <see cref="HeadingNumbering.Off"/> names no level at all, so a reader
+    /// asking for numbers while the preference is off gets them from the first heading down,
+    /// which is what "number this" means with nothing else to go on.
+    /// </summary>
+    public static HeadingNumbering Effective(HeadingNumbering preference, bool? documentOverride) =>
+        documentOverride switch
+        {
+            null => preference,
+            false => HeadingNumbering.Off,
+            true when preference == HeadingNumbering.Off => HeadingNumbering.FromHeading1,
+            true => preference,
+        };
+
+    /// <summary>
     /// The number for each heading, in the order the levels were given. A heading that is
     /// not numbered - because numbering is off, or because it sits above the level the count
     /// starts at - gets an empty string rather than a gap, so the result stays index-for-index

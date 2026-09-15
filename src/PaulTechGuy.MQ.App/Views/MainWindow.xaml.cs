@@ -532,6 +532,12 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.Number4, alt, () => ViewModel.ToggleOutlineCommand.Execute(null));
         Add(VirtualKey.Number4, alt | VirtualKeyModifiers.Shift, () => ViewModel.FocusOutlineCommand.Execute(null));
 
+        // Alt+5 continues the run for the same reason Alt+4 joined it: the heading numbers are
+        // shown in the preview and in the outline, which are the two things Alt+1 to Alt+4
+        // govern. The webshell carries this one too - a reader toggling it is usually reading,
+        // but the caret is in Monaco either way and this accelerator never sees the key then.
+        Add(VirtualKey.Number5, alt, () => ViewModel.ToggleHeadingNumbersCommand.Execute(null));
+
         Add(VirtualKey.Z, alt, () => ViewModel.ToggleWordWrapCommand.Execute(null));
 
         // F7 is the spell-check key everywhere else - Word, LibreOffice - so it needs no

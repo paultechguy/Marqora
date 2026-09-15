@@ -181,6 +181,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleHeadingNumbersCommand))]
     [NotifyPropertyChangedFor(nameof(CanFormat))]
     [NotifyPropertyChangedFor(nameof(CanUndo))]
     [NotifyPropertyChangedFor(nameof(CanRedo))]
@@ -336,6 +337,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     public partial bool SpellCheckEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the document on screen is being numbered - the View menu's check mark.
+    ///
+    /// The effective answer for this one document rather than the preference, so a tab whose
+    /// numbers have been switched off shows the item unchecked while the preference stays on.
+    /// Moved by <see cref="UpdateActiveDocumentState"/> as tabs are switched, because the menu
+    /// is global and this is not.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HeadingNumbersEnabled { get; set; }
 
     // What the formatting toolbar shows. Each of these says what its button would *do*
     // rather than what the text *is* -- see MarkdownMarkState for why the distinction
@@ -616,10 +628,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         DocumentName = string.Empty;
         DocumentPath = string.Empty;
-
-        // What the first render will use, so that opening Preferences and changing something
-        // else does not look like the numbering changed.
-        _renderedHeadingNumbering = settings.Current.HeadingNumbering;
 
         // Starts true, and the shell corrects it the moment the window is first activated.
         // The optimistic default is the safe one: an offered command that reports an empty
@@ -2682,6 +2690,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // closed document's outline alive for as long as the app ran.
         _outlines.Remove(id);
 
+        // And so is anything said about how it was numbered. The override is a reading
+        // convenience for one sitting with one document - see _numberingOverrides - so
+        // closing the tab is where it ends; a new tab for the same file starts from the
+        // preference, as every other document does.
+        _numberingOverrides.Remove(id);
+        _renderedNumbering.Remove(id);
+
         if (FindTab(id) is { } tab)
         {
             _isSyncingTabs = true;
@@ -2845,6 +2860,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The menu is global and the count is per document, so switching tab has to move it.
         RefreshBlockedImagesMenuText();
+
+        // The same is true of the numbering check mark, for the same reason: a tab that has
+        // been stood down must not leave the menu claiming the tab beside it is numbered too.
+        RefreshHeadingNumbersState();
 
         // Whitespace-only counts as empty: there is nothing to export, format or search for
         // in a file of blank lines, and offering those commands only invites a no-op.
@@ -3152,7 +3171,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             await _host.ApplyPreferencesAsync(PreviewPreferences.FromSettings(current))
                 .ConfigureAwait(true);
 
-            await ReapplyHeadingNumberingAsync(current.HeadingNumbering).ConfigureAwait(true);
+            // Before the re-render rather than after it: the menu is describing a preference
+            // that has already changed, and a long document must not leave it saying otherwise
+            // while the pages are rebuilt.
+            RefreshHeadingNumbersState();
+
+            await ReapplyHeadingNumberingAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -3174,28 +3198,109 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// was last sent and redraws from it when it is shown, so leaving the others alone would
     /// mean a tab that quietly disagreed with the preference until it was next typed in.
     ///
-    /// Guarded on the value having actually changed. The Preferences window applies live and
-    /// calls in whenever any preference moves, and re-rendering every open document because
-    /// someone chose a font would be a poor way to spend a large document.
+    /// Guarded per document on the value having actually changed. The Preferences window
+    /// applies live and calls in whenever any preference moves, and re-rendering every open
+    /// document because someone chose a font would be a poor way to spend a large document.
+    /// A document whose numbers a reader has switched off is guarded by the same comparison
+    /// rather than a check of its own: its effective numbering did not move, so it is passed
+    /// over and keeps what it was given.
     /// </summary>
-    private async Task ReapplyHeadingNumberingAsync(HeadingNumbering numbering)
+    private async Task ReapplyHeadingNumberingAsync()
     {
-        if (_host is null || numbering == _renderedHeadingNumbering)
+        if (_host is null)
         {
             return;
         }
 
-        _renderedHeadingNumbering = numbering;
-
         // A snapshot: each render below yields, and a tab closed in the meantime would
         // otherwise be walked into.
         foreach (MarkdownDocument document in _workspace.Documents.ToList())
+        {
+            // No entry means the document has never been rendered, and its first render will
+            // read whatever is current then. Nothing to reapply.
+            if (!_renderedNumbering.TryGetValue(document.Id, out HeadingNumbering was)
+                || was == NumberingFor(document.Id))
+            {
+                continue;
+            }
+
+            RenderedMarkdown rendered =
+                await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
+
+            await _host.UpdatePreviewAsync(document.Id, rendered).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// The numbering one document is rendered with: the preference, unless a reader has said
+    /// otherwise about this document. See <see cref="HeadingNumbers.Effective"/> for the rule
+    /// and <see cref="_numberingOverrides"/> for why it is not a preference.
+    /// </summary>
+    private HeadingNumbering NumberingFor(Guid documentId) => HeadingNumbers.Effective(
+        _settings.Current.HeadingNumbering,
+        _numberingOverrides.TryGetValue(documentId, out bool over) ? over : null);
+
+    /// <summary>
+    /// Points the View menu's check mark at whichever document is now in front.
+    ///
+    /// Two things move it: switching tabs, and the preference changing under a document that
+    /// has no override of its own. Both end here rather than setting the property themselves,
+    /// so there is one answer to what the check mark means.
+    /// </summary>
+    private void RefreshHeadingNumbersState() => HeadingNumbersEnabled =
+        _workspace.Active is { } active && NumberingFor(active.Id) != HeadingNumbering.Off;
+
+    /// <summary>
+    /// Turns this document's heading numbers on or off, for as long as its tab is open.
+    ///
+    /// Named as the preference is - "Number headings" on the Preview page, and Line Numbers
+    /// beside it in this same menu - rather than after the section numbers it produces. The
+    /// numbers are section numbers; the switch is a heading-numbers switch, and a reader
+    /// looking for one should not have to know both words.
+    ///
+    /// The case it exists for: someone else's document that writes "1.2 Scope" into the
+    /// heading text itself. With numbering on, the preview and the outline show Marqora's
+    /// numbers beside the author's, and the two rarely agree - a document whose own numbering
+    /// skips a section, or starts at zero, disagrees on every heading after it. One press
+    /// stands the document down, and nothing is written to the file or to preferences.
+    ///
+    /// Both ways, rather than a suppressor: with numbering off in preferences, this adds
+    /// numbers to the document in front without turning them on for everything else.
+    ///
+    /// Only the document on screen, and only its own tab. The eleven other documents in the
+    /// workspace are not what the reader is looking at, and the next document opened is a
+    /// fresh question.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnDocument))]
+    private async Task ToggleHeadingNumbersAsync()
+    {
+        if (_workspace.Active is not { } document)
+        {
+            return;
+        }
+
+        bool numbered = !HeadingNumbersEnabled;
+
+        _numberingOverrides[document.Id] = numbered;
+        HeadingNumbersEnabled = numbered;
+
+        if (_host is not null)
         {
             RenderedMarkdown rendered =
                 await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
 
             await _host.UpdatePreviewAsync(document.Id, rendered).ConfigureAwait(true);
         }
+
+        // Said out loud because the keyboard route has nothing else to show for itself: the
+        // View menu's check mark is the standing answer, and nobody who pressed Alt+5 is
+        // looking at it. A document with no headings is the case this saves - the key would
+        // otherwise appear to have done nothing at all.
+        StatusText = numbered
+            ? "Heading numbers on for this document"
+            : "Heading numbers off for this document";
+
+        RestoreDocumentFocusAfterChrome();
     }
 
     [RelayCommand]
@@ -5863,9 +5968,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         List<FolioRenderedDocument> rendered = [];
 
-        // Once, for the whole Folio: a preference changed while a long export is running
-        // must not number the first half of a collection and not the second.
-        HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+        // Every document's numbering settled here, before the first render: a preference
+        // changed while a long export is running must not number the first half of a
+        // collection and not the second.
+        //
+        // One answer per document rather than one for the Folio, because a reader can stand
+        // a single tab down - see _numberingOverrides - and a collection is exactly where
+        // that matters: one contributor's chapter numbering its own headings does not make
+        // the other eleven unnumbered. Keyed by path, as the planner keys its own lookup,
+        // because a plan carries where a document came from rather than which tab it is.
+        Dictionary<string, HeadingNumbering> numbering = _workspace.Documents
+            .Where(d => d.Path is not null)
+            .ToDictionary(d => d.Path!, d => NumberingFor(d.Id), StringComparer.OrdinalIgnoreCase);
 
         for (int i = 0; i < plan.Documents.Count; i++)
         {
@@ -5879,8 +5993,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // Numbered as the preview is. A Folio is the document as the author reads it,
             // and the export used to be handed numbers by the shell on its way past; the
             // renderer writes them now, so this is where they have to be asked for.
+            //
+            // A planned document with no open tab cannot happen - the picker offers only what
+            // is open - but it falls back to the preference rather than to Off, which is what
+            // a document nobody has spoken for is numbered with everywhere else.
+            HeadingNumbering documentNumbering =
+                numbering.TryGetValue(document.SourcePath, out HeadingNumbering chosen)
+                    ? chosen
+                    : _settings.Current.HeadingNumbering;
+
             RenderedMarkdown markdown = await Task
-                .Run(() => _renderer.Render(document.Text, numbering))
+                .Run(() => _renderer.Render(document.Text, documentNumbering))
                 .ConfigureAwait(true);
 
             string html = await _host.RenderForExportAsync(markdown.Html).ConfigureAwait(true);
@@ -6129,7 +6252,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             string markdown = document.Text;
             string title = document.DisplayName;
             string? source = document.Path;
-            HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+
+            // This document's answer, not the preference: a tab whose numbers were switched
+            // off because the author writes their own must not export with both sets. What is
+            // on screen is what goes into the file.
+            HeadingNumbering numbering = NumberingFor(document.Id);
 
             // Off the UI thread. Building a .docx is heavier than building an HTML file -
             // there are images to re-encode and a whole part graph to assemble - and the HTML
@@ -7128,12 +7255,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<Guid, IReadOnlyList<OutlineHeading>> _outlines = [];
 
     /// <summary>
-    /// The numbering the open documents were last rendered with.
+    /// The numbering each open document was last rendered with, keyed by document id.
     ///
     /// Held because the Preferences window applies live and calls in on every change, and
     /// only this one costs a re-render. See <see cref="ReapplyHeadingNumberingAsync"/>.
+    ///
+    /// Per document rather than one value for the workspace, because two tabs can legitimately
+    /// disagree: <see cref="_numberingOverrides"/> lets a reader switch one document's numbers
+    /// off without touching the rest. A single field could only be right about one of them, and
+    /// would answer for all of them - which is either a re-render nobody asked for or an
+    /// override silently lost the next time a preference moved.
+    ///
+    /// A document with no entry here has never been rendered. There is nothing to reapply to
+    /// it: its first render reads the value that is current then.
     /// </summary>
-    private HeadingNumbering _renderedHeadingNumbering;
+    private readonly Dictionary<Guid, HeadingNumbering> _renderedNumbering = [];
+
+    /// <summary>
+    /// The documents whose numbering a reader has taken into their own hands, keyed by
+    /// document id. No entry - which is the usual state - means the preference stands.
+    ///
+    /// This is a reading convenience rather than a preference, and it is deliberately not
+    /// written anywhere: it lives as long as the tab does and is dropped in
+    /// <see cref="RemoveTabAsync"/>. Someone else's document that numbers its own headings is
+    /// read once, and the next document opened from that folder is a different question.
+    ///
+    /// The markdown is untouched either way. Turning numbers off here does not delete the
+    /// author's, and turning them on does not write Marqora's into the file - the numbers live
+    /// in the rendered copy, which is what makes a per-document answer safe to offer at all.
+    /// </summary>
+    private readonly Dictionary<Guid, bool> _numberingOverrides = [];
 
     /// <summary>
     /// The headings the panel is currently showing, after filtering.
@@ -7585,12 +7736,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<RenderedMarkdown> RenderAsync(Guid documentId, string text)
     {
-        // Read here rather than inside the lambda: the preference is settled on this thread
+        // Read here rather than inside the lambda: the answer is settled on this thread
         // before the render leaves it, and one document cannot be numbered halfway.
-        HeadingNumbering numbering = _settings.Current.HeadingNumbering;
+        HeadingNumbering numbering = NumberingFor(documentId);
 
         RenderedMarkdown rendered = await Task.Run(() => _renderer.Render(text, numbering))
             .ConfigureAwait(true);
+
+        // Recorded on the way past, so the live-applying Preferences window can tell which
+        // documents a changed preference actually moves. See ReapplyHeadingNumberingAsync.
+        _renderedNumbering[documentId] = numbering;
 
         _outlines[documentId] = rendered.Outline;
 
@@ -7938,6 +8093,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 case "toggleSpellCheck":
                     await ToggleSpellCheckCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "toggleHeadingNumbers" when ToggleHeadingNumbersCommand.CanExecute(null):
+                    await ToggleHeadingNumbersCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "formatDocument" when FormatDocumentCommand.CanExecute(null):

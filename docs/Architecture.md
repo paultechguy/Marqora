@@ -170,6 +170,37 @@ runs mermaid, KaTeX and highlight.js over the result.
 Markdig is not asked for a full HTML document, only a fragment, so the page, its scroll
 position and Monaco's state all survive an update.
 
+### Heading numbers are per document, not per app
+
+Heading numbers are written into the rendered copy by `HeadingNumberPass`, never into the
+markdown, and the outline panel reads the outline that same render produced — which is why a
+section called "2.3" in the preview is called "2.3" in the panel without either of them
+asking the other.
+
+The level to number from is a preference, but *whether this document is numbered* is not.
+`MainViewModel._numberingOverrides` holds an answer per document id, and
+`HeadingNumbers.Effective` combines the two: no entry means the preference stands, and an
+entry is a reader having decided about one document. The case it exists for is someone else's
+document that writes "1.2 Scope" into the heading text itself, where Marqora's numbers appear
+beside the author's and the two disagree from the first skipped section onward. *View, Section
+Numbers* (Alt+5) stands that one document down. It is a reading convenience rather than a
+preference, so nothing is written to disk and `RemoveTabAsync` drops it with the tab.
+
+Everything flows from `RenderAsync` asking `NumberingFor(documentId)` instead of the
+preference, so the preview and the outline move together. The exports that take their markup
+from the live preview — HTML, PDF, print, Copy as Rich Text — follow for free. The two that
+render for themselves have to ask: the Word export passes the active document's answer to
+`IDocxExporter`, and a Folio settles every document's answer into a dictionary keyed by path
+*before* its first render, so one contributor's self-numbered chapter does not unnumber the
+other eleven.
+
+One consequence worth knowing. `ReapplyHeadingNumberingAsync` — which exists because the
+Preferences window applies live and calls in on every change — used to guard on a single
+`HeadingNumbering` field for the whole workspace. Once two tabs can legitimately disagree,
+that field can only be right about one of them, so it is a dictionary keyed by document id
+too, written by `RenderAsync` on the way past. A document with no entry has never been
+rendered and is skipped: its first render reads whatever is current then.
+
 ---
 
 ## Scroll synchronization

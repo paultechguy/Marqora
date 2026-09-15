@@ -733,6 +733,25 @@
                                               KeyboardAcceleratorTextOverride="Alt+4"
                                               ToolTipService.ToolTip="List the document's headings beside it" />
 
+                        <!--
+                            Next to the outline because it is the other item here about
+                            headings, and because the two places it changes are the preview and
+                            that panel.
+
+                            Named for the preference it answers to - "Number headings" on the
+                            Preview page - and it reads as a pair with Line Numbers further
+                            down this same menu.
+
+                            The only toggle in this menu that is not a preference: the check
+                            mark describes the document in front, and switching tabs moves it.
+                            See MainViewModel._numberingOverrides.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Heading Numbers"
+                                              IsChecked="{x:Bind ViewModel.HeadingNumbersEnabled, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleHeadingNumbersCommand}"
+                                              KeyboardAcceleratorTextOverride="Alt+5"
+                                              ToolTipService.ToolTip="Number this document's headings, for as long as its tab is open; the file is not changed" />
+
                         <MenuFlyoutSeparator />
 
                         <MenuFlyoutItem Text="Next Tab"

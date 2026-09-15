@@ -2623,6 +2623,15 @@
     { alt: true, code: 'Digit4', run: 'toggleOutline' },
     { alt: true, shift: true, code: 'Digit4', run: 'focusOutline' },
 
+    /*
+      Alt+5 turns this document's heading numbers on and off - the reading convenience for
+      someone else's document that numbers its own headings, and the only View toggle that is
+      about the document in front rather than a preference. The host answers it, because the
+      numbers are written into the HTML by the renderer and only the host can ask for another
+      one.
+    */
+    { alt: true, code: 'Digit5', run: 'toggleHeadingNumbers' },
+
     { alt: true, code: 'KeyZ', run: 'wordWrap' },
 
     // Spell check. The window has the same binding; this is the half that fires while the

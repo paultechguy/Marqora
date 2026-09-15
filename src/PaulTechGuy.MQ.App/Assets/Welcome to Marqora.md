@@ -265,6 +265,7 @@ page whenever you want it.
 | Show / hide the outline  | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`       |
 | Spell check on / off     | `F7`                      | Correct the word at the cursor | `Ctrl+.`            |
 | Zoom the active pane     | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`             |
+| Heading numbers, this tab | `Alt+5`                  |                                |                     |
 
 Those are the keys; the syntax is one more. `Ctrl+F1` opens the Markdown cheatsheet — every
 construct on this page and a few that are not, each one's markup sitting beside its result, with

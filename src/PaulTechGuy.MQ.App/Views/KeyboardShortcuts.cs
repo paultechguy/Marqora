@@ -111,6 +111,8 @@ internal static class KeyboardShortcuts
             new("Go to the outline, and back", "Alt+Shift+4"),
             new("Leave the outline", "Escape"),
 
+            new("Heading numbers, for this document only", "Alt+5"),
+
             new("Spell check", "F7"),
 
             new("Word wrap", "Alt+Z"),

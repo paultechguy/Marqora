@@ -349,6 +349,24 @@ applying them to one you cannot see is how documents get changed by accident. Ev
 keeps working: Save, Undo, the Find family, view modes and zoom all behave exactly as usual,
 and zoom still targets the last pane you were in.
 
+**Heading numbers**
+
+`View > Preferences > Preview` numbers your headings — `1`, `1.1`, `1.1.1` — in the preview
+and in the outline panel together, starting from whichever level you choose. Nothing is
+written into your markdown; the numbers live in the rendered copy.
+
+Someone else's document often numbers its own headings in the text, though, and then you are
+reading two sets at once that stop agreeing the moment the author skips a section. **`View >
+Heading Numbers` (`Alt+5`)** settles it for that document alone: the preview and the panel drop
+Marqora's numbers and leave the author's, every other tab carries on as it was, and the
+preference is untouched. It works the other way too — with numbering off, `Alt+5` numbers just
+the document in front of you.
+
+It lasts as long as the tab does, because it is a reading convenience rather than a setting.
+What you see is what you export: a Word document or a Folio carries whatever the tab was
+showing, settled per document, so one self-numbered chapter in a twelve-document Folio does not
+unnumber the other eleven.
+
 **Zoom**
 
 | Action                   | Shortcut                                            |

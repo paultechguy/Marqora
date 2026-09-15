@@ -186,8 +186,10 @@ Sections follow content: cover only gives two, contents only gives two, neither 
 
 ### Contents field
 
-The range follows the reader's numbering preference, so the contents begin at the first numbered
-section:
+The range follows the numbering this document is being exported with, so the contents begin at
+the first numbered section. That is the preference for almost every document, but a reader can
+stand one document down with *View, Heading Numbers* — see *Heading numbers are per document*
+in `Architecture.md` — and an export of that document carries no numbers and no numbered range:
 
 | `HeadingNumbering` | Field range |
 | --- | --- |
