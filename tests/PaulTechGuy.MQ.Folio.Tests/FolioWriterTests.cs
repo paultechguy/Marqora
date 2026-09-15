@@ -175,4 +175,18 @@ public sealed class FolioWriterTests
 
         FolioManifest.SuggestedName(workspace.Plan(), DateTimeOffset.Now).ShouldBe("team-handbook");
     }
+
+    [Fact]
+    public void A_folio_page_is_offered_under_a_prefixed_name()
+    {
+        FolioManifest.PageName("team-handbook").ShouldBe("Folio-team-handbook");
+    }
+
+    [Fact]
+    public void A_folio_page_name_that_is_already_prefixed_is_left_alone()
+    {
+        // The stamped fallback begins this way, and so does a set being shared a second time.
+        FolioManifest.PageName("Folio-2026-09-15-101500").ShouldBe("Folio-2026-09-15-101500");
+        FolioManifest.PageName("folio-notes").ShouldBe("folio-notes");
+    }
 }

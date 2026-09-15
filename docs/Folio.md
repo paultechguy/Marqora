@@ -120,6 +120,14 @@ The primary recipient of a Folio is someone who may not have Marqora. Handing th
 type their machine cannot open defeats the entire feature. The name lives on the menu item and on
 the Folio's own cover page, which is where a name belongs.
 
+The file name carries a prefix instead. A Folio written as a single page is offered as
+`Folio-<name>.html`, because `.html` is the one thing about it that is deliberately
+unremarkable: beside an ordinary HTML export in the same folder the two are one icon and one
+extension, and the name is all that is left to tell them apart. `FolioManifest.PageName` adds
+it, and leaves alone a name that already begins that way — which the stamped fallback does, and
+so does a set being shared a second time under the name it was given the first. The zip form is
+not prefixed; a bundle looks like a bundle.
+
 The manifest inside follows the `PreferencesDocument` envelope exactly — `format`,
 `schemaVersion`, `appVersion`, `exportedUtc`, `exportedFrom` — including the rule that the
 version is not a gate: a Folio from a newer build unpacks everything this build understands and

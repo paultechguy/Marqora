@@ -90,7 +90,9 @@ public sealed class FolioHtmlWriter(RenderedHtmlPackager packager, ILogger<Folio
             body.AppendLine("</article>");
         }
 
-        string content = body.ToString();
+        // Diagrams become click-to-enlarge. Wrapped over the whole Folio rather than per
+        // document, so the running identifier cannot repeat itself across twelve of them.
+        string content = DiagramViewer.Wrap(body.ToString());
 
         var page = new StringBuilder();
 
@@ -110,6 +112,7 @@ public sealed class FolioHtmlWriter(RenderedHtmlPackager packager, ILogger<Folio
         page.AppendLine(packager.ReadStyles(content));
         page.AppendLine(ExportLayout.PageCss(measurePixels));
         page.AppendLine(FolioStyles(measurePixels));
+        page.AppendLine(DiagramViewer.CssFor(content));
         page.AppendLine("</style>");
         page.AppendLine("</head>");
         page.AppendLine("<body>");

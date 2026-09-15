@@ -137,6 +137,28 @@ public sealed record FolioManifest
         return "Folio" + taken.ToLocalTime().ToString(
             "'-'yyyy-MM-dd'-'HHmmss", CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// The name to offer for a Folio written as a single page.
+    ///
+    /// Prefixed, because that form is an .html file and nothing else about it says what it is:
+    /// in a folder beside an ordinary export the two are one icon and one extension. The .zip
+    /// needs no such help - a bundle looks like a bundle - so the prefix is asked for here
+    /// rather than folded into <see cref="SuggestedName"/>, which both forms share.
+    ///
+    /// A name that already begins this way is left alone. The stamped fallback above does, and
+    /// so does a Folio being shared a second time under the name it was given the first.
+    /// </summary>
+    public static string PageName(string suggested)
+    {
+        ArgumentNullException.ThrowIfNull(suggested);
+
+        return suggested.StartsWith(PagePrefix, StringComparison.OrdinalIgnoreCase)
+            ? suggested
+            : PagePrefix + suggested;
+    }
+
+    private const string PagePrefix = "Folio-";
 }
 
 /// <summary>

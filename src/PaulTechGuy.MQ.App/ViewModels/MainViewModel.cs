@@ -5725,7 +5725,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 .PickExportFileAsync(suggested + ".zip", "Folio", [".zip"])
                 .ConfigureAwait(true),
             FolioForm.SingleFile => await _fileDialogs
-                .PickExportFileAsync(suggested + ".html", "Folio", [".html", ".htm"])
+                .PickExportFileAsync(
+                    FolioManifest.PageName(suggested) + ".html", "Folio", [".html", ".htm"])
                 .ConfigureAwait(true),
             _ => await _fileDialogs.PickFolderAsync().ConfigureAwait(true),
         };

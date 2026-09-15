@@ -40,6 +40,10 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         string body = packager.EmbedLocalImages(
             renderedHtml, sourceDocumentPath, out IReadOnlyList<string> skipped);
 
+        // Diagrams become click-to-enlarge. Nothing in the file runs; the fragment in the
+        // address bar is the state, and the browser is what keeps it.
+        body = DiagramViewer.Wrap(body);
+
         var builder = new StringBuilder();
 
         builder.AppendLine("<!DOCTYPE html>");
@@ -52,6 +56,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         builder.AppendLine("<style>");
         builder.AppendLine(styles);
         builder.AppendLine(ExportLayout.PageCss(measurePixels));
+        builder.AppendLine(DiagramViewer.CssFor(body));
         builder.AppendLine("</style>");
         builder.AppendLine("</head>");
         builder.AppendLine("<body>");

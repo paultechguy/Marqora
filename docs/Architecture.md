@@ -632,6 +632,20 @@ answer to it through `ExportLayout`, which states the page rules once — they e
 a copy, and both capped the text at a 46em measure the preview itself had already dropped for
 the reason recorded beside `--mq-preview-measure` in `app.css`.
 
+A diagram in an exported page is **click-to-view**, and nothing in the file runs to do it.
+`DiagramViewer` wraps each rendered diagram in an anchor linking to itself, so `:target` is the
+open state and the browser is what keeps it; the stylesheet rides along only when something was
+actually wrapped, the way the math and highlighting themes do. The overlay fits the whole
+diagram to the viewport on its own opaque card — opaque because a sequence diagram is nearly
+all transparent and a dimmed page reads straight through one. It enlarges as readily as it
+shrinks, which is the rule the pop-out window's `fit` uses, so a small diagram grows a great
+deal and a large one comes out about the size it already was: it was fitted to the column
+before, and fitting all of it on screen is the same constraint. Hence "Click to view" rather
+than a promise of magnification. Going past that means zoom and pan, zoom and pan mean script,
+and a script is the line an export does not cross — it is what keeps the file safe to mail.
+`DiagramViewer` records the rest, including why browser zoom is no substitute and what
+`:target` cannot do.
+
 `docs/WordExport.md` is the design in full - the part order, the section and numbering rules,
 the traps Word answers with a repair prompt rather than a message, and how to pick testing back
 up. What follows here is the shape of it.
