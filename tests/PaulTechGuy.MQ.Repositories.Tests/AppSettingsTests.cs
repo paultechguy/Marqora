@@ -128,6 +128,9 @@ public sealed class AppSettingsTests : IDisposable
         settings.ContinueLists.ShouldBeTrue();
         settings.AutoCloseBrackets.ShouldBeTrue();
 
+        // Repeating a list number changes what Enter types, so a settings file written before
+        // it existed must come back with Enter behaving the way it always did.
+        settings.RepeatListNumbers.ShouldBeFalse();
         // Nothing that alters a document or a file may arrive switched on.
         settings.HeadingNumbering.ShouldBe(HeadingNumbering.Off);
         settings.AutoSave.ShouldBe(AutoSaveMode.Off);
@@ -174,6 +177,7 @@ public sealed class AppSettingsTests : IDisposable
             ShowMinimap = true,
             HighlightCurrentLine = false,
             ContinueLists = false,
+            RepeatListNumbers = true,
             AutoCloseBrackets = false,
             ShowBlockedImages = false,
             HeadingNumbering = HeadingNumbering.FromHeading2,

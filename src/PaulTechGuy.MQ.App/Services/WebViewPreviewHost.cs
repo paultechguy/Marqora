@@ -523,6 +523,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 minimap = preferences.ShowMinimap,
                 highlightCurrentLine = preferences.HighlightCurrentLine,
                 continueLists = preferences.ContinueLists,
+                repeatListNumbers = preferences.RepeatListNumbers,
                 autoCloseBrackets = preferences.AutoCloseBrackets,
 
                 // Heading numbering is deliberately not here. The numbers are written into

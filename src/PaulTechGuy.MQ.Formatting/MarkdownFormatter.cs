@@ -424,11 +424,26 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
     /// The starting number is kept rather than forced to 1: a list that deliberately begins
     /// at 5 is continuing an earlier one, and renumbering it would change what the document
     /// says.
+    ///
+    /// A run whose items all carry the same number keeps them. That is the "1. 1. 1."
+    /// shorthand, where the counting is left to the renderer — which numbers the items in
+    /// order whatever the source says — so that an item can be dropped in mid-list without
+    /// renumbering the rest by hand. Rewriting it would undo the thing the author was doing,
+    /// and it is what Preferences | Editor now offers to type for them.
+    ///
+    /// That call cannot be made a line at a time, which is why the numbering is worked out
+    /// in one pass and written in another: standing on the second item of "1. 1. 2." there
+    /// is no way to tell a shorthand list from one somebody has begun fixing by hand.
     /// </summary>
     private static void RenumberOrderedLists(List<Line> lines)
     {
-        // Indent width to the next number expected at that depth.
+        // Indent width to the next number expected at that depth, and to the run that
+        // expectation belongs to. Runs are counted off rather than keyed by depth, so that a
+        // depth returned to after a gap is a new run and not a continuation of the old one.
         var counters = new Dictionary<int, int>();
+        var runs = new Dictionary<int, int>();
+        var items = new List<OrderedItem>();
+        int nextRun = 0;
         int blanks = 0;
         bool blankBefore = false;
 
@@ -437,6 +452,7 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
             if (line.Kind != LineKind.Text)
             {
                 counters.Clear();
+                runs.Clear();
                 continue;
             }
 
@@ -448,6 +464,7 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
                 if (++blanks > 1)
                 {
                     counters.Clear();
+                    runs.Clear();
                 }
 
                 continue;
@@ -464,6 +481,7 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
                 if (line.Text.Length > 0 && !char.IsWhiteSpace(line.Text[0]))
                 {
                     counters.Clear();
+                    runs.Clear();
                 }
 
                 continue;
@@ -473,28 +491,73 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
             foreach (int deeper in counters.Keys.Where(k => k > indent).ToList())
             {
                 counters.Remove(deeper);
+                runs.Remove(deeper);
             }
 
             bool known = counters.TryGetValue(indent, out int expected);
 
             // A number that jumps forward after a blank line is the author starting a new
             // list, not losing count. Renumbering it would change what the document says, so
-            // the sequence restarts from whatever they wrote. A number that falls behind is
-            // the familiar "1. 1. 1." shorthand and does get renumbered.
+            // the sequence restarts from whatever they wrote.
             if (known && hadBlank && number > expected)
             {
                 known = false;
             }
 
+            if (!known)
+            {
+                runs[indent] = nextRun++;
+            }
+
             int next = known ? expected : number;
             counters[indent] = next + 1;
 
-            if (line.Frozen)
-            {
-                continue;
-            }
+            items.Add(new OrderedItem(line, runs[indent], number, next, indent, delimiter, rest));
+        }
 
-            line.Text = string.Concat(new string(' ', indent), next.ToString(System.Globalization.CultureInfo.InvariantCulture), delimiter.ToString(), " ", rest);
+        WriteOrderedItems(items);
+    }
+
+    /// <summary>One ordered item as the first pass read it, and the number it would be given.</summary>
+    private sealed record OrderedItem(
+        Line Line,
+        int Run,
+        int Number,
+        int Next,
+        int Indent,
+        char Delimiter,
+        string Rest);
+
+    /// <summary>Writes the numbering the first pass worked out, leaving a repeated run repeated.</summary>
+    private static void WriteOrderedItems(List<OrderedItem> items)
+    {
+        foreach (IGrouping<int, OrderedItem> run in items.GroupBy(item => item.Run))
+        {
+            int first = run.First().Number;
+
+            // Every item agreeing is the shorthand, and those numbers stay as they were. The
+            // rest of the rewrite happens either way, so a run left to repeat is not also
+            // exempted from the indent and the single space after the delimiter. A run that
+            // agrees only in part — "1. 1. 2." — is half fixed by hand, and gets finished
+            // rather than frozen where it was left.
+            bool repeats = run.All(item => item.Number == first);
+
+            foreach (OrderedItem item in run)
+            {
+                if (item.Line.Frozen)
+                {
+                    continue;
+                }
+
+                int number = repeats ? item.Number : item.Next;
+
+                item.Line.Text = string.Concat(
+                    new string(' ', item.Indent),
+                    number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    item.Delimiter.ToString(),
+                    " ",
+                    item.Rest);
+            }
         }
     }
 

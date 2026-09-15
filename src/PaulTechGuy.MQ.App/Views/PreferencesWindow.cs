@@ -185,6 +185,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _downscaleImageFiles;
     private readonly CheckBox _highlightLine;
     private readonly CheckBox _continueLists;
+    private readonly CheckBox _repeatListNumbers;
     private readonly CheckBox _autoCloseBrackets;
     private readonly NumberBox _wrapColumn;
 
@@ -359,8 +360,19 @@ internal sealed class PreferencesWindow : PaletteWindow
         _highlightLine = BuildCheck("Highlight the current line");
         Bind(_highlightLine, v => _vm.UpdateAsync(s => s with { HighlightCurrentLine = v }));
 
+        // Both boxes exist before either is bound: the handler below greys the second one,
+        // and a Checked event can arrive the moment the binding is made.
         _continueLists = BuildCheck("Continue lists when Enter is pressed");
-        Bind(_continueLists, v => _vm.UpdateAsync(s => s with { ContinueLists = v }));
+        _repeatListNumbers = BuildCheck("Keep repeated numbering when continuing a list");
+
+        Bind(_continueLists, v =>
+        {
+            UpdateEnabledState();
+
+            return _vm.UpdateAsync(s => s with { ContinueLists = v });
+        });
+
+        Bind(_repeatListNumbers, v => _vm.UpdateAsync(s => s with { RepeatListNumbers = v }));
 
         _autoCloseBrackets = BuildCheck("Close brackets and quotes automatically");
         Bind(_autoCloseBrackets, v => _vm.UpdateAsync(s => s with { AutoCloseBrackets = v }));
@@ -1046,6 +1058,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(NumberField("Tab size", _tabSize, EditorPage, "spaces"));
         panel.Children.Add(_insertSpaces);
         panel.Children.Add(_continueLists);
+        panel.Children.Add(_repeatListNumbers);
         panel.Children.Add(_autoCloseBrackets);
 
         panel.Children.Add(Note(
@@ -1722,6 +1735,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _downscaleImageFiles.IsChecked = s.DownscaleImageFiles;
             _highlightLine.IsChecked = s.HighlightCurrentLine;
             _continueLists.IsChecked = s.ContinueLists;
+            _repeatListNumbers.IsChecked = s.RepeatListNumbers;
             _autoCloseBrackets.IsChecked = s.AutoCloseBrackets;
             _wrapColumn.Value = s.Formatting.WrapColumn;
             _selectFirstResult.IsChecked = s.FindSelectFirstResult;
@@ -1817,6 +1831,10 @@ internal sealed class PreferencesWindow : PaletteWindow
     {
         _previewWidth.IsEnabled = _limitWidth.IsChecked ?? false;
         _autoSaveDelay.IsEnabled = _autoSave.SelectedIndex == (int)AutoSaveMode.AfterDelay;
+
+        // Enter is left alone entirely when lists do not continue, so there is nothing for
+        // the repeat to act on.
+        _repeatListNumbers.IsEnabled = _continueLists.IsChecked ?? false;
     }
 
     private Task ApplyPreviewWidthAsync()

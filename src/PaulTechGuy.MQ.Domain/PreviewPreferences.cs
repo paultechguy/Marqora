@@ -56,6 +56,9 @@ public sealed record PreviewPreferences
     /// <summary>Carry a list marker onto the next line when Enter is pressed.</summary>
     public bool ContinueLists { get; init; } = true;
 
+    /// <inheritdoc cref="AppSettings.RepeatListNumbers"/>
+    public bool RepeatListNumbers { get; init; }
+
     /// <summary>Close a bracket, quote or emphasis marker as it is typed.</summary>
     public bool AutoCloseBrackets { get; init; } = true;
 
@@ -76,6 +79,7 @@ public sealed record PreviewPreferences
             ShowMinimap = settings.ShowMinimap,
             HighlightCurrentLine = settings.HighlightCurrentLine,
             ContinueLists = settings.ContinueLists,
+            RepeatListNumbers = settings.RepeatListNumbers,
             AutoCloseBrackets = settings.AutoCloseBrackets,
         };
     }

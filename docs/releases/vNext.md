@@ -130,6 +130,37 @@ What you see is what you export. An HTML file, a PDF, a printed page, rich text 
 clipboard, a Word document and a Folio all carry whatever the tab was showing. A Folio settles
 it per document, so one contributor's self-numbered chapter does not unnumber the other eleven.
 
+## Lists that keep the number you gave them
+
+Numbered lists are often easier to write with the same number on every line:
+
+```markdown
+1) Preheat the oven
+1) Butter the tin
+1) Beat the eggs
+```
+
+Markdown counts them 1, 2, 3 whatever the source says, so writing them this way means an item
+can be dropped into the middle later without renumbering everything under it by hand. Pressing
+Enter used to hand you a 2 regardless, and the shorthand was a fight.
+
+**Preferences | Editor | Keep repeated numbering when continuing a list** stops the fight. Two
+items carrying the same number is the signal: write the number twice and every Enter after it
+carries that number on. Nothing is guessed from a single item, so the first Enter of a fresh
+list still counts up — change that 2 back to a 1 and the rest of the list follows you.
+
+It works with whatever number you started from. A list of `0)` stays a list of `0)`, one that
+begins at 7 stays at 7, and the preview numbers them in order either way. A list you genuinely
+typed 1, 2, 3 still counts up, because its items do not agree.
+
+The setting is off unless you ask for it, and it only means something while **Continue lists
+when Enter is pressed** is on — with that off, Enter is left alone entirely.
+
+**Format Document no longer undoes it.** Tidying up used to renumber a repeated list into 1, 2,
+3, which threw the shorthand away every time the document was formatted. A list whose items all
+carry one number is now left carrying it. A list that has lost count — or one you had begun
+fixing by hand, so that it agrees only in part — is renumbered as before.
+
 ## Fixes
 
 **A table of contents now lands where GitHub's would.** A heading whose title loses a word to

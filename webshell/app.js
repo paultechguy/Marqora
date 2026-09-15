@@ -131,6 +131,7 @@
     showWrapGlyph: false,
     sourceFontBase: SOURCE_BASE_FONT_PX,
     continueLists: true,
+    repeatListNumbers: false,
 
     /*
       One entry per open tab, keyed by the host's document id:
@@ -3496,6 +3497,54 @@
   var LIST_ITEM = /^(\s*)([-*+]|(\d+)([.)]))(\s+\[([ xX])\])?(\s+)(.*)$/;
 
   /*
+    Whether an ordered item is repeating the number of the item above it.
+
+    Two siblings carrying the same number is the "1. 1. 1." shorthand: the author leaves the
+    counting to the renderer, which numbers the items in order whatever the source says, so
+    an item can be dropped in the middle without renumbering the rest of the list by hand.
+    Enter on such a pair carries the number across rather than stepping past it.
+
+    Read out of the buffer rather than held as a mode, which is what makes it work on a
+    document opened fresh: Enter in the middle of a list that already repeats gets the
+    repeat, with nothing to switch on first and no state to have got wrong.
+
+    The sibling is the first item found at this indent. Deeper lines are skipped, since a
+    nested list and a continuation paragraph both belong to the item above rather than being
+    it; a shallower item or anything at the left margin means this item has stepped out of
+    the run, and ends the search with no pattern. Lazy continuation - a wrapped line sitting
+    at the left margin - therefore reads as the end of the list, which is the same call
+    RenumberOrderedLists makes on the host side.
+  */
+  function repeatsPreviousNumber(model, lineNumber, indent, digits, delimiter) {
+    var blanks = 0;
+
+    for (var n = lineNumber - 1; n >= 1; n--) {
+      var text = model.getLineContent(n);
+
+      if (!text.trim()) {
+        // One blank line inside a list is a loose list, not the end of it. Two is.
+        if (++blanks > 1) { return false; }
+
+        continue;
+      }
+
+      blanks = 0;
+
+      var above = LIST_ITEM.exec(text);
+      var aboveIndent = (above ? above[1] : /^\s*/.exec(text)[0]).length;
+
+      if (aboveIndent > indent) { continue; }
+
+      // The delimiter has to match as well: CommonMark starts a new list when it changes,
+      // so "1." above "1)" is two lists that each begin at one, not a repeat.
+      return !!above && aboveIndent === indent
+        && above[3] === digits && above[4] === delimiter;
+    }
+
+    return false;
+  }
+
+  /*
     Carries a list on to the next line when Enter is pressed inside one.
 
     This is the one authoring behavior the host cannot own. The decision depends on the
@@ -3536,7 +3585,18 @@
 
     var task = match[5];
     var ordered = match[3];
-    var marker = ordered ? String(parseInt(ordered, 10) + 1) + match[4] : match[2];
+    var marker;
+
+    if (!ordered) {
+      marker = match[2];
+    } else if (state.repeatListNumbers && repeatsPreviousNumber(
+      model, selection.startLineNumber, match[1].length, ordered, match[4])) {
+      // Carried across as the digits that were written rather than as a number, so 01)
+      // stays 01) instead of arriving back as 1).
+      marker = ordered + match[4];
+    } else {
+      marker = String(parseInt(ordered, 10) + 1) + match[4];
+    }
 
     // A carried-over task box starts unticked however the one above it was left.
     var prefix = match[1] + marker + (task ? ' [ ] ' : match[7]);
@@ -4288,6 +4348,7 @@
       }
 
       state.continueLists = p.continueLists !== false;
+      state.repeatListNumbers = p.repeatListNumbers === true;
       state.sourceFontBase = p.sourceFontSize || SOURCE_BASE_FONT_PX;
 
       if (state.editor) {

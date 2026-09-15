@@ -44,6 +44,7 @@
     <Project Path="tests/PaulTechGuy.MQ.Docx.Tests/PaulTechGuy.MQ.Docx.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Spelling.Tests/PaulTechGuy.MQ.Spelling.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Editing.Tests/PaulTechGuy.MQ.Editing.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Formatting.Tests/PaulTechGuy.MQ.Formatting.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Analysis.Tests/PaulTechGuy.MQ.Analysis.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Finding.Tests/PaulTechGuy.MQ.Finding.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Folio.Tests/PaulTechGuy.MQ.Folio.Tests.csproj" />

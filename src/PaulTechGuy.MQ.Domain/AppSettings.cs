@@ -414,6 +414,21 @@ public sealed record AppSettings
     /// <summary>Carry a list marker onto the next line when Enter is pressed.</summary>
     public bool ContinueLists { get; set; } = true;
 
+    /// <summary>
+    /// Repeat an ordered item's number when the item above it already carries the same one.
+    ///
+    /// The "1. 1. 1." shorthand, where the counting is left to the renderer so that an item
+    /// can be inserted mid-list without renumbering the rest by hand. Two siblings agreeing
+    /// is the whole signal: nothing fires until the same number has been written twice, and
+    /// a list typed out 1, 2, 3 still counts up with this on.
+    ///
+    /// Off by default because it changes what Enter does, and counting up is what every
+    /// document written before this setting existed was typed against. Subordinate to
+    /// <see cref="ContinueLists"/> — with that off, Enter is left alone entirely and this
+    /// has nothing to act on.
+    /// </summary>
+    public bool RepeatListNumbers { get; set; }
+
     /// <summary>Close a bracket, quote or emphasis marker as it is typed.</summary>
     public bool AutoCloseBrackets { get; set; } = true;
 
