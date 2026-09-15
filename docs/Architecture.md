@@ -296,6 +296,44 @@ work on the last line without it sitting on the frame - and a fixed cushion is t
 The cost is that `scrollToLine` can no longer lift a heading in the final screenful to the very
 top of the source pane.
 
+### Keeping the preview's place through a reflow
+
+`scrollTop` counts pixels into one particular layout, and the preview does not keep one layout
+for long: the pane changes width whenever the view mode changes, the splitter moves, the outline
+panel opens or the window is resized. A paragraph that wrapped over four lines beside the source
+takes three across the whole window, so everything below it moves up while the number stays where
+it was - the pane has not scrolled and is nevertheless showing somewhere else. Clicking a heading
+in the outline and then switching to preview view is where that reads worst: the heading is at
+the top because the user asked for it there, and widening the pane slides it off.
+
+So the preview remembers a block rather than a distance. `capturePreviewAnchor` records the last
+block starting at or above the fold - the element the top of the pane is inside - together with
+how far the pane is scrolled past its top, and `restorePreviewAnchor` measures that same element
+again once the new layout has settled and puts the pane back the same distance past it. A heading
+lifted to the top is the case where that distance is zero; everything else keeps the partly
+scrolled line it had, so nothing jumps that did not need to. Nested blocks share an offset - a
+list and its first item - and the later of the two is taken, which is what stops a screenful in
+the middle of a long list anchoring to the line the list began on.
+
+The anchor is taken in the preview's own scroll handler rather than read at each reflow, because
+a window resize is only announced once it has happened: by then the old layout is gone and there
+is nothing left to measure. Map entries carry their nodes, so keeping it current costs a binary
+search rather than a walk of the DOM.
+
+`reanchorPreview` decides which rule places the pane, and it is the answer the rest of this
+section gives: while the panes are tied together the editor is the stable side and
+`syncEditorToPreview` places the preview, so the anchor is consulted only where nothing else
+will - the preview on its own, or a split with sync switched off. Both routes into it are
+deliberate. `setViewMode` asks a frame after the switch, by which time the new width has been
+through a layout pass and Monaco has been laid out, and nothing is seen moving because a frame
+requested from there still runs before that layout is painted. The `ResizeObserver` on the
+article asks for everything else: a splitter drag, a window resize, a zoom step, an image that
+finished decoding.
+
+A node the article no longer holds has been replaced by a re-render, and measures zero wherever
+it went, which would send the pane to the top of the document. The line it was built from is
+carried beside it for that case, and the map the new DOM produced answers instead.
+
 ---
 
 ## Why mermaid runs in an iframe

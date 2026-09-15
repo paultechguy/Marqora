@@ -753,7 +753,10 @@
       var top = node.offsetTop;
       if (top < lastTop) { continue; }
 
-      map.push({ line: line, top: top });
+      // The node itself as well as its position. A pane laid out again has moved every top
+      // in the map, and the element is the thing that has not moved: it is still the same
+      // paragraph whatever the width. See capturePreviewAnchor.
+      map.push({ line: line, top: top, node: node });
       lastLine = line;
       lastTop = top;
     }
@@ -950,6 +953,104 @@
   }
 
   /*
+    Where the preview is, in terms that survive the pane being laid out again.
+
+    scrollTop counts pixels into one particular layout, and the pane does not keep that
+    layout. A paragraph that wrapped over four lines beside the source takes three across the
+    whole window, so everything below it moves up while the number stays where it was: swap
+    split view for preview view and the pane has not scrolled, but the document above the
+    fold got shorter, and what was at the top is now above it. A heading the outline lifted
+    to the top is where that shows worst, because it is the one place the user asked for
+    exactly.
+
+    The block at the top of the viewport is what the reflow cannot move - whatever the width,
+    it is still the same paragraph - so the position is remembered as that block and the
+    distance the pane has been scrolled past its top. Zero for a heading the outline put
+    there, part of a line for anyone who arrived with the wheel, and put back by measuring
+    the block again once the new layout has settled.
+
+    Held from the preview's own scroll handler rather than read at each reflow, because a
+    window resize is only announced after the fact: by the time anything hears about it the
+    old layout is gone and there is nothing left to measure.
+  */
+  var previewAnchor = null;
+
+  function capturePreviewAnchor() {
+    // A pane the view mode has hidden measures zero for everything, and its scrollTop is
+    // whatever the browser did to it on the way out. Neither is a position worth keeping,
+    // and the one from before it was hidden still is - which is what brings a preview back
+    // where it was after a trip through source-only view.
+    if (els.previewPane.clientHeight === 0) { return; }
+
+    var map = lineMap();
+    if (map.length === 0) { previewAnchor = null; return; }
+
+    var scrollTop = els.previewPane.scrollTop;
+
+    // The last block starting at or above the fold: the one the top of the pane is inside.
+    // Nested blocks share a top - a list and its first item - and the later of the two is
+    // the finer grained, which is what stops a screenful in the middle of a long list
+    // anchoring to the line the list began on.
+    var lo = 0;
+    var hi = map.length - 1;
+
+    while (lo < hi) {
+      var mid = (lo + hi + 1) >> 1;
+      if (map[mid].top <= scrollTop) { lo = mid; } else { hi = mid - 1; }
+    }
+
+    // The offset goes negative above the first block, where the article's own top padding is
+    // on screen. Kept rather than clamped, so a document being read from the beginning is
+    // put back at the beginning and not one padding short of it.
+    previewAnchor = {
+      node: map[lo].node,
+      line: map[lo].line,
+      offset: scrollTop - map[lo].top
+    };
+  }
+
+  function restorePreviewAnchor() {
+    if (!previewAnchor || els.previewPane.clientHeight === 0) { return; }
+
+    /*
+      Measured off the node while the article still holds it, which is exact and costs one
+      layout read - no interpolation, so a tall figure at the fold lands where it is rather
+      than where the two mapped lines either side of it suggest.
+
+      A re-render replaces every element in the article, and a node detached from the
+      document measures zero wherever it really went, which would send the pane to the top.
+      So the line it was built from is carried beside it, and the map the new DOM produced
+      answers instead.
+    */
+    var top = previewAnchor.node && els.preview.contains(previewAnchor.node)
+      ? previewAnchor.node.offsetTop
+      : interpolate(lineMap(), previewAnchor.line, 'line', 'top');
+
+    // Owned by the source for the reason every other programmatic preview scroll is: this is
+    // the pane being put back, not the user moving it, and the editor must not be dragged
+    // along behind it.
+    beginSync('source');
+    setPreviewScrollTop(top + previewAnchor.offset);
+  }
+
+  /*
+    Puts the preview back after something changed the shape it is laid out in - a view mode,
+    the splitter, the window, a zoom step, an image that finished decoding.
+
+    Which rule applies is the question the scroll sync answers everywhere else. While the two
+    panes are tied together the editor is the stable side and places the preview; the anchor
+    is consulted only where nothing else will, which is the preview on its own or a split
+    with sync switched off.
+  */
+  function reanchorPreview() {
+    if (state.scrollSync && state.viewMode === 'SideBySide') {
+      syncEditorToPreview();
+    } else {
+      restorePreviewAnchor();
+    }
+  }
+
+  /*
     The source line the preview is anchored to.
 
     The editor's top line, wherever the editor has room to scroll. That is what keeps the two
@@ -1089,6 +1190,7 @@
   }
 
   els.previewPane.addEventListener('scroll', function () {
+    capturePreviewAnchor();
     reportViewportLine();
 
     if (syncOwner === 'source') { return; }
@@ -1101,15 +1203,19 @@
     Everything below the change moves and the map does not know, so from then on the panes
     disagree by exactly that much, and stay that way until something else rebuilds it.
 
-    Watching the article's size catches every such change at once. The editor is the
-    stable side, so the preview is put back under its top line rather than the other way
-    round; the scroll that causes fires as owned by the source and is ignored by the
-    preview's own handler, so this cannot feed back on itself.
+    Watching the article's size catches every such change at once - and a change of width
+    along with them, which is the other half of what this is for. The splitter, the window,
+    the outline panel opening, a zoom step: the same document laid out narrower is a taller
+    one, so everything below the fold moves whether or not a byte of it changed.
+
+    Either way the preview is put back where it was, by whichever rule reanchorPreview picks;
+    the scroll that causes fires as owned by the source and is ignored by the preview's own
+    handler, so this cannot feed back on itself.
   */
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(function () {
       state.lineMapDirty = true;
-      if (syncOwner !== 'preview') { syncEditorToPreview(); }
+      if (syncOwner !== 'preview') { reanchorPreview(); }
     }).observe(els.preview);
   }
 
@@ -4291,9 +4397,18 @@
         applyFindCommand(pending.command, pending.seed);
       }
 
-      if (p.mode === 'SideBySide') {
-        requestAnimationFrame(syncEditorToPreview);
-      }
+      /*
+        And the preview put back under whatever it was showing. The pane has just been laid
+        out at a different width, so the same document is a different height above the fold
+        and the pixel count it was scrolled to no longer points at the same paragraph - which
+        is how a heading clicked in the outline slides off the top of a widening pane.
+
+        A frame on, so that what the decision reads is the new layout and not the old one:
+        the editor has been told to lay out but has not done it yet, and the article has not
+        been through a pass at its new width either. Nothing is seen moving, because a frame
+        requested from here still runs before that layout is painted.
+      */
+      requestAnimationFrame(reanchorPreview);
 
       // Temporary diagnostic for the blank-preview report. Reads the pane after layout has
       // settled, so it distinguishes "no content" from "content the user cannot see".
