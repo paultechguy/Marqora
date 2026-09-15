@@ -65,6 +65,19 @@ $words = [ordered]@{
     'maths' = 'math'
 }
 
+# The entries above that are matched as whole words instead of as stems.
+#
+# A stem is matched anywhere in a word, which is what makes the plural, past and -ing forms
+# come along for free. 'maths' cannot afford that: it sits inside examplemathsite.com, the
+# example domain in docs/Cloudflare Emergency Maintenance Page-Route.md, and as a stem it
+# rewrites that to examplemathite.com in 67 places - DNS names and Worker route patterns,
+# most of them inside fenced blocks where they read as literal configuration. The check had
+# been reporting all 67 as British spelling, and none of them were.
+#
+# British 'maths' is standalone or hyphenated, never a compound prefix, so the boundary costs
+# no real catch. Add a word here when its stem turns out to live inside a name.
+$wholeWord = @('maths')
+
 $extensions = @('*.cs', '*.xaml', '*.js', '*.css', '*.html', '*.json', '*.md')
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -74,8 +87,16 @@ $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 # Marqora's business. artifacts holds built release bodies, which are already published.
 $excluded = '[\\/](obj|bin|vendor|node_modules|artifacts|\.git|\.vs|\.github|\.claude)[\\/]'
 
+# A whole-word entry gets a boundary at each end. Everything else stays a stem, matched
+# anywhere in a word, and the order the entries were written in still decides the alternation.
+$alternatives = $words.Keys | ForEach-Object {
+    $escaped = [regex]::Escape($_)
+
+    if ($wholeWord -contains $_) { "\b$escaped\b" } else { $escaped }
+}
+
 $pattern = [regex]::new(
-    '(' + (($words.Keys | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')',
+    '(' + ($alternatives -join '|') + ')',
     [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
 
 <#
