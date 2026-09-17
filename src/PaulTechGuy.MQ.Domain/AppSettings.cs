@@ -660,6 +660,7 @@ public sealed record AppSettings
             "cheatsheetWindow",
             "cheatsheetScrollTop",
             "findAllWindow",
+            "exportReportWindow",
             "folioWindow",
             "folioProblemsHeight",
             "preferencesWindow",

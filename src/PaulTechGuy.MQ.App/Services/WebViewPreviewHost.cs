@@ -1467,7 +1467,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 _logger.LogWarning("Preview shell: {Message} {Detail}", message, detail);
                 break;
             default:
-                _logger.LogInformation("Preview shell: {Message}", message);
+                // The detail travels here too. It used to be dropped on this branch alone,
+                // which made an information message the one kind that could be sent with
+                // something attached and arrive without it.
+                _logger.LogInformation("Preview shell: {Message} {Detail}", message, detail);
                 break;
         }
     }

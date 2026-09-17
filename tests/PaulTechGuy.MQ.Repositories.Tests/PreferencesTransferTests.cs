@@ -295,6 +295,13 @@ public sealed class PreferencesTransferTests : IDisposable
             CheatsheetWindow = new WindowPlacement { Width = 111, Height = 222 },
             CheatsheetScrollTop = 42,
             FindAllWindow = new WindowPlacement { Width = 333, Height = 444 },
+
+            // Was missing here, and SessionKeys had never named it either. WithSessionOf has
+            // carried ExportReportWindow since the export report was built, but with this
+            // fixture leaving it at its default nothing differed and the gap stayed invisible.
+            // A member in one list and not the other is exactly the leak this test exists to
+            // catch, and it needs a value here to be able to.
+            ExportReportWindow = new WindowPlacement { Width = 999, Height = 1_010 },
             FolioWindow = new WindowPlacement { Width = 777, Height = 888 },
             FolioProblemsHeight = 123,
             PreferencesWindow = new WindowPlacement { Width = 555, Height = 666 },
