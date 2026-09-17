@@ -1005,6 +1005,7 @@
     previewAnchor = {
       node: map[lo].node,
       line: map[lo].line,
+      height: map[lo].node ? map[lo].node.offsetHeight : 0,
       offset: scrollTop - map[lo].top
     };
   }
@@ -1022,27 +1023,52 @@
       So the line it was built from is carried beside it, and the map the new DOM produced
       answers instead.
     */
-    var top = previewAnchor.node && els.preview.contains(previewAnchor.node)
-      ? previewAnchor.node.offsetTop
+    var node = previewAnchor.node && els.preview.contains(previewAnchor.node)
+      ? previewAnchor.node
+      : null;
+
+    var top = node !== null
+      ? node.offsetTop
       : interpolate(lineMap(), previewAnchor.line, 'line', 'top');
+
+    /*
+      The distance past the top of that block, scaled by what the reflow did to the block.
+
+      A paragraph that was four wrapped lines beside the source is three across the window, so
+      the same pixel count lands further down it - far enough, on a tall block, to leave the
+      paragraph altogether and land in the next one, which is the one thing remembering the
+      block was meant to prevent. What the reader sees is the fraction through the block, so
+      the fraction is what is kept.
+
+      Positive offsets only: it goes negative above the first block, where what is on screen
+      is the article's own top padding rather than any part of the block.
+    */
+    var offset = previewAnchor.offset;
+
+    if (node !== null && offset > 0 && previewAnchor.height > 0) {
+      offset *= node.offsetHeight / previewAnchor.height;
+    }
 
     // Owned by the source for the reason every other programmatic preview scroll is: this is
     // the pane being put back, not the user moving it, and the editor must not be dragged
     // along behind it.
     beginSync('source');
-    setPreviewScrollTop(top + previewAnchor.offset);
+    setPreviewScrollTop(top + offset);
   }
 
   /*
-    Puts the preview back after something changed the shape it is laid out in - a view mode,
+    Puts the panes back after something changed the shape they are laid out in - a view mode,
     the splitter, the window, a zoom step, an image that finished decoding.
 
-    Which rule applies is the question the scroll sync answers everywhere else. While the two
-    panes are tied together the editor is the stable side and places the preview; the anchor
-    is consulted only where nothing else will, which is the preview on its own or a split
-    with sync switched off.
+    Which rule applies is the question the scroll sync answers everywhere else. A mode change
+    has already read the position off whichever pane knew it and left that answer standing, and
+    it wins for the two frames it is held. Otherwise: while the panes are tied together the
+    editor is the stable side and places the preview, and the anchor is consulted only where
+    nothing else will, which is the preview on its own or a split with sync switched off.
   */
   function reanchorPreview() {
+    if (pendingModeSwitch !== null) { applyModeSwitch(pendingModeSwitch); return; }
+
     if (state.scrollSync && state.viewMode === 'SideBySide') {
       syncEditorToPreview();
     } else {
@@ -1078,25 +1104,52 @@
     return caretLine + (topLine - caretLine) * weight;
   }
 
-  function syncEditorToPreview() {
-    if (!state.scrollSync || state.viewMode !== 'SideBySide') { return; }
+  /*
+    The editor's half of the sync, read off the editor and nothing else.
 
-    beginSync('source');
-
+    Split from placing the preview because the two halves do not always happen at the same
+    moment. A view mode change measures this while the old layout is still standing and applies
+    it a frame later against the new one, by which time the editor may be hidden and measuring
+    zero for everything. See captureModeSwitch.
+  */
+  function sourcePlacement() {
     var editor = state.editor;
     var model = editor && editor.getModel();
 
     // Between closing the last tab and opening the next there is no model to ask.
-    if (!model) { scrollPreviewToLine(0); return; }
-
-    var map = lineMap();
-    if (map.length === 0) { return; }
+    if (!model) { return null; }
 
     var height = editor.getLayoutInfo().height;
     var editorEnd = editorEndScrollTop();
     var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
+    var scrollTop = editor.getScrollTop();
 
-    var target = interpolate(map, sourceAnchorLine(editor, weight), 'line', 'top');
+    return {
+      line: sourceAnchorLine(editor, weight),
+      weight: weight,
+      blend: endBlend(scrollTop, editorEnd, height),
+      scrollTop: scrollTop,
+      end: editorEnd,
+      max: editorMaxScrollTop()
+    };
+  }
+
+  /*
+    Puts the preview under the line the source is showing, in whatever layout the preview is
+    in now.
+
+    Everything the editor contributes arrives in the placement; everything the preview
+    contributes is measured here. That is what makes this safe to run a frame after the
+    measurement, and idempotent across a reflow: run against two different layouts it gives the
+    right answer for each, because a line does not change when a pane does.
+  */
+  function placePreviewFromSource(placement) {
+    if (placement === null) { scrollPreviewToLine(0); return; }
+
+    var map = lineMap();
+    if (map.length === 0) { return; }
+
+    var target = interpolate(map, placement.line, 'line', 'top');
     var previewEnd = previewEndScrollTop();
 
     /*
@@ -1107,52 +1160,182 @@
       editor has in the documents that do scroll. Each pane is asked in the proportion it is
       carrying the position.
     */
-    var scrollTop = editor.getScrollTop();
     var blend = endBlend(target, previewEnd, els.previewPane.clientHeight);
 
-    blend += (endBlend(scrollTop, editorEnd, height) - blend) * weight;
+    blend += (placement.blend - blend) * placement.weight;
 
     if (blend > 0) { target += (previewEnd - target) * blend; }
 
-    var carried = carryOverscroll(scrollTop, editorEnd, editorMaxScrollTop(), target, previewMaxScrollTop(), weight);
+    var carried = carryOverscroll(
+      placement.scrollTop, placement.end, placement.max, target, previewMaxScrollTop(), placement.weight);
 
     setPreviewScrollTop(carried === null ? target : carried);
+  }
+
+  function syncEditorToPreview() {
+    if (!state.scrollSync || state.viewMode !== 'SideBySide') { return; }
+
+    beginSync('source');
+    placePreviewFromSource(sourcePlacement());
+  }
+
+  // The preview's half of the same division, for the same reason.
+  function previewPlacement() {
+    // A pane the view mode has hidden measures zero for everything, and there is no position
+    // to be read out of it.
+    if (els.previewPane.clientHeight === 0) { return null; }
+
+    var map = lineMap();
+    if (map.length === 0) { return null; }
+
+    var scrollTop = els.previewPane.scrollTop;
+    var previewEnd = previewEndScrollTop();
+
+    return {
+      line: interpolate(map, scrollTop, 'top', 'line'),
+      blend: endBlend(scrollTop, previewEnd, els.previewPane.clientHeight),
+      scrollTop: scrollTop,
+      end: previewEnd,
+      max: previewMaxScrollTop()
+    };
+  }
+
+  function placeSourceFromPreview(placement) {
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+
+    if (placement === null || !model) { return; }
+
+    var lineCount = model.getLineCount();
+    var lineNumber = clamp(Math.floor(placement.line) + 1, 1, lineCount);
+    var top = editor.getTopForLineNumber(lineNumber);
+    var next = editor.getTopForLineNumber(Math.min(lineNumber + 1, lineCount));
+    var fraction = placement.line - Math.floor(placement.line);
+    var target = top + (next - top) * fraction;
+
+    var height = editor.getLayoutInfo().height;
+    var editorEnd = editorEndScrollTop();
+    var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
+
+    // The mirror of the easing above. Without it the two sides disagree about where the end
+    // is: reading the preview to the last block would leave the editor a screenful short, and
+    // the next arrow key would haul the preview back up to meet it.
+    if (placement.blend > 0) { target += (editorEnd - target) * placement.blend; }
+
+    // And the mirror of the overscroll carry, so wheeling the preview down through its own
+    // padding walks the editor through scrollBeyondLastLine rather than parking it.
+    var carried = carryOverscroll(
+      placement.scrollTop, placement.end, placement.max, target, editorMaxScrollTop(), weight);
+
+    editor.setScrollTop(carried === null ? target : carried);
   }
 
   function syncPreviewToEditor() {
     if (!state.scrollSync || state.viewMode !== 'SideBySide' || !state.editor) { return; }
 
     // Between closing the last tab and opening the next there is no model at all.
-    var model = state.editor.getModel();
-    if (!model) { return; }
+    if (!state.editor.getModel()) { return; }
+
+    var placement = previewPlacement();
+    if (placement === null) { return; }
 
     beginSync('preview');
+    placeSourceFromPreview(placement);
+  }
 
-    var lineCount = model.getLineCount();
-    var line = previewTopLine();
-    var lineNumber = clamp(Math.floor(line) + 1, 1, lineCount);
-    var top = state.editor.getTopForLineNumber(lineNumber);
-    var next = state.editor.getTopForLineNumber(Math.min(lineNumber + 1, lineCount));
-    var fraction = line - Math.floor(line);
-    var target = top + (next - top) * fraction;
+  // ------------------------------------------------------- changing the view
 
-    // The mirror of the easing above. Without it the two sides disagree about where the end
-    // is: reading the preview to the last block would leave the editor a screenful short, and
-    // the next arrow key would haul the preview back up to meet it.
-    var scrollTop = els.previewPane.scrollTop;
-    var previewEnd = previewEndScrollTop();
-    var editorEnd = editorEndScrollTop();
-    var height = state.editor.getLayoutInfo().height;
-    var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
-    var blend = endBlend(scrollTop, previewEnd, els.previewPane.clientHeight);
+  /*
+    A view mode change is the one moment both panes move at once: the pane that stays gets the
+    whole window, so it reflows, and the pane that goes measures zero from then on. Neither of
+    reanchorPreview's rules covers that by itself - the editor cannot be asked where it was
+    once it is hidden, and the preview's pixel count means a different place at the new width.
 
-    if (blend > 0) { target += (editorEnd - target) * blend; }
+    So the position is read while the old layout is still standing, kept as a line rather than
+    a distance, and applied once the new layout has settled.
 
-    // And the mirror of the overscroll carry, so wheeling the preview down through its own
-    // padding walks the editor through scrollBeyondLastLine rather than parking it.
-    var carried = carryOverscroll(scrollTop, previewEnd, previewMaxScrollTop(), target, editorMaxScrollTop(), weight);
+    Which pane is read is what the mode answers. On the way into preview view the source is
+    what the reader was steering with, so the preview lands where split view's own rule would
+    have put it at the full width - the same expression evaluated against the new layout, not
+    an approximation of it. On the way out of preview view the reading was done in the preview,
+    so the source is the side that gives way and scrolls to meet it, and the preview keeps the
+    place it had.
+  */
+  var pendingModeSwitch = null;
 
-    state.editor.setScrollTop(carried === null ? target : carried);
+  function captureModeSwitch(from, to) {
+    // With sync off the two panes are independent, and a mode change is not the moment to tie
+    // them together: each keeps its own place, which is what the block anchor is for.
+    if (!state.scrollSync || from === to) { return null; }
+
+    if (to === 'Preview') {
+      var source = sourcePlacement();
+      return source === null ? null : { read: 'source', placement: source };
+    }
+
+    if (from === 'Preview') {
+      var preview = previewPlacement();
+      return preview === null ? null : { read: 'preview', placement: preview };
+    }
+
+    // Source and split, either way round. The preview was hidden for one of the two, so there
+    // is nothing to carry that reanchorPreview's own rules do not already cover.
+    return null;
+  }
+
+  /*
+    Held for two frames rather than spent by the first caller.
+
+    Two separate things ask for the pane to be put back after a switch: setViewMode's own
+    frame, and the ResizeObserver that sees the article change width. Observer callbacks run
+    after animation frame callbacks, so the second would otherwise overwrite the placement with
+    the block anchor a moment later. Both are answered from the same frozen line instead, which
+    is why applying it twice, against two layouts, is harmless.
+
+    By the second frame the scroll this produced has been through the preview's scroll handler
+    and the block anchor has been taken from it, so the ordinary rules agree with the placement
+    and the freeze can go.
+  */
+  function beginModeSwitch(move) {
+    pendingModeSwitch = move;
+    if (move === null) { return; }
+
+    // This switch and no other: two of them a frame apart would otherwise have the first one's
+    // timer take the second one's placement down with it, a frame before it was due.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (pendingModeSwitch === move) { pendingModeSwitch = null; }
+      });
+    });
+  }
+
+  /*
+    Anything that deliberately puts a pane somewhere outranks a switch that is still settling,
+    and says so here.
+
+    The frozen line is an inference about what the reader was looking at. A heading clicked in
+    the outline, a result picked in Find All, a jump to either end of the document, a hand on the
+    wheel: none of those is an inference, and they arrive after the switch by design. The host
+    moves to a view that can show what it is about to point at, and points at it a message later.
+    Without this, the ResizeObserver trailing the switch would take the reader back off it.
+  */
+  function cancelModeSwitch() {
+    pendingModeSwitch = null;
+  }
+
+  function applyModeSwitch(move) {
+    if (move.read === 'source') {
+      beginSync('source');
+      placePreviewFromSource(move.placement);
+      return;
+    }
+
+    beginSync('preview');
+    placeSourceFromPreview(move.placement);
+
+    // The preview keeps its place but not its pixel count: it has just reflowed, so the block
+    // it was showing is somewhere else now, and its own anchor is what knows where.
+    restorePreviewAnchor();
   }
 
   /*
@@ -1194,6 +1377,8 @@
     reportViewportLine();
 
     if (syncOwner === 'source') { return; }
+
+    cancelModeSwitch();
     syncPreviewToEditor();
   }, { passive: true });
 
@@ -3251,6 +3436,8 @@
       updateWrapGlyphs();
 
       if (syncOwner === 'preview') { return; }
+
+      cancelModeSwitch();
       syncEditorToPreview();
     });
 
@@ -4021,6 +4208,11 @@
     var editor = state.editor;
     if (!editor) { return; }
 
+    // A find parked for a view mode change runs from inside setViewMode, a frame before that
+    // switch would place the panes. Revealing a match is a place the user asked for, so it is
+    // the placement that gives way rather than the match. See cancelModeSwitch.
+    cancelModeSwitch();
+
     // In split view the preview may be holding the keyboard, which is the other half of why
     // these arrive here at all: an editor answers a keystroke only while it has focus.
     editor.focus();
@@ -4215,6 +4407,9 @@
     state.lastHtml = null;
     applyPreviewHtml(tab.html, false);
 
+    // Where this tab was, not where the last one was. A placement still settling from a view
+    // mode change was read off the document being left, and has nothing to say about this one.
+    cancelModeSwitch();
     els.previewPane.scrollTop = tab.previewScrollTop || 0;
 
     // The WebView is collapsed by the host until a document exists, so the page may have
@@ -4391,6 +4586,13 @@
     },
 
     setViewMode: function (p) {
+      /*
+        Read before anything moves. The pane about to be hidden measures zero from here on, and
+        the one that stays is about to be laid out at a different width, so this is the last
+        moment either of them can be asked where the reader is. See captureModeSwitch.
+      */
+      beginModeSwitch(captureModeSwitch(state.viewMode, p.mode));
+
       state.viewMode = p.mode;
       els.root.setAttribute('data-view', p.mode);
       state.lineMapDirty = true;
@@ -4409,10 +4611,12 @@
       }
 
       /*
-        And the preview put back under whatever it was showing. The pane has just been laid
-        out at a different width, so the same document is a different height above the fold
-        and the pixel count it was scrolled to no longer points at the same paragraph - which
-        is how a heading clicked in the outline slides off the top of a widening pane.
+        And the panes put back under what they were showing, by whichever rule reanchorPreview
+        picks: the line read above where the mode change carried one, the preview's own block
+        anchor otherwise. The pane has just been laid out at a different width, so the same
+        document is a different height above the fold and the pixel count it was scrolled to no
+        longer points at the same paragraph - which is how a heading clicked in the outline
+        slides off the top of a widening pane.
 
         A frame on, so that what the decision reads is the new layout and not the old one:
         the editor has been told to lay out but has not done it yet, and the article has not
@@ -5104,6 +5308,8 @@
       sides of the bridge.
     */
     scrollToEdge: function (p) {
+      cancelModeSwitch();
+
       var toEnd = p.edge === 'end';
       var both = p.both === true;
       var wantsPreview = both || p.pane !== 'Source';
@@ -5134,6 +5340,8 @@
     },
 
     scrollToLine: function (p) {
+      cancelModeSwitch();
+
       if (state.editor) {
         // At the top, not near it. revealLineNearTop leaves a gap above of whichever is
         // larger, five lines or a fifth of the pane, so the heading lands somewhere between
@@ -5172,6 +5380,8 @@
     selectRange: function (p) {
       var editor = state.editor;
       if (!editor || state.activeTabId !== p.id) { return; }
+
+      cancelModeSwitch();
 
       // Nothing here asks for the source pane. A selection on a pane that is not on screen
       // is an answer the user cannot see, so the host puts the shell into split view first

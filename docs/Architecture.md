@@ -333,7 +333,11 @@ block starting at or above the fold - the element the top of the pane is inside 
 how far the pane is scrolled past its top, and `restorePreviewAnchor` measures that same element
 again once the new layout has settled and puts the pane back the same distance past it. A heading
 lifted to the top is the case where that distance is zero; everything else keeps the partly
-scrolled line it had, so nothing jumps that did not need to. Nested blocks share an offset - a
+scrolled line it had, so nothing jumps that did not need to. The distance is scaled by what the
+reflow did to the block's own height, because the block is the thing that reflowed: keeping the
+pixel count instead walks the fold down a shortening paragraph, and on a tall one it walks clear
+out of the paragraph and into the next, which is the single thing remembering the block was meant
+to prevent. Nested blocks share an offset - a
 list and its first item - and the later of the two is taken, which is what stops a screenful in
 the middle of a long list anchoring to the line the list began on.
 
@@ -355,6 +359,55 @@ finished decoding.
 A node the article no longer holds has been replaced by a re-render, and measures zero wherever
 it went, which would send the pane to the top of the document. The line it was built from is
 carried beside it for that case, and the map the new DOM produced answers instead.
+
+### Changing the view mode
+
+A view mode change is the one moment both panes move at once. The pane that stays gets the whole
+window, so it reflows; the pane that goes is `display: none` and measures zero from then on.
+Neither of `reanchorPreview`'s two rules covers that by itself - the editor cannot be asked where
+it was once it is hidden, and the preview's pixel count means a different place at the new width.
+
+So the position is read while the old layout is still standing, kept as a line rather than a
+distance, and applied once the new one has settled. `captureModeSwitch` runs at the top of
+`setViewMode`, before the attribute that changes the grid, and it is the reason the two sync
+functions are each split in half: `sourcePlacement` and `previewPlacement` measure a pane,
+`placePreviewFromSource` and `placeSourceFromPreview` put the other one under what was measured.
+Split them and the measurement can be a frame older than the placement; keep them together, as
+they used to be, and it cannot.
+
+Which pane is read is what the mode answers.
+
+Going *into* preview view, the source is what the reader was steering with, so the preview lands
+where split view's own rule would have put it at the full width. Not an approximation of that
+rule - the same expression, evaluated against the new layout: the top line weighted against the
+caret, eased onto the end of the document over the last screenful, carrying any overscroll. That
+is what makes the switch invisible in the case that matters, where the two panes were already
+showing the same thing and one of them is now the only one.
+
+Coming *out* of preview view, the reading was done in the preview, so the source is the side that
+gives way and scrolls to meet it, and the preview keeps the place it had. The alternative is what
+used to happen: the editor stayed where the reader left it several minutes and a chapter ago, and
+the preview snapped back to meet it, throwing away everything read in preview view.
+
+The placement is held for two frames rather than spent by the first caller, because two separate
+things ask for the pane to be put back after a switch. `setViewMode` asks a frame later, and the
+`ResizeObserver` asks when it sees the article change width - and observer callbacks run *after*
+animation frame callbacks, so the second would otherwise overwrite the first a moment later with
+the block anchor. Both are answered from the same frozen line instead, which is exactly why the
+halves are worth separating: applying one placement twice, against two layouts, lands in the same
+place both times. By the second frame the scroll it produced has been through the preview's
+scroll handler and the block anchor has been taken from it, so the ordinary rules now agree and
+the freeze can go.
+
+What outranks it is anything that deliberately puts a pane somewhere: a heading clicked in the
+outline, a result picked in Find All, a jump to either end of the document, a hand on the wheel.
+Those arrive *after* the switch by design - the host moves to a view that can show what it is
+about to point at, and points at it a message later - so each of them calls `cancelModeSwitch`
+first. A frozen line is an inference about what the reader was looking at, and a click is not an
+inference.
+
+With sync switched off none of this happens. The panes are independent, a mode change is not the
+moment to tie them together, and each keeps its own place.
 
 ---
 

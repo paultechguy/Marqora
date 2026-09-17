@@ -55,3 +55,7 @@ ordinary HTML file so that anybody can open it, which also means that in a folde
 ordinary exported page the two are one icon and one extension — nothing to tell them apart. The
 suggested name now carries the prefix, and a name that already begins that way is left as it is.
 Sharing as a zip is unchanged.
+
+**Switching the view keeps your place.** Moving between split, source and preview view put the
+pane that stayed wherever the other one had last been left, which on a long document meant
+losing the paragraph you were reading. The switch now carries the line across.
