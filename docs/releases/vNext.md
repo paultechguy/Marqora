@@ -2,31 +2,16 @@
 
 ## A callout takes the text you were looking at
 
-Inserting a callout used to drop an empty one above whatever you were reading, leaving you to
-retype the sentence you wanted in it or cut and paste it in. That is backwards: a callout is
-almost always made *out of* something already written, and the click that makes one happens while
-you are looking at exactly that text.
+A callout is almost always made *out of* something already written, and inserting one used to drop
+an empty one above it and leave you to retype the sentence. `Insert > Callouts` now takes what you
+have selected in with it — a few words out of the middle of a paragraph splits the paragraph, with
+what came before and after left reading correctly on either side — and with nothing selected, the
+paragraph the caret is in goes in whole. A caret in a list, a table or a code block still inserts
+an empty callout, on the grounds that clicking *Note* should not silently move a forty-line table;
+select the table first and it wraps.
 
-Select a sentence and pick `Insert > Callouts > Note` and the sentence is what goes inside. Select
-a few words out of the middle of a paragraph and the paragraph splits around them — what came
-before and what came after stay where they were, each reading correctly on its own, with the
-callout between them. Select two paragraphs and both come across as one callout rather than two.
-
-With nothing selected at all, the paragraph the caret is in goes in whole, so the common case is
-one click and no selecting first. A heading does the same.
-
-A caret in a list, a table or a code block still inserts an empty callout, and that is deliberate
-rather than a limitation — all three sit inside a callout perfectly well, but clicking *Note* with
-the caret somewhere in a forty-line table and watching the whole table move is not what the click
-looked like it would do. Select the table first and it wraps; selecting it is what says you meant
-it. `Ctrl+Z` takes any of this back in one step.
-
-Your own snippet files can do it too. A `.md` file in your snippets folder has always been able to
-say where the caret should land with `$0`; it can now say where your selected text goes with
-`$SEL`, which is what makes a `<details>` block or a two-column layout of your own worth reaching
-for with text already marked. A snippet without a `$SEL` behaves exactly as it did before, which
-is why nothing else that ships with Marqora carries one — a paragraph captured into Front Matter's
-`title:` line, or inside a Mermaid fence, would not be markdown any more.
+Your own snippets can do it too: `$SEL` in a snippet file is where the captured text goes, beside
+the `$0` that has always said where the caret lands.
 
 ## Where a document's numbers start
 
