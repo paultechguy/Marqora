@@ -517,10 +517,41 @@ because Open and Save don't belong under "More formatting", but the File menu an
 The menu bar splits the same commands a different way, along a line the bar does not draw:
 **Format** marks up text that is already there, and **Insert** (`Alt+I`) puts something new in
 at the caret — an image, a link, a table, a code block, a rule, a diagram or a snippet. Nothing
-in Insert needs a selection to mean something and everything in Format does, which is the
-difference the two menus are named for. Within each, the order is a flat inventory rather than
-the bar's grouping: that is what you want from the surface you go to when you cannot find
-something on the bar.
+in Insert *needs* a selection to mean something and everything in Format does, which is the
+difference the two menus are named for; the five callouts are the one place in Insert that will
+*use* one if it is there, and the section below says what they take. Within each, the order is a
+flat inventory rather than the bar's grouping: that is what you want from the surface you go to
+when you cannot find something on the bar.
+
+**Callouts take the text you are looking at**
+
+`Insert > Callouts` holds the five GitHub alerts — Note, Tip, Important, Warning and Caution.
+Reaching for one with text selected puts that text inside it, rather than dropping an empty
+callout above it for you to retype into. A few words out of the middle of a paragraph splits the
+paragraph: what was before and after them stays where it was, reading correctly on either side.
+With nothing selected, the paragraph the caret is in goes in whole, so turning a paragraph into a
+callout is a click with no selecting first. A heading does the same.
+
+A caret in a list, a table or a code block captures nothing and inserts an empty callout as it
+always did — not because those cannot go inside one, but because clicking Note with the caret
+somewhere in a long table should not silently move the table. Selecting it first still wraps it,
+selection being the thing that says you meant it.
+
+Your own snippet files can do this too. `$SEL` anywhere in the file is where the captured text
+goes, and `$0` is where the caret ends up:
+
+```markdown
+<details>
+<summary>$0</summary>
+
+$SEL
+
+</details>
+```
+
+Without a `$SEL` a snippet behaves exactly as it always has, which is why none of the ones that
+ship with Marqora carry one except the callouts — a captured paragraph inside a Mermaid fence is
+not a diagram. Write `$$SEL` or `$$0` for a literal one.
 
 **Formatting**
 

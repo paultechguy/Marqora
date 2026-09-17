@@ -41,4 +41,16 @@ public static class EditContextScopes
         MarkdownEditCommand.IncreaseIndent or MarkdownEditCommand.DecreaseIndent => EditContextScope.Document,
         _ => EditContextScope.Selection,
     };
+
+    /// <summary>
+    /// The scope a snippet has to be given, which depends on its body.
+    ///
+    /// A snippet that only drops text in needs the caret's surroundings and nothing else. One
+    /// carrying <see cref="SnippetMarkers.Selection"/> takes text with it, and with no selection
+    /// that text is the paragraph the caret is in — which reaches to the blank lines either side,
+    /// at an unknown distance, and is only a paragraph at all if the caret is not inside a fenced
+    /// block or front matter. Both questions are answered from the top of the file.
+    /// </summary>
+    public static EditContextScope ForSnippet(string? body) =>
+        SnippetMarkers.HasSelection(body) ? EditContextScope.Document : EditContextScope.Selection;
 }

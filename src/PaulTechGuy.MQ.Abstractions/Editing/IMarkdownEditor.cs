@@ -37,6 +37,12 @@ public interface IMarkdownEditor
     /// The body is plain markdown. An optional <c>$0</c> says where the caret should end up
     /// and is removed on the way in; <c>$$0</c> escapes a literal one. Without a marker the
     /// caret lands after what was inserted.
+    ///
+    /// A body may also carry one <c>$SEL</c>, which says the snippet takes text in with it: the
+    /// selection, or the paragraph the caret is in when there is nothing selected. That one
+    /// needs <see cref="EditContextScope.Document"/> — see
+    /// <see cref="EditContextScopes.ForSnippet"/> — and with a narrower context it quietly does
+    /// the same thing a body without the marker does.
     /// </summary>
     EditResult Insert(string snippetBody, EditContext context);
 

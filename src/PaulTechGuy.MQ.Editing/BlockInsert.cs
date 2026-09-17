@@ -106,6 +106,9 @@ internal static class BlockInsert
     /// True when a neighbouring line holds text, and so needs a blank line between it and
     /// the block. A line off the end of the window is the end of the document, which needs
     /// nothing.
+    ///
+    /// Shared with <see cref="SnippetInsert"/>, which replaces a span rather than inserting at
+    /// one and so cannot call <see cref="Insert"/>, but wants this decided the same way.
     /// </summary>
-    private static bool NeedsAir(string? line) => line is not null && line.Trim().Length > 0;
+    internal static bool NeedsAir(string? line) => line is not null && line.Trim().Length > 0;
 }

@@ -47,11 +47,17 @@ internal static class BuiltInSnippets
         // Severity order rather than alphabetical, matching the cheatsheet: the list is
         // short enough to read whole, and read whole it says what the five are for. The
         // alphabet would open on Caution, which is the one reached for least.
-        Callout("Note", "> [!NOTE]\n> $0"),
-        Callout("Tip", "> [!TIP]\n> $0"),
-        Callout("Important", "> [!IMPORTANT]\n> $0"),
-        Callout("Warning", "> [!WARNING]\n> $0"),
-        Callout("Caution", "> [!CAUTION]\n> $0"),
+        //
+        // These are the five that carry $SEL, and the only shipped snippets that do. Marking a
+        // sentence and reaching for Note is the usual way one of these gets written - the
+        // alternative was inserting an empty callout above the paragraph and retyping into it.
+        // Nothing else here wants it: a captured paragraph inside Front Matter's title, or
+        // inside a Mermaid fence, is not markdown any more.
+        Callout("Note", "> [!NOTE]\n> $SEL$0"),
+        Callout("Tip", "> [!TIP]\n> $SEL$0"),
+        Callout("Important", "> [!IMPORTANT]\n> $SEL$0"),
+        Callout("Warning", "> [!WARNING]\n> $SEL$0"),
+        Callout("Caution", "> [!CAUTION]\n> $SEL$0"),
 
         // Mermaid. Every one of these is a working diagram rather than a stub, because the
         // point of the menu is to hand over syntax nobody remembers, and a skeleton with

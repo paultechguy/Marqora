@@ -7031,7 +7031,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             .ConfigureAwait(true);
     }
 
-    /// <summary>Puts a snippet in at the caret.</summary>
+    /// <summary>
+    /// Puts a snippet in at the caret, and — for the callouts, and any snippet of the user's own
+    /// carrying <c>$SEL</c> — takes the selection or the caret's paragraph in with it.
+    ///
+    /// The scope is asked of the body rather than fixed, because only a capturing snippet needs
+    /// the whole document, and every snippet is a round trip that has to carry the lines back.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanFormat))]
     private async Task InsertSnippetAsync(Snippet? snippet)
     {
@@ -7051,7 +7057,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await RunEditAsync(context => _editor.Insert(body, context), snippet.Name).ConfigureAwait(true);
+        await RunEditAsync(
+                context => _editor.Insert(body, context),
+                snippet.Name,
+                EditContextScopes.ForSnippet(body))
+            .ConfigureAwait(true);
 
         StatusText = $"Inserted {snippet.Name}";
     }

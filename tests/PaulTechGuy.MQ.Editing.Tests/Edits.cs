@@ -43,6 +43,22 @@ internal static class Edits
     public static int CaretAfterImages(EditContext context, params string[] references) =>
         Editor.InsertImages(references, context).Selection?.Ordered.Start.Column ?? -1;
 
+    /// <summary>
+    /// Where the caret ended up after a snippet insert. Both coordinates matter for a snippet
+    /// that captured text, because the block it lands in is as tall as what it took.
+    /// </summary>
+    public static TextPosition CaretAfterSnippet(EditContext context, string body) =>
+        Editor.Insert(body, context).Selection?.Ordered.Start ?? new TextPosition(-1, -1);
+
+    /// <summary>
+    /// The text a snippet insert writes, without applying it.
+    ///
+    /// For the one context <see cref="Apply"/> cannot replay: a window that starts partway down
+    /// a document addresses its edits in document coordinates the window does not hold.
+    /// </summary>
+    public static string TextFromSnippet(EditContext context, string body) =>
+        string.Concat(Editor.Insert(body, context).Edits.Select(e => e.Text));
+
     /// <summary>What the toolbar would show for this selection.</summary>
     public static MarkdownMarkState Describe(EditContext context) => Editor.Describe(context);
 

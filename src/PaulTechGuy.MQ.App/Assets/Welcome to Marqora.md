@@ -247,7 +247,11 @@ page whenever you want it.
 - **Files are watched.** If a document changes on disk and you have no unsaved edits in it, the
   tab quietly catches up. If you do have edits, Marqora asks first.
 - **Snippets are just files.** Drop a `.md` file into your snippets folder and it appears on the
-  toolbar's **Insert** menu, under *Your snippets*.
+  toolbar's **Insert** menu, under *Your snippets*. `$0` in the file is where the caret lands,
+  and `$SEL` is where your selected text goes.
+- **Callouts take the text you are looking at.** Select a sentence, or just leave the caret in a
+  paragraph, and **Insert > Callouts > Note** puts it inside the callout instead of leaving you
+  an empty one to retype into.
 - **Everything is on the keyboard.** `Alt` puts you on the menu bar, and `Help > Keyboard
   Shortcuts...` lists every shortcut in the app with a button that copies the lot.
 
