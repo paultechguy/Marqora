@@ -4441,10 +4441,26 @@
     tab already on screen, and activateTab, for one arriving. Both go through here so there is
     one answer to what read-only does to the editor.
   */
+  /*
+    What the editor says when somebody types into a read-only document.
+
+    Monaco's own wording is "Cannot edit in read-only editor", which is the wrong voice twice
+    over: Marqora does not call itself "the editor" when talking to the reader, and the sentence
+    explains the mechanism rather than the document. Short on purpose - this appears every time a
+    key is pressed, so it is read once and then bumped into repeatedly.
+
+    An IMarkdownString rather than a plain string, which is the shape the option takes.
+  */
+  var READ_ONLY_MESSAGE = { value: 'This document is read-only' };
+
   function applyReadOnly(readOnly) {
     if (!state.editor) { return; }
 
-    state.editor.updateOptions({ readOnly: readOnly, domReadOnly: readOnly });
+    state.editor.updateOptions({
+      readOnly: readOnly,
+      domReadOnly: readOnly,
+      readOnlyMessage: READ_ONLY_MESSAGE
+    });
   }
 
   function activateTab(id) {

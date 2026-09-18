@@ -393,6 +393,54 @@ a.mq-blocked-media {
   border-radius: 4px;
 }
 
+/*
+  The message the editor puts up when somebody types into a read-only document.
+
+  Monaco's own: 2px of padding, a 3px radius and VS Code's hover palette, bordered in
+  inputValidation-infoBorder - which is a blue the app uses nowhere else. Beside the zoom badge
+  and the diagram error block it read as a different program's popup, because it was one.
+
+  Retimed as well as recolored. The widget fades in over 150ms and out over 100ms, which is
+  tuned for a message you see occasionally; this one appears on every keystroke into a marked
+  document, and at that rate the fade is what you notice rather than the words.
+
+  8px rather than the zoom badge's pill, which belongs to something with two words in it. A
+  sentence in a fully rounded box has too much air at the ends and reads as a toast that is
+  going somewhere.
+*/
+.monaco-editor-overlaymessage .message {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--mq-border-strong);
+  background: var(--mq-bg-subtle);
+  box-shadow: var(--mq-shadow);
+  color: var(--mq-text);
+  font-family: var(--mq-font-ui);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/*
+  The little triangle joining the box to the caret. Monaco colors only the one border edge that
+  points at the text, so each direction is named separately - and it takes the border color
+  rather than the fill, which is what keeps it reading as part of the outline.
+*/
+.monaco-editor-overlaymessage .anchor.top {
+  border-bottom-color: var(--mq-border-strong);
+}
+
+.monaco-editor-overlaymessage .anchor.below {
+  border-top-color: var(--mq-border-strong);
+}
+
+.monaco-editor-overlaymessage.fadeIn {
+  animation-duration: 90ms;
+}
+
+.monaco-editor-overlaymessage.fadeOut {
+  animation-duration: 70ms;
+}
+
 .mq-pane--preview {
   overflow-y: auto;
   overflow-x: hidden;
@@ -512,6 +560,16 @@ a.mq-blocked-media {
 @media (prefers-reduced-motion: reduce) {
   .mq-boot__pulse { animation: none; }
   .mq-zoom-badge { transition: none; }
+
+  /*
+    The read-only message appears and goes on its own, so it is the animation rather than the
+    element that has to stop - none at all would leave it never shown, since Monaco fades it in
+    rather than placing it. Cut to nothing perceptible instead.
+  */
+  .monaco-editor-overlaymessage.fadeIn,
+  .monaco-editor-overlaymessage.fadeOut {
+    animation-duration: 1ms;
+  }
 }
 
 /* -------------------------------------------------------------- preview */
