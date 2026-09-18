@@ -105,10 +105,26 @@ public sealed partial class DocumentTabViewModel : ObservableObject
 
             // Local time in the machine's own format: "at 13:42" is wrong for half the world,
             // and this is the one place the exact moment is available to be read.
-            return _document.AutoReloadedUtc is { } reloaded
-                ? text + "\nReloaded from disk at "
-                    + reloaded.ToLocalTime().ToString("t", CultureInfo.CurrentCulture)
-                : text;
+            if (_document.AutoReloadedUtc is { } reloaded)
+            {
+                text += "\nReloaded from disk at "
+                    + reloaded.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
+            }
+
+            // The tab strip carries no glyph for this, so the tooltip is where it is said. It
+            // composes with everything above rather than replacing any of it: a read-only
+            // document can also hold unsaved edits and have been reloaded this morning, and all
+            // three are worth knowing at once. The second line is for the case that reads as a
+            // contradiction - unsaved work in a document that will not be written - and points
+            // at the way out rather than leaving the reader to find it.
+            if (_document.IsLocked)
+            {
+                text += _document.IsDirty
+                    ? "\nRead-only — unsaved edits will need Save As"
+                    : "\nRead-only";
+            }
+
+            return text;
         }
     }
 
@@ -131,6 +147,16 @@ public sealed partial class DocumentTabViewModel : ObservableObject
 
     public bool IsUntitled => _document.IsUntitled;
 
+    /// <summary>Whether this document refuses to be written.</summary>
+    public bool IsReadOnly => _document.IsReadOnly;
+
+    /// <summary>
+    /// Whether the mark is on, which is not the same question as <see cref="IsReadOnly"/>: a
+    /// marked document whose file has been deleted still refuses nothing, because saving is how
+    /// the file comes back. The menu's tick follows the mark, so it stays where the user put it.
+    /// </summary>
+    public bool IsLocked => _document.IsLocked;
+
     public string? Path => _document.Path;
 
     /// <summary>Replaces the snapshot and tells the view what changed.</summary>
@@ -146,5 +172,7 @@ public sealed partial class DocumentTabViewModel : ObservableObject
         OnPropertyChanged(nameof(IsUntitled));
         OnPropertyChanged(nameof(Path));
         OnPropertyChanged(nameof(HasExternalChange));
+        OnPropertyChanged(nameof(IsReadOnly));
+        OnPropertyChanged(nameof(IsLocked));
     }
 }

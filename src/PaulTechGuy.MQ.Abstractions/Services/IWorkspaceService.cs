@@ -35,6 +35,15 @@ public enum WorkspaceChange
     /// still awaiting a render would otherwise try to mark a tab that had not been added yet.
     /// </summary>
     ExternalStateChanged,
+
+    /// <summary>
+    /// A document was marked read-only, or had its mark taken off.
+    ///
+    /// Its own change rather than an Edited: nothing about the text moved, and the tab strip,
+    /// the menus and the editor all need telling for a reason that has nothing to do with the
+    /// buffer.
+    /// </summary>
+    LockChanged,
 }
 
 /// <summary>Describes one change to the workspace. <see cref="Document"/> is null for a close.</summary>
@@ -91,13 +100,36 @@ public interface IWorkspaceService
 
     void Activate(Guid id);
 
-    /// <summary>Updates the in-memory buffer from the editor. Does not touch disk.</summary>
-    void ApplyEdit(Guid id, string text);
+    /// <summary>
+    /// Updates the in-memory buffer from the editor. Does not touch disk.
+    ///
+    /// False when nothing changed - the text already matched, the document has gone, or it is
+    /// marked read-only. A caller that also pushes this text into the editor has to check:
+    /// doing one without the other leaves the buffer and the editor holding different documents.
+    /// </summary>
+    bool ApplyEdit(Guid id, string text);
 
-    /// <summary>Writes the document. A document with no path is a no-op; use SaveAsAsync.</summary>
-    Task SaveAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Writes the document. False when nothing was written - no path yet, or the document is
+    /// marked read-only. Callers announce a save as soon as this returns, so the answer matters.
+    /// </summary>
+    Task<bool> SaveAsync(Guid id, CancellationToken cancellationToken = default);
 
-    Task SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Writes the document somewhere else and points it there. The mark does not travel with
+    /// it - this is the way out of a marked document - but a destination that is itself marked
+    /// is refused, and that is what false means here.
+    /// </summary>
+    Task<bool> SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks the document read-only, or takes the mark off, and remembers it for next time.
+    ///
+    /// False for an untitled document: there is no file yet for a mark to protect. Marking a
+    /// document that has unsaved edits is allowed - the edits stay, and stay unsaveable until
+    /// the mark comes off or they are written somewhere else.
+    /// </summary>
+    Task<bool> SetLockedAsync(Guid id, bool locked, CancellationToken cancellationToken = default);
 
     Task ReloadAsync(Guid id, CancellationToken cancellationToken = default);
 

@@ -69,6 +69,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IUpdateReminderService _updates;
     private readonly IDocumentAssetStore _assets;
     private readonly IPastedImageTracker _pastedImages;
+    private readonly IDocumentLocks _locks;
     private readonly ILogger<MainViewModel> _logger;
 
     private IPreviewHost? _host;
@@ -195,6 +196,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     [NotifyCanExecuteChangedFor(nameof(ReloadFromDiskCommand))]
     public partial bool IsDirty { get; set; }
+
+    /// <summary>
+    /// Whether the tab in front of the user is marked read-only.
+    ///
+    /// Mirrored onto the view model rather than reached through <c>ActiveTab</c> in each
+    /// binding, because x:Bind only re-evaluates when something raises a change for the value
+    /// it was given - a path through a property of a property would leave Cut, Paste and Format
+    /// wearing whatever they had when the tab was selected.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAlterText))]
+    [NotifyPropertyChangedFor(nameof(CanFormat))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleReadOnlyCommand))]
+    public partial bool ActiveTabIsReadOnly { get; set; }
+
+    /// <summary>
+    /// Whether the active tab carries the mark, which is what the menu's tick shows.
+    ///
+    /// Separate from <see cref="ActiveTabIsReadOnly"/>, which also answers false for a marked
+    /// document whose file has been deleted - saving is how that file comes back, so the mark
+    /// stands down there. The tick still has to show where the user put it.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ActiveTabIsLocked { get; set; }
+
+    /// <summary>
+    /// Whether the active tab is turning text away at the caret, which is what grays Cut and
+    /// Paste. Narrower than <see cref="ActiveTabIsReadOnly"/> - see
+    /// <c>MarkdownDocument.RefusesEdits</c> - so a marked document holding unsaved edits keeps
+    /// both, along with the undo that gets the user back out of them.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAlterText))]
+    public partial bool ActiveTabRefusesEdits { get; set; }
 
     /// <summary>
     /// Whether any open tab holds unsaved work, which is the whole of Save All's answer: it
@@ -609,6 +645,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IUpdateReminderService updates,
         IDocumentAssetStore assets,
         IPastedImageTracker pastedImages,
+        IDocumentLocks locks,
         ILogger<MainViewModel> logger)
     {
         _workspace = workspace;
@@ -645,6 +682,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _updates = updates;
         _assets = assets;
         _pastedImages = pastedImages;
+        _locks = locks;
         _logger = logger;
 
         DocumentName = string.Empty;
@@ -723,7 +761,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// of this app exists to prevent - so the Format menu and the format bar gray out while
     /// the keyboard is in the panel.
     /// </remarks>
-    public bool CanFormat => HasDocument && ViewMode is not ViewMode.Preview && !OutlineHasFocus;
+    public bool CanFormat => HasDocument
+        && ViewMode is not ViewMode.Preview
+        && !OutlineHasFocus
+        && !ActiveTabIsReadOnly;
 
     /// <summary>
     /// Whether the Edit menu's caret-scoped commands - Cut, Paste, Select All - can do
@@ -735,6 +776,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// text, which is not a surprise when they asked to search.
     /// </summary>
     public bool CanEditText => HasContent && !OutlineHasFocus;
+
+    /// <summary>
+    /// Whether a command that <em>removes</em> text at the caret is worth offering.
+    ///
+    /// Cut and Paste, and deliberately not Select All, which shares every other condition with
+    /// them. Selecting all of a read-only document is exactly what somebody reading one wants -
+    /// it is how the text gets copied out - and folding read-only into
+    /// <see cref="CanEditText"/> would have taken that away as a side effect of guarding Cut.
+    /// </summary>
+    public bool CanAlterText => CanEditText && !ActiveTabRefusesEdits;
 
     /// <summary>
     /// Whether Undo has anything to take back, for the toolbar button and its Edit-menu
@@ -927,6 +978,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// list is still written on the way out either way, so switching the preference back
     /// picks the session up again rather than starting from an empty one.
     /// </summary>
+    /// <summary>
+    /// Reads the read-only marks, before anything is opened.
+    ///
+    /// Order matters and is the whole reason this is its own call: the workspace asks whether a
+    /// path is marked as it opens each document, and a document opened before the marks are in
+    /// memory would come up writable. That covers the restored session, a file named on the
+    /// command line and the welcome document alike, so it has to run ahead of all three.
+    ///
+    /// Marks whose file has since been deleted are dropped as they are read, and saying so is
+    /// the point: a guard that quietly stops guarding is worse than one that was never there.
+    /// </summary>
+    public async Task LoadDocumentMarksAsync()
+    {
+        await _locks.LoadAsync().ConfigureAwait(true);
+
+        if (_locks.DroppedOnLoad is var dropped and > 0)
+        {
+            StatusText = dropped == 1
+                ? "A read-only mark was dropped; its file is gone"
+                : $"{dropped} read-only marks were dropped; their files are gone";
+        }
+    }
+
     public async Task RestoreSessionAsync()
     {
         AppSettings current = _settings.Current;
@@ -1519,6 +1593,50 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         && ActiveExternalState != ExternalState.Missing
         && (IsDirty || ActiveExternalState == ExternalState.Changed);
 
+    /// <summary>
+    /// Whether the active document can carry a mark at all.
+    ///
+    /// Only untitled documents cannot: there is no file yet for a mark to protect, and the mark
+    /// is remembered by path. Everything else is offered, including a document that already has
+    /// unsaved edits - taking the offer away there would be a blocking question in an app that
+    /// does not ask them, and the edits survive the mark perfectly well.
+    /// </summary>
+    private bool CanToggleReadOnly() => HasDocument && !string.IsNullOrWhiteSpace(DocumentPath);
+
+    /// <summary>
+    /// Marks the active document read-only, or takes the mark off.
+    ///
+    /// Marking a document that has unsaved edits is allowed, and says so once. The alternative
+    /// - refusing until the user saves or discards - would put a blocking question in the way of
+    /// something they asked for plainly, in an app whose whole habit is to say so and carry on.
+    /// The edits stay, the file stays untouched, and Save As is the way to keep both.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanToggleReadOnly))]
+    private async Task ToggleReadOnlyAsync()
+    {
+        if (_workspace.Active is not { } document)
+        {
+            return;
+        }
+
+        bool marking = !document.IsLocked;
+
+        if (!await _workspace.SetLockedAsync(document.Id, marking).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        if (!marking)
+        {
+            StatusText = $"{document.DisplayName} is no longer read-only";
+            return;
+        }
+
+        StatusText = document.IsDirty
+            ? $"{document.DisplayName} is read-only — its unsaved edits will need Save As"
+            : $"{document.DisplayName} is read-only";
+    }
+
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
@@ -1551,6 +1669,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Ahead of FormatBeforeSaveAsync, which would otherwise rewrite the buffer of a document
+        // that is about to refuse to be written - leaving it reformatted, unsaved and unsaveable.
+        //
+        // This is the guard that counts, rather than CanSave: the accelerators call Execute
+        // directly and ICommand.Execute does not consult CanExecute, so a grayed menu item says
+        // nothing about what Ctrl+S will do.
+        if (document.IsReadOnly)
+        {
+            StatusText = $"Read-only — {document.DisplayName} was not saved";
+            return;
+        }
+
         await FormatBeforeSaveAsync(id).ConfigureAwait(true);
 
         // Re-read: formatting replaced the document's text.
@@ -1563,8 +1693,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _workspace.SaveAsync(id).ConfigureAwait(true);
-            StatusText = $"Saved {document.DisplayName}";
+            // Announced only on the workspace's say-so. It answers rather than throwing when it
+            // declines to write, and "Saved notes.md" over a file nothing touched is the one
+            // thing this whole feature must never do.
+            if (await _workspace.SaveAsync(id).ConfigureAwait(true))
+            {
+                StatusText = $"Saved {document.DisplayName}";
+            }
         }
         catch (DirectoryNotFoundException ex)
         {
@@ -1583,7 +1718,129 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "Could not save {Path}.", document.DisplayPath);
-            await _dialogs.ShowMessageAsync("Could not save", ex.Message).ConfigureAwait(true);
+
+            await _dialogs
+                .ShowMessageAsync("Could not save", DescribeSaveFailure(document, ex))
+                .ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// What the shell was last told about each document's editor, so it is only told again when
+    /// the answer moves. Edited fires on every keystroke and the answer almost never changes.
+    /// </summary>
+    private readonly Dictionary<Guid, bool> _editorReadOnly = [];
+
+    /// <summary>
+    /// Tells the editor whether to take typing for this document.
+    ///
+    /// Sent on the same predicate the buffer enforces - see <c>MarkdownDocument.RefusesEdits</c>
+    /// - so the two cannot disagree about a keystroke. A marked document that already holds
+    /// unsaved edits deliberately keeps its editor: Monaco's readOnly option turns off undo and
+    /// redo along with typing, and undo is the only way back out of edits that cannot be saved.
+    /// </summary>
+    private async Task ApplyEditorReadOnlyAsync(MarkdownDocument document)
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        bool wanted = document.RefusesEdits;
+
+        if (_editorReadOnly.TryGetValue(document.Id, out bool sent) && sent == wanted)
+        {
+            return;
+        }
+
+        _editorReadOnly[document.Id] = wanted;
+
+        await _host.SetReadOnlyAsync(document.Id, wanted).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Whether this document is marked read-only, saying so once if it is.
+    ///
+    /// Called at the head of every command that would change text. The workspace refuses those
+    /// changes too, but it refuses them silently and in one place, which is the wrong shape for
+    /// telling somebody why the thing they just clicked did nothing - and a command that pushed
+    /// its result into the editor and had only the buffer refuse it would leave the two holding
+    /// different documents. So the commands ask first, and the workspace is what makes the
+    /// promise true for anything that forgets to.
+    ///
+    /// <paramref name="what"/> names the command rather than scolding: the reader knows they
+    /// marked it, and what they want to know is which of the things they just asked for did
+    /// not happen.
+    /// </summary>
+    private bool RefuseIfReadOnly(Guid id, string what)
+    {
+        if (_workspace.Find(id) is not { IsReadOnly: true })
+        {
+            return false;
+        }
+
+        StatusText = $"Read-only — {what} did nothing";
+        return true;
+    }
+
+    /// <summary>
+    /// The same question about whichever document is in front, for the commands that act on it
+    /// rather than on a document they were handed.
+    /// </summary>
+    private bool RefuseActiveIfReadOnly(string what) =>
+        _workspace.Active is { } active && RefuseIfReadOnly(active.Id, what);
+
+    /// <summary>
+    /// The same question for text entered at the caret - typing, cut, paste - which follows the
+    /// narrower predicate the editor and the buffer share rather than the mark itself.
+    ///
+    /// The difference shows up on a marked document that already holds unsaved edits. Typing
+    /// into one is allowed, because refusing it would mean turning the editor read-only, and
+    /// Monaco takes undo away with it. Paste has to follow typing: being able to type a
+    /// sentence but not paste one would be an odd line to draw, and the file is no more at risk
+    /// either way. The commands that rewrite a document are the other case and stay on the mark
+    /// - those are deliberate acts, and honoring the mark is the whole of what it was for.
+    /// </summary>
+    private bool RefuseActiveIfNotTakingEdits(string what) =>
+        _workspace.Active is { RefusesEdits: true } active && RefuseIfReadOnly(active.Id, what);
+
+    /// <summary>
+    /// What to say about a save that did not happen.
+    ///
+    /// <see cref="UnauthorizedAccessException"/> arrives both for a file carrying the read-only
+    /// attribute and for one the user has no permission to write, and the framework's message
+    /// names neither - it reports the path and the word "denied" and leaves the reader to guess
+    /// which. The attribute is the one of the two that the user can see and undo, so it is worth
+    /// naming outright. Anything else keeps the original text, which is more use than a guess.
+    /// </summary>
+    private static string DescribeSaveFailure(MarkdownDocument document, Exception exception)
+    {
+        if (exception is UnauthorizedAccessException
+            && document.Path is { } path
+            && IsMarkedReadOnlyOnDisk(path))
+        {
+            return $"{document.DisplayName} is marked read-only on disk, so it cannot be written back. "
+                + "Clear the read-only tick in the file's properties, or use Save As to write a copy "
+                + "somewhere else.";
+        }
+
+        return exception.Message;
+    }
+
+    /// <summary>
+    /// Whether the file carries the read-only attribute, asked only to describe a failure that
+    /// has already happened. A file that cannot even be asked keeps the original message rather
+    /// than trading one failure for another.
+    /// </summary>
+    private static bool IsMarkedReadOnlyOnDisk(string path)
+    {
+        try
+        {
+            return new FileInfo(path).IsReadOnly;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
         }
     }
 
@@ -1619,8 +1876,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// A missing file counts as dirty, so Save stays within reach for the one case where
     /// rewriting an unedited buffer is exactly the point: putting back a file that has been
     /// deleted underneath it.
+    ///
+    /// A document marked read-only has nothing Save can do either - but this is not where that
+    /// is enforced, and the difference matters. The accelerators call Execute directly and
+    /// ICommand.Execute does not consult CanExecute, so all this grays is the menu item and the
+    /// toolbar button. SaveDocumentAsync holds the guard that Ctrl+S actually meets.
     /// </summary>
-    private bool CanSave() => HasDocument && IsDirty;
+    private bool CanSave() => HasDocument && IsDirty && !ActiveTabIsReadOnly;
 
     /// <summary>
     /// Writes every open document that has unsaved changes.
@@ -1642,11 +1904,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         // Ids rather than documents, and a copy of them: every save replaces the record it
         // wrote, and a Save As can reorder the list under the loop.
-        List<Guid> dirty = [.. _workspace.Documents.Where(d => d.IsDirty).Select(d => d.Id)];
+        List<Guid> dirty =
+            [.. _workspace.Documents.Where(d => d.IsDirty && !d.IsReadOnly).Select(d => d.Id)];
+
+        // Counted apart rather than left in the list to fail. A marked document is not a save
+        // that went wrong, it is one that was never asked for, and letting it be the gap in
+        // "Saved 4 of 6" would read as a failure the user has to go and investigate.
+        int marked = _workspace.Documents.Count(d => d.IsDirty && d.IsReadOnly);
 
         if (dirty.Count == 0)
         {
-            StatusText = "Nothing to save";
+            StatusText = marked > 0
+                ? $"Nothing to save — {Documents(marked)} read-only"
+                : "Nothing to save";
+
             return;
         }
 
@@ -1672,9 +1943,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _workspace.Activate(previous);
         }
 
-        StatusText = saved == dirty.Count
+        string written = saved == dirty.Count
             ? $"Saved {Documents(saved)}"
             : $"Saved {saved} of {Documents(dirty.Count)}";
+
+        StatusText = marked > 0 ? $"{written} — {Documents(marked)} read-only" : written;
     }
 
     /// <summary>
@@ -1939,6 +2212,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Offers to save a tab before it is closed. Returns false when the user cancels, in
     /// which case the caller must abandon what it was doing.
+    ///
+    /// A document marked read-only is offered Save As rather than Save, and that is a deadlock
+    /// fix rather than a nicety. This calls <c>SaveAsync</c> directly rather than through the
+    /// command, so <c>CanSave</c> never runs; the save would be refused, the document would stay
+    /// dirty, this would return false, and the tab would refuse to close. Every tab goes through
+    /// here when the window closes - a false answer there cancels the shutdown - so the app
+    /// could not be exited at all.
     /// </summary>
     private async Task<bool> ConfirmDiscardAsync(DocumentTabViewModel tab)
     {
@@ -1950,16 +2230,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Make the tab in question visible, or the prompt names a document the user cannot see.
         _workspace.Activate(tab.Id);
 
+        bool readOnly = tab.IsReadOnly;
+
         ConfirmResult result = await _dialogs.ConfirmAsync(
             "Save changes?",
-            $"{tab.Title} has unsaved changes.",
-            primaryText: "Save",
+            readOnly
+                ? $"{tab.Title} is read-only and has unsaved changes. They can be kept by saving "
+                    + "a copy somewhere else."
+                : $"{tab.Title} has unsaved changes.",
+            primaryText: readOnly ? "Save As..." : "Save",
             secondaryText: "Discard").ConfigureAwait(true);
 
         switch (result)
         {
             case ConfirmResult.Primary:
-                await SaveAsync().ConfigureAwait(true);
+
+                // Straight to Save As for a read-only document. Going through SaveAsync would
+                // be refused, leave it dirty, and take the tab - and the window - with it.
+                if (readOnly)
+                {
+                    await SaveDocumentAsAsync(tab.Id).ConfigureAwait(true);
+                }
+                else
+                {
+                    await SaveAsync().ConfigureAwait(true);
+                }
 
                 // A cancelled Save As leaves the document dirty; do not close it.
                 return _workspace.Find(tab.Id) is not { IsDirty: true };
@@ -2535,6 +2830,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     ApplyDocumentNumberingDefault(opened, reloaded: false);
 
                     await AddTabAsync(opened).ConfigureAwait(true);
+
+                    // After the tab exists in the shell: the option is stored against it, so
+                    // sending this any earlier would arrive at a tab the page had not made yet.
+                    // A document restored from the previous session comes up marked here.
+                    await ApplyEditorReadOnlyAsync(opened).ConfigureAwait(true);
                     break;
 
                 case WorkspaceChange.Closed:
@@ -2542,6 +2842,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     // currently recycled. Closing a tab is not a way to lose a picture.
                     _pastedImages.Forget(e.DocumentId);
                     _blockedImageCounts.Remove(e.DocumentId);
+                    _editorReadOnly.Remove(e.DocumentId);
                     await RemoveTabAsync(e.DocumentId).ConfigureAwait(true);
                     RefreshExternalNotice();
                     break;
@@ -2568,6 +2869,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 case WorkspaceChange.Edited when e.Document is { } edited:
                     FindTab(edited.Id)?.Update(edited);
                     UpdateActiveDocumentState();
+
+                    // A marked document that has just gone dirty gives its editor back, and one
+                    // undone all the way to its saved text takes it away again. Only sent when
+                    // the answer actually moves, which for an unmarked document is never.
+                    await ApplyEditorReadOnlyAsync(edited).ConfigureAwait(true);
                     break;
 
                 case WorkspaceChange.Saved when e.Document is { } saved:
@@ -2581,6 +2887,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     UpdateActiveDocumentState();
                     RefreshExternalNotice();
                     PersistSession();
+
+                    // A marked document is clean again once it has been written somewhere, so
+                    // its editor closes back up. Reached by Save As, which is the way out.
+                    await ApplyEditorReadOnlyAsync(saved).ConfigureAwait(true);
 
                     // Save As moves a document to a different folder, and always does for an
                     // untitled one, which had none. Relative images resolve against that
@@ -2608,6 +2918,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                     break;
                 }
+
+                case WorkspaceChange.LockChanged when e.Document is { } marked:
+
+                    // The tab for its tooltip, the active state for the menus and commands, and
+                    // the editor because a marked document stops taking typing. Nothing about
+                    // the text moved, so nothing here re-renders or re-checks it.
+                    FindTab(marked.Id)?.Update(marked);
+                    UpdateActiveDocumentState();
+
+                    await ApplyEditorReadOnlyAsync(marked).ConfigureAwait(true);
+                    break;
 
                 case WorkspaceChange.ExternalStateChanged when e.Document is { } stale:
                     FindTab(stale.Id)?.Update(stale);
@@ -2904,12 +3225,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DocumentName = document?.DisplayName ?? string.Empty;
         DocumentPath = document?.Path ?? string.Empty;
         IsDirty = document?.IsDirty ?? false;
+        ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
+        ActiveTabIsLocked = document?.IsLocked ?? false;
+        ActiveTabRefusesEdits = document?.RefusesEdits ?? false;
         ActiveExternalState = document?.External ?? ExternalState.InSync;
 
         // Every tab, not just this one: Save All writes the whole workspace, and a document
         // can go dirty - or come back clean - while another tab is the one on screen. This
         // runs on each workspace change, which is the only thing that can move the answer.
-        HasDirtyTabs = _workspace.Documents.Any(d => d.IsDirty);
+        // Read-only documents are excluded, so Save All is not offered when everything it would
+        // reach refuses to be written.
+        HasDirtyTabs = _workspace.Documents.Any(d => d.IsDirty && !d.IsReadOnly);
 
         if (document is not null)
         {
@@ -3677,6 +4003,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task<bool> ApplyHeadingRewriteAsync(Guid documentId, HeadingNumberRewriter.Result result)
     {
         if (_host is null)
+        {
+            return false;
+        }
+
+        // Ahead of both halves below. The buffer would turn this away on its own, but the
+        // editor is written to as well, and doing one without the other leaves them holding
+        // different documents.
+        if (RefuseIfReadOnly(documentId, "renumbering"))
         {
             return false;
         }
@@ -4453,6 +4787,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (RefuseActiveIfReadOnly("repointing the link"))
+        {
+            return;
+        }
+
         string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 
         if (hit.Line < 0 || hit.Line >= lines.Length)
@@ -4510,6 +4849,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public async Task RemoveLinkAsync(LinkFindingHit hit)
     {
         if (_host is null)
+        {
+            return;
+        }
+
+        if (RefuseActiveIfReadOnly("removing the link"))
         {
             return;
         }
@@ -4675,6 +5019,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (RefuseActiveIfReadOnly("that"))
+        {
+            return;
+        }
+
         string[] lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 
         if (hit.Line < 0 || hit.Line >= lines.Length)
@@ -4721,6 +5070,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task PlaceImageAsync(LinkFindingHit hit, ReadOnlyMemory<byte> bytes, string? suggestedName)
     {
+        // Ahead of EnsureSavedForImagesAsync, which can put a Save As dialog on screen and
+        // writes the picture to disk. Asking where to file an image for a document that will
+        // not take the reference to it is a question with nothing behind it.
+        if (RefuseActiveIfNotTakingEdits("inserting the image"))
+        {
+            return;
+        }
+
         if (await EnsureSavedForImagesAsync().ConfigureAwait(true) is not { } documentPath)
         {
             return;
@@ -4885,6 +5242,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (RefuseActiveIfReadOnly("the correction"))
+        {
+            return;
+        }
+
         var range = new TextRange(
             new TextPosition(hit.Line, hit.Start),
             new TextPosition(hit.Line, hit.End));
@@ -5005,6 +5367,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             case "copy":
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
+                return;
+
+            // Degrades to a copy rather than refusing outright, and says which it did. The
+            // clipboard half of a cut is perfectly reasonable on a document you are only
+            // reading, and the shell writes the selection out before it is asked to delete
+            // it - so the text is on the clipboard either way. What must not happen is the
+            // word "Cut" over a document that still has every line it had a moment ago.
+            case "cut" when _workspace.Active is { RefusesEdits: true }:
+                await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
+                StatusText = "Read-only — copied instead of cut";
                 return;
 
             case "cut":
@@ -5435,6 +5807,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task PasteFromClipboardAsync()
     {
+        // Paste is a host command rather than a Monaco one - the app owns the clipboard, see
+        // the Clipboard section of the architecture notes - so the editor's read-only option
+        // is not what stops it. This is.
+        if (RefuseActiveIfNotTakingEdits("the paste"))
+        {
+            return;
+        }
+
         try
         {
             DataPackageView view = Clipboard.GetContent();
@@ -5505,6 +5885,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task<bool> InsertImagesAsync(IReadOnlyList<PastedImage> images)
     {
         if (_host is null || images.Count == 0)
+        {
+            return false;
+        }
+
+        // Ahead of EnsureSavedForImagesAsync for the reason PlaceImageAsync gives: it can raise
+        // a Save As dialog and it writes files to disk, both on behalf of a reference the
+        // document is going to refuse.
+        if (RefuseActiveIfNotTakingEdits("the paste"))
         {
             return false;
         }
@@ -7185,6 +7573,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         string what,
         EditContextScope scope = EditContextScope.Selection)
     {
+        // Said before the CanFormat check below, which already covers read-only but covers it
+        // silently - it is one predicate standing for half a dozen reasons a command might be
+        // unavailable, and a command that does nothing without saying why is the complaint this
+        // whole feature would otherwise create.
+        if (RefuseActiveIfReadOnly(what))
+        {
+            return;
+        }
+
         // Checked here rather than trusting CanExecute: the accelerators call Execute
         // directly, and ICommand.Execute does not consult it. One predicate, four entry
         // points — menu, toolbar, window accelerator and the shell's own keybindings.
@@ -7387,6 +7784,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_host is null)
         {
+            return false;
+        }
+
+        // Covers Format Document, Format All and format-on-save alike, which is why it is here
+        // rather than at each of them. Format All reaches every open tab, so a marked document
+        // in a background tab is turned away by this without the others being affected.
+        //
+        // Said out loud only when the user asked for it. Format-on-save passes announce: false,
+        // and it arrives here behind a save that has already been refused and has already
+        // explained itself; a second line about formatting would be noise.
+        if (_workspace.Find(documentId) is { IsReadOnly: true })
+        {
+            if (announce)
+            {
+                _ = RefuseIfReadOnly(documentId, "Format");
+            }
+
             return false;
         }
 
@@ -8377,6 +8791,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // meaningfully different. The update reminder waits on it - see UpdateReminderIdle.
             _lastEditUtc = DateTimeOffset.UtcNow;
 
+            // Everything below this line works from e.Text: the preview is drawn from it, the
+            // pasted-image reconciliation acts on it, and the spelling and link checks report
+            // against its line numbers. A document whose buffer is going to turn this text away
+            // therefore has to stop here rather than fall through - carrying on would paint a
+            // preview of text the buffer does not hold and underline words at lines that are
+            // not in it.
+            //
+            // Asked of the document rather than read off ApplyEdit's answer, which is also
+            // false for text that simply matches what is already there. That case still wants
+            // everything below, and has had it since long before any of this.
+            //
+            // The editor was told the same thing and has stopped taking keystrokes, so this is
+            // the backstop for the moment between the two rather than the usual path.
+            if (_workspace.Find(e.DocumentId) is { RefusesEdits: true })
+            {
+                return;
+            }
+
             _workspace.ApplyEdit(e.DocumentId, e.Text);
 
             /*
@@ -8489,7 +8921,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         List<Guid> pending =
         [
             .. _workspace.Documents
-                .Where(d => d.IsDirty && !d.IsUntitled && !d.HasExternalChange)
+                // A document marked read-only is left alone, and this one clause is the whole of
+                // why the feature exists. Autosave is the only path that writes a file nobody
+                // asked it to write, and FormatBeforeSaveAsync runs inside the loop below - so
+                // without this a single stray keystroke in a reference document reformats it and
+                // puts it on disk, with no prompt and nothing but a log line if it fails.
+                .Where(d => d.IsDirty && !d.IsUntitled && !d.HasExternalChange && !d.IsReadOnly)
                 .Select(d => d.Id)
         ];
 
@@ -8511,8 +8948,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
-                await _workspace.SaveAsync(id).ConfigureAwait(true);
-                saved++;
+                // Counted on the write, not on the attempt. The filter above has already put
+                // marked documents out of reach, but a mark can arrive between the two - the
+                // list is copied first precisely because saving mutates the workspace - and
+                // "Autosaved 3 documents" has to mean three.
+                if (await _workspace.SaveAsync(id).ConfigureAwait(true))
+                {
+                    saved++;
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                 or DirectoryNotFoundException)

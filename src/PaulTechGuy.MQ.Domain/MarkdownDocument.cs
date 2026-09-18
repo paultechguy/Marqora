@@ -52,6 +52,15 @@ public sealed record MarkdownDocument
     /// </summary>
     public DateTimeOffset? AutoReloadedUtc { get; init; }
 
+    /// <summary>
+    /// The read-only mark the user put on this document, restored by path when it is opened.
+    ///
+    /// Marqora's own record of it. The file's read-only attribute is a separate thing that this
+    /// deliberately neither reads nor writes, so a mark here says only that Marqora will refuse
+    /// to write the file - never that Windows would.
+    /// </summary>
+    public bool IsLocked { get; init; }
+
     public bool IsUntitled => Path is null;
 
     /// <summary>Tab label: the file name, or the placeholder name when never saved.</summary>
@@ -75,6 +84,37 @@ public sealed record MarkdownDocument
 
     /// <summary>Whether an external change is waiting for the user to say what to do about it.</summary>
     public bool HasExternalChange => External != ExternalState.InSync;
+
+    /// <summary>
+    /// Whether this document refuses to be written.
+    ///
+    /// A missing file is deliberately not protected, and that clause is load-bearing rather than
+    /// tidy-mindedness. <see cref="IsDirty"/> counts a missing file as unsaved precisely so the
+    /// buffer can be written back over it - which is the one case where rewriting an unedited
+    /// document is the point. Leaving the mark in force there would take the only way back and
+    /// leave the user holding text with nowhere to put it.
+    ///
+    /// Computed rather than stored, for the reason <see cref="IsDirty"/> gives: a second flag
+    /// saying what two others already say is a flag that can disagree with them.
+    /// </summary>
+    public bool IsReadOnly => IsLocked && External != ExternalState.Missing;
+
+    /// <summary>
+    /// Whether text changes are turned away outright - by the editor and by the buffer alike.
+    ///
+    /// One predicate for both, because they cannot be allowed to disagree. The editor is told
+    /// this and the buffer enforces it, so a keystroke is either refused in both places or
+    /// accepted in both; letting one hold text the other does not is the one failure that would
+    /// be worse than having no mark at all.
+    ///
+    /// It is narrower than <see cref="IsReadOnly"/>, and the gap is the point. A marked document
+    /// holding unsaved edits keeps taking them: turning the editor read-only there would take
+    /// undo away with it - Monaco refuses undo and redo under the same option that refuses
+    /// typing - and undo is the only way back out of edits that cannot be saved. Nothing is lost
+    /// by allowing them, because the file is protected where it is written rather than here: a
+    /// document that refuses to be saved refuses just as firmly whatever its buffer holds.
+    /// </summary>
+    public bool RefusesEdits => IsReadOnly && !IsDirty;
 
     public MarkdownDocument WithText(string text) => this with { Text = text };
 

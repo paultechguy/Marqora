@@ -123,6 +123,41 @@ internal sealed class TempFolder : IDisposable
 }
 
 /// <summary>
+/// Read-only marks held in memory, with no file behind them.
+///
+/// The real service normalizes paths and prunes entries whose file is gone, both of which need
+/// a disk to be interesting; tests that care about those drive the real one. What the workspace
+/// needs from this is only the question "is this path marked", answered the same way twice.
+/// </summary>
+internal sealed class FakeDocumentLocks : IDocumentLocks
+{
+    private readonly HashSet<string> _locked = new(StringComparer.OrdinalIgnoreCase);
+
+    public int DroppedOnLoad { get; }
+
+    public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public bool IsLocked(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && _locked.Contains(System.IO.Path.GetFullPath(path));
+
+    public Task SetAsync(string path, bool locked, CancellationToken cancellationToken = default)
+    {
+        string key = System.IO.Path.GetFullPath(path);
+
+        if (locked)
+        {
+            _locked.Add(key);
+        }
+        else
+        {
+            _locked.Remove(key);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// Paths pointed at a scratch folder: an "install" directory holding what ships, and a data
 /// directory standing in for %LOCALAPPDATA%. The real implementation lives in the
 /// repositories layer, which these tests do not reference.
@@ -136,6 +171,8 @@ internal sealed class FakeAppPaths(string root) : IAppPaths
     public string SettingsFilePath => System.IO.Path.Combine(DataDirectory, "settings.json");
 
     public string RecentFilesFilePath => System.IO.Path.Combine(DataDirectory, "recent-files.json");
+
+    public string DocumentLocksFilePath => System.IO.Path.Combine(DataDirectory, "document-locks.json");
 
     public string UserDictionaryPath => System.IO.Path.Combine(DataDirectory, "user-dictionary.txt");
 

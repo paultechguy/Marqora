@@ -1,5 +1,33 @@
 # Marqora vNext - What's New
 
+## A document you only meant to read
+
+Some documents are open to be consulted rather than written: a specification, a style guide,
+somebody else's README sitting beside the thing you are actually working on. Right-click its tab
+and tick **Read-Only**, or use `File > Read-Only`, and Marqora will not write that file again
+until you take the tick off. The mark is remembered per file, so it is still there when you open
+the document next week.
+
+It is worth having because of autosave. With autosave on, one stray keystroke in a document you
+were only reading is enough to have it saved — and if you also format on save, the whole file is
+reformatted on its way to disk, without a prompt. A marked document is skipped by autosave
+entirely, Save and Save All pass it by, `Ctrl+Shift+H` leaves it out of Replace All rather than
+counting it and then skipping it, and the commands that rewrite a document say so in the status
+bar instead of quietly doing nothing.
+
+Marking a document you have already started editing is allowed, and it does not take your
+editing away: the text stays, undo keeps working, and nothing reaches the file. **Save As** is
+how you keep such edits — it writes them somewhere else and the copy arrives unmarked, ready to
+be worked on normally. Closing that tab offers Save As rather than Save, for the same reason.
+
+Two things a mark deliberately does not do. It is Marqora's own, not the read-only tick in the
+file's Windows properties — this never touches that, in either direction. And it does not stop
+the document changing: a marked file rewritten by something else is still picked up the way any
+other open file is. It stops *Marqora* writing your file, which is the part that was happening
+by itself.
+
+Select All and Copy work as they always did. Cut copies instead of cutting, and says so.
+
 ## A callout takes the text you were looking at
 
 A callout is almost always made *out of* something already written, and inserting one used to drop

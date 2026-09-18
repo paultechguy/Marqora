@@ -870,8 +870,13 @@ clickable: picking one takes the caret there. An edit underneath it does not onl
 out of date, it makes every row an invitation to land the caret in the wrong place. So the first
 real edit to that document fades the rows, shows the amber notice, and **stops them navigating at
 all** — a row that cannot be trusted does not offer. The alternatives were both refused here:
-locking the editor while the window is up would be a read-only state the app has never had, and
+locking the editor while the window is up would impose a read-only state nobody asked for, and
 real modality is the cost above.
+
+The app does have a read-only state now — see *Read-only documents* below — and it does not
+change this decision. That one is a mark the user puts on a document and takes off again, on
+their own initiative and for as long as they choose. A window silently freezing whatever
+document it happened to open over is the opposite thing wearing the same name.
 
 Real modality would be a first for the app, and it is not free: the owner has to be disabled and
 re-enabled around the window's whole lifetime, and an exception escaping in between leaves the
@@ -1147,6 +1152,104 @@ whatever edit element that model already had open — one `Ctrl+Z` could have ta
 rewrite *and* the last thing typed there. `model.pushStackElement` on both sides is the model's
 own version of the same thing. Format All had the same latent gap and is fixed by the same
 line.
+
+---
+
+## Read-only documents
+
+A document can be marked read-only. The mark is Marqora's own and is remembered by path in
+`document-locks.json`, so it survives closing the tab, quitting and coming back next week. It
+is deliberately **not** the file's read-only attribute: nothing here reads or writes what
+Windows keeps, and a marked document is one this app refuses to write rather than one the
+operating system would.
+
+It exists because of autosave. `AutoSaveAsync` writes every dirty document that has a file and
+runs `FormatBeforeSaveAsync` first, so without a mark a single stray keystroke in a reference
+document reformats the whole file onto disk with no prompt — and autosave's only failure path
+is a log line. `Ctrl+Shift+H` across every open tab is the other way that happens.
+
+### Monaco's readOnly is asymmetric, and it takes undo with it
+
+The option is real but it is not the guarantee, and reaching for it alone would produce
+something worse than nothing. In the vendored bundle it is option 104:
+
+- `CodeEditorWidget.executeEdits` begins `if(!this._modelData||this._configuration.options.get(104))return!1`.
+  So it **is** blocked — and `applyEdits` in `app.js` used to ignore that return, meaning every
+  host-computed authoring edit would have vanished silently. It now checks and logs.
+- `model.pushEditOperations` is a *model* API and ignores the option entirely. `replaceAllText`
+  uses it, deliberately including background tabs — so the formatter, Replace All, heading
+  renumbering and a reload all go straight through it.
+- **Undo and redo are blocked too**, by the same option: `if(!(!i.hasModel()||i.getOption(104)===!0))return i.getModel().undo()`,
+  and `pushUndoStop` alongside them.
+
+That last one decides the shape of the feature. `readOnly` is applied **only while the document
+is clean**. Mark a clean document and typing does nothing. Mark one that already holds unsaved
+edits and the editor stays open, because taking undo away from somebody holding work they cannot
+save is the one thing the mark must not do. The file is protected where it is written instead.
+
+`MarkdownDocument.RefusesEdits` is that predicate, and the editor and the buffer are both told
+it — one predicate for both, so a keystroke is refused in both places or accepted in both.
+Letting one hold text the other does not is the failure that would be worse than having no mark.
+
+### Where the guarantee actually lives
+
+Not in `CanSave`. That only feeds `SaveCommand.CanExecute`, and the accelerators call `Execute`
+directly — `RunEditAsync`'s comment says so in as many words — while the tab menu reads
+`tab.IsDirty` rather than the command. So `CanSave` grays a menu item and nothing more.
+
+The guarantee is three refusals, each of which **answers** rather than returning quietly:
+
+- `DocumentWorkspace.SaveAsync` stops short of `WriteAsync`, which also keeps it from arming the
+  watcher-suppression window or raising `Saved`. It returns false, because every caller
+  announces a save the moment it returns and "Saved notes.md" over an untouched file is the one
+  thing this must never print.
+- `DocumentWorkspace.ApplyEdit` refuses on `RefusesEdits` and answers, because a caller that
+  pushed the same text into the editor and had only the buffer refuse it would leave the two
+  holding different documents.
+- `MainViewModel.SaveDocumentAsync` guards ahead of `FormatBeforeSaveAsync`, so a document about
+  to refuse a write is not reformatted on the way to refusing it.
+
+Everything above those is for the message rather than the promise: each command that changes
+text calls `RefuseIfReadOnly` first, so the user is told which of the things they just asked for
+did not happen. `AutoSaveAsync` filters marked documents out before the formatter runs, and
+Replace All excludes them in `FindAllWindow.SearchedDocuments` — *before* the confirmation is
+composed, or the dialog would promise twelve documents and quietly rewrite eleven.
+
+### What a mark does not stop
+
+Reload and auto-reload, which read rather than write; `ReloadCoreAsync` assigns through
+`with { … }` and never calls `ApplyEdit`, which is what makes that safe. Select All and Copy,
+because copying text out is most of what reading a locked document is for — which is why Cut and
+Paste moved to `CanAlterText` and Select All stayed on `CanEditText`. Cut degrades to a copy and
+says so, since the shell writes the selection to the clipboard before it is asked to delete it.
+
+Save As is the way out, and clears the mark as it goes: the copy lands somewhere else, unmarked,
+and the original is untouched. Saving *onto* a marked file is refused whichever command asks.
+
+A document whose file has been **deleted** stands its mark down — `IsReadOnly` is false while
+`External` is `Missing`. `IsDirty` counts a missing file as unsaved precisely so the buffer can
+be written back over it, and leaving the mark in force there would take away the only way back.
+
+### The close prompt is a deadlock fix
+
+A dirty marked document is offered **Save As** and Discard rather than Save. `ConfirmDiscardAsync`
+calls `SaveAsync()` directly rather than through the command, so `CanSave` never runs; the save
+would be refused, the document would stay dirty, the method would return false and the tab would
+refuse to close. Every tab goes through it on the way out and a false answer cancels the
+shutdown — so the plain version makes the app impossible to exit.
+
+### What path keying costs
+
+The key is the full path, resolved through `File.ResolveLinkTarget` so a junction, a symlink and
+a `subst` drive do not each get their own mark, and compared case-insensitively like every other
+path in the app. Rename or move a file outside Marqora and its mark is left behind, because
+there is nothing left to match it against. That is a real limit and the app says so rather than
+letting the guard lapse in silence: marks whose file has gone are dropped on load and the count
+is reported.
+
+Pruning asks whether the *volume* answers before it asks whether the file exists. The obvious
+version — drop anything missing at startup — would unlock a whole shareful of reference
+documents the first time Marqora opened away from the network.
 
 ---
 

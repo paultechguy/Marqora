@@ -31,6 +31,7 @@ public static class ServiceCollectionExtensions
     {
         services.TryAddSingleton<ISettingsService, SettingsService>();
         services.TryAddSingleton<IRecentFilesService, RecentFilesService>();
+        services.TryAddSingleton<IDocumentLocks, DocumentLocksService>();
 
         services.TryAddSingleton<IWelcomeDocumentService>(provider => new WelcomeDocumentService(
             provider.GetRequiredService<IAppPaths>(),

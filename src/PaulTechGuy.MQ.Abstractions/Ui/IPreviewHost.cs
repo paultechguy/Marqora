@@ -317,6 +317,21 @@ public interface IPreviewHost
 
     Task SetWordWrapAsync(bool enabled);
 
+    /// <summary>
+    /// Tells the shell whether this document's model should take typing.
+    ///
+    /// Per document rather than per editor: one Monaco instance serves every tab, so the shell
+    /// remembers the answer against the tab and applies it again each time that tab is brought
+    /// forward.
+    ///
+    /// This stops the keyboard, and nothing more. It is not where the promise is kept - Monaco's
+    /// readOnly blocks the editor's own commands while leaving the model API that the formatter,
+    /// Replace All and a reload write through untouched - so the guards that matter are in the
+    /// workspace. Sending it is about not letting somebody type into a document that will throw
+    /// the keystroke away.
+    /// </summary>
+    Task SetReadOnlyAsync(Guid documentId, bool readOnly);
+
     Task SetLineNumbersAsync(bool enabled);
 
     /// <summary>Render spaces and tabs in the source pane.</summary>

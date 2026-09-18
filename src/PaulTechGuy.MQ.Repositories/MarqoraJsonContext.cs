@@ -17,4 +17,5 @@ namespace PaulTechGuy.MQ.Repositories;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(RecentFilesDocument))]
+[JsonSerializable(typeof(DocumentLocksDocument))]
 internal sealed partial class MarqoraJsonContext : JsonSerializerContext;

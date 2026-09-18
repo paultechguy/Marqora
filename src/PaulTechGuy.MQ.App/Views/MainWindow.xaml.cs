@@ -236,9 +236,13 @@ public sealed partial class MainWindow : Window
     /// content - pasting into an empty file is the ordinary case - so it cannot share
     /// CanEditText. What it does share is the reason for the new condition: with the
     /// keyboard in the outline there is no caret on screen to paste at.
+    ///
+    /// The read-only condition arrives as a parameter rather than being read off the view
+    /// model inside, because x:Bind only re-evaluates a function when one of its arguments
+    /// raises a change - a value fetched in the body would leave the item stuck as it was.
     /// </summary>
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
-    public bool CanPaste(bool outlineHasFocus) => !outlineHasFocus;
+    public bool CanPaste(bool outlineHasFocus, bool readOnly) => !outlineHasFocus && !readOnly;
 
     /// <summary>
     /// A tooltip, or none at all.
@@ -737,6 +741,10 @@ public sealed partial class MainWindow : Window
             await _previewHost.InitializeAsync(CurrentEffectiveTheme);
 
             _isLoaded = true;
+
+            // Before anything is opened: the workspace asks whether a path is marked read-only
+            // as it opens each document, so a document opened ahead of this would be writable.
+            await ViewModel.LoadDocumentMarksAsync();
 
             // A file named on the command line replaces the restored session as the active
             // tab, but does not discard it.

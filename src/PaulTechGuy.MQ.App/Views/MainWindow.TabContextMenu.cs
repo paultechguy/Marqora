@@ -45,6 +45,25 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _tabPrintItem;
 
     /// <summary>
+    /// The read-only tick. Its own field type because <see cref="ToggleMenuFlyoutItem"/> is a
+    /// sibling of <see cref="MenuFlyoutItem"/> under MenuFlyoutItemBase rather than a subclass
+    /// of it, so the Item helper that builds every other row here cannot make one.
+    /// </summary>
+    private ToggleMenuFlyoutItem? _tabReadOnlyItem;
+
+    /// <summary>
+    /// Set while <see cref="RefreshTabMenu"/> is writing the tick, so the Click handler can tell
+    /// the user's choice from the menu's own bookkeeping.
+    ///
+    /// Belt and braces rather than a fix for something observed: WinUI raises Click on invoke
+    /// rather than on an assignment to IsChecked, so this should never be the thing that saves
+    /// it. The cost of being wrong is the reason it is here anyway - RefreshTabMenu runs every
+    /// time the menu opens, so a Click raised from it would toggle the document on every
+    /// right-click, which is about the worst failure this feature could have.
+    /// </summary>
+    private bool _settingTabReadOnlyTick;
+
+    /// <summary>
     /// Set while an item that hands the keyboard back itself is running. See
     /// <see cref="RunTabActionAsync"/>.
     /// </summary>
@@ -166,6 +185,28 @@ public sealed partial class MainWindow
             () => ViewModel.ReloadFromDiskCommand.ExecuteAsync(null));
 
         menu.Items.Add(_tabReloadItem);
+
+        // With the file commands rather than in a group of its own: it is a fact about the
+        // file, and it decides what Save above it will do.
+        //
+        // Wired directly rather than through Item, which returns a MenuFlyoutItem. This one
+        // raises no dialog, so the flyout's Closed hands the keyboard back for it, exactly as
+        // it does for the last two items in the menu.
+        _tabReadOnlyItem = new ToggleMenuFlyoutItem { Text = "Read-Only" };
+
+        _tabReadOnlyItem.Click += (_, _) =>
+        {
+            // Guards against the menu's own tick-writing being read as the user's choice. See
+            // the field for why it is here when it should not be reachable.
+            if (_settingTabReadOnlyTick)
+            {
+                return;
+            }
+
+            _ = ViewModel.ToggleReadOnlyCommand.ExecuteAsync(null);
+        };
+
+        menu.Items.Add(_tabReadOnlyItem);
         menu.Items.Add(new MenuFlyoutSeparator());
 
         // Its own group: the document acted on, rather than the file on disk above or the
@@ -255,6 +296,7 @@ public sealed partial class MainWindow
     {
         if (_tabSaveItem is null
             || _tabReloadItem is null
+            || _tabReadOnlyItem is null
             || _tabCloseOthersItem is null
             || _tabRevealItem is null
             || _tabCopyPathItem is null
@@ -267,7 +309,25 @@ public sealed partial class MainWindow
         // name, never the tab's shortened one - the shortening exists because a tab is a fixed
         // width, and a menu is not.
         _tabSaveItem.Text = $"Save \"{tab.Title}\"";
-        _tabSaveItem.IsEnabled = tab.IsDirty;
+
+        // The read-only half is not decoration here: this item does not go through the Save
+        // command's CanExecute, so without it a marked document would offer a Save that the
+        // workspace turns away.
+        _tabSaveItem.IsEnabled = tab.IsDirty && !tab.IsReadOnly;
+
+        // The tick follows the mark rather than IsReadOnly, which also answers false for a
+        // document whose file has been deleted - saving is how that one comes back, and the
+        // user's mark should still be showing where they put it.
+        //
+        // Guarded because assigning IsChecked raises Click, which would read as the user
+        // toggling it the moment the menu opened.
+        _settingTabReadOnlyTick = true;
+        _tabReadOnlyItem.IsChecked = tab.IsLocked;
+        _settingTabReadOnlyTick = false;
+
+        // An untitled document has no file for a mark to protect, and the mark is remembered
+        // by path. Grayed rather than dropped, like Open in File Explorer below.
+        _tabReadOnlyItem.IsEnabled = !tab.IsUntitled;
 
         _tabReloadItem.IsEnabled =
             !tab.IsUntitled

@@ -27,7 +27,11 @@ public sealed class ExternalChangeTests : IDisposable
     public ExternalChangeTests()
     {
         _settings = new FakeSettingsService();
-        _workspace = new DocumentWorkspace(_watchers, _settings, NullLogger<DocumentWorkspace>.Instance);
+        _workspace = new DocumentWorkspace(
+            _watchers,
+            _settings,
+            new FakeDocumentLocks(),
+            NullLogger<DocumentWorkspace>.Instance);
         _workspace.Changed += (_, e) => _changes.Add(e);
     }
 

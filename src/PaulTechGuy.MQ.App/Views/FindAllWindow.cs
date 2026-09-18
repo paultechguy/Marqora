@@ -1060,6 +1060,19 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         foreach (MarkdownDocument document in _workspace.Documents)
         {
+            // A document marked read-only is left out here rather than turned away later, and
+            // the difference is what the confirmation says. Everything downstream counts from
+            // this list - the matches, the document count, the sentence the user is asked to
+            // agree to - so a marked document still in it would have the dialog promise twelve
+            // documents and then quietly rewrite eleven.
+            //
+            // Only Replace All calls this. Searching a read-only document is exactly what one
+            // is for, and the results list is built from somewhere else entirely.
+            if (document.IsReadOnly)
+            {
+                continue;
+            }
+
             if (_searched.TryGetValue(document.Id, out string? text))
             {
                 documents.Add(new FindDocument(
@@ -1374,7 +1387,12 @@ public sealed partial class FindAllWindow : PaletteWindow
 
         if (documents.Count == 0)
         {
-            _summary.Text = "There is nothing to replace in.";
+            // Named rather than left as "nothing to replace in", which would read as a bug to
+            // somebody looking at a list of matches.
+            _summary.Text = _workspace.Documents.Any(d => d.IsReadOnly)
+                ? "Nothing to replace in — the documents with matches are read-only."
+                : "There is nothing to replace in.";
+
             return;
         }
 

@@ -17,6 +17,15 @@ public interface IAppPaths
     string RecentFilesFilePath { get; }
 
     /// <summary>
+    /// Which documents the user has marked read-only.
+    ///
+    /// Its own file rather than a key in the settings: a mark belongs to a document rather than
+    /// to the app, and keeping it here is what lets it survive Reset Preferences - which asks
+    /// about settings and says nothing about anybody's files.
+    /// </summary>
+    string DocumentLocksFilePath { get; }
+
+    /// <summary>
     /// The words the user has accepted, one per line.
     ///
     /// Plain text rather than JSON on purpose: it is a list of words, it can be shared and

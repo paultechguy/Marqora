@@ -498,6 +498,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public Task SetWordWrapAsync(bool enabled) => SendAsync("setWordWrap", new { enabled });
 
+    public Task SetReadOnlyAsync(Guid documentId, bool readOnly) =>
+        SendAsync("setReadOnly", new { documentId, readOnly });
+
     public Task SetLineNumbersAsync(bool enabled) => SendAsync("setLineNumbers", new { enabled });
 
     public Task SetShowWhitespaceAsync(bool enabled) => SendAsync("setShowWhitespace", new { enabled });

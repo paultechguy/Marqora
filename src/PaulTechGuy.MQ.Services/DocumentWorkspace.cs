@@ -29,6 +29,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
     private readonly IFileWatcherFactory _watcherFactory;
     private readonly ISettingsService _settings;
+    private readonly IDocumentLocks _locks;
     private readonly ILogger<DocumentWorkspace> _logger;
 
     private readonly List<MarkdownDocument> _documents = [];
@@ -49,10 +50,12 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
     public DocumentWorkspace(
         IFileWatcherFactory watcherFactory,
         ISettingsService settings,
+        IDocumentLocks locks,
         ILogger<DocumentWorkspace> logger)
     {
         _watcherFactory = watcherFactory;
         _settings = settings;
+        _locks = locks;
         _logger = logger;
     }
 
@@ -95,6 +98,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             SavedText = text,
             LoadedUtc = DateTimeOffset.UtcNow,
             Stamp = stamp,
+            IsLocked = _locks.IsLocked(fullPath),
         };
 
         _documents.Add(document);
@@ -197,7 +201,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
     // ------------------------------------------------------------------ editing
 
-    public void ApplyEdit(Guid id, string text)
+    public bool ApplyEdit(Guid id, string text)
     {
         ArgumentNullException.ThrowIfNull(text);
 
@@ -205,23 +209,52 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         if (index < 0 || string.Equals(_documents[index].Text, text, StringComparison.Ordinal))
         {
-            return;
+            return false;
+        }
+
+        // The backstop, not the guard. Every command that changes text asks first and says so;
+        // this is what makes the promise true for anything that does not, because a buffer that
+        // never changes is a buffer with nothing to write. It answers rather than throwing: the
+        // caller has to know, since one that pushed the same text into the editor and had this
+        // refuse it would leave the two holding different documents.
+        if (_documents[index].RefusesEdits)
+        {
+            _logger.LogDebug(
+                "Refused an edit to {Path}: it is marked read-only.",
+                _documents[index].DisplayPath);
+
+            return false;
         }
 
         _documents[index] = _documents[index].WithText(text);
         Raise(WorkspaceChange.Edited, _documents[index]);
+
+        return true;
     }
 
     // ------------------------------------------------------------------- saving
 
-    public async Task SaveAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> SaveAsync(Guid id, CancellationToken cancellationToken = default)
     {
         int index = _documents.FindIndex(d => d.Id == id);
 
         if (index < 0 || _documents[index].Path is not { } path)
         {
             // Never saved: the caller has to choose a location first.
-            return;
+            return false;
+        }
+
+        // Answered rather than thrown, and answered here rather than left to the caller.
+        //
+        // Every caller announces a save the moment this returns - "Saved notes.md", a count of
+        // documents written - so a refusal that looked like a return would put those words on
+        // screen for a file nothing touched. It also has to stop short of WriteAsync for two
+        // quieter reasons: that method arms the watcher suppression window, and the Saved event
+        // below would tell the tab strip its document is clean.
+        if (_documents[index].IsReadOnly)
+        {
+            _logger.LogInformation("Refused to save {Path}: it is marked read-only.", path);
+            return false;
         }
 
         ExternalState before = _documents[index].External;
@@ -242,9 +275,11 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         _logger.LogInformation("Saved {Path}.", path);
         Raise(WorkspaceChange.Saved, _documents[index]);
+
+        return true;
     }
 
-    public async Task SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default)
+    public async Task<bool> SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -252,10 +287,20 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         if (index < 0)
         {
-            return;
+            return false;
         }
 
         string fullPath = Path.GetFullPath(path);
+
+        // Save As is the way out of a marked document, so the mark does not travel with the
+        // text - but the *destination* gets the same protection any other file has. Writing
+        // over a file the user marked read-only is still writing over it, whichever command
+        // asked.
+        if (_locks.IsLocked(fullPath))
+        {
+            _logger.LogInformation("Refused to save over {Path}: it is marked read-only.", fullPath);
+            return false;
+        }
 
         FileStamp? stamp = await WriteAsync(id, fullPath, _documents[index].Text, cancellationToken)
             .ConfigureAwait(false);
@@ -267,6 +312,11 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             External = ExternalState.InSync,
             Stamp = stamp,
             AutoReloadedUtc = null,
+
+            // Read from the store rather than set to false, so the one place that decides
+            // whether a path is marked stays the one place. The guard above has already
+            // established what this answers.
+            IsLocked = _locks.IsLocked(fullPath),
         };
 
         // The document may have had no path at all, so start watching now.
@@ -274,6 +324,47 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         _logger.LogInformation("Saved a copy as {Path}.", fullPath);
         Raise(WorkspaceChange.Saved, _documents[index]);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Marks or unmarks a document, and writes the change out.
+    ///
+    /// Addressed by <c>Id</c> like everything else here, even though what is stored is a path:
+    /// the caller has a tab, and the path a tab points at can change underneath it through Save
+    /// As. Reading the path from the document at the moment of the call is what keeps the mark
+    /// on the file the user is actually looking at.
+    ///
+    /// An untitled document has no path to mark and is refused. There is nothing on disk yet
+    /// for a mark to protect.
+    /// </summary>
+    public async Task<bool> SetLockedAsync(Guid id, bool locked, CancellationToken cancellationToken = default)
+    {
+        int index = _documents.FindIndex(d => d.Id == id);
+
+        if (index < 0 || _documents[index].Path is not { } path)
+        {
+            return false;
+        }
+
+        if (_documents[index].IsLocked == locked)
+        {
+            return true;
+        }
+
+        await _locks.SetAsync(path, locked, cancellationToken).ConfigureAwait(false);
+
+        _documents[index] = _documents[index] with { IsLocked = locked };
+
+        _logger.LogInformation(
+            "{Path} is {State}.",
+            path,
+            locked ? "marked read-only" : "no longer marked read-only");
+
+        Raise(WorkspaceChange.LockChanged, _documents[index]);
+
+        return true;
     }
 
     public Task ReloadAsync(Guid id, CancellationToken cancellationToken = default) =>

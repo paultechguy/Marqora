@@ -298,6 +298,19 @@
                                         Command="{x:Bind ViewModel.ReloadFromDiskCommand}"
                                         ToolTipService.ToolTip="Discard the buffer and reopen the file as it is on disk" />
 
+                        <!--
+                            With the file commands, because it is a fact about the file and it
+                            decides what Save does. The same item is on the tab's own menu -
+                            every document command here is - so neither is the only way to it.
+
+                            The tick is bound rather than set: the mark can change from the tab
+                            menu or from another tab being selected, and this menu is built once.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Read-Only"
+                                              Command="{x:Bind ViewModel.ToggleReadOnlyCommand}"
+                                              IsChecked="{x:Bind ViewModel.ActiveTabIsLocked, Mode=OneWay}"
+                                              ToolTipService.ToolTip="Refuse to write this file until the mark is taken off" />
+
                         <MenuFlyoutSeparator />
 
                         <MenuFlyoutItem Text="Reopen Closed Tab"
@@ -405,11 +418,16 @@
                             see. Copy is not gated with them - it retargets to the selected
                             heading instead of graying out, the way a focused list copies its
                             selection everywhere else in Windows.
+
+                            Cut and Paste take one more condition than Select All, which is
+                            why they no longer share a property: they take text away, and a
+                            read-only document has none to give. Selecting all of one is how
+                            its text gets copied out, so that stays.
                         -->
                         <MenuFlyoutItem Text="Cut"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="cut"
-                                        IsEnabled="{x:Bind ViewModel.CanEditText, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.CanAlterText, Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+X" />
                         <MenuFlyoutItem Text="Copy"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
@@ -419,7 +437,7 @@
                         <MenuFlyoutItem Text="Paste"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="paste"
-                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus), Mode=OneWay}"
+                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus, ViewModel.ActiveTabRefusesEdits), Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+V" />
 
                         <!--

@@ -3838,7 +3838,21 @@
     }
 
     editor.pushUndoStop();
-    editor.executeEdits('marqora-authoring', operations);
+
+    /*
+      Checked, because executeEdits reports a refusal by returning false rather than by
+      throwing. Monaco's readOnly option is one thing that makes it refuse - and it blocks
+      only this route, leaving model.pushEditOperations, which is how the formatter, Replace
+      All and a reload write, working exactly as before. An unchecked call therefore looked
+      identical from the host's side whether the batch landed or vanished.
+    */
+    if (!editor.executeEdits('marqora-authoring', operations)) {
+      report(
+        'warning',
+        'The editor refused an authoring edit.',
+        operations.length + ' edit(s) were dropped');
+    }
+
     editor.pushUndoStop();
 
     if (selection) {
@@ -4412,8 +4426,25 @@
 
       // Files a relative reference in this document could point at, pushed by the host because
       // the page cannot read a disk. See setLinkTargets.
-      linkTargets: []
+      linkTargets: [],
+
+      // Whether this document takes typing. Per tab because one editor serves all of them;
+      // the host sets it and activateTab puts it back on. See setReadOnly.
+      readOnly: false
     };
+  }
+
+  /*
+    Puts the read-only option on the editor.
+
+    Its own function because two places need it and they must not drift: the handler, for the
+    tab already on screen, and activateTab, for one arriving. Both go through here so there is
+    one answer to what read-only does to the editor.
+  */
+  function applyReadOnly(readOnly) {
+    if (!state.editor) { return; }
+
+    state.editor.updateOptions({ readOnly: readOnly, domReadOnly: readOnly });
   }
 
   function activateTab(id) {
@@ -4442,6 +4473,11 @@
     state.suppressEditorEvents = true;
     state.editor.setModel(tab.model);
     state.suppressEditorEvents = false;
+
+    // Before the view state is restored, so the incoming document's answer is on the editor
+    // from the first frame. The option lives on the editor and the answer lives on the tab, so
+    // without this an ordinary document would inherit whatever the last marked one left behind.
+    applyReadOnly(tab.readOnly);
 
     if (tab.viewState) {
       state.editor.restoreViewState(tab.viewState);
@@ -4795,6 +4831,26 @@
     setLineNumbers: function (p) {
       if (state.editor) { state.editor.updateOptions({ lineNumbers: p.enabled ? 'on' : 'off' }); }
       updateWrapGlyphs();
+    },
+
+    /*
+      Whether this tab's document takes typing.
+
+      Kept on the tab rather than applied and forgotten, because one editor serves every tab:
+      the option belongs to the editor, the answer belongs to the document, and the two are only
+      the same while that tab is the one in front. activateTab reapplies it, which is what stops
+      a marked document handing its read-only state to whatever tab is opened next.
+
+      domReadOnly as well as readOnly: without it the textarea Monaco keeps underneath still
+      accepts input and the caret still blinks, so the editor looks willing and silently is not.
+    */
+    setReadOnly: function (p) {
+      var tab = state.tabs[p.documentId];
+      if (!tab) { return; }
+
+      tab.readOnly = !!p.readOnly;
+
+      if (p.documentId === state.activeTabId) { applyReadOnly(tab.readOnly); }
     },
 
     setShowWhitespace: function (p) {
