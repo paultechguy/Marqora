@@ -157,7 +157,7 @@ No script covers this; `Test-ButtonStandards.ps1` cannot see it and neither can 
 
 1. Windows dark, Marqora light, Ctrl+P — the dialog is light. Windows light, Marqora dark — it
    is dark.
-2. Choose *Black and white* on a color printer; the page comes out grey. This is the bug the
+2. Choose *Black and white* on a color printer; the page comes out gray. This is the bug the
    old dialog hid.
 3. Two-sided, on a printer that offers it; confirm the field is absent on one that does not.
 4. Copies above one enables Collate; a nonsense page range disables Print and says why.

@@ -606,7 +606,7 @@ internal sealed class FolioWindow : PaletteWindow
     }
 
     /// <summary>
-    /// Greys each arrow out when it has nothing to do - the first row cannot go up, the last
+    /// Grays each arrow out when it has nothing to do - the first row cannot go up, the last
     /// cannot go down. A button that is enabled and does nothing is worse than a dim one.
     /// </summary>
     private void UpdateMoveButtons()

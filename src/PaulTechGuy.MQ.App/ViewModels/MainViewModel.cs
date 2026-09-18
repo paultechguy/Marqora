@@ -652,7 +652,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // Starts true, and the shell corrects it the moment the window is first activated.
         // The optimistic default is the safe one: an offered command that reports an empty
-        // clipboard is a smaller failure than a greyed-out one that would have worked.
+        // clipboard is a smaller failure than a grayed-out one that would have worked.
         ClipboardHasText = true;
 
         ExternalNotice = ExternalChangeNotice.None;
@@ -720,7 +720,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The outline is the third condition for the same reason Preview view is the second:
     /// there is no caret the user can see to apply a format to. Bolding whatever the caret
     /// last sat on, in a pane they are not looking at, is the kind of silent edit the rest
-    /// of this app exists to prevent - so the Format menu and the format bar grey out while
+    /// of this app exists to prevent - so the Format menu and the format bar gray out while
     /// the keyboard is in the panel.
     /// </remarks>
     public bool CanFormat => HasDocument && ViewMode is not ViewMode.Preview && !OutlineHasFocus;
@@ -730,7 +730,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// anything meaningful.
     ///
     /// Copy is deliberately not gated on this: with the keyboard in the outline it copies
-    /// the selected heading instead of greying out. Undo, Redo and the Find family are not
+    /// the selected heading instead of graying out. Undo, Redo and the Find family are not
     /// either - they are document-scoped, or they deliberately take the user back to the
     /// text, which is not a surprise when they asked to search.
     /// </summary>
@@ -1745,7 +1745,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Whether the active document has a file behind it, for the commands that can only talk
     /// about one: showing it in Explorer, and copying its path. Both used to be offered on an
     /// untitled document, where one silently did nothing and the other explained itself in the
-    /// status bar - a greyed item says the same thing before the click rather than after it.
+    /// status bar - a grayed item says the same thing before the click rather than after it.
     /// </summary>
     private bool CanActOnFile() => HasDocument && !string.IsNullOrWhiteSpace(DocumentPath);
 

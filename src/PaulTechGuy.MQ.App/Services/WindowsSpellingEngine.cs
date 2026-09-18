@@ -139,7 +139,7 @@ internal sealed class WindowsSpellingEngine : ISpellingEngine, IDisposable
     /// <summary>
     /// Builds the checker on first use, once. A machine with no dictionary for the user's
     /// language is an ordinary outcome, not a failure: <see cref="_available"/> stays false, every
-    /// call returns empty, and the preferences page greys the setting out with the reason.
+    /// call returns empty, and the preferences page grays the setting out with the reason.
     /// </summary>
     private void EnsureChecker()
     {

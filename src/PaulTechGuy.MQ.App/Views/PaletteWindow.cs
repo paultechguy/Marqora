@@ -170,7 +170,7 @@ public abstract class PaletteWindow : Window
             dark title bar rather than replacing it.
 
             The colors still earn their place: they match the caption to the page beneath it
-            rather than to the stock light or dark grey, which is the whole reason this method
+            rather than to the stock light or dark gray, which is the whole reason this method
             exists. PreferredTheme decides the mode; the rest decides the shade.
         */
         bar.PreferredTheme = dark ? TitleBarTheme.Dark : TitleBarTheme.Light;

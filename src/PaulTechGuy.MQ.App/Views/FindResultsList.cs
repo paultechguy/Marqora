@@ -88,7 +88,7 @@ internal sealed partial class FindResultsList : ListView
 
     /// <summary>
     /// Documents that have been closed since the search ran. Held by the window and mutated
-    /// in place, so a rebuild is all it takes to show one greying out.
+    /// in place, so a rebuild is all it takes to show one graying out.
     /// </summary>
     public IReadOnlySet<Guid> ClosedDocuments { get; set; } = new HashSet<Guid>();
 

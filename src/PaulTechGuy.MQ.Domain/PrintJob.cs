@@ -72,7 +72,7 @@ public sealed record PrintJob
     public bool IncludeBackgrounds { get; init; } = true;
 
     /// <summary>
-    /// Color or grey. Default where the printer offers no choice, which is most of the
+    /// Color or gray. Default where the printer offers no choice, which is most of the
     /// time: a mono laser has one answer and the dialog does not ask.
     /// </summary>
     public PrintColorMode ColorMode { get; init; } = PrintColorMode.Default;

@@ -27,7 +27,7 @@ internal static class HighlightPalette
     private const string Blue = "005CC5";
     private const string Navy = "032F62";
     private const string Orange = "E36209";
-    private const string Grey = "6A737D";
+    private const string Gray = "6A737D";
     private const string Green = "22863A";
     private const string Ink = "24292E";
 
@@ -63,9 +63,9 @@ internal static class HighlightPalette
             ["hljs-built_in"] = new(Orange),
             ["hljs-symbol"] = new(Orange),
 
-            ["hljs-code"] = new(Grey),
-            ["hljs-comment"] = new(Grey),
-            ["hljs-formula"] = new(Grey),
+            ["hljs-code"] = new(Gray),
+            ["hljs-comment"] = new(Gray),
+            ["hljs-formula"] = new(Gray),
 
             ["hljs-name"] = new(Green),
             ["hljs-quote"] = new(Green),

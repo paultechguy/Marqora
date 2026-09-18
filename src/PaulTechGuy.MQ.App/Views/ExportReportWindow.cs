@@ -467,7 +467,7 @@ public sealed partial class ExportReportWindow : PaletteWindow
 
         // The same distinction the copied text makes with "!" and "-", drawn. Two signals, not
         // one: the glyph carries it on its own, so the row still reads correctly to somebody who
-        // cannot tell the amber from the grey. Color only ever emphasizes what the shape says.
+        // cannot tell the amber from the gray. Color only ever emphasizes what the shape says.
         var mark = new FontIcon
         {
             Glyph = issue.IsAdvisory ? InfoGlyph : WarningGlyph,

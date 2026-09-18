@@ -82,7 +82,7 @@ A second engine is not planned. The seam exists so the surface area is known if 
 
 | Member | Contract |
 |---|---|
-| `IsAvailable` | False is ordinary, not a failure. Every other member returns empty while it is false, the feature switches itself off, and the preferences checkbox greys out with the reason |
+| `IsAvailable` | False is ordinary, not a failure. Every other member returns empty while it is false, the feature switches itself off, and the preferences checkbox grays out with the reason |
 | `Check` | Offsets into the string it was handed. Callers pass a **masked** line, so those offsets are valid against the original only because masking preserves length |
 | `Suggest` | Best first, or empty. Called **on the UI thread** while a menu is opening, so it must be quick — the analyzer caches by word, but the first call for each word is felt |
 

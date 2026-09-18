@@ -2125,7 +2125,7 @@
     the host's own Markdig markup rather than from this DOM, so it never sees a wrapper to
     remove. And the printer serializes nothing at all - it paints this very DOM, and there the
     chip is wanted, because a picture that cannot be fetched cannot be in the PDF either and a
-    small honest chip beats the grey rectangle an unhidden iframe leaves behind. See app.css.
+    small honest chip beats the gray rectangle an unhidden iframe leaves behind. See app.css.
   */
   function withoutBlockedChips(root) {
     var clone = root.cloneNode(true);
@@ -2550,7 +2550,7 @@
           description nobody has written yet, not a link that leads nowhere, and the ruler should
           say which is which at a glance.
 
-          The one tick that still takes the squiggle's own token. Grey beside three hues is
+          The one tick that still takes the squiggle's own token. Gray beside three hues is
           unmistakable at any size, so there was nothing to tune and a second token would only
           be somewhere else for the same value to drift from.
         */
@@ -2631,7 +2631,7 @@
         findMatchHighlightBackground the other matches Find turned up, softened, so the one
                                      being looked at still stands out from the rest
 
-      Monaco's own vs-dark colors for these are a navy, a grey and an orange: three
+      Monaco's own vs-dark colors for these are a navy, a gray and an orange: three
       different answers to one question, and the two that matter most are the faintest.
 
       The foreground goes on the two that are drawn at full strength. The softened one is
@@ -2752,7 +2752,7 @@
     Monaco tracks both, but keeps canUndo/canRedo off the published ITextModel surface -
     they exist to drive its own context keys - so this asks the model and shrugs if some
     future build stops answering. The shrug is `true` rather than `false`: a button that
-    stays lit does exactly what it did before this was wired up, while one stuck grey
+    stays lit does exactly what it did before this was wired up, while one stuck gray
     would take the command away altogether.
   */
   function canHistory(model, method) {
@@ -4575,7 +4575,7 @@
         emitStats();
 
         // setValue throws the undo stack away, so the toolbar's Undo has to be told to go
-        // grey. Nothing else will say so: the change event above is suppressed for
+        // gray. Nothing else will say so: the change event above is suppressed for
         // host-driven writes, and that is what normally carries the caret state.
         emitCaretState();
       }
@@ -5046,8 +5046,8 @@
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
 
-        // Alt text is the odd kind: nothing is broken, so it wears a quieter mark - grey and
-        // dotted rather than colored. It does earn a tick, in that same grey; the note by the
+        // Alt text is the odd kind: nothing is broken, so it wears a quieter mark - gray and
+        // dotted rather than colored. It does earn a tick, in that same gray; the note by the
         // overviewRuler block below says why that argument was reversed.
         var isHint = link.kind === 'MissingAltText';
 
@@ -5055,7 +5055,7 @@
           A picture that will not appear here is the fourth kind of claim, and it needed its own
           mark rather than borrowing one.
 
-          Red is wrong, amber is broken, grey is incomplete - and this is none of the three. The
+          Red is wrong, amber is broken, gray is incomplete - and this is none of the three. The
           address is valid, the file is there, the author meant every character of it, and on
           GitHub it renders. Wearing the dead-link mark would say the document is broken, which
           is not true and is exactly the way to teach somebody that the amber marks can be
@@ -5128,7 +5128,7 @@
               contested lane would have been a lane they could not use at the one moment they
               were being used. These three are few by comparison, so they pay the rent.
 
-              Alt text rides here too, in its own grey. It is the fourth color and the only
+              Alt text rides here too, in its own gray. It is the fourth color and the only
               passenger: it can lose a collision to a broken link, which is the cheapest pair in
               the set to lose, and it can hide neither a misspelling nor a blocked picture.
             */

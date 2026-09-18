@@ -403,7 +403,7 @@
                             HasContent, which adds one condition: they edit at the caret, and
                             with the keyboard in the outline there is no caret the user can
                             see. Copy is not gated with them - it retargets to the selected
-                            heading instead of greying out, the way a focused list copies its
+                            heading instead of graying out, the way a focused list copies its
                             selection everywhere else in Windows.
                         -->
                         <MenuFlyoutItem Text="Cut"
@@ -698,7 +698,7 @@
 
                         <!--
                             Hidden rather than disabled when the Snipping Tool is not installed:
-                            a permanently grey item is a promise the machine cannot keep.
+                            a permanently gray item is a promise the machine cannot keep.
                         -->
                         <MenuFlyoutItem Text="Screen Clip..."
                                         Command="{x:Bind ViewModel.ScreenClipCommand}"
@@ -1177,7 +1177,7 @@
 
             CanFormat is false only in Preview-only view, where there is no source pane to
             edit. It deliberately ignores which pane has focus: clicking into the preview
-            to scroll must not grey the bar out, or it would flicker every time the user
+            to scroll must not gray the bar out, or it would flicker every time the user
             moved between panes.
 
             The toggles carry glyphs rather than text on purpose. A stock ToggleButton
@@ -1199,14 +1199,14 @@
                     The four file commands, first on the bar and ruled off from the rest.
 
                     Outside the CanFormat gate below, deliberately and necessarily. That gate
-                    greys the whole bar in Preview-only view, where there is no source pane to
+                    grays the whole bar in Preview-only view, where there is no source pane to
                     format; but opening and saving are exactly as reasonable while reading the
                     preview as while editing, so these four sit in front of it rather than
-                    inside it. It does mean four live buttons on an otherwise grey bar in
+                    inside it. It does mean four live buttons on an otherwise gray bar in
                     Preview view - which is the honest picture of what still works there.
 
                     Bound to the same commands as their File-menu twins, so Save cannot be
-                    greyed in one place and lit in the other. Nothing here sets IsEnabled:
+                    grayed in one place and lit in the other. Nothing here sets IsEnabled:
                     CanExecute owns all four, and it is what dims Save and Save All when
                     there is nothing to write.
 
@@ -2249,7 +2249,7 @@
                     since it last suggested you look. See AppSettings.UpdateReminderDays.
 
                     It wears the same amber pill as a highlighted status message, and for the
-                    same reason: quiet grey text in a status bar is missable, and a reminder
+                    same reason: quiet gray text in a status bar is missable, and a reminder
                     nobody notices is a reminder that did not happen. The difference is that
                     this one does not time out after eight seconds - it stands until it is
                     clicked or the session ends.

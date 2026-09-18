@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 <img src="src/PaulTechGuy.MQ.App/Assets/MarqoraLogo.png" alt="Marqora logo" width="144" height="144">
 
@@ -344,7 +344,7 @@ so it never appears in a printed page or an exported PDF.
 
 Because the outline is a place to work rather than a menu you pass through, the commands that
 edit at the caret — the whole Format menu and formatting bar, plus Cut, Paste and Select All —
-grey out while the keyboard is in it. There is no caret on screen to apply them to, and
+gray out while the keyboard is in it. There is no caret on screen to apply them to, and
 applying them to one you cannot see is how documents get changed by accident. Everything else
 keeps working: Save, Undo, the Find family, view modes and zoom all behave exactly as usual,
 and zoom still targets the last pane you were in.
@@ -417,7 +417,7 @@ the keyboard to the text.
 
 Results are a snapshot. Editing a document that was searched puts an amber **Documents have
 changed** notice on the status line — search again to update it — rather than reshuffling the
-rows while you are reading them; closing a document greys its results out. Going to a match that has since moved still lands
+rows while you are reading them; closing a document grays its results out. Going to a match that has since moved still lands
 on the right text: the match is looked for again before anything is selected, so a row can
 never quietly select the wrong thing.
 
@@ -814,7 +814,7 @@ dictionary, or to delete a word you have typed twice in a row.
 
 The words come from the spelling dictionary Windows already has, so there is nothing to
 download and nothing leaves the machine. If Windows has no dictionary for your language, spell
-check stays quiet and the setting greys out to say why.
+check stays quiet and the setting grays out to say why.
 
 A document about software is mostly not prose, so most of what is on screen is never checked:
 

@@ -276,7 +276,7 @@ public sealed partial class MainWindow
 
         _tabCloseOthersItem.IsEnabled = ViewModel.Tabs.Count > 1;
 
-        // Nothing to reveal or copy until the document has been written somewhere. Greyed
+        // Nothing to reveal or copy until the document has been written somewhere. Grayed
         // rather than dropped, so the menu keeps one shape whichever tab it is opened on and
         // its items do not move under the pointer.
         _tabRevealItem.IsEnabled = !tab.IsUntitled;

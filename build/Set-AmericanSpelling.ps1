@@ -61,6 +61,12 @@ $words = [ordered]@{
     'centre' = 'center'
 
     'colour' = 'color'
+
+    # Covers greyscale, greyed, greys and greying off the one stem. Checked before adding:
+    # every occurrence in the tree was prose in a comment, a doc or the README, with no
+    # identifier, string literal or compound such as greyhound for the stem to eat.
+    'grey' = 'gray'
+
     'materialis' = 'materializ'
     'maths' = 'math'
 }

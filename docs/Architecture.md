@@ -1123,7 +1123,7 @@ Two refusals remain, both about not rewriting something unseen. A search that hi
 the ceiling, so what came back covers an arbitrary part of the workspace, and listing that much
 is useful where rewriting it is not. And an empty search term does nothing but say so and put
 the keyboard back in the box — the one case the button genuinely cannot act on, answered with a
-sentence rather than with grey.
+sentence rather than with gray.
 
 Between the question and the answer, a file watcher or another tab can still move a document,
 so each one is checked again immediately before it is written — reference equality on the
@@ -1230,7 +1230,7 @@ never marked however far away it points — nothing happens until a click, and a
 that line wrong and a README's dozen ordinary links light up, which is the fastest possible way
 to have the whole rule switched off.
 
-**A fourth claim, and its own mark.** Red is wrong, amber is broken, grey is incomplete — and
+**A fourth claim, and its own mark.** Red is wrong, amber is broken, gray is incomplete — and
 this is none of them. The address is valid, the file is there, the author meant it, and on
 GitHub it renders. So it wears dotted violet, and earns a tick in the overview ruler in the
 same violet.
@@ -1279,7 +1279,7 @@ with nothing to compare against, and the two want different numbers. `--mq-dange
 `--mq-warning` have relative luminances of 0.15 and 0.16 — under words they read as red and
 amber, as ticks they read as two dark smudges. The ruler pair separates by lightness as well as
 hue and both clear 3:1 against their background. Only two exist: blocked was already tuned, and
-grey beside three hues needs no tuning.
+gray beside three hues needs no tuning.
 
 **Raw HTML needed its own reader.** `ReadLinks` walks `LinkInline`, so `<img>` and `<iframe>`
 reached no check at all — and pinning a width is exactly why people reach for the tag.

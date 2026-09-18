@@ -25,7 +25,7 @@ public interface ISpellingAnalyzer
     /// Whether there is a dictionary to check against at all.
     ///
     /// False is an ordinary state: a machine with no language pack for the user's language has
-    /// nothing to offer. Surfaced so the preferences page can grey the setting out and say why,
+    /// nothing to offer. Surfaced so the preferences page can gray the setting out and say why,
     /// rather than leaving a switch that appears to do nothing.
     /// </summary>
     bool IsAvailable { get; }

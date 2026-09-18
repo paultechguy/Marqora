@@ -159,7 +159,7 @@ public sealed partial class MainWindow
             FitLinkItems(e.LinkFinding);
 
             // Collapsed rather than disabled, for the same reason the preview's Copy Link is:
-            // an item that can never do anything on this clipboard is not worth a greyed row.
+            // an item that can never do anything on this clipboard is not worth a grayed row.
             Show(_pasteImageItem, ViewModel.ClipboardHasImage);
         }
         else

@@ -223,7 +223,7 @@ The window-side twin for flyouts is `PreferencesWindow.Themed`.
 
 **`MqSegmentStyle` carries a full `ControlTemplate` on purpose.** The stock `ToggleButton`
 animates on press and on check, and while an animation runs the control's content is composited
-into its own layer — which drops the label from ClearType to greyscale antialiasing. The text
+into its own layer — which drops the label from ClearType to grayscale antialiasing. The text
 visibly softens. The custom template changes state by swapping brushes, so no layer is ever
 created. Do not simplify it into a plain style.
 

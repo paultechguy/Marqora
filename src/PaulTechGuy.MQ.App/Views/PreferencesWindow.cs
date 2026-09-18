@@ -362,7 +362,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         _highlightLine = BuildCheck("Highlight the current line");
         Bind(_highlightLine, v => _vm.UpdateAsync(s => s with { HighlightCurrentLine = v }));
 
-        // Both boxes exist before either is bound: the handler below greys the second one,
+        // Both boxes exist before either is bound: the handler below grays the second one,
         // and a Checked event can arrive the moment the binding is made.
         _continueLists = BuildCheck("Continue lists when Enter is pressed");
         _repeatListNumbers = BuildCheck("Keep repeated numbering when continuing a list");
@@ -469,7 +469,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         // decided they wanted it, and Cancel cannot unwrite that.
         _autoSave = BuildCombo(["Off", "When the window loses focus", "After a pause in typing"]);
 
-        // The only live effect is greying the delay box, which is this dialog's own business
+        // The only live effect is graying the delay box, which is this dialog's own business
         // rather than a change to the settings.
         _autoSave.SelectionChanged += (_, _) => Apply(UpdateEnabledState);
 
@@ -1762,7 +1762,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _spellCheck.IsChecked = s.SpellCheckEnabled;
             _maximizeDiagrams.IsChecked = s.MaximizeDiagramWindows;
 
-            // Greyed out, with the reason, when Windows has no dictionary for this language.
+            // Grayed out, with the reason, when Windows has no dictionary for this language.
             // A switch that stays on and does nothing is worse than one that says why it cannot.
             // Set here rather than in the constructor because Populate runs under the _loading
             // guard, so touching the control cannot write the setting back.
@@ -1842,7 +1842,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// <summary>A sensible measure for someone switching the width limit on for the first time.</summary>
     private const int DefaultPreviewWidth = 860;
 
-    /// <summary>Greys out the fields that only mean something when another is set.</summary>
+    /// <summary>Grays out the fields that only mean something when another is set.</summary>
     private void UpdateEnabledState()
     {
         _previewWidth.IsEnabled = _limitWidth.IsChecked ?? false;

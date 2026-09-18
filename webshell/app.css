@@ -74,7 +74,7 @@
      lighter amber becoming a tick nobody sees.
 
      Only two. Blocked keeps --mq-blocked, which was tuned for exactly this measurement and
-     would only be copied here, and alt text keeps --mq-text-tertiary, because grey beside three
+     would only be copied here, and alt text keeps --mq-text-tertiary, because gray beside three
      hues is unmistakable at any size. A color is chosen in one place or it drifts. */
   --mq-tick-spelling: #d1242f;
   --mq-tick-link: #bf8700;
@@ -261,11 +261,11 @@ body {
 /*
   An image with no alt text.
 
-  Dotted and grey rather than wavy and colored, because it is the one mark in the source pane
+  Dotted and gray rather than wavy and colored, because it is the one mark in the source pane
   that is not reporting a fault: the image is there and will render. It is a note that something
   is missing for a reader who cannot see it, which is worth saying and not worth shouting. The
   three marks then read as three different claims at a glance - red is wrong, amber is broken,
-  grey is incomplete.
+  gray is incomplete.
 */
 .monaco-editor .view-line span.mq-missing-alt {
   text-decoration: underline dotted var(--mq-text-tertiary);
@@ -285,7 +285,7 @@ body {
   indistinguishable from eight broken links at the one glance the ruler exists to serve. A
   fourth claim needs a fourth color or it is not a fourth claim.
 
-  Red is wrong, amber is broken, grey is incomplete, violet is "not here".
+  Red is wrong, amber is broken, gray is incomplete, violet is "not here".
 */
 .monaco-editor .view-line span.mq-unrenderable {
   text-decoration: underline dotted var(--mq-blocked);
@@ -799,7 +799,7 @@ a.mq-blocked-media {
   font-weight: 620;
 }
 
-/* Deliberately still grey. See the note above the header rule. */
+/* Deliberately still gray. See the note above the header rule. */
 .mq-preview tbody tr:nth-child(even) { background: color-mix(in srgb, var(--mq-bg-subtle) 55%, transparent); }
 
 /* ----------------------------------------------------------------- code */
@@ -1089,7 +1089,7 @@ a.mq-blocked-media {
   rules regardless of the theme on screen.
 
   The colors a callout or a link reads - the accent, the four other alert hues, and the soft
-  fill that goes with each - are the light :root values exactly. The greys are not: text,
+  fill that goes with each - are the light :root values exactly. The grays are not: text,
   borders and insets sit a shade darker here than they do on screen. That split is the point.
   An alert reads two tokens, its line color and its fill, and a print block that re-stated
   only the first drew a blue bar against a teal wash. Holding the hues to :root also keeps
@@ -1137,7 +1137,7 @@ a.mq-blocked-media {
     and should not carry this app's commentary - the same argument that keeps spelling squiggles
     off the page. Printing one proved it wrong. A blocked picture cannot be in the PDF whatever
     is done here, so the only question is what occupies the hole: restoring the element paints a
-    200x80 grey rectangle for an iframe and a broken-image glyph for a picture, both of which
+    200x80 gray rectangle for an iframe and a broken-image glyph for a picture, both of which
     look like a fault in the document rather than a fact about it. Hiding both leaves a silent
     gap, which is the very defect this feature exists to close, now printed.
 
