@@ -320,6 +320,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// count changing, by being dragged.
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CloseTabsToTheRightCommand))]
+
+    // Close Other Tabs counts the unpinned tabs that are not this one, so moving the selection
+    // moves its answer too - on a strip of two where one is pinned, it depends entirely on which
+    // of them is in front.
+    [NotifyCanExecuteChangedFor(nameof(CloseOtherTabsCommand))]
     public partial DocumentTabViewModel? ActiveTab { get; set; }
 
     /// <summary>
@@ -2201,55 +2206,50 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Materialized before the loop, like CloseTabsOtherThanActiveAsync: closing a tab
-        // removes it from the collection being walked.
-        foreach (DocumentTabViewModel tab in Tabs.Skip(from + 1).ToList())
-        {
-            // Cancel stops the run where it stands rather than skipping one and going on.
-            // Answering "no" to a document means "stop closing things", which is what the
-            // same prompt means everywhere else in this file.
-            if (!await ConfirmDiscardAsync(tab).ConfigureAwait(true))
-            {
-                return;
-            }
-
-            RecordClosedTab(tab);
-            _workspace.Close(tab.Id);
-        }
+        await CloseEachAsync(ToTheRightOf(from)).ConfigureAwait(true);
 
         RestoreDocumentFocusAfterChrome();
     }
 
+    /// <summary>
+    /// The tabs a bulk close would actually take: everything after <paramref name="from"/>,
+    /// less the pinned ones.
+    /// </summary>
+    private List<DocumentTabViewModel> ToTheRightOf(int from) =>
+        [.. Tabs.Skip(from + 1).Where(tab => !tab.IsPinned)];
+
+    /// <summary>
+    /// Enabled only when there is something to the right this would really close. A run of
+    /// pinned tabs to the right is not a reason to offer a command that would do nothing.
+    /// </summary>
     private bool CanCloseTabsToTheRight() =>
         ActiveTab is { } active
         && Tabs.IndexOf(active) is int index and >= 0
-        && index < Tabs.Count - 1;
+        && ToTheRightOf(index).Count > 0;
 
-    private async Task CloseTabsOtherThanActiveAsync()
-    {
-        if (ActiveTab is not { } keep)
-        {
-            return;
-        }
+    private Task CloseTabsOtherThanActiveAsync() =>
+        ActiveTab is { } keep
+            ? CloseEachAsync(OtherThan(keep))
+            : Task.CompletedTask;
 
-        foreach (DocumentTabViewModel tab in Tabs.Where(t => t.Id != keep.Id).ToList())
-        {
-            if (!await ConfirmDiscardAsync(tab).ConfigureAwait(true))
-            {
-                return;
-            }
+    /// <summary>Every tab but this one, less the pinned ones.</summary>
+    private List<DocumentTabViewModel> OtherThan(DocumentTabViewModel keep) =>
+        [.. Tabs.Where(tab => tab.Id != keep.Id && !tab.IsPinned)];
 
-            RecordClosedTab(tab);
-            _workspace.Close(tab.Id);
-        }
-    }
+    private bool CanCloseOthers() => ActiveTab is { } active && OtherThan(active).Count > 0;
 
-    private bool CanCloseOthers() => Tabs.Count > 1;
-
-    [RelayCommand(CanExecute = nameof(CanActOnDocument))]
+    /// <summary>
+    /// Closes every tab a bulk command is allowed to take - which is every unpinned one.
+    ///
+    /// The pinned filter lives here, in the command, and must never move down into
+    /// <see cref="CloseAllAsync"/>. That one is what the window's closing handler calls, and a
+    /// shutdown that skipped pinned documents would either refuse to close or close without
+    /// prompting for unsaved work in them. The same reason the focus restore below is here.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCloseAllTabs))]
     private async Task CloseAllTabsAsync()
     {
-        await CloseAllAsync().ConfigureAwait(true);
+        await CloseEachAsync([.. Tabs.Where(tab => !tab.IsPinned)]).ConfigureAwait(true);
 
         // Not in CloseAllAsync itself: the window's closing handler calls that one, and a
         // window on its way out has no document left to put the keyboard in.
@@ -2257,12 +2257,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Offered only when an unpinned tab exists. Without this the command is live on a strip of
+    /// nothing but pinned documents and silently does nothing when picked.
+    /// </summary>
+    private bool CanCloseAllTabs() => Tabs.Any(tab => !tab.IsPinned);
+
+    /// <summary>
     /// Closes every tab, prompting for each dirty one. Returns false if the user cancelled,
     /// which the window's closing handler uses to abort shutdown.
+    ///
+    /// Takes pinned documents too, unlike every command above. A pin keeps a tab out of a bulk
+    /// close the user asked for; it is not a reason to leave a document unwritten when the
+    /// application is going away.
     /// </summary>
-    public async Task<bool> CloseAllAsync()
+    public Task<bool> CloseAllAsync() => CloseEachAsync([.. Tabs]);
+
+    /// <summary>
+    /// Closes a given set of tabs, prompting for each dirty one, and stops at the first refusal.
+    ///
+    /// The one loop all four close commands share; what differs between them is only which tabs
+    /// they hand it. Cancel stops the run where it stands rather than skipping one and carrying
+    /// on - answering "no" to a document means "stop closing things", which is what the same
+    /// prompt means everywhere else in this file.
+    ///
+    /// The list is materialized by every caller before it arrives, because closing a tab removes
+    /// it from the collection they were all built from.
+    /// </summary>
+    private async Task<bool> CloseEachAsync(List<DocumentTabViewModel> tabs)
     {
-        foreach (DocumentTabViewModel tab in Tabs.ToList())
+        foreach (DocumentTabViewModel tab in tabs)
         {
             if (!await ConfirmDiscardAsync(tab).ConfigureAwait(true))
             {
@@ -3681,6 +3704,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         CloseOtherTabsCommand.NotifyCanExecuteChanged();
         CloseTabsToTheRightCommand.NotifyCanExecuteChanged();
+
+        // All three now answer about how many tabs are *closable* rather than how many there
+        // are, so a pin changes the answer without changing the count - which is why PinChanged
+        // calls this method as well as the opens and closes that always did.
+        CloseAllTabsCommand.NotifyCanExecuteChanged();
+
         NextTabCommand.NotifyCanExecuteChanged();
         PreviousTabCommand.NotifyCanExecuteChanged();
     }

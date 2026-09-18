@@ -64,6 +64,7 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _tabReloadItem;
     private MenuFlyoutItem? _tabCloseOthersItem;
     private MenuFlyoutItem? _tabCloseRightItem;
+    private MenuFlyoutItem? _tabCloseAllItem;
     private MenuFlyoutItem? _tabReopenItem;
     private MenuFlyoutItem? _tabRevealItem;
     private MenuFlyoutItem? _tabPrintItem;
@@ -358,12 +359,15 @@ public sealed partial class MainWindow
             () => ViewModel.CloseTabsToTheRightCommand.ExecuteAsync(null));
 
         menu.Items.Add(Item("Close Tab", "Ctrl+W", () => ViewModel.CloseTabCommand.ExecuteAsync(null)));
-        menu.Items.Add(_tabCloseOthersItem);
-        menu.Items.Add(_tabCloseRightItem);
-        menu.Items.Add(Item(
+        // Kept in a field like the other two, now that a pin can make it close nothing.
+        _tabCloseAllItem = Item(
             "Close All Tabs",
             "Ctrl+Shift+W",
-            () => ViewModel.CloseAllTabsCommand.ExecuteAsync(null)));
+            () => ViewModel.CloseAllTabsCommand.ExecuteAsync(null));
+
+        menu.Items.Add(_tabCloseOthersItem);
+        menu.Items.Add(_tabCloseRightItem);
+        menu.Items.Add(_tabCloseAllItem);
 
         // The undo of the four above it, and the reason it is in their group rather than in
         // one of its own. It is also the one item here that answers about the workspace rather
@@ -510,6 +514,7 @@ public sealed partial class MainWindow
             || _tabPinnedItem is null
             || _tabCloseOthersItem is null
             || _tabCloseRightItem is null
+            || _tabCloseAllItem is null
             || _tabReopenItem is null
             || _tabRevealItem is null
             || _tabCopyMenu is null
@@ -563,14 +568,23 @@ public sealed partial class MainWindow
             && tab.Document.External != ExternalState.Missing
             && (tab.IsDirty || tab.Document.External == ExternalState.Changed);
 
-        _tabCloseOthersItem.IsEnabled = ViewModel.Tabs.Count > 1;
-
-        // Read off the strip rather than from the command, for the reason this method exists:
-        // the clicked tab knows where it is sooner than the view model does. Mirrors
-        // CanCloseTabsToTheRight.
+        // Read off the strip rather than from the commands, for the reason this method exists:
+        // the clicked tab knows where it is sooner than the view model does. These three mirror
+        // CanCloseOthers, CanCloseTabsToTheRight and CanCloseAllTabs, and have to be changed with
+        // them - a predicate written in one place and not the other gives either a gray item
+        // that would have worked or a live one that silently closes nothing.
+        //
+        // All three now count what a command would actually take rather than how many tabs
+        // there are, because a pinned tab is not one of them.
         int position = ViewModel.Tabs.IndexOf(tab);
 
-        _tabCloseRightItem.IsEnabled = position >= 0 && position < ViewModel.Tabs.Count - 1;
+        _tabCloseOthersItem.IsEnabled =
+            ViewModel.Tabs.Any(other => other.Id != tab.Id && !other.IsPinned);
+
+        _tabCloseRightItem.IsEnabled =
+            position >= 0 && ViewModel.Tabs.Skip(position + 1).Any(right => !right.IsPinned);
+
+        _tabCloseAllItem.IsEnabled = ViewModel.Tabs.Any(any => !any.IsPinned);
 
         // The only item here that is not about the clicked tab, so it is the only one whose
         // enabled state comes straight off its command.

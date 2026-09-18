@@ -1,5 +1,27 @@
 ﻿# Marqora vNext - What's New
 
+## Menu Structure Rebuild
+
+The menu bar has been rebuilt around where Windows users already look. It runs File, Edit, View,
+Insert, Format, Tools, Help — the order Office has shipped for decades — with the exports and the
+Folio commands on `File`, where every other Windows application keeps them. `View` had become the
+place any new checkbox went; its display, proofing and zoom settings now sit behind three
+submenus rather than one long list. `Tools` holds what its name promises.
+
+A tab's right-click menu has grown up alongside it. **Close Tabs to the Right** and **Reopen
+Closed Tab** are the two every browser has and Marqora did not, and a new **Copy** submenu offers
+a document's name, its relative path, its full path, or a finished markdown link — the last being
+what you want when linking one document to another.
+
+And a tab can now be **pinned**. Right-click it and tick **Pinned**: it moves to the left of the
+strip, wears a pin, and is left alone by Close Other Tabs, Close Tabs to the Right and Close All
+Tabs. Drag a tab in or out of the pinned group to pin or unpin it. Pins are remembered per file,
+so the document you keep to hand is still there next week.
+
+**Renamed:** Number Headings and Remove Heading Numbers are now **Number Sections** and **Remove
+Section Numbers**; Format Markdown is **Formatting Options**; Check for Updates is **Marqora
+Releases Online**. Open Log Folder has moved to `Preferences > Advanced`.
+
 ## Mark a Document Read-Only
 
 Some documents are open to be consulted rather than written — a specification, a style guide,
@@ -70,44 +92,6 @@ to match and a hand-written table of contents keeps working; a link from another
 at the old anchor, and both commands say so before they run. A document that numbers its own
 headings now opens with Marqora's numbering already stood down rather than showing both sets at
 once, which `Preferences > Preview` can turn off. `Ctrl+Z` takes any of it back in one step.
-
-## Rearranged Menus
-
-The bar now runs File, Edit, View, Insert, Format, Tools, Help — the order Windows menus have
-used since long before Marqora, and the one Office still ships. View had been sitting fifth
-behind Format and Insert, which is not where a hand goes looking for it. The keys are
-unchanged: `Alt+O` is still Format and `Alt+I` still Insert, so nothing you press has moved, only
-where the pointer goes.
-
-`View` had grown to twenty-four rows and was long enough to scroll on a 1080p screen at the
-scaling Windows picks by default, which hides items with no sign that anything is hidden. It is
-nine now. Word wrap, line numbers, whitespace, wrapped-line markers and synchronized scrolling
-are together under `View > Display`; the three that underline something and tick the scrollbar —
-problems, blocked images, spell check — are under `View > Proofing`; and the six zoom commands
-are under `View > Zoom`. `F7`, `Alt+Z` and the zoom keys are untouched. Next Tab and Previous Tab
-have left the menu, `Ctrl+Tab` and the tab list in the title bar being the two ways anyone
-actually uses them, and **Reload files changed on disk** is now set in `Preferences > Files`
-alone, being a policy you choose once rather than something to toggle while reading.
-
-The three exports and the two Folio commands have moved to `File`, where Word, Acrobat and every
-other Windows application has always kept them: `File > Export` holds PDF, HTML and Word, with
-**Share as Folio...** and **Open Folio...** beside **Print...** below it. That leaves `Tools`
-holding what its name promises — Format Document, Format All Open Documents, the formatting
-options behind them, and the two commands that write section numbers into the file. **Open in
-File Explorer** and **Copy Full Path** are now on the tab's own right-click menu only, which is
-where that gesture already names a document.
-
-`Insert` has gained **Callouts** beside **Diagram** and **Snippet**, so a callout is two steps
-from the bar instead of three.
-
-Four commands have been renamed. What each of them does is unchanged. **Number Headings** and
-**Remove Heading Numbers** are **Number Sections** and **Remove Section Numbers**, so the two
-commands that write into your file no longer read as the same two words as `View > Heading
-Numbers`, which only changes what is drawn. **Format Markdown** is **Formatting Options**, because
-it opens a page of switches rather than formatting anything. **Check for Updates** is now
-**Marqora Releases Online**: Marqora has never checked for an update and still does not, and the
-old name promised otherwise. **Open Log Folder** has moved from `Help` to
-`Preferences > Advanced`, beside the button that opens the settings folder.
 
 ## Fixes
 
