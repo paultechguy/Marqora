@@ -1323,6 +1323,28 @@
     pendingModeSwitch = null;
   }
 
+  /*
+    Set for the duration of the layout call setViewMode makes, and nowhere else.
+
+    Monaco raises its scroll-changed event from inside layout(), synchronously, whenever the
+    call changes what the editor can see - and a view mode change always does. The editor is
+    either going display:none, where it measures nothing, or coming back from it, and with word
+    wrap on either one re-wraps every line: the scroll height changes, and Monaco puts the pane
+    back under the model line it had at the top, which is a scrollTop change into the bargain.
+
+    None of that is the reader moving, but the editor's scroll handler could not tell it from a
+    wheel. It canceled the switch and placed the preview under whatever line the editor had been
+    left on - on the way out of preview view, wherever the reader was a chapter ago, so the
+    preview scrolled back up to meet it. On the way in the same cancel quietly left the carried
+    line unused, and the switch looked right only because the block anchor was carrying it. The
+    events raised inside that one call are the pane changing shape, and the handler lets them
+    pass.
+
+    A flag around the call rather than a check on the event's fields, because the event does
+    not say why it fired: a re-wrap and a wheel both change scrollTop.
+  */
+  var layingOutForModeSwitch = false;
+
   function applyModeSwitch(move) {
     if (move.read === 'source') {
       beginSync('source');
@@ -3432,10 +3454,21 @@
       emitCaretState();
     });
 
-    state.editor.onDidScrollChange(function () {
+    state.editor.onDidScrollChange(function (e) {
       updateWrapGlyphs();
 
       if (syncOwner === 'preview') { return; }
+
+      // The pane changing shape under a view mode change, not the reader moving. See
+      // layingOutForModeSwitch.
+      if (layingOutForModeSwitch) { return; }
+
+      // Nor is a measurement. Once the pane is showing again Monaco renders it and reports the
+      // scroll width it found, and a re-wrap reports a scroll height; the top line has not
+      // moved in either. While a switch is settling only a moved top line outranks it -
+      // anything else would cancel the placement and put the preview back under the source's
+      // rule, a few pixels from where the anchor had it.
+      if (pendingModeSwitch !== null && !e.scrollTopChanged) { return; }
 
       cancelModeSwitch();
       syncEditorToPreview();
@@ -4696,7 +4729,13 @@
       els.root.setAttribute('data-view', p.mode);
       state.lineMapDirty = true;
 
-      if (state.editor) { state.editor.layout(); }
+      // Guarded, because Monaco answers this call with its scroll event before it returns, and
+      // the editor's scroll handler would read that as the user moving and throw the placement
+      // above away. See layingOutForModeSwitch.
+      if (state.editor) {
+        layingOutForModeSwitch = true;
+        try { state.editor.layout(); } finally { layingOutForModeSwitch = false; }
+      }
 
       /*
         A Find command that was waiting for this. The pane has just been laid out, so the

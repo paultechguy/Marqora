@@ -406,8 +406,66 @@ about to point at, and points at it a message later - so each of them calls `can
 first. A frozen line is an inference about what the reader was looking at, and a click is not an
 inference.
 
+One thing that looks like a hand on the wheel is not. `setViewMode` asks Monaco to lay the
+editor out as soon as the grid has changed, and Monaco answers from inside that call, before it
+returns, with its scroll-changed event: the pane has gone `display: none` or come back from it,
+with word wrap on every line re-wraps either way, so the scroll height changes and Monaco puts the
+top model line back where it was, which changes `scrollTop` too. The editor's scroll handler
+could not tell that from a wheel. It canceled the switch and placed the preview under whatever
+line the editor had been left on - on the way out of preview view, wherever the reader was a
+chapter ago, so the preview scrolled back up to meet it; on the way in, the same cancel left the
+carried line unused, and the switch looked right only because the block anchor was carrying it.
+`layingOutForModeSwitch` is set for the duration of that one call and the handler lets those
+events pass. It is a flag around a synchronous call rather than a check on the event's fields,
+because the event does not say why it fired: a re-wrap and a wheel both change `scrollTop`.
+
+One more arrives after the call, once the pane has rendered: Monaco measures the width of the
+lines it drew and reports the scroll width it found, and the top line has not moved. While a
+switch is settling the handler ignores any event that leaves `scrollTop` alone, because canceling
+on one of those put the preview back under the source's rule, a few pixels from where the anchor
+had it. Outside that window they are handled as they always were.
+
 With sync switched off none of this happens. The panes are independent, a mode change is not the
 moment to tie them together, and each keeps its own place.
+
+### Walking the switch by hand
+
+Nothing automated sees any of this - the shell is exercised only by running the app - so a change
+anywhere in this section is checked by walking the table below: six transitions, each with sync
+on and off, from each of the ways a position gets set. It takes a few minutes with a long
+document that has a tall table or diagram in it to land the fold on.
+
+Set the position, switch, and look at both panes before touching anything else.
+
+| From | To | Sync on | Sync off |
+|---|---|---|---|
+| Split | Preview | The preview lands where split view's own rule puts it under the editor's top line, so if the panes already agreed nothing visibly moves. | The preview keeps the block at its fold, reflowed wider. |
+| Preview | Split | The preview keeps the block it was showing, reflowed narrower, and the editor scrolls to meet it. Nothing read in preview view is lost. | The preview keeps its block; the editor stays where it was. |
+| Split | Source | The editor keeps its top line at the wider width. | The same. |
+| Source | Split | The preview reappears under the editor's top line. | The preview reappears on the block it showed before it was hidden. |
+| Source | Preview | The preview lands under the editor's top line. | The preview reappears on its own block. |
+| Preview | Source | The editor scrolls to meet the preview. | The editor stays where it was. |
+
+Run the table from each of these starting positions, because they exercise different halves of
+the placement:
+
+- **A heading clicked in the outline.** Puts the block at the top exactly, offset zero: the
+  sharpest test of the anchor, and the case this section was written for. In preview view the
+  hidden editor cannot follow the click, so the switch back to split has to place the editor from
+  the preview and never the other way round.
+- **The wheel, stopped part-way through a paragraph.** A fractional offset the reflow has to
+  scale.
+- **Ctrl+End in either pane.** The last screenful, where the eased target and the overscroll
+  carry are in play and the two panes' idea of the end differs.
+- **A Find All result.** The editor is centered on a match, and in split view the preview has
+  followed it.
+
+And two things that are not positions:
+
+- **Switch twice, fast.** Split to preview to split before anything settles. The second switch's
+  placement must not be cleared by the first switch's timer.
+- **A document shorter than the pane** with a preview taller than it, such as a page of images.
+  The caret carries the position there, and the preview must follow it into preview view.
 
 ---
 

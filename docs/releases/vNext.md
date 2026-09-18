@@ -112,7 +112,10 @@ Sharing as a zip is unchanged.
 
 **Switching the view keeps your place.** Moving between split, source and preview view put the
 pane that stayed wherever the other one had last been left, which on a long document meant
-losing the paragraph you were reading. The switch now carries the line across.
+losing the paragraph you were reading. The switch now carries the line across. That includes
+coming back to split view from preview view: the preview stays on what you were reading, at its
+narrower width, and the source scrolls to meet it rather than pulling the preview back up to
+wherever it had been left.
 
 **A pasted table gets its header back.** Copy as Rich Text carries the preview's own stylesheet
 across, and Word and Outlook do read it — code keeps its highlighting, links keep their color — but
