@@ -1,4 +1,4 @@
-# Marqora vNext - What's New
+﻿# Marqora vNext - What's New
 
 ## A document you only meant to read
 
@@ -7,9 +7,9 @@ somebody else's README. Right-click its tab and tick **Read-Only**, or use `File
 and Marqora will not write that file until you take the tick off. The mark is remembered per
 file, so it is still there next week. Typing does nothing, and says so at the caret.
 
-Autosave is what this is for. One stray keystroke in a document you were only reading is enough
+One stray keystroke in a document you were only reading is enough
 to have it written, and with format on save the whole file is rewritten on the way to disk. A
-marked document is passed over by autosave, by Save and Save All, and by `Ctrl+Shift+H`, which
+marked document is passed over by Save and Save All, and by `Ctrl+Shift+H`, which
 leaves it out of the count rather than skipping it afterwards.
 
 Marking a document you have already edited keeps those edits, and undo with them. **Save As**

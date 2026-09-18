@@ -995,9 +995,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (_locks.DroppedOnLoad is var dropped and > 0)
         {
-            StatusText = dropped == 1
+            // Highlighted for the same reason a silent reload is: it reports something that
+            // happened without being asked for, and it is said once. A guard that has stopped
+            // guarding is worth more than a line of caption text that fades on the first
+            // keystroke.
+            ShowReadOnlyStatus(dropped == 1
                 ? "A read-only mark was dropped; its file is gone"
-                : $"{dropped} read-only marks were dropped; their files are gone";
+                : $"{dropped} read-only marks were dropped; their files are gone");
         }
     }
 
@@ -1632,9 +1636,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        StatusText = document.IsDirty
-            ? $"{document.DisplayName} is read-only — its unsaved edits will need Save As"
-            : $"{document.DisplayName} is read-only";
+        // Marking a clean document is a plain confirmation of something that worked. Marking one
+        // with unsaved edits in it is not: the user has just put those edits somewhere they
+        // cannot be written from, which is worth the highlight even though they asked for it.
+        if (document.IsDirty)
+        {
+            ShowReadOnlyStatus(
+                $"{document.DisplayName} is read-only — its unsaved edits will need Save As");
+
+            return;
+        }
+
+        StatusText = $"{document.DisplayName} is read-only";
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -1677,7 +1690,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // nothing about what Ctrl+S will do.
         if (document.IsReadOnly)
         {
-            StatusText = $"Read-only — {document.DisplayName} was not saved";
+            ShowReadOnlyStatus($"Read-only — {document.DisplayName} was not saved");
             return;
         }
 
@@ -1779,7 +1792,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        StatusText = $"Read-only — {what} did nothing";
+        ShowReadOnlyStatus($"Read-only — {what} did nothing");
         return true;
     }
 
@@ -1914,9 +1927,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (dirty.Count == 0)
         {
-            StatusText = marked > 0
-                ? $"Nothing to save — {Documents(marked)} read-only"
-                : "Nothing to save";
+            if (marked > 0)
+            {
+                // Save All reached nothing at all because everything it would have written is
+                // marked. That is the same "you asked and it did not happen" as a single save.
+                ShowReadOnlyStatus($"Nothing to save — {Documents(marked)} read-only");
+            }
+            else
+            {
+                StatusText = "Nothing to save";
+            }
 
             return;
         }
@@ -1947,7 +1967,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ? $"Saved {Documents(saved)}"
             : $"Saved {saved} of {Documents(dirty.Count)}";
 
-        StatusText = marked > 0 ? $"{written} — {Documents(marked)} read-only" : written;
+        // Highlighted only when something was left behind. Some documents were written, so this
+        // is not a plain failure - but the part the user needs to notice is the part that was
+        // not, and that is what the highlight is for.
+        if (marked > 0)
+        {
+            ShowReadOnlyStatus($"{written} — {Documents(marked)} read-only");
+        }
+        else
+        {
+            StatusText = written;
+        }
     }
 
     /// <summary>
@@ -2399,6 +2429,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// plain exclamation mark.
     /// </summary>
     private const string ReloadedGlyph = "\uE72C";
+
+    /// <summary>
+    /// Segoe Fluent's padlock, in front of a message about a read-only document. From the icon
+    /// font for the reason the reload arrow above gives.
+    /// </summary>
+    private const string ReadOnlyGlyph = "\uE72E";
+
+    /// <summary>
+    /// Puts a read-only message up wearing the same highlight a silent reload gets.
+    ///
+    /// These are the messages that report something the user asked for and did not get. Plain
+    /// caption text in the corner is not enough for that: pressing Ctrl+S and walking away
+    /// believing the file is written is exactly the outcome the mark exists to prevent, and a
+    /// gray line that fades on the next keystroke would let it happen anyway.
+    /// </summary>
+    private void ShowReadOnlyStatus(string text) => ShowHighlightedStatus(text, ReadOnlyGlyph);
 
     /// <summary>
     /// Told by the window whether it has the user's attention.
@@ -5376,7 +5422,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // word "Cut" over a document that still has every line it had a moment ago.
             case "cut" when _workspace.Active is { RefusesEdits: true }:
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
-                StatusText = "Read-only — copied instead of cut";
+                ShowReadOnlyStatus("Read-only — copied instead of cut");
                 return;
 
             case "cut":
