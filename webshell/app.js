@@ -4066,6 +4066,45 @@
     'rgba(0, 0, 0, 0)': true, 'transparent': true
   };
 
+  /*
+    An equation reduced to its MathML, for the clipboard.
+
+    KaTeX renders every equation twice and ships both. .katex-mathml holds real MathML and is
+    hidden by a clip-path; .katex-html is the visible one, built from absolutely positioned
+    spans measured in ems. A paste carries both, and Word can use neither as it stands: the
+    positioned spans have no positioning to fall back on and collapse into overlapping glyphs,
+    while the MathML that would have worked is clipped to a single pixel. What arrives is a
+    scramble with an invisible correct answer inside it.
+
+    Word 2013 and later convert MathML into their own equation format on paste. So dropping
+    the visual copy and unwrapping the hidden one hands over the one form the destination can
+    read - and hands it over as an equation the recipient can edit, rather than a picture of
+    one. Nothing is converted here; both renderings were already in the markup.
+
+    Clipboard only, and that is the point of it being here rather than in updatePreview. The
+    preview, the printer, an exported HTML file and a Folio all want the visual rendering:
+    a browser lays that out exactly as KaTeX intended, and its MathML support is the weaker
+    of the two.
+  */
+  function withMathmlOnly(root) {
+    var equations = root.querySelectorAll('.katex');
+
+    for (var i = 0; i < equations.length; i++) {
+      var equation = equations[i];
+      var math = equation.querySelector('.katex-mathml math');
+
+      // No MathML to promote: a KaTeX built with output:'html', or half an equation caught
+      // by a selection that started inside it. Left exactly as it is, which is today's
+      // behavior, rather than deleting the one copy of the math that did come across.
+      if (!math || !equation.parentNode) { continue; }
+
+      equation.parentNode.insertBefore(math, equation);
+      equation.parentNode.removeChild(equation);
+    }
+
+    return root;
+  }
+
   function withInlineStyles(source) {
     // The clone is measured rather than the original, so the live preview is never touched.
     // It has to be in the document for getComputedStyle to have anything to say, and it
@@ -4139,7 +4178,15 @@
   function applyInlineStyle(element) {
     // SVG carries its own presentation attributes and its style property behaves
     // differently; mermaid diagrams already arrive self-describing.
-    if (element.namespaceURI && element.namespaceURI.indexOf('svg') >= 0) { return; }
+    //
+    // MathML is skipped for a different reason. Word will turn it into a real equation, but
+    // only while it still looks like MathML: a style attribute on every mrow and mi is enough
+    // for it to give up and paste the characters instead. Nothing in the whitelist below would
+    // have improved an equation in any case - MathML does its own layout.
+    if (element.namespaceURI
+        && (element.namespaceURI.indexOf('svg') >= 0 || element.namespaceURI.indexOf('MathML') >= 0)) {
+      return;
+    }
 
     var computed = window.getComputedStyle(element);
     var parent = element.parentElement ? window.getComputedStyle(element.parentElement) : null;
@@ -5268,9 +5315,12 @@
         text = dom.toString();
       }
 
+      // Order matters. withoutBlockedChips hands back a clone, which the next two are free to
+      // rewrite; the math is reduced before the styles are measured, so nothing is spent
+      // inlining a computed style onto spans that are about to be dropped.
       post('previewHtml', {
         requestId: p.requestId,
-        html: withInlineStyles(withoutBlockedChips(source)),
+        html: withInlineStyles(withMathmlOnly(withoutBlockedChips(source))),
         text: text
       });
     },

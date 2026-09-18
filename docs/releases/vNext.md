@@ -97,3 +97,12 @@ keeps the words inside them. The clipboard now carries the picture instead, the 
 export and the preview's own Copy as PNG already use, so a diagram copied from the page matches the
 one copied from its own window. A diagram the shell cannot draw is left out altogether rather than
 scattered across the page.
+
+**An equation pasted into Word is an equation.** Math went across as a scramble of overlapping
+characters. KaTeX draws every equation twice — once as MathML, which it hides, and once as the
+visible version, built from positioned pieces measured against a font — and both were being
+copied. Word has no way to place the positioned pieces and the MathML it could have used was
+hidden, so the two arrived on top of each other. The clipboard now carries the MathML on its own,
+which Word turns into one of its own equations: a real one, that the person you sent it to can
+click into and edit, rather than a picture or a row of stray symbols. The preview, printing and
+every exported file keep the drawn version, which is the better of the two in a browser.
