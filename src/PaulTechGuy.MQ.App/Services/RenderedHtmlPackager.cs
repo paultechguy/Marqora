@@ -62,7 +62,8 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     {
         var builder = new StringBuilder();
 
-        string styles = CssAlphaFlattening.OverWhite(FlattenCustomProperties(ReadStyles(renderedHtml)));
+        string styles = CssAlphaFlattening.OverWhite(
+            FlattenCustomProperties(ReadStyles(renderedHtml, embedMathFonts: false)));
 
         builder.AppendLine("<style>");
         builder.AppendLine(styles);
@@ -100,7 +101,17 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// contains them. KaTeX's stylesheet alone is around 25 KB, which is most of the file
     /// for a document with no equations in it.
     /// </summary>
-    public string ReadStyles(string renderedHtml)
+    /// <param name="embedMathFonts">
+    /// False for the clipboard, where the math fonts are dead weight. The shell reduces an
+    /// equation to its MathML on that path, so no <c>.katex</c> element survives to be set in
+    /// KaTeX_Main and the twenty woff2 files behind it render nothing - around 430 KB of base64
+    /// on every copy of a document containing math. The one rule still worth shipping is
+    /// <c>.katex-display</c>, which the wrapper around a display equation keeps, so the
+    /// stylesheet goes across with its <c>@font-face</c> blocks taken out rather than being
+    /// dropped altogether. The HTML export and a Folio are untouched: both carry the drawn
+    /// rendering and genuinely need the fonts.
+    /// </param>
+    public string ReadStyles(string renderedHtml, bool embedMathFonts = true)
     {
         ArgumentNullException.ThrowIfNull(renderedHtml);
 
@@ -116,11 +127,24 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
 
         if (renderedHtml.Contains("katex", StringComparison.Ordinal))
         {
-            builder.AppendLine(EmbedKatexFonts(ReadAsset(Path.Combine("vendor", "katex", "katex.min.css"))));
+            string katex = ReadAsset(Path.Combine("vendor", "katex", "katex.min.css"));
+
+            builder.AppendLine(embedMathFonts ? EmbedKatexFonts(katex) : WithoutFontFaces(katex));
         }
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// The stylesheet with its font declarations removed, for markup that has no element left
+    /// to set in them.
+    ///
+    /// Taking the blocks out rather than merely not embedding the files matters: left in, they
+    /// would name twenty relative paths that resolve to nothing wherever the fragment is
+    /// pasted, and a destination that tried to fetch them would be reaching for files it
+    /// cannot see on a machine that is not this one.
+    /// </summary>
+    private static string WithoutFontFaces(string css) => FontFaceBlock().Replace(css, string.Empty);
 
     /// <summary>
     /// The accent, written out for a document that has left the app.
@@ -433,6 +457,13 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         ".svg" => "image/svg+xml",
         _ => "application/octet-stream",
     };
+
+    /// <summary>
+    /// A whole <c>@font-face</c> rule. The stylesheet is minified and these carry no nested
+    /// braces, so the first closing brace is the end of the block.
+    /// </summary>
+    [GeneratedRegex(@"@font-face\s*\{[^}]*\}", RegexOptions.IgnoreCase)]
+    private static partial Regex FontFaceBlock();
 
     /// <summary>Matches a woff2 reference in the KaTeX stylesheet.</summary>
     [GeneratedRegex(@"url\(fonts/(?<file>[A-Za-z0-9_\-]+\.woff2)\)", RegexOptions.IgnoreCase)]

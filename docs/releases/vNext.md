@@ -106,3 +106,10 @@ hidden, so the two arrived on top of each other. The clipboard now carries the M
 which Word turns into one of its own equations: a real one, that the person you sent it to can
 click into and edit, rather than a picture or a row of stray symbols. The preview, printing and
 every exported file keep the drawn version, which is the better of the two in a browser.
+
+**A copied document carrying math is much smaller.** Because an equation now travels as MathML,
+the fonts KaTeX draws its own version in have nothing left to set: they were going onto the
+clipboard anyway, twenty files encoded into roughly 430 KB on every copy of a document with an
+equation in it. They are no longer included. The one rule that still matters — the one that puts a
+display equation on its own centered line — goes across as before, and exported HTML files and
+Folios are unchanged, since those carry the drawn version and genuinely need the fonts.
