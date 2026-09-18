@@ -1054,31 +1054,23 @@ public sealed partial class MainWindow : Window
     private const double ClosableTabChrome = 50;
 
     /*
-      What a pinned tab books instead, and the room its glyph takes.
+      A pinned tab books this too, and that is the whole of what pinning does to the arithmetic.
 
-      A pinned tab never draws a close button - IsClosable is IsActive && !IsPinned - so the 50
-      above is 32 pixels of nothing on every one of them. What is left is the plain chrome the
-      table in docs/BROKEN_TAB_BAR.md has always recorded and nothing has ever booked: header
-      padding 8+8 and border 1+1, measured at 17.8-18.5 across five inactive tabs.
+      It draws no close button - IsClosable is IsActive && !IsPinned - so the 32 pixels booked for
+      one are free, and the pin glyph is 16 of them: Width 12 plus a right Margin of 4, both set
+      in the tab template. Real content comes to about 34 against 50 booked, so a pinned tab
+      carries roughly 16 pixels of trailing space.
 
-      Booking chrome per tab state is listed in that document as tried and abandoned, and this is
-      not that. The rejected version booked 18 inactive and 50 active, so a tab resized every time
-      the selection moved - which moves every tab after it, on a gesture nobody thinks of as
-      touching the strip. A pin changes only when the user pins, unpins, or drags the tab across
-      the boundary, and all three already move it.
+      That space is the point rather than waste, and it is the same trade the paragraph above
+      makes for an inactive tab. A pinned tab is exactly as wide as it was unpinned, so pinning
+      and unpinning move nothing on the strip except the tab's own trip to the front - and the
+      name is fitted against the same room either way, so no ellipsis can appear or disappear.
 
-      20 rather than 18: two pixels over the measurement on purpose. Those tabs were pinned to a
-      50-chrome width when they were measured, so a systematic error would have had 32 pixels of
-      slack to hide in. Booking light clips the name; booking heavy leaves slack inside a tab that
-      is pinned to this width, which is invisible.
-
-      PinGlyphRoom is the FontIcon's Width plus its right Margin, both set in the template so this
-      can be a constant the strip is told rather than a measurement the ruler and the render could
-      disagree about. Change one and change the other.
+      Booking chrome per tab state was tried and abandoned, and this is how that is avoided rather
+      than repeated: nothing here is per state at all. Make the glyph bigger than 32 and it stops
+      fitting inside the close button's allowance, at which point a pinned tab would have to book
+      more than an ordinary one and the strip would move on every pin. Do not.
     */
-    private const double PinnedTabChrome = 20;
-
-    private const double PinGlyphRoom = 16;
 
     /// <summary>
     /// Slack between the cap and the widest a fitted title may be. Covers the pixel or two
@@ -1242,12 +1234,10 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            // Read off the tab rather than off the panel's Visibility. Both come from the same
-            // property, but a binding is applied when the framework gets round to it and this
-            // runs from a layout callback - so the view model is the answer that cannot be a
-            // frame behind the one the booking below depends on.
-            bool isPinned = item is DocumentTabViewModel { IsPinned: true };
-
+            // Nothing here asks whether the tab is pinned, and that is deliberate. The booking
+            // below is the same either way, so there is no state for the glyph's arrival to get
+            // out of step with - the pin can appear and vanish on its binding's own schedule
+            // without this pass ever needing to agree about when.
             if (marker < 0)
             {
                 marker = TabTitleFitter.Reserve(title, DocumentTabViewModel.Markers);
@@ -1262,17 +1252,12 @@ public sealed partial class MainWindow : Window
             string state = DocumentTabViewModel.MarkerOf(full);
             string name = full[state.Length..];
 
-            // room is the same for every tab, pinned or not, and that is the point rather than an
-            // oversight. Only the chrome added on the end changes, so the name is cut exactly as
-            // it would have been the other way - pinning a tab never adds an ellipsis and
-            // unpinning never takes one away. Recomputing room from the smaller chrome is the
-            // obvious change and is wrong twice: a long name re-truncates on both gestures, and
-            // the tab stops getting narrower at all because it just fills the cap with more
-            // characters.
+            // The same booking for every tab, pinned or not: the pin glyph fits inside the room
+            // already set aside for a close button the pinned tab does not draw. So a tab is the
+            // width it was before it was pinned, the name is fitted against the same room, and
+            // neither pinning nor unpinning moves anything to the right of it.
             double booked =
-                TabTitleFitter.Fit(title, name, room - marker, state)
-                + marker
-                + (isPinned ? PinGlyphRoom + PinnedTabChrome : ClosableTabChrome);
+                TabTitleFitter.Fit(title, name, room - marker, state) + marker + ClosableTabChrome;
 
             // Min and max together, because Width is not ours to hold: TabView writes that
             // one itself while it manages tab sizing. Clamping both ends leaves the tab
@@ -1614,6 +1599,15 @@ public sealed partial class MainWindow : Window
     private void OnTabDragCompleted(TabView sender, TabViewTabDragCompletedEventArgs args)
     {
         _isDraggingTab = false;
+
+        // Where a reorder is actually noticed. The collection notification a drag produces is a
+        // Remove and an Add rather than a Move, so the view model's CollectionChanged handler
+        // never sees one - this is the event that does, and it is also the only one that knows
+        // the drag has finished rather than merely that an item moved.
+        if (args.Item is DocumentTabViewModel moved)
+        {
+            ViewModel.OnTabDragged(moved);
+        }
 
         // The visibility pass sat out the drag along with the regions, and the reorder may
         // have moved a tab across the fold in either direction.

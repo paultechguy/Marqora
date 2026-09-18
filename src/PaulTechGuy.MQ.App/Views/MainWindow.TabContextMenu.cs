@@ -35,6 +35,12 @@ namespace PaulTechGuy.MQ.App.Views;
 /// The menu bar gave them up in the same pass that moved Export onto File, so this is the only
 /// route to them - which is why they now sit above the closing group rather than below it.
 ///
+/// Pinned is the second item with no File menu twin, and deliberately so rather than by
+/// omission: a pin is about where a tab sits in the strip, and the strip is the only place the
+/// gesture means anything. It would read as a document property on the File menu and as a
+/// position on this one, which is the kind of split that makes two menus disagree about what a
+/// word means.
+///
 /// Two things about it are less obvious than they look, and both are about focus. It selects
 /// the clicked tab before showing anything, so every item can use the same active-document
 /// command the File menu uses; Close Other Tabs in particular keeps ActiveTab, and would
@@ -97,6 +103,22 @@ public sealed partial class MainWindow
     /// of it, so the Item helper that builds every other row here cannot make one.
     /// </summary>
     private ToggleMenuFlyoutItem? _tabReadOnlyItem;
+
+    /// <summary>
+    /// The pinned tick. Its own field type for the reason the read-only one gives, and its own
+    /// guard below for a sharper version of the same reason.
+    /// </summary>
+    private ToggleMenuFlyoutItem? _tabPinnedItem;
+
+    /// <summary>
+    /// Set while <see cref="RefreshTabMenu"/> is writing the pinned tick.
+    ///
+    /// Not belt and braces the way the read-only one is. That tick and this one are both written
+    /// on every right-click, but the cost of a stray Click differs: there it would toggle a mark
+    /// the user would see on the next glance, and here it would move the tab to the other side of
+    /// the strip while the menu was still open on it.
+    /// </summary>
+    private bool _settingTabPinnedTick;
 
     /// <summary>
     /// Set while <see cref="RefreshTabMenu"/> is writing the tick, so the Click handler can tell
@@ -285,6 +307,41 @@ public sealed partial class MainWindow
         menu.Items.Add(BuildTabCopyMenu());
         menu.Items.Add(new MenuFlyoutSeparator());
 
+        // Its own group directly above the closing one, because it guards three of the four
+        // items in it. A reader who wonders why Close All Tabs left something behind finds the
+        // answer on the row above rather than having to know it already.
+        //
+        // "Pinned" rather than "Pin Tab" / "Unpin Tab": a tick is what this menu already uses
+        // for a per-tab boolean, and rewriting the text per tab would change the row's width
+        // under the pointer between one right-click and the next.
+        //
+        // This one gets a tooltip where Read-Only does not, and the difference is deliberate.
+        // Read-Only says what it does in its own name. What a pin does to the close commands is
+        // not guessable from the word, and it is the half people are surprised by.
+        _tabPinnedItem = new ToggleMenuFlyoutItem { Text = "Pinned" };
+
+        ToolTipService.SetToolTip(
+            _tabPinnedItem,
+            "Keep this tab at the left of the strip, and out of Close Other Tabs, "
+            + "Close Tabs to the Right and Close All Tabs");
+
+        _tabPinnedItem.Click += (_, _) =>
+        {
+            // The same guard Read-Only takes, and here it earns its keep rather than being belt
+            // and braces: RefreshTabMenu writes this tick on every right-click, and a Click
+            // raised from that write would send the tab across the strip each time the menu was
+            // opened on it.
+            if (_settingTabPinnedTick)
+            {
+                return;
+            }
+
+            _ = ViewModel.ToggleTabPinCommand.ExecuteAsync(null);
+        };
+
+        menu.Items.Add(_tabPinnedItem);
+        menu.Items.Add(new MenuFlyoutSeparator());
+
         _tabCloseOthersItem = Item(
             "Close Other Tabs",
             null,
@@ -450,6 +507,7 @@ public sealed partial class MainWindow
         if (_tabSaveItem is null
             || _tabReloadItem is null
             || _tabReadOnlyItem is null
+            || _tabPinnedItem is null
             || _tabCloseOthersItem is null
             || _tabCloseRightItem is null
             || _tabReopenItem is null
@@ -489,6 +547,16 @@ public sealed partial class MainWindow
         // An untitled document has no file for a mark to protect, and the mark is remembered
         // by path. Grayed rather than dropped, like Open in File Explorer below.
         _tabReadOnlyItem.IsEnabled = !tab.IsUntitled;
+
+        // The pinned tick, read off the clicked tab rather than the view model for the reason
+        // this whole method exists: the selection is applied through the workspace queue, and a
+        // tab cannot be out of date about itself.
+        _settingTabPinnedTick = true;
+        _tabPinnedItem.IsChecked = tab.IsPinned;
+        _settingTabPinnedTick = false;
+
+        // Same rule as the mark above, and the same reason: a pin is remembered by path.
+        _tabPinnedItem.IsEnabled = !tab.IsUntitled;
 
         _tabReloadItem.IsEnabled =
             !tab.IsUntitled

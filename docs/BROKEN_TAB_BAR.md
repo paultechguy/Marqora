@@ -158,8 +158,7 @@ in the WinUI package's `generic.xaml`, confirmed against the running strip.
 | --- | --- | --- | --- |
 | `TabViewItemMaxWidth` | 220 | `App.xaml` | the width cap; read back by `TabMaximumWidth` |
 | `ClosableTabChrome` | 50 | `MainWindow.xaml.cs` | header padding 8+4, close margin 4, close button 32, border 1+1 |
-| `PinnedTabChrome` | 20 | `MainWindow.xaml.cs` | a pinned tab, which draws no close button: padding 8+8, border 1+1, plus two for the measurement |
-| `PinGlyphRoom` | 16 | `MainWindow.xaml.cs` | the pin `FontIcon`'s `Width` 12 + right `Margin` 4; must equal the template |
+| *(pin glyph room)* | 16 | tab template | the pin `FontIcon`'s `Width` 12 + right `Margin` 4 — spent out of `ClosableTabChrome`, **nothing books it separately** |
 | `TabWidthSafety` | 3 | `MainWindow.xaml.cs` | ruler-vs-render disagreement, in the fit only |
 | `TabSpacing` | 6 | `MainWindow.xaml.cs` | must equal the tab template's `Margin` |
 | `AddButtonWidth` | 44 | `MainWindow.xaml.cs` | add button 32 + 3 container padding + 9 ItemsPresenter |
@@ -172,11 +171,15 @@ inactive one at 17.8–18.5, with the 1px border present in both states. The 50 
 pixel or two of slack inside a tab that is pinned to this width is invisible, and coming in
 under would clip the close button.
 
-`PinnedTabChrome` is that inactive figure plus two. The 17.8–18.5 was taken while every tab was
-booked at 50, so it had 32 pixels of slack to hide a systematic error in; two over is cheap
-insurance in the direction that cannot clip a name. It is the first number in this table that
-depends on a tab's state rather than only on the template, and the section below says why that
-is safe here when it was not before.
+A pinned tab books the same 50. It draws no close button, so the 32 set aside for one is free,
+and its glyph spends 16 of them — real content of about 34 against 50 booked, leaving roughly 16
+pixels of trailing space. That is the same trade the paragraph above makes for an inactive tab,
+and it buys the same thing: a pinned tab is exactly as wide as it was unpinned, so pinning and
+unpinning move nothing on the strip except the tab's own trip to the front.
+
+**The glyph must stay under 32 pixels of total room.** Past that it no longer fits inside the
+close button's allowance, a pinned tab would have to book more than an ordinary one, and the
+strip would move on every pin — which is the thing this whole file exists to prevent.
 
 ## Constraints that must survive any future change
 
@@ -201,15 +204,14 @@ is safe here when it was not before.
 - **Every write in these passes must be guarded by a compare.** They run from a layout
   callback; assigning `Text`, `Visibility`, `MinWidth`, `MaxWidth` or a margin
   unconditionally invalidates the layout that called it, and nothing ever settles.
-- **Chrome is booked per tab, not per *transient* tab state** — see "Two things that must not
-  move". Selection, dirty, missing and changed all arrive without the user acting on that tab,
-  so none of them may alter a booking. A pin may, and does: it changes only when the tab is
-  pinned, unpinned, or dragged across the boundary, and all three already move the tab.
-- **The fitted name must not depend on the pin.** `room` is computed from `ClosableTabChrome`
-  for every tab, pinned or not; only the chrome added at the end differs. That is what makes
-  pinning and unpinning unable to add or remove an ellipsis. Recomputing `room` from the smaller
-  chrome re-truncates on both gestures *and* stops the tab getting narrower, because it fills
-  the cap with more characters instead.
+- **Chrome is booked per tab, not per tab state** — see "Two things that must not move". This
+  survived pinning intact: a pinned tab books `ClosableTabChrome` like every other tab, and its
+  glyph is spent out of the close button's allowance rather than added to it. Nothing in the fit
+  pass asks whether a tab is pinned.
+- **Neither the fitted name nor the booked width may depend on the pin.** Both follow from the
+  line above, and together they are what makes pinning and unpinning move nothing but the tab
+  itself. Giving a pinned tab its own smaller chrome is the obvious change and costs exactly
+  this: every tab to its right shifts by the difference, on both gestures.
 - **The header is a panel, not a bare `TextBlock`.** The pin is a `FontIcon` because the glyph
   is in Segoe Fluent Icons' private-use range and renders as a box in the title's own font. The
   fit pass finds the title by type; `x:Name` inside a `DataTemplate` is not reachable from the
@@ -225,11 +227,12 @@ is safe here when it was not before.
 - **Measuring tab widths from containers** — a collapsed tab measures zero, so the
   measurement depends on the decision it feeds.
 - **Booking chrome per tab state (18 / 50)** — correct arithmetic, but it lets a tab resize
-  when the close button arrives, which moves every tab after it. Note what the fault actually
-  was: the close button arrived *on selection*, so a tab resized on a gesture nobody thinks of
-  as touching the strip. A pinned tab books 20 for the same reason that version booked 18, and
-  it is not this mistake — its close button never arrives at all, and the booking changes only
-  when the user pins, unpins or drags it.
+  when the close button arrives, which moves every tab after it.
+- **Giving a pinned tab its own smaller chrome** — the same mistake wearing different clothes,
+  and it was tried during the pinning work. The arithmetic is right and the tab really is
+  narrower, but pinning or unpinning then shifts every tab to its right, which is the strip
+  moving under a gesture that was only supposed to move one tab. Spending the glyph out of the
+  close button's allowance costs about 16 pixels of trailing space and moves nothing.
 - **Reading the measuring weight off the live selected tab** — a race. WinUI applies the
   selected visual state some time after the selection changes, so a pass landing in between
   reads the old weight off the new tab and fits the whole strip to it; the next pass fits the
@@ -270,7 +273,8 @@ With a document pinned as well:
 
 13. Pin a tab — it moves to the left of the strip, gains the pin glyph, and loses its close
     button. **Its name is cut exactly as it was before**: no ellipsis appears or disappears,
-    on it or on any other tab.
+    on it or on any other tab. **And nothing to the right of its new position moves** — the
+    tab is the same width pinned as it was unpinned.
 14. Select the pinned tab. It does *not* gain a close button, and nothing on the strip moves.
     This is item 11 for pinning, and the same regression.
 15. Type in a pinned tab. The dirty dot arrives beside the pin and no tab moves.

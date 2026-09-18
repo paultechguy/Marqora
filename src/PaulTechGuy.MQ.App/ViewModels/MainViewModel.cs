@@ -2908,8 +2908,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Mirrors a drag-reorder back into the workspace. TabView moves the item in the bound
-    /// collection itself, so this reacts rather than drives.
+    /// Mirrors a Move back into the workspace, for the callers that really do raise one -
+    /// <see cref="ReopenLastClosedTabAsync"/> and <see cref="KeepPinnedTabsFirst"/> both go
+    /// through <c>Tabs.Move</c>, though both suppress this with <c>_isSyncingTabs</c> and tell
+    /// the workspace themselves.
+    ///
+    /// **A drag does not arrive here.** TabView reorders through IList, which an
+    /// ObservableCollection reports as a Remove and an Add rather than a Move, so this method
+    /// sits out the one case its name suggests it exists for. <see cref="OnTabDragged"/> is
+    /// where a reorder is actually handled; this is kept because a Move from anywhere else
+    /// would otherwise leave the workspace's own order stale.
+    ///
+    /// Nothing here may move a tab. <see cref="Tabs"/> has more than one CollectionChanged
+    /// subscriber, which is exactly when ObservableCollection refuses a mutation raised from
+    /// inside its own notification - and <c>_isSyncingTabs</c> is no help, because it suppresses
+    /// this handler rather than the collection's reentrancy guard.
     /// </summary>
     private void OnTabsCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
@@ -2918,11 +2931,150 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (e.NewItems?.Count > 0 && e.NewItems[0] is DocumentTabViewModel moved)
+        if (e.NewItems?.Count is not > 0 || e.NewItems[0] is not DocumentTabViewModel moved)
         {
-            _workspace.Move(moved.Id, e.NewStartingIndex);
-            PersistSession();
+            return;
         }
+
+        _workspace.Move(moved.Id, e.NewStartingIndex);
+        PersistSession();
+    }
+
+    /// <summary>
+    /// A drag of one tab has finished. Bring the workspace's order into line, and decide what
+    /// the drop did to the tab's pin.
+    ///
+    /// Driven from TabView's own TabDragCompleted rather than from the collection notification
+    /// next door, and that is not a preference. A reorder reaches <see cref="Tabs"/> through
+    /// IList, which on an ObservableCollection raises Remove and then Add - not Move - so the
+    /// branch above never runs for a drag and cannot be where this decision lives. The workspace
+    /// mirror there has the same problem, which is why it is repeated here.
+    ///
+    /// Safe to move things from: this arrives as an ordinary event, not from inside a
+    /// CollectionChanged dispatch, so nothing here is fighting the collection's reentrancy
+    /// guard the way a correction in that handler would be.
+    /// </summary>
+    public void OnTabDragged(DocumentTabViewModel tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+
+        int landed = Tabs.IndexOf(tab);
+
+        if (landed < 0)
+        {
+            return;
+        }
+
+        _workspace.Move(tab.Id, landed);
+        PersistSession();
+
+        int othersPinned = PinnedCountExcluding(tab);
+        bool wanted = PinnedAfterDrop(landed, othersPinned, tab.IsPinned);
+
+        // Debug rather than Information: this is every drag, and it is noise until the day the
+        // boundary does the wrong thing. Kept because the inputs are the only way to tell a
+        // wrong rule from a wrong index without attaching a debugger to a drag.
+        _logger.LogDebug(
+            "Tab {Tab} dropped at {Landed} with {Others} other pinned tab(s); was {Was}, wants {Wants}.",
+            tab.Title,
+            landed,
+            othersPinned,
+            tab.IsPinned,
+            wanted);
+
+        if (wanted == tab.IsPinned)
+        {
+            return;
+        }
+
+        // An untitled document cannot be pinned - a pin is remembered by path - so a drop that
+        // asks for one has to be undone rather than honored.
+        if (tab.Path is null)
+        {
+            BounceFromPinnedBlock(tab);
+
+            return;
+        }
+
+        _ = ApplyPinFromDragAsync(tab, wanted);
+    }
+
+    /// <summary>
+    /// Whether a tab should be pinned after being dropped at <paramref name="landed"/>, given
+    /// that <paramref name="othersPinned"/> of the other tabs are pinned.
+    ///
+    /// Pure, and separated out because it is the whole of the drag rule and there is no test
+    /// project for this assembly - so the worked cases below are the only check it gets. Read
+    /// them before changing the expression.
+    ///
+    /// The rule: you have to *cross* the boundary, not merely reach it. A tab dropped on the
+    /// boundary slot keeps the state it had. Without that, dropping a tab immediately after the
+    /// last pinned one would pin it, and that is exactly where somebody drops a tab they meant
+    /// to put first among the unpinned ones.
+    ///
+    /// <code>
+    /// [P0 P1 A B], drag A (unpinned) to 0 -> othersPinned 2, 0 &lt; 2            -> pinned
+    /// [P0 P1 A B], drag A (unpinned) to 2 -> othersPinned 2, 2 == 2, not pinned -> unpinned
+    /// [P0 P1 A],   drag P1 to 2           -> othersPinned 1, 2 &gt; 1            -> unpinned
+    /// [P0 P1 A],   drag P1 to 1           -> othersPinned 1, 1 == 1, pinned     -> pinned
+    /// [P0 P1 A],   drag P0 to 1           -> othersPinned 1, 1 == 1, pinned     -> pinned
+    /// [A B C],     drag C to 0            -> othersPinned 0, 0 == 0, not pinned -> unpinned
+    /// </code>
+    ///
+    /// That last case is why the comparison is strict. With nothing pinned the boundary is zero
+    /// and no drop can pin anything - which is correct rather than a gap, because there is no
+    /// block to drag into yet and the tab menu is how the first pin is made. A non-strict
+    /// comparison would silently pin a tab dragged to the front of an ordinary strip, which is
+    /// the most common reorder in the app.
+    /// </summary>
+    private static bool PinnedAfterDrop(int landed, int othersPinned, bool wasPinned) =>
+        landed < othersPinned || (wasPinned && landed == othersPinned);
+
+    /// <summary>
+    /// Puts a tab back on the unpinned side of the boundary, next turn.
+    ///
+    /// Posted rather than done here, and that is not tidiness. <see cref="Tabs"/> has more than
+    /// one CollectionChanged subscriber - this class and the strip's own binding - which is
+    /// exactly the condition under which ObservableCollection refuses a mutation raised from
+    /// inside its own notification. A synchronous Move here throws, and <c>_isSyncingTabs</c>
+    /// does not help: that flag suppresses this handler, not the collection's reentrancy guard.
+    /// </summary>
+    private void BounceFromPinnedBlock(DocumentTabViewModel tab) =>
+        _ui.Post(() =>
+        {
+            KeepPinnedTabsFirst(tab);
+
+            StatusText = $"{tab.Title} has to be saved before it can be pinned";
+        });
+
+    /// <summary>
+    /// Applies the pin a drop asked for, and repairs the order if it is refused.
+    ///
+    /// Nothing moves on the way through. The workspace raises PinChanged, which reaches the tab
+    /// through the usual queue and calls <see cref="KeepPinnedTabsFirst"/> - and that finds the
+    /// tab already where the drop left it, so it returns without touching the collection. The
+    /// repair only does anything when the pin did not take.
+    /// </summary>
+    private async Task ApplyPinFromDragAsync(DocumentTabViewModel tab, bool pinned)
+    {
+        try
+        {
+            if (await _workspace.SetPinnedAsync(tab.Id, pinned).ConfigureAwait(true))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Nothing above this catches: the call is fire-and-forget off a collection
+            // notification, so a failure would otherwise reach the global handler with no
+            // useful context at all.
+            _logger.LogWarning(ex, "Could not change the pin on {Tab} after a drag.", tab.Title);
+        }
+
+        // The pin was refused or threw, so the tab is sitting on the wrong side of a boundary it
+        // no longer qualifies for. Same posting rule as the bounce above.
+        _ui.Post(() => KeepPinnedTabsFirst(tab));
     }
 
     // ------------------------------------------------------------- workspace sync
