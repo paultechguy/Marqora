@@ -421,16 +421,21 @@ a.mq-blocked-media {
 }
 
 /*
-  The little triangle joining the box to the caret. Monaco colors only the one border edge that
-  points at the text, so each direction is named separately - and it takes the border color
-  rather than the fill, which is what keeps it reading as part of the outline.
-*/
-.monaco-editor-overlaymessage .anchor.top {
-  border-bottom-color: var(--mq-border-strong);
-}
+  The little triangle that pointed at the caret, taken off.
 
-.monaco-editor-overlaymessage .anchor.below {
-  border-top-color: var(--mq-border-strong);
+  It is a CSS border triangle - 8px of solid color with no width or height of its own - sitting
+  outside the box rather than being part of it. That works for Monaco's flat 3px message, which
+  has one color and nothing else. It cannot be made to work here: the box has a border, a fill
+  and a shadow, and a single triangle can carry exactly one of the three. Coloring it like the
+  border left a dark wedge floating off the left edge; coloring it like the fill left a pale one
+  with no outline, still outside the shadow.
+
+  Doing it properly means two stacked triangles, one inset by a pixel, positioned per direction -
+  real machinery for an arrow nobody needs. The message already appears at the caret, and the
+  container's own 8px of padding keeps it off the text, so the gap reads correctly without it.
+*/
+.monaco-editor-overlaymessage .anchor {
+  display: none;
 }
 
 .monaco-editor-overlaymessage.fadeIn {

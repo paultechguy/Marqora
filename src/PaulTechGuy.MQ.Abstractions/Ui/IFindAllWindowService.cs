@@ -32,11 +32,22 @@ public sealed class FindMatchActivatedEventArgs(Guid documentId, FindMatch match
 public sealed class ReplaceAllRequestedEventArgs(
     IReadOnlyList<ReplaceDocumentResult> documents,
     int totalMatches,
-    bool isDeletion) : EventArgs
+    bool isDeletion,
+    int readOnlyDocuments = 0) : EventArgs
 {
     public IReadOnlyList<ReplaceDocumentResult> Documents { get; } = documents;
 
     public int TotalMatches { get; } = totalMatches;
+
+    /// <summary>
+    /// How many documents held matches and were left out for being marked read-only.
+    ///
+    /// Carried so the confirmation can account for itself. The results list behind the dialog
+    /// still shows those rows - searching a read-only document is exactly what searching is for
+    /// - so a count that quietly came up short would read as the search having been wrong, or
+    /// worse, would not be noticed at all.
+    /// </summary>
+    public int ReadOnlyDocuments { get; } = readOnlyDocuments;
 
     /// <summary>
     /// True when the replacement is empty, so every match is being removed rather than changed.

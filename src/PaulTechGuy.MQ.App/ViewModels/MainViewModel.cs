@@ -5482,6 +5482,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ? "It becomes unsaved, and can be undone with Ctrl+Z."
                 : "Each becomes unsaved, and each can be undone separately with Ctrl+Z.";
 
+            /*
+                What was left out, and why.
+
+                The results list behind this dialog still shows the read-only documents' matches,
+                because searching one is exactly what searching is for. So the count here is
+                smaller than the list the user is looking at, and without a word about it the
+                difference reads as the search having gone wrong - or, worse, goes unnoticed and
+                the user walks away believing those documents were rewritten too.
+            */
+            string leftOut = e.ReadOnlyDocuments switch
+            {
+                0 => string.Empty,
+                1 => " One more is read-only and will be left alone.",
+                _ => $" {e.ReadOnlyDocuments} more are read-only and will be left alone.",
+            };
+
             // Enter cancels rather than replaces. Everything this does is undoable and none of
             // it reaches disk, so the loss is not permanent - but it changes every open
             // document at once, and the reader arrives here having just pressed Enter or
@@ -5489,7 +5505,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // A bulk edit across documents is worth a deliberate click.
             ConfirmResult answer = await _dialogs.ConfirmAsync(
                 "Replace all matches?",
-                $"{where} will be {(e.IsDeletion ? "deleted" : "replaced")}. {undo}",
+                $"{where} will be {(e.IsDeletion ? "deleted" : "replaced")}.{leftOut} {undo}",
                 "Replace all",
                 destructivePrimary: true,
                 anchor: DialogAnchor.FindAll).ConfigureAwait(true);

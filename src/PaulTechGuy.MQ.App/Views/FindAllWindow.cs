@@ -1054,9 +1054,20 @@ public sealed partial class FindAllWindow : PaletteWindow
     /// ordinary case; taking the recorded one means a document that moved in the gap fails the
     /// check at the point of writing rather than being rewritten against text nobody read.
     /// </summary>
-    private List<FindDocument> SearchedDocuments()
+    private List<FindDocument> SearchedDocuments() => SearchedDocuments(out _);
+
+    /// <summary>
+    /// The searched documents Replace All may write, and how many it had to leave behind.
+    ///
+    /// <paramref name="readOnlyWithMatches"/> counts only documents that were actually searched
+    /// and are marked read-only - a marked document nobody searched is not something the
+    /// confirmation has any business mentioning.
+    /// </summary>
+    private List<FindDocument> SearchedDocuments(out int readOnlyWithMatches)
     {
         var documents = new List<FindDocument>();
+
+        readOnlyWithMatches = 0;
 
         foreach (MarkdownDocument document in _workspace.Documents)
         {
@@ -1070,6 +1081,13 @@ public sealed partial class FindAllWindow : PaletteWindow
             // is for, and the results list is built from somewhere else entirely.
             if (document.IsReadOnly)
             {
+                // Counted only if it was searched, so the number means "had matches you can
+                // see" rather than "happens to be open".
+                if (_searched.ContainsKey(document.Id))
+                {
+                    readOnlyWithMatches++;
+                }
+
                 continue;
             }
 
@@ -1383,14 +1401,14 @@ public sealed partial class FindAllWindow : PaletteWindow
             return;
         }
 
-        List<FindDocument> documents = SearchedDocuments();
+        List<FindDocument> documents = SearchedDocuments(out int readOnly);
 
         if (documents.Count == 0)
         {
             // Named rather than left as "nothing to replace in", which would read as a bug to
             // somebody looking at a list of matches.
-            _summary.Text = _workspace.Documents.Any(d => d.IsReadOnly)
-                ? "Nothing to replace in — the documents with matches are read-only."
+            _summary.Text = readOnly > 0
+                ? "Nothing to replace in — every document with matches is read-only."
                 : "There is nothing to replace in.";
 
             return;
@@ -1430,14 +1448,17 @@ public sealed partial class FindAllWindow : PaletteWindow
         var request = new ReplaceAllRequestedEventArgs(
             results.Documents,
             results.TotalMatches,
-            isDeletion: string.IsNullOrEmpty(query.Replacement));
+            isDeletion: string.IsNullOrEmpty(query.Replacement),
+            readOnlyDocuments: readOnly);
 
         handler(this, request);
 
         _logger.LogInformation(
-            "Replace All: offered {Matches} matches across {Documents} documents.",
+            "Replace All: offered {Matches} matches across {Documents} documents, "
+                + "leaving out {ReadOnly} marked read-only.",
             results.TotalMatches,
-            results.Documents.Count);
+            results.Documents.Count,
+            readOnly);
 
         // Waited on so the button stays down until the whole thing is over, the confirmation
         // included. See ReplaceAllRequestedEventArgs.Completion.
