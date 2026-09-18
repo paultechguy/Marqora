@@ -97,24 +97,23 @@ public sealed record MarkdownDocument
     /// Computed rather than stored, for the reason <see cref="IsDirty"/> gives: a second flag
     /// saying what two others already say is a flag that can disagree with them.
     /// </summary>
-    public bool IsReadOnly => IsLocked && External != ExternalState.Missing;
-
     /// <summary>
-    /// Whether text changes are turned away outright - by the editor and by the buffer alike.
+    /// Whether this document refuses to be written, and to be changed.
     ///
-    /// One predicate for both, because they cannot be allowed to disagree. The editor is told
-    /// this and the buffer enforces it, so a keystroke is either refused in both places or
-    /// accepted in both; letting one hold text the other does not is the one failure that would
-    /// be worse than having no mark at all.
+    /// One answer for both, because the editor is told it and the buffer enforces it, and the
+    /// two cannot be allowed to disagree: a keystroke is either turned away in both places or
+    /// taken in both. Letting one hold text the other does not would be worse than having no
+    /// mark at all.
     ///
-    /// It is narrower than <see cref="IsReadOnly"/>, and the gap is the point. A marked document
-    /// holding unsaved edits keeps taking them: turning the editor read-only there would take
-    /// undo away with it - Monaco refuses undo and redo under the same option that refuses
-    /// typing - and undo is the only way back out of edits that cannot be saved. Nothing is lost
-    /// by allowing them, because the file is protected where it is written rather than here: a
-    /// document that refuses to be saved refuses just as firmly whatever its buffer holds.
+    /// It applies whether or not the document is already dirty. An earlier version stood down
+    /// over unsaved edits, so that Monaco's readOnly - which switches off undo and redo along
+    /// with typing - would not freeze work somebody still needed to get back. That turned out
+    /// to be the more dangerous of the two: undoing to the point where the buffer matched the
+    /// file made the document clean, the editor locked on that transition, and redo went with
+    /// it, so the edits could not be recovered at all. Locking at once loses undo but loses
+    /// nothing else, and taking the mark off hands it straight back.
     /// </summary>
-    public bool RefusesEdits => IsReadOnly && !IsDirty;
+    public bool IsReadOnly => IsLocked && External != ExternalState.Missing;
 
     public MarkdownDocument WithText(string text) => this with { Text = text };
 

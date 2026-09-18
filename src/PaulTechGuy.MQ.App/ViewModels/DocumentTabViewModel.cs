@@ -120,7 +120,7 @@ public sealed partial class DocumentTabViewModel : ObservableObject
             if (_document.IsLocked)
             {
                 text += _document.IsDirty
-                    ? "\nRead-only — unsaved edits will need Save As"
+                    ? "\nRead-only — unmark or Save As to reach the unsaved edits"
                     : "\nRead-only";
             }
 

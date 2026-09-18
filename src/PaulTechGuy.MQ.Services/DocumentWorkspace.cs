@@ -217,7 +217,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         // never changes is a buffer with nothing to write. It answers rather than throwing: the
         // caller has to know, since one that pushed the same text into the editor and had this
         // refuse it would leave the two holding different documents.
-        if (_documents[index].RefusesEdits)
+        if (_documents[index].IsReadOnly)
         {
             _logger.LogDebug(
                 "Refused an edit to {Path}: it is marked read-only.",

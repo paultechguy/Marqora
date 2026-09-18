@@ -437,7 +437,7 @@
                         <MenuFlyoutItem Text="Paste"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="paste"
-                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus, ViewModel.ActiveTabRefusesEdits), Mode=OneWay}"
+                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus, ViewModel.ActiveTabIsReadOnly), Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+V" />
 
                         <!--

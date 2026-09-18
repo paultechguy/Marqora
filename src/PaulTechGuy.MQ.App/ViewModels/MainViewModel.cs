@@ -223,16 +223,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public partial bool ActiveTabIsLocked { get; set; }
 
     /// <summary>
-    /// Whether the active tab is turning text away at the caret, which is what grays Cut and
-    /// Paste. Narrower than <see cref="ActiveTabIsReadOnly"/> - see
-    /// <c>MarkdownDocument.RefusesEdits</c> - so a marked document holding unsaved edits keeps
-    /// both, along with the undo that gets the user back out of them.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanAlterText))]
-    public partial bool ActiveTabRefusesEdits { get; set; }
-
-    /// <summary>
     /// Whether any open tab holds unsaved work, which is the whole of Save All's answer: it
     /// writes every dirty document, so which tab is being looked at has nothing to do with it.
     ///
@@ -785,7 +775,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// it is how the text gets copied out - and folding read-only into
     /// <see cref="CanEditText"/> would have taken that away as a side effect of guarding Cut.
     /// </summary>
-    public bool CanAlterText => CanEditText && !ActiveTabRefusesEdits;
+    public bool CanAlterText => CanEditText && !ActiveTabIsReadOnly;
 
     /// <summary>
     /// Whether Undo has anything to take back, for the toolbar button and its Edit-menu
@@ -1642,7 +1632,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (document.IsDirty)
         {
             ShowReadOnlyStatus(
-                $"{document.DisplayName} is read-only — its unsaved edits will need Save As");
+                $"{document.DisplayName} is read-only — unmark it or Save As to reach its unsaved edits");
 
             return;
         }
@@ -1747,10 +1737,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Tells the editor whether to take typing for this document.
     ///
-    /// Sent on the same predicate the buffer enforces - see <c>MarkdownDocument.RefusesEdits</c>
-    /// - so the two cannot disagree about a keystroke. A marked document that already holds
-    /// unsaved edits deliberately keeps its editor: Monaco's readOnly option turns off undo and
-    /// redo along with typing, and undo is the only way back out of edits that cannot be saved.
+    /// Sent on the same predicate the buffer enforces - <c>MarkdownDocument.IsReadOnly</c> - so
+    /// the two cannot disagree about a keystroke. Monaco's readOnly switches off undo and redo
+    /// along with typing, so a marked document holding unsaved edits has neither until the mark
+    /// comes off; <c>IsReadOnly</c> says why that is the safer of the two answers.
     /// </summary>
     private async Task ApplyEditorReadOnlyAsync(MarkdownDocument document)
     {
@@ -1759,7 +1749,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        bool wanted = document.RefusesEdits;
+        bool wanted = document.IsReadOnly;
 
         if (_editorReadOnly.TryGetValue(document.Id, out bool sent) && sent == wanted)
         {
@@ -1802,20 +1792,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private bool RefuseActiveIfReadOnly(string what) =>
         _workspace.Active is { } active && RefuseIfReadOnly(active.Id, what);
-
-    /// <summary>
-    /// The same question for text entered at the caret - typing, cut, paste - which follows the
-    /// narrower predicate the editor and the buffer share rather than the mark itself.
-    ///
-    /// The difference shows up on a marked document that already holds unsaved edits. Typing
-    /// into one is allowed, because refusing it would mean turning the editor read-only, and
-    /// Monaco takes undo away with it. Paste has to follow typing: being able to type a
-    /// sentence but not paste one would be an odd line to draw, and the file is no more at risk
-    /// either way. The commands that rewrite a document are the other case and stay on the mark
-    /// - those are deliberate acts, and honoring the mark is the whole of what it was for.
-    /// </summary>
-    private bool RefuseActiveIfNotTakingEdits(string what) =>
-        _workspace.Active is { RefusesEdits: true } active && RefuseIfReadOnly(active.Id, what);
 
     /// <summary>
     /// What to say about a save that did not happen.
@@ -2986,6 +2962,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     }
 
                     RefreshExternalNotice();
+
+                    // A marked document whose file has gone stands its mark down, because
+                    // saving is how that file comes back - so the editor has to open again to
+                    // let the buffer be written. The reverse when the file returns.
+                    await ApplyEditorReadOnlyAsync(stale).ConfigureAwait(true);
                     break;
 
                 case WorkspaceChange.ReloadedFromDisk when e.Document is { } reloaded:
@@ -3273,7 +3254,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsDirty = document?.IsDirty ?? false;
         ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveTabIsLocked = document?.IsLocked ?? false;
-        ActiveTabRefusesEdits = document?.RefusesEdits ?? false;
+        ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveExternalState = document?.External ?? ExternalState.InSync;
 
         // Every tab, not just this one: Save All writes the whole workspace, and a document
@@ -5119,7 +5100,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Ahead of EnsureSavedForImagesAsync, which can put a Save As dialog on screen and
         // writes the picture to disk. Asking where to file an image for a document that will
         // not take the reference to it is a question with nothing behind it.
-        if (RefuseActiveIfNotTakingEdits("inserting the image"))
+        if (RefuseActiveIfReadOnly("inserting the image"))
         {
             return;
         }
@@ -5420,7 +5401,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // reading, and the shell writes the selection out before it is asked to delete
             // it - so the text is on the clipboard either way. What must not happen is the
             // word "Cut" over a document that still has every line it had a moment ago.
-            case "cut" when _workspace.Active is { RefusesEdits: true }:
+            case "cut" when _workspace.Active is { IsReadOnly: true }:
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
                 ShowReadOnlyStatus("Read-only — copied instead of cut");
                 return;
@@ -5856,7 +5837,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Paste is a host command rather than a Monaco one - the app owns the clipboard, see
         // the Clipboard section of the architecture notes - so the editor's read-only option
         // is not what stops it. This is.
-        if (RefuseActiveIfNotTakingEdits("the paste"))
+        if (RefuseActiveIfReadOnly("the paste"))
         {
             return;
         }
@@ -5938,7 +5919,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Ahead of EnsureSavedForImagesAsync for the reason PlaceImageAsync gives: it can raise
         // a Save As dialog and it writes files to disk, both on behalf of a reference the
         // document is going to refuse.
-        if (RefuseActiveIfNotTakingEdits("the paste"))
+        if (RefuseActiveIfReadOnly("the paste"))
         {
             return false;
         }
@@ -8850,7 +8831,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             //
             // The editor was told the same thing and has stopped taking keystrokes, so this is
             // the backstop for the moment between the two rather than the usual path.
-            if (_workspace.Find(e.DocumentId) is { RefusesEdits: true })
+            if (_workspace.Find(e.DocumentId) is { IsReadOnly: true })
             {
                 return;
             }

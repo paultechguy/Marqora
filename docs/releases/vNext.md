@@ -12,8 +12,9 @@ to have it written, and with format on save the whole file is rewritten on the w
 marked document is passed over by Save and Save All, and by `Ctrl+Shift+H`, which
 leaves it out of the count rather than skipping it afterwards.
 
-Marking a document you have already edited keeps those edits, and undo with them. **Save As**
-writes them somewhere else and the copy arrives unmarked; closing the tab offers the same.
+Marking a document you have already edited holds those edits where they are — not written, and
+not undoable until the mark comes off. Taking it off hands them straight back; **Save As** writes
+them somewhere else and the copy arrives unmarked. Closing the tab offers the same.
 
 This is Marqora's own mark, not the read-only tick in the file's Windows properties, which it
 never touches. Rename or move the file outside Marqora and the mark is left behind.

@@ -199,52 +199,64 @@ public sealed class ReadOnlyDocumentTests : IDisposable
     }
 
     /// <summary>
-    /// The narrower rule, and the reason it exists: a marked document that already holds unsaved
-    /// edits keeps taking them. Turning the editor read-only there would take undo with it, and
-    /// undo is the only way back out of edits that cannot be saved. Nothing is risked, because
-    /// the file is protected where it is written rather than here.
+    /// The mark applies whether or not there are unsaved edits already in the buffer. Those
+    /// edits are held exactly where they are - not written, not undoable - until the mark comes
+    /// off or they are saved somewhere else.
+    ///
+    /// An earlier version stood the mark down over unsaved edits, so that Monaco's readOnly
+    /// would not switch off undo along with typing. That was the more dangerous of the two:
+    /// undoing until the buffer matched the file made the document clean, the editor locked on
+    /// that transition, and redo went with it - so the edits could not be brought back at all.
     /// </summary>
     [Fact]
-    public async Task A_marked_document_that_is_already_dirty_keeps_taking_edits()
+    public async Task Marking_a_document_that_is_already_dirty_holds_its_edits_where_they_are()
     {
         (MarkdownDocument document, string path) = await OpenAsync(text: "# Notes\n");
 
-        // Dirty first, then marked - which is the order a user marking the tab they are working
-        // in would produce.
+        // Dirty first, then marked - the order a user marking the tab they are working in
+        // would produce.
         _workspace.ApplyEdit(document.Id, "# Half a thought\n").ShouldBeTrue();
         (await _workspace.SetLockedAsync(document.Id, true, TestContext.Current.CancellationToken))
             .ShouldBeTrue();
 
         Current(document.Id).IsDirty.ShouldBeTrue();
-        Current(document.Id).RefusesEdits.ShouldBeFalse();
+        Current(document.Id).IsReadOnly.ShouldBeTrue();
 
-        _workspace.ApplyEdit(document.Id, "# A whole thought\n").ShouldBeTrue();
-        Current(document.Id).Text.ShouldBe("# A whole thought\n");
+        // The edits are still there, and nothing further can be added to them.
+        _workspace.ApplyEdit(document.Id, "# A whole thought\n").ShouldBeFalse();
+        Current(document.Id).Text.ShouldBe("# Half a thought\n");
 
-        // Still nothing reaches the file.
+        // And nothing reaches the file.
         (await _workspace.SaveAsync(document.Id, TestContext.Current.CancellationToken)).ShouldBeFalse();
         File.ReadAllText(path).ShouldBe("# Notes\n");
+
+        // Taking the mark off hands the document back, edits and all.
+        await _workspace.SetLockedAsync(document.Id, false, TestContext.Current.CancellationToken);
+
+        Current(document.Id).Text.ShouldBe("# Half a thought\n");
+        _workspace.ApplyEdit(document.Id, "# A whole thought\n").ShouldBeTrue();
     }
 
     /// <summary>
-    /// The editor and the buffer are told the same thing, so the predicate they share has to
-    /// mean the same thing in both states.
+    /// The editor is told this and the buffer enforces it, so there is one answer rather than
+    /// two that could disagree about a keystroke.
     /// </summary>
     [Fact]
-    public async Task Refusing_edits_follows_the_mark_and_the_dirty_state_together()
+    public async Task Refusing_edits_follows_the_mark_alone()
     {
         (MarkdownDocument document, _) = await OpenAsync(marked: true);
 
-        Current(document.Id).RefusesEdits.ShouldBeTrue();
+        Current(document.Id).IsReadOnly.ShouldBeTrue();
 
         await _workspace.SetLockedAsync(document.Id, false, TestContext.Current.CancellationToken);
-        Current(document.Id).RefusesEdits.ShouldBeFalse();
+        Current(document.Id).IsReadOnly.ShouldBeFalse();
 
-        _workspace.ApplyEdit(document.Id, "# Dirty now\n");
+        // Dirty makes no difference to the answer.
+        _workspace.ApplyEdit(document.Id, "# Dirty now\n").ShouldBeTrue();
         await _workspace.SetLockedAsync(document.Id, true, TestContext.Current.CancellationToken);
 
+        Current(document.Id).IsDirty.ShouldBeTrue();
         Current(document.Id).IsReadOnly.ShouldBeTrue();
-        Current(document.Id).RefusesEdits.ShouldBeFalse();
     }
 
     // ----------------------------------------------------------------- the mark

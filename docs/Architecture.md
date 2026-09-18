@@ -1182,14 +1182,22 @@ something worse than nothing. In the vendored bundle it is option 104:
 - **Undo and redo are blocked too**, by the same option: `if(!(!i.hasModel()||i.getOption(104)===!0))return i.getModel().undo()`,
   and `pushUndoStop` alongside them.
 
-That last one decides the shape of the feature. `readOnly` is applied **only while the document
-is clean**. Mark a clean document and typing does nothing. Mark one that already holds unsaved
-edits and the editor stays open, because taking undo away from somebody holding work they cannot
-save is the one thing the mark must not do. The file is protected where it is written instead.
+That last one is the interesting constraint, and the first answer to it was wrong. `readOnly`
+was applied **only while the document was clean**, so that marking one with unsaved edits in it
+would not take undo away from work somebody might still need. It produced a worse trap than the
+one it avoided: undoing until the buffer matched the file made the document clean, the editor
+locked on that transition, and **redo went with it** — so the edits could not be brought back at
+all. Losing undo is a nuisance; losing work is not.
 
-`MarkdownDocument.RefusesEdits` is that predicate, and the editor and the buffer are both told
-it — one predicate for both, so a keystroke is refused in both places or accepted in both.
-Letting one hold text the other does not is the failure that would be worse than having no mark.
+So the mark applies at once, dirty or not. `MarkdownDocument.IsReadOnly` is the single predicate,
+and the editor and the buffer are both told it — one answer for both, so a keystroke is refused
+in both places or taken in both. Letting one hold text the other does not is the failure that
+would be worse than having no mark at all.
+
+Unsaved edits in a marked document are therefore held exactly where they are: not written, and
+not undoable. Taking the mark off hands the document back with its edits intact, and Save As
+carries them out to a new file. Both are one click away, and the status line names the second
+when the mark goes on over unsaved work.
 
 ### Where the guarantee actually lives
 
