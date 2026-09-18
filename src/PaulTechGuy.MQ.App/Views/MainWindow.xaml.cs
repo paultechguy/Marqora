@@ -1053,6 +1053,33 @@ public sealed partial class MainWindow : Window
     */
     private const double ClosableTabChrome = 50;
 
+    /*
+      What a pinned tab books instead, and the room its glyph takes.
+
+      A pinned tab never draws a close button - IsClosable is IsActive && !IsPinned - so the 50
+      above is 32 pixels of nothing on every one of them. What is left is the plain chrome the
+      table in docs/BROKEN_TAB_BAR.md has always recorded and nothing has ever booked: header
+      padding 8+8 and border 1+1, measured at 17.8-18.5 across five inactive tabs.
+
+      Booking chrome per tab state is listed in that document as tried and abandoned, and this is
+      not that. The rejected version booked 18 inactive and 50 active, so a tab resized every time
+      the selection moved - which moves every tab after it, on a gesture nobody thinks of as
+      touching the strip. A pin changes only when the user pins, unpins, or drags the tab across
+      the boundary, and all three already move it.
+
+      20 rather than 18: two pixels over the measurement on purpose. Those tabs were pinned to a
+      50-chrome width when they were measured, so a systematic error would have had 32 pixels of
+      slack to hide in. Booking light clips the name; booking heavy leaves slack inside a tab that
+      is pinned to this width, which is invisible.
+
+      PinGlyphRoom is the FontIcon's Width plus its right Margin, both set in the template so this
+      can be a constant the strip is told rather than a measurement the ruler and the render could
+      disagree about. Change one and change the other.
+    */
+    private const double PinnedTabChrome = 20;
+
+    private const double PinGlyphRoom = 16;
+
     /// <summary>
     /// Slack between the cap and the widest a fitted title may be. Covers the pixel or two
     /// the fitter's off-tree ruler and the rendered TextBlock disagree by in a proportional
@@ -1161,6 +1188,28 @@ public sealed partial class MainWindow : Window
     /// document going dirty — or a file going missing, or changing on disk — puts a glyph in
     /// front of its name without the tab moving to make space for it.
     /// </summary>
+    /// <summary>
+    /// The title block inside a tab's header panel, or null if the template has been changed out
+    /// from under this.
+    ///
+    /// Found by type rather than by name: <c>x:Name</c> inside a DataTemplate is not reachable
+    /// from here, and the panel holds exactly one TextBlock, so the first is the title. Returning
+    /// null rather than throwing keeps a mid-swap container out of the pass, which
+    /// <see cref="UpdateTabTitles"/> already knows how to skip.
+    /// </summary>
+    private static TextBlock? TitleOf(Panel header)
+    {
+        foreach (UIElement child in header.Children)
+        {
+            if (child is TextBlock title)
+            {
+                return title;
+            }
+        }
+
+        return null;
+    }
+
     private void UpdateTabTitles()
     {
         // Titles are fitted against the active tab's chrome even on tabs that are not
@@ -1181,12 +1230,23 @@ public sealed partial class MainWindow : Window
 
         foreach (object item in DocumentTabs.TabItemsSource is IEnumerable<object> source ? source : [])
         {
+            // The header is a panel now rather than a bare TextBlock: a pinned tab draws the pin
+            // beside its name, and the glyph has to be a real FontIcon because the code point
+            // lives in Segoe Fluent Icons' private-use range and would come out as a box in the
+            // font the title is drawn in.
             if (DocumentTabs.ContainerFromItem(item) is not TabViewItem container
-                || container.Header is not TextBlock title
+                || container.Header is not Panel header
+                || TitleOf(header) is not { } title
                 || title.Tag is not string full)
             {
                 continue;
             }
+
+            // Read off the tab rather than off the panel's Visibility. Both come from the same
+            // property, but a binding is applied when the framework gets round to it and this
+            // runs from a layout callback - so the view model is the answer that cannot be a
+            // frame behind the one the booking below depends on.
+            bool isPinned = item is DocumentTabViewModel { IsPinned: true };
 
             if (marker < 0)
             {
@@ -1202,8 +1262,17 @@ public sealed partial class MainWindow : Window
             string state = DocumentTabViewModel.MarkerOf(full);
             string name = full[state.Length..];
 
-            double pinned =
-                TabTitleFitter.Fit(title, name, room - marker, state) + marker + ClosableTabChrome;
+            // room is the same for every tab, pinned or not, and that is the point rather than an
+            // oversight. Only the chrome added on the end changes, so the name is cut exactly as
+            // it would have been the other way - pinning a tab never adds an ellipsis and
+            // unpinning never takes one away. Recomputing room from the smaller chrome is the
+            // obvious change and is wrong twice: a long name re-truncates on both gestures, and
+            // the tab stops getting narrower at all because it just fills the cap with more
+            // characters.
+            double booked =
+                TabTitleFitter.Fit(title, name, room - marker, state)
+                + marker
+                + (isPinned ? PinGlyphRoom + PinnedTabChrome : ClosableTabChrome);
 
             // Min and max together, because Width is not ours to hold: TabView writes that
             // one itself while it manages tab sizing. Clamping both ends leaves the tab
@@ -1213,19 +1282,19 @@ public sealed partial class MainWindow : Window
             // Guarded like the visibility writes below, and for the same reason: this runs
             // from a layout callback, and assigning a size unconditionally there would
             // invalidate the layout that called it and never settle.
-            if (container.MinWidth != pinned)
+            if (container.MinWidth != booked)
             {
-                container.MinWidth = pinned;
+                container.MinWidth = booked;
             }
 
-            if (container.MaxWidth != pinned)
+            if (container.MaxWidth != booked)
             {
-                container.MaxWidth = pinned;
+                container.MaxWidth = booked;
             }
 
             // Exact now rather than an estimate with slack on top: the tab is as wide as it
             // was just told to be, so there is nothing left for the safety margin to cover.
-            _tabWidths[container] = pinned + TabSpacing;
+            _tabWidths[container] = booked + TabSpacing;
         }
     }
 

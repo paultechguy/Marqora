@@ -44,6 +44,16 @@ public enum WorkspaceChange
     /// buffer.
     /// </summary>
     LockChanged,
+
+    /// <summary>
+    /// A document was pinned to the left of the tab strip, or had its pin taken off.
+    ///
+    /// Its own change for the reason <see cref="LockChanged"/> is: nothing about the text moved.
+    /// What listens to it is different again - a pin decides where the tab *sits*, so the strip
+    /// has to reorder on it, which no other change in this enum asks for except
+    /// <see cref="Reordered"/>.
+    /// </summary>
+    PinChanged,
 }
 
 /// <summary>Describes one change to the workspace. <see cref="Document"/> is null for a close.</summary>
@@ -119,6 +129,10 @@ public interface IWorkspaceService
     /// Writes the document somewhere else and points it there. The mark does not travel with
     /// it - this is the way out of a marked document - but a destination that is itself marked
     /// is refused, and that is what false means here.
+    ///
+    /// A pin does travel. The two differ because they mean different things: a mark guards a
+    /// file, so leaving it behind is the point, while a pin holds a tab's place and the tab has
+    /// not moved.
     /// </summary>
     Task<bool> SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default);
 
@@ -130,6 +144,17 @@ public interface IWorkspaceService
     /// the mark comes off or they are written somewhere else.
     /// </summary>
     Task<bool> SetLockedAsync(Guid id, bool locked, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pins the document to the left of the tab strip, or takes the pin off, and remembers it
+    /// for next time.
+    ///
+    /// False for an untitled document: a pin is remembered by path, and there is not one yet.
+    ///
+    /// Where the pinned tab lands among the other pinned tabs is not decided here. This says
+    /// only that it is pinned; the strip does the moving, on <see cref="WorkspaceChange.PinChanged"/>.
+    /// </summary>
+    Task<bool> SetPinnedAsync(Guid id, bool pinned, CancellationToken cancellationToken = default);
 
     Task ReloadAsync(Guid id, CancellationToken cancellationToken = default);
 

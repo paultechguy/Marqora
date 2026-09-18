@@ -71,6 +71,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDocumentAssetStore _assets;
     private readonly IPastedImageTracker _pastedImages;
     private readonly IDocumentLocks _locks;
+    private readonly IDocumentPins _pins;
     private readonly ILogger<MainViewModel> _logger;
 
     private IPreviewHost? _host;
@@ -224,6 +225,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public partial bool ActiveTabIsLocked { get; set; }
 
     /// <summary>
+    /// Whether the active tab is pinned, which is what the tab menu's tick shows.
+    ///
+    /// Unlike <see cref="ActiveTabIsLocked"/> there is no second, narrower answer to keep it
+    /// apart from: a pin means one thing and never stands itself down.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool ActiveTabIsPinned { get; set; }
+
+    /// <summary>
     /// Whether any open tab holds unsaved work, which is the whole of Save All's answer: it
     /// writes every dirty document, so which tab is being looked at has nothing to do with it.
     ///
@@ -253,6 +263,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ReloadFromDiskCommand))]
     [NotifyCanExecuteChangedFor(nameof(RevealInFolderCommand))]
     [NotifyCanExecuteChangedFor(nameof(CopyPathCommand))]
+
+    // Pinning is refused for a document with no path, and this is the property that answers
+    // that - so the command is re-asked from here rather than from a neighbour that happens to
+    // be assigned in the same pass.
+    [NotifyCanExecuteChangedFor(nameof(ToggleTabPinCommand))]
     public partial string DocumentPath { get; set; }
 
     /// <summary>
@@ -643,6 +658,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IDocumentAssetStore assets,
         IPastedImageTracker pastedImages,
         IDocumentLocks locks,
+        IDocumentPins pins,
         ILogger<MainViewModel> logger)
     {
         _workspace = workspace;
@@ -680,6 +696,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _assets = assets;
         _pastedImages = pastedImages;
         _locks = locks;
+        _pins = pins;
         _logger = logger;
 
         DocumentName = string.Empty;
@@ -989,6 +1006,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public async Task LoadDocumentMarksAsync()
     {
         await _locks.LoadAsync().ConfigureAwait(true);
+
+        // Both before the session is restored, and that ordering is load-bearing for the pins in
+        // a way it is not for the marks: a document opened before the pins are in memory comes up
+        // unpinned, so it lands wherever it was appended rather than at the front of the strip,
+        // and nothing afterwards would move it. The pins say nothing, because a lapsed pin is not
+        // worth interrupting anybody for - see DocumentPinsService.
+        await _pins.LoadAsync().ConfigureAwait(true);
 
         if (_locks.DroppedOnLoad is var dropped and > 0)
         {
@@ -1645,6 +1669,43 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         StatusText = $"{document.DisplayName} is read-only";
+    }
+
+    /// <summary>
+    /// A pin is remembered by path, so there has to be one. The same condition Read-Only takes,
+    /// and for the same reason.
+    /// </summary>
+    private bool CanToggleTabPin() => HasDocument && !string.IsNullOrWhiteSpace(DocumentPath);
+
+    /// <summary>
+    /// Pins the active document to the left of the tab strip, or takes the pin off.
+    ///
+    /// Named for the tab rather than just "pin" because this view model already has a
+    /// <c>TogglePinCommand</c>, which pins a file to the top of the recent list. Two unrelated
+    /// things called pinning, and the one place they could be confused is here.
+    ///
+    /// Moves nothing itself. The workspace raises PinChanged, and the case handling it does the
+    /// reposition - so the tab arrives at its new place already wearing the glyph, rather than
+    /// sliding first and being relabelled a moment later.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanToggleTabPin))]
+    private async Task ToggleTabPinAsync()
+    {
+        if (_workspace.Active is not { } document)
+        {
+            return;
+        }
+
+        bool pinning = !document.IsPinned;
+
+        if (!await _workspace.SetPinnedAsync(document.Id, pinning).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        StatusText = pinning
+            ? $"{document.DisplayName} is pinned to the left"
+            : $"{document.DisplayName} is no longer pinned";
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -3010,6 +3071,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     await ApplyEditorReadOnlyAsync(marked).ConfigureAwait(true);
                     break;
 
+                case WorkspaceChange.PinChanged when e.Document is { } repinned:
+                {
+                    // The tab first, so it knows its own answer before it is asked to move -
+                    // KeepPinnedTabsFirst reads IsPinned off the snapshot this installs.
+                    DocumentTabViewModel? tab = FindTab(repinned.Id);
+
+                    tab?.Update(repinned);
+
+                    if (tab is not null)
+                    {
+                        KeepPinnedTabsFirst(tab);
+                    }
+
+                    UpdateActiveDocumentState();
+
+                    // The close commands answer about how many tabs are closable rather than how
+                    // many there are, and a pin changes that without changing the count.
+                    NotifyTabCountChanged();
+
+                    // No ApplyEditorReadOnlyAsync, unlike LockChanged: a pin decides where a tab
+                    // sits and nothing whatever about whether its text can be typed into.
+                    break;
+                }
+
                 case WorkspaceChange.ExternalStateChanged when e.Document is { } stale:
                     FindTab(stale.Id)?.Update(stale);
                     UpdateActiveDocumentState();
@@ -3106,9 +3191,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var tab = new DocumentTabViewModel(document);
+
         _isSyncingTabs = true;
-        Tabs.Add(new DocumentTabViewModel(document));
+        Tabs.Add(tab);
         _isSyncingTabs = false;
+
+        // Appended and then put in its place, rather than inserted at the right index outright.
+        // Every route into this method appends - New, Open, the recent list, a link, a Find All
+        // jump, the restored session, the welcome document - and only some of them can produce a
+        // pinned document. Letting them all append and normalizing once is one rule instead of
+        // seven, and it is the same rule that repairs the order after a drag.
+        KeepPinnedTabsFirst(tab);
 
         NotifyTabCountChanged();
 
@@ -3117,6 +3211,73 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
+        }
+
+        PersistSession();
+    }
+
+    /// <summary>
+    /// How many of the <em>other</em> tabs are pinned, which is where the pinned block ends as
+    /// far as one tab being placed is concerned.
+    ///
+    /// Counted over the others deliberately. A pin arrives through the workspace queue, so at
+    /// the moment a destination is worked out this tab's own snapshot may or may not have caught
+    /// up - and leaving it out of the count means the answer is the same either way, so the flag
+    /// and the move cannot disagree about which order they happened in.
+    ///
+    /// Counted rather than taken as the leading run. A run stops at the first unpinned tab, so
+    /// one tab in the wrong place would report a boundary of one and strand every pinned tab
+    /// behind it, with nothing that ever put them back. A count cannot drift from the flags it
+    /// is counting.
+    /// </summary>
+    private int PinnedCountExcluding(DocumentTabViewModel tab) =>
+        Tabs.Count(other => other.IsPinned && !ReferenceEquals(other, tab));
+
+    /// <summary>
+    /// Puts one tab on the correct side of the pinned boundary, and leaves every other tab where
+    /// it is.
+    ///
+    /// Idempotent, which is what lets it be called from everywhere without anyone having to know
+    /// whether it is needed: a tab already in a legal place is not touched at all, so this is
+    /// both the mechanism that moves a newly pinned tab and the repair that runs after a drag.
+    ///
+    /// A pinned tab is legal anywhere at or before the boundary, so it only moves when it is
+    /// past it - and then only as far as the end of the pinned block, which keeps the order of
+    /// the pins already there. An unpinned tab is the mirror image. <see cref="ObservableCollection{T}.Move"/>
+    /// removes before it inserts, so the boundary is already the post-removal index in both
+    /// directions and needs no adjusting.
+    /// </summary>
+    private void KeepPinnedTabsFirst(DocumentTabViewModel tab)
+    {
+        int at = Tabs.IndexOf(tab);
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        int boundary = PinnedCountExcluding(tab);
+        int target = tab.IsPinned ? Math.Min(at, boundary) : Math.Max(at, boundary);
+
+        if (target == at)
+        {
+            return;
+        }
+
+        _isSyncingTabs = true;
+        Tabs.Move(at, target);
+        _isSyncingTabs = false;
+
+        // The workspace keeps its own list in tab order, and the echo this move would normally
+        // produce was just suppressed - so it is told directly, exactly as the reopen path does.
+        _workspace.Move(tab.Id, target);
+
+        // Moving a tab does not change which object ActiveTab points at, so nothing notifies the
+        // strip that the selected item is now somewhere else and it keeps the old slot
+        // highlighted. The same raise ReopenLastClosedTabAsync makes after its own move.
+        if (ReferenceEquals(ActiveTab, tab))
+        {
+            OnPropertyChanged(nameof(ActiveTab));
         }
 
         PersistSession();
@@ -3312,6 +3473,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsDirty = document?.IsDirty ?? false;
         ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveTabIsLocked = document?.IsLocked ?? false;
+        ActiveTabIsPinned = document?.IsPinned ?? false;
         ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveExternalState = document?.External ?? ExternalState.InSync;
 

@@ -29,6 +29,7 @@ public static class RepositoryServiceCollectionExtensions
         services.TryAddSingleton<ISettingsRepository, JsonSettingsRepository>();
         services.TryAddSingleton<IRecentFilesRepository, JsonRecentFilesRepository>();
         services.TryAddSingleton<IDocumentLocksRepository, JsonDocumentLocksRepository>();
+        services.TryAddSingleton<IDocumentPinsRepository, JsonDocumentPinsRepository>();
         services.TryAddSingleton<IUserDictionaryRepository, TextUserDictionaryRepository>();
         services.TryAddSingleton<ISnippetCatalog, SnippetCatalog>();
 

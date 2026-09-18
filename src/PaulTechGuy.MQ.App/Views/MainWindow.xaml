@@ -230,7 +230,7 @@
                         read as one run of text. The width the fit pass books per tab
                         includes this gap - see TabSpacing in the code-behind.
                     -->
-                    <TabViewItem IsClosable="{x:Bind IsActive, Mode=OneWay}"
+                    <TabViewItem IsClosable="{x:Bind IsClosable, Mode=OneWay}"
                                  Margin="0,0,6,0"
                                  ToolTipService.ToolTip="{x:Bind Tooltip, Mode=OneWay}">
                         <!--
@@ -241,14 +241,41 @@
                             and still changes when the document is renamed or goes dirty.
                         -->
                         <!--
-                            No icon. Every document here is markdown, so the same glyph on
-                            every tab says nothing and costs about twenty pixels of name on
-                            each one.
+                            No icon that says what the document is. Every document here is
+                            markdown, so the same glyph on every tab would say nothing and cost
+                            about twenty pixels of name on each one.
+
+                            The pin is the exception, and pays for itself by appearing on one
+                            tab in ten: it is the only thing on the strip that says why this tab
+                            is where it is. The same glyph the recent list pins with, two points
+                            smaller, so the two readings of "pinned" look like one idea.
+
+                            Collapsed rather than hidden when there is nothing to say, so it
+                            takes no width at all - the fit pass books its room only for a tab
+                            that is actually showing one. Width and Margin are set here rather
+                            than left to the glyph's own metrics, so what the strip books is a
+                            constant it can be told rather than a measurement that could differ
+                            between the ruler and the render. See PinGlyphRoom in the code-behind.
+
+                            Visibility binds straight to the bool. VisibleWhen, which the rest of
+                            this file uses, is an instance member of the window, and a function
+                            binding inside a DataTemplate resolves against the row's own type -
+                            so it cannot be reached from here.
                         -->
                         <TabViewItem.Header>
-                            <TextBlock x:Name="TabTitle"
-                                       Tag="{x:Bind DisplayTitle, Mode=OneWay}"
-                                       TextWrapping="NoWrap" />
+                            <StackPanel Orientation="Horizontal">
+                                <FontIcon x:Name="TabPin"
+                                          Glyph="&#xE718;"
+                                          FontSize="12"
+                                          Width="12"
+                                          Margin="0,0,4,0"
+                                          VerticalAlignment="Center"
+                                          Visibility="{x:Bind IsPinned, Mode=OneWay}" />
+                                <TextBlock x:Name="TabTitle"
+                                           Tag="{x:Bind DisplayTitle, Mode=OneWay}"
+                                           TextWrapping="NoWrap"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
                         </TabViewItem.Header>
                     </TabViewItem>
                 </DataTemplate>

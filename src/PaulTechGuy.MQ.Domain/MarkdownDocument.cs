@@ -61,6 +61,21 @@ public sealed record MarkdownDocument
     /// </summary>
     public bool IsLocked { get; init; }
 
+    /// <summary>
+    /// Whether the user has pinned this document to the left of the tab strip, restored by path
+    /// when it is opened.
+    ///
+    /// Kept with the document rather than with its tab for the reason the mark above is: it is
+    /// remembered per path, and Save As is the one moment both the old path and the new one are
+    /// in the same hand. A pin held only by the view model would need a second place to know
+    /// what a rename means.
+    ///
+    /// Unlike the mark, this says nothing about whether the file may be written. It moves the
+    /// tab to the front of the strip, takes its close button away, and keeps the document out of
+    /// the three bulk close commands - and that is the whole of it.
+    /// </summary>
+    public bool IsPinned { get; init; }
+
     public bool IsUntitled => Path is null;
 
     /// <summary>Tab label: the file name, or the placeholder name when never saved.</summary>

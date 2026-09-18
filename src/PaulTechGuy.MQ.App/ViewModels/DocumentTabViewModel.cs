@@ -124,6 +124,14 @@ public sealed partial class DocumentTabViewModel : ObservableObject
                     : "\nRead-only";
             }
 
+            // Said here as well as shown, because what the glyph cannot say is the half that is
+            // not about position: a pinned document is also left alone by Close Other Tabs,
+            // Close Tabs to the Right and Close All Tabs.
+            if (_document.IsPinned)
+            {
+                text += "\nPinned — kept at the left, and left out of the bulk close commands";
+            }
+
             return text;
         }
     }
@@ -141,7 +149,19 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     /// re-evaluates when the selection moves.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsClosable))]
     public partial bool IsActive { get; set; }
+
+    /// <summary>
+    /// Whether this tab draws a close button: the active one, unless it is pinned.
+    ///
+    /// The pin takes the cross away permanently rather than while the tab is unselected, and
+    /// that distinction is what makes the narrower chrome a pinned tab books safe. Were this
+    /// still bound to <see cref="IsActive"/> alone, selecting a pinned tab would hand it a close
+    /// button and resize it — which is booking chrome per tab *state*, the thing
+    /// docs/BROKEN_TAB_BAR.md records as tried and abandoned.
+    /// </summary>
+    public bool IsClosable => IsActive && !IsPinned;
 
     public bool IsDirty => _document.IsDirty;
 
@@ -156,6 +176,15 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     /// the file comes back. The menu's tick follows the mark, so it stays where the user put it.
     /// </summary>
     public bool IsLocked => _document.IsLocked;
+
+    /// <summary>
+    /// Whether this document is pinned to the left of the tab strip.
+    ///
+    /// Read from the document rather than held here, so there is one answer rather than two that
+    /// could disagree about where the tab belongs. The strip reads it to place the tab and to
+    /// decide how much chrome to book; the close commands read it to leave the tab alone.
+    /// </summary>
+    public bool IsPinned => _document.IsPinned;
 
     public string? Path => _document.Path;
 
@@ -174,5 +203,13 @@ public sealed partial class DocumentTabViewModel : ObservableObject
         OnPropertyChanged(nameof(HasExternalChange));
         OnPropertyChanged(nameof(IsReadOnly));
         OnPropertyChanged(nameof(IsLocked));
+
+        // IsClosable before IsPinned, and both before the strip next lays out. The fit pass
+        // books a pinned tab's chrome from IsPinned and the template draws its close button from
+        // IsClosable, so the two have to agree - and if they are ever split apart, a tab that has
+        // lost its cross while still booking room for one is the harmless direction to be wrong
+        // in. It clips nothing; the other way round does.
+        OnPropertyChanged(nameof(IsClosable));
+        OnPropertyChanged(nameof(IsPinned));
     }
 }

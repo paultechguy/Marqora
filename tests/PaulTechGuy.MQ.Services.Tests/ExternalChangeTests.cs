@@ -31,6 +31,7 @@ public sealed class ExternalChangeTests : IDisposable
             _watchers,
             _settings,
             new FakeDocumentLocks(),
+            new FakeDocumentPins(),
             NullLogger<DocumentWorkspace>.Instance);
         _workspace.Changed += (_, e) => _changes.Add(e);
     }

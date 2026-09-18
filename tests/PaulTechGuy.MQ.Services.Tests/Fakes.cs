@@ -158,6 +158,41 @@ internal sealed class FakeDocumentLocks : IDocumentLocks
 }
 
 /// <summary>
+/// Pins held in memory, with no file behind them. The twin of <see cref="FakeDocumentLocks"/>
+/// above, and stood up for the same reason: the workspace only ever asks this one question, and
+/// the pruning and path-keying that make the real service interesting want a disk.
+///
+/// <see cref="DocumentPinsTests"/> drives the real one.
+/// </summary>
+internal sealed class FakeDocumentPins : IDocumentPins
+{
+    private readonly HashSet<string> _pinned = new(StringComparer.OrdinalIgnoreCase);
+
+    public int DroppedOnLoad { get; }
+
+    public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public bool IsPinned(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && _pinned.Contains(System.IO.Path.GetFullPath(path));
+
+    public Task SetAsync(string path, bool pinned, CancellationToken cancellationToken = default)
+    {
+        string key = System.IO.Path.GetFullPath(path);
+
+        if (pinned)
+        {
+            _pinned.Add(key);
+        }
+        else
+        {
+            _pinned.Remove(key);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// Paths pointed at a scratch folder: an "install" directory holding what ships, and a data
 /// directory standing in for %LOCALAPPDATA%. The real implementation lives in the
 /// repositories layer, which these tests do not reference.
@@ -173,6 +208,8 @@ internal sealed class FakeAppPaths(string root) : IAppPaths
     public string RecentFilesFilePath => System.IO.Path.Combine(DataDirectory, "recent-files.json");
 
     public string DocumentLocksFilePath => System.IO.Path.Combine(DataDirectory, "document-locks.json");
+
+    public string DocumentPinsFilePath => System.IO.Path.Combine(DataDirectory, "document-pins.json");
 
     public string UserDictionaryPath => System.IO.Path.Combine(DataDirectory, "user-dictionary.txt");
 

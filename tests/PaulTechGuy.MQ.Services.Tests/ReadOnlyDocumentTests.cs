@@ -28,6 +28,7 @@ public sealed class ReadOnlyDocumentTests : IDisposable
             _watchers,
             new FakeSettingsService(),
             _locks,
+            new FakeDocumentPins(),
             NullLogger<DocumentWorkspace>.Instance);
 
     public void Dispose()

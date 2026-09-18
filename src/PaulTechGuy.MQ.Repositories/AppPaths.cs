@@ -42,6 +42,8 @@ public sealed class AppPaths : IAppPaths
 
     public string DocumentLocksFilePath => Path.Combine(DataDirectory, "document-locks.json");
 
+    public string DocumentPinsFilePath => Path.Combine(DataDirectory, "document-pins.json");
+
     public string UserDictionaryPath => Path.Combine(DataDirectory, "user-dictionary.txt");
 
     public string LogDirectory => Path.Combine(DataDirectory, "logs");

@@ -18,4 +18,5 @@ namespace PaulTechGuy.MQ.Repositories;
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(RecentFilesDocument))]
 [JsonSerializable(typeof(DocumentLocksDocument))]
+[JsonSerializable(typeof(DocumentPinsDocument))]
 internal sealed partial class MarqoraJsonContext : JsonSerializerContext;

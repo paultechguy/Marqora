@@ -30,6 +30,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
     private readonly IFileWatcherFactory _watcherFactory;
     private readonly ISettingsService _settings;
     private readonly IDocumentLocks _locks;
+    private readonly IDocumentPins _pins;
     private readonly ILogger<DocumentWorkspace> _logger;
 
     private readonly List<MarkdownDocument> _documents = [];
@@ -51,11 +52,13 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         IFileWatcherFactory watcherFactory,
         ISettingsService settings,
         IDocumentLocks locks,
+        IDocumentPins pins,
         ILogger<DocumentWorkspace> logger)
     {
         _watcherFactory = watcherFactory;
         _settings = settings;
         _locks = locks;
+        _pins = pins;
         _logger = logger;
     }
 
@@ -99,6 +102,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             LoadedUtc = DateTimeOffset.UtcNow,
             Stamp = stamp,
             IsLocked = _locks.IsLocked(fullPath),
+            IsPinned = _pins.IsPinned(fullPath),
         };
 
         _documents.Add(document);
@@ -302,8 +306,27 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             return false;
         }
 
+        // Read before the write, while the document still holds the path it is leaving.
+        bool wasPinned = _documents[index].IsPinned;
+        string? leaving = _documents[index].Path;
+
         FileStamp? stamp = await WriteAsync(id, fullPath, _documents[index].Text, cancellationToken)
             .ConfigureAwait(false);
+
+        // The pin travels and the mark does not, which is the one place these two part company.
+        // A mark guards a file, so Save As is the way out of one; a pin holds a tab's place, and
+        // the tab has not moved - it is the same tab, showing the same text, under a new name.
+        // Leaving the pin behind would also throw the tab out of the pinned block mid-save,
+        // which is the visible half of getting this wrong.
+        if (wasPinned)
+        {
+            if (leaving is not null)
+            {
+                await _pins.SetAsync(leaving, false, cancellationToken).ConfigureAwait(false);
+            }
+
+            await _pins.SetAsync(fullPath, true, cancellationToken).ConfigureAwait(false);
+        }
 
         _documents[index] = _documents[index] with
         {
@@ -317,6 +340,10 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             // whether a path is marked stays the one place. The guard above has already
             // established what this answers.
             IsLocked = _locks.IsLocked(fullPath),
+
+            // Read back for the same reason, which is what makes the transfer above the only
+            // thing that decides a pin rather than one of two things that could disagree.
+            IsPinned = _pins.IsPinned(fullPath),
         };
 
         // The document may have had no path at all, so start watching now.
@@ -363,6 +390,43 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             locked ? "marked read-only" : "no longer marked read-only");
 
         Raise(WorkspaceChange.LockChanged, _documents[index]);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Pins a document to the left of the tab strip, or takes the pin off, and writes the change
+    /// out.
+    ///
+    /// The same shape as <see cref="SetLockedAsync"/> above, and refuses on the same condition:
+    /// an untitled document has no path, and a pin is remembered by one.
+    ///
+    /// Nothing here moves anything. Where a pinned tab sits is the strip's business, and it
+    /// reorders when <see cref="WorkspaceChange.PinChanged"/> reaches it - which is also why
+    /// this raises a change of its own rather than folding into LockChanged, whose listeners
+    /// would then have to work out which of the two had actually moved.
+    /// </summary>
+    public async Task<bool> SetPinnedAsync(Guid id, bool pinned, CancellationToken cancellationToken = default)
+    {
+        int index = _documents.FindIndex(d => d.Id == id);
+
+        if (index < 0 || _documents[index].Path is not { } path)
+        {
+            return false;
+        }
+
+        if (_documents[index].IsPinned == pinned)
+        {
+            return true;
+        }
+
+        await _pins.SetAsync(path, pinned, cancellationToken).ConfigureAwait(false);
+
+        _documents[index] = _documents[index] with { IsPinned = pinned };
+
+        _logger.LogInformation("{Path} is {State}.", path, pinned ? "pinned" : "no longer pinned");
+
+        Raise(WorkspaceChange.PinChanged, _documents[index]);
 
         return true;
     }

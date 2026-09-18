@@ -26,6 +26,16 @@ public interface IAppPaths
     string DocumentLocksFilePath { get; }
 
     /// <summary>
+    /// Which documents the user has pinned to the left of the tab strip.
+    ///
+    /// Its own file beside the marks, and for the same reason: a pin belongs to a document
+    /// rather than to the app, so it survives Reset Preferences. Separate from the marks because
+    /// the two answer different questions and one of them is a guard - clearing the pins should
+    /// never be able to take a read-only mark with it.
+    /// </summary>
+    string DocumentPinsFilePath { get; }
+
+    /// <summary>
     /// The words the user has accepted, one per line.
     ///
     /// Plain text rather than JSON on purpose: it is a list of words, it can be shared and

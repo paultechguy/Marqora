@@ -8,21 +8,24 @@ using PaulTechGuy.MQ.Abstractions.Services;
 namespace PaulTechGuy.MQ.Services;
 
 /// <summary>
-/// The read-only marks, held as a set of normalized paths and written out as they change.
+/// The pinned documents, held as a set of normalized paths and written out as they change.
 ///
-/// Written straight through rather than behind a debounce like the settings: a mark changes when
-/// somebody picks a menu item, not many times a second, and the one thing worse than a slow write
-/// here is a mark that was not saved.
+/// The same shape as <see cref="DocumentLocksService"/> down to the locking, and deliberately so:
+/// both are a set of paths that has to survive a restart, and the two share
+/// <see cref="DocumentPathKeys"/> for the only part of either that is subtle. Written straight
+/// through rather than behind a debounce - a pin changes when somebody picks a menu item or
+/// finishes a drag, not many times a second.
 ///
 /// The lock is never held across an await - the set is copied inside it and the file is written
-/// outside - so <see cref="IsLocked"/> can be answered from the UI thread without waiting on a
-/// disk write.
+/// outside - so <see cref="IsPinned"/> can be answered from the UI thread without waiting on a
+/// disk write. It is asked on every document open and on every pass that decides where a tab
+/// sits, so it has to be cheap.
 /// </summary>
-public sealed class DocumentLocksService(
-    IDocumentLocksRepository repository,
-    ILogger<DocumentLocksService> logger) : IDocumentLocks
+public sealed class DocumentPinsService(
+    IDocumentPinsRepository repository,
+    ILogger<DocumentPinsService> logger) : IDocumentPins
 {
-    private readonly HashSet<string> _locked = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _pinned = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _sync = new();
 
     public int DroppedOnLoad { get; private set; }
@@ -47,21 +50,26 @@ public sealed class DocumentLocksService(
 
         lock (_sync)
         {
-            _locked.Clear();
-            _locked.UnionWith(kept);
+            _pinned.Clear();
+            _pinned.UnionWith(kept);
             DroppedOnLoad = dropped;
         }
 
         if (dropped > 0)
         {
-            logger.LogInformation("Dropped {Count} read-only mark(s) whose file no longer exists.", dropped);
+            // Logged and not announced, which is the one place this parts company with the
+            // read-only marks. That announcement exists because a guard which has quietly
+            // stopped guarding is worth interrupting somebody for. A pin that has lapsed costs
+            // a tab its place at the front of the strip, and saying so on launch would be
+            // charging a full-width status message for it.
+            logger.LogInformation("Dropped {Count} pin(s) whose file no longer exists.", dropped);
 
             // Rewritten so the same entries are not weighed again on every launch.
             await repository.SaveAsync(kept, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    public bool IsLocked(string? path)
+    public bool IsPinned(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -72,11 +80,11 @@ public sealed class DocumentLocksService(
 
         lock (_sync)
         {
-            return _locked.Contains(key);
+            return _pinned.Contains(key);
         }
     }
 
-    public async Task SetAsync(string path, bool locked, CancellationToken cancellationToken = default)
+    public async Task SetAsync(string path, bool pinned, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -85,14 +93,14 @@ public sealed class DocumentLocksService(
 
         lock (_sync)
         {
-            bool changed = locked ? _locked.Add(key) : _locked.Remove(key);
+            bool changed = pinned ? _pinned.Add(key) : _pinned.Remove(key);
 
             if (!changed)
             {
                 return;
             }
 
-            snapshot = [.. _locked];
+            snapshot = [.. _pinned];
         }
 
         await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
