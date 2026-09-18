@@ -39,20 +39,49 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// This is the shape the clipboard wants. Custom properties are resolved on the way out,
     /// because a fragment has no root element to declare them on and the applications this is
     /// aimed at — Word, Outlook — do not implement them in any case.
+    ///
+    /// Translucency goes the same way and for the same reason. Those applications read this
+    /// style block and apply most of it — the highlighting theme is plain hex and arrives
+    /// intact — but they do not recognize <c>rgba()</c> or <c>color-mix()</c> as colors, so
+    /// each declaration written with one was being dropped rather than approximated. That cost
+    /// the table header its only background and left all five callout tints showing the solid
+    /// gray underneath them. <see cref="CssAlphaFlattening"/> composites them onto the white
+    /// this fragment is always dropped onto; the order matters, since both are written in terms
+    /// of custom properties and there is nothing to composite until those are resolved.
     /// </summary>
-    public string BuildFragment(string renderedHtml, string? sourceDocumentPath)
+    /// <param name="diagrams">
+    /// The rasterized diagrams, by hash, which the caller fetches before calling because this is
+    /// synchronous and each one is a round trip to the shell. A diagram with no picture here is
+    /// removed rather than carried across; see <see cref="DiagramPictures"/> for why an inline
+    /// SVG is worse than nothing in Word.
+    /// </param>
+    public string BuildFragment(
+        string renderedHtml,
+        string? sourceDocumentPath,
+        IReadOnlyDictionary<string, byte[]>? diagrams = null)
     {
         var builder = new StringBuilder();
 
+        string styles = CssAlphaFlattening.OverWhite(FlattenCustomProperties(ReadStyles(renderedHtml)));
+
         builder.AppendLine("<style>");
-        builder.AppendLine(FlattenCustomProperties(ReadStyles(renderedHtml)));
+        builder.AppendLine(styles);
         builder.AppendLine(FragmentOverrides);
         builder.AppendLine("</style>");
         builder.AppendLine("<article class=\"mq-preview\">");
 
         // The clipboard has nowhere to report a skipped image and no second chance to ask, so
         // this is the one caller that discards the list rather than showing it.
-        builder.AppendLine(EmbedLocalImages(renderedHtml, sourceDocumentPath, out _));
+        string body = EmbedLocalImages(renderedHtml, sourceDocumentPath, out _);
+
+        // Before the table pass, so that a diagram is already a picture rather than an SVG full
+        // of text nodes by the time anything else walks the markup.
+        body = DiagramPictures.Substitute(body, diagrams ?? new Dictionary<string, byte[]>());
+
+        // A table is the one thing the style block above cannot deliver, whatever it says. The
+        // rules are carried onto the cells themselves, read back out of that same block so the
+        // color is still only written down in app.css.
+        builder.AppendLine(InlineTableStyles.Stamp(body, styles));
 
         builder.AppendLine("</article>");
 
@@ -109,6 +138,12 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// it with. <see cref="FlattenCustomProperties"/> folds these values into a clipboard
     /// fragment for Word and Outlook, which understand neither custom properties nor
     /// color-mix, and this is the one place a tint of the accent is used as a background.
+    ///
+    /// Writing it as rgba was half the answer: those two do not read rgba either, and the
+    /// header this tints was arriving with no background at all. <see cref="BuildFragment"/>
+    /// runs <see cref="CssAlphaFlattening"/> over the result, which is what finally makes the
+    /// tint opaque. The rgba stays, because the export this also feeds goes to a browser that
+    /// blends it properly against whatever is behind it.
     /// </summary>
     private static string AccentDeclarations()
     {

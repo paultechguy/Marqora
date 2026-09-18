@@ -5958,9 +5958,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            // A diagram is an inline SVG, which Word does not draw and does not ignore either -
+            // it keeps the node labels and drops the shapes, so the diagram arrives as a list of
+            // stray lines. The shell is asked for the same picture the Word export and Copy as
+            // PNG already use. Fetched here rather than inside the packager because each one is
+            // a round trip and building the fragment is synchronous.
+            IReadOnlyDictionary<string, byte[]> diagrams =
+                await FetchDiagramPicturesAsync(selection.Html).ConfigureAwait(true);
+
             // Embedding images means reading and encoding them, which is not something to
             // do on the UI thread for a document full of screenshots.
-            string fragment = await Task.Run(() => _packager.BuildFragment(selection.Html, document.Path))
+            string fragment = await Task
+                .Run(() => _packager.BuildFragment(selection.Html, document.Path, diagrams))
                 .ConfigureAwait(true);
 
             bool wholeDocument = selection.Text.Length == 0;
@@ -5979,6 +5988,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// The picture for each diagram in the markup, by hash, fetched concurrently.
+    ///
+    /// A diagram that does not come back is simply absent from the dictionary and the packager
+    /// drops it. Nothing is said about it: the copy succeeded, the rest of the document is on the
+    /// clipboard, and a dialog about a diagram would be in the way of the paste that follows.
+    /// The shell has already logged a warning if its rasterizer was the thing that failed.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, byte[]>> FetchDiagramPicturesAsync(string html)
+    {
+        var pictures = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+
+        if (_host is null || DiagramPictures.HashesIn(html) is not { Count: > 0 } hashes)
+        {
+            return pictures;
+        }
+
+        KeyValuePair<string, byte[]?>[] fetched = await Task.WhenAll(
+            hashes.Select(async hash => new KeyValuePair<string, byte[]?>(
+                hash,
+                await _host.RequestDiagramPngAsync(hash).ConfigureAwait(true))))
+            .ConfigureAwait(true);
+
+        foreach ((string hash, byte[]? png) in fetched)
+        {
+            if (png is { Length: > 0 })
+            {
+                pictures[hash] = png;
+            }
+        }
+
+        return pictures;
     }
 
     /// <summary>

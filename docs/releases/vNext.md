@@ -1,4 +1,4 @@
-﻿# Marqora vNext - What's New
+# Marqora vNext - What's New
 
 ## A callout takes the text you were looking at
 
@@ -72,3 +72,28 @@ Sharing as a zip is unchanged.
 **Switching the view keeps your place.** Moving between split, source and preview view put the
 pane that stayed wherever the other one had last been left, which on a long document meant
 losing the paragraph you were reading. The switch now carries the line across.
+
+**A pasted table gets its header back.** Copy as Rich Text carries the preview's own stylesheet
+across, and Word and Outlook do read it — code keeps its highlighting, links keep their color — but
+a table is not laid out from CSS. Word imports one into its own table model and takes each cell's
+shading from that cell, so the rule describing the header was understood and then dropped at the
+table boundary, and a pasted table lost the line between the head and the data entirely. The table
+rules are now written onto the cells themselves on the way to the clipboard, read back out of the
+same stylesheet so the colors are still stated only once. Striped rows come with them, having
+depended on a selector Word does not implement either.
+
+**Callouts paste in their own colors.** The same fragment described its tints with modern CSS that
+Word and Outlook do not recognize as color at all, so each declaration was thrown away rather than
+approximated. A note, tip, important, warning or caution box kept the plain gray underneath its
+tint and quietly came out the wrong color. Those shades are now worked out against the white they
+are dropped onto before the fragment leaves. An exported HTML file is unchanged either way, since a
+browser blends them correctly on its own.
+
+**A diagram pasted into Word is a diagram.** Copying a document with a mermaid diagram in it put
+the diagram's labels into the pasted document as ordinary lines of text — "Source pane", "Preview
+pane" and the rest, one after another, reading as prose the author never wrote. A diagram is an
+inline drawing, which Word does not draw and does not skip either: it throws the shapes away and
+keeps the words inside them. The clipboard now carries the picture instead, the same one the Word
+export and the preview's own Copy as PNG already use, so a diagram copied from the page matches the
+one copied from its own window. A diagram the shell cannot draw is left out altogether rather than
+scattered across the page.
