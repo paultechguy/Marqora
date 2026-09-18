@@ -8,6 +8,10 @@ and tick **Read-Only**, or use `File > Read-Only`, and Marqora will not write th
 until you take the tick off. The mark is remembered per file, so it is still there when you open
 the document next week.
 
+Typing into one does nothing, and the editor says so where the caret is rather than leaving you
+to work out that the key did not land. The document is still a document otherwise: it scrolls,
+it searches, the preview follows it, and `Ctrl+Shift+F` finds in it exactly as before.
+
 It is worth having because of autosave. With autosave on, one stray keystroke in a document you
 were only reading is enough to have it saved — and if you also format on save, the whole file is
 reformatted on its way to disk, without a prompt. A marked document is skipped by autosave
@@ -27,6 +31,12 @@ other open file is. It stops *Marqora* writing your file, which is the part that
 by itself.
 
 Select All and Copy work as they always did. Cut copies instead of cutting, and says so.
+
+The mark follows the file's location, so renaming or moving a document outside Marqora leaves it
+behind — there is nothing left to match it against. Marks whose files have gone for good are
+dropped at startup and Marqora says how many, rather than letting a guard quietly stop guarding.
+A file that is merely out of reach, on a drive that is not attached or a share you are away from,
+keeps its mark.
 
 ## A callout takes the text you were looking at
 
