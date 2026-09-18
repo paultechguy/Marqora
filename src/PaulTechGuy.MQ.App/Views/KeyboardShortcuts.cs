@@ -28,11 +28,15 @@ internal static class KeyboardShortcuts
         new("Menus",
         [
             new("Focus the menu bar", "Alt"),
+
+            // Listed in the order the bar shows them, so this reads left to right the way the
+            // menus do. The letters are the Word ones and did not move when the bar was
+            // reordered - Alt+O is Format wherever Format happens to sit.
             new("File menu", "Alt+F"),
             new("Edit menu", "Alt+E"),
-            new("Format menu", "Alt+O"),
-            new("Insert menu", "Alt+I"),
             new("View menu", "Alt+V"),
+            new("Insert menu", "Alt+I"),
+            new("Format menu", "Alt+O"),
             new("Tools menu", "Alt+T"),
             new("Help menu", "Alt+H"),
         ]),

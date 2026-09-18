@@ -21,9 +21,19 @@ namespace PaulTechGuy.MQ.App.Views;
 /// pointer was over.
 ///
 /// It carries the File menu's per-document half, in the File menu's own order, so the two
-/// never read as different applications. What it leaves out is anything about the workspace
-/// as a whole - New, Open, Save All - because the gesture named one document and the menu
-/// should answer about that one.
+/// never read as different applications. What it leaves out is anything about *other*
+/// documents - New, Open, Save All - because the gesture named one document.
+///
+/// That line used to be drawn at "the workspace as a whole", which was never quite what the
+/// menu did: Close Other Tabs and Close All Tabs were always here, and neither is about the
+/// clicked tab alone. The line the items actually fall on is the clicked tab and the set of
+/// tabs around it, which is why Close Tabs to the Right and Reopen Closed Tab belong here too.
+/// Reopen in particular: the strip is where somebody realizes they closed the wrong thing, and
+/// the strip is where their hand already is.
+///
+/// Open in File Explorer and the Copy submenu are no longer duplicates of a File menu item.
+/// The menu bar gave them up in the same pass that moved Export onto File, so this is the only
+/// route to them - which is why they now sit above the closing group rather than below it.
 ///
 /// Two things about it are less obvious than they look, and both are about focus. It selects
 /// the clicked tab before showing anything, so every item can use the same active-document
@@ -33,6 +43,13 @@ namespace PaulTechGuy.MQ.App.Views;
 /// </summary>
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// The longest a document's name may be where the Save item spells it out. Generous rather
+    /// than tight: the point is to stop a pathological name drawing a flyout off the screen, not
+    /// to keep the menu narrow.
+    /// </summary>
+    private const int MaximumNamedTitle = 44;
+
     private MenuFlyout? _tabMenu;
 
     // The items whose text or enabled state depends on which tab was clicked. The rest are
@@ -40,9 +57,39 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _tabSaveItem;
     private MenuFlyoutItem? _tabReloadItem;
     private MenuFlyoutItem? _tabCloseOthersItem;
+    private MenuFlyoutItem? _tabCloseRightItem;
+    private MenuFlyoutItem? _tabReopenItem;
     private MenuFlyoutItem? _tabRevealItem;
-    private MenuFlyoutItem? _tabCopyPathItem;
     private MenuFlyoutItem? _tabPrintItem;
+
+    /// <summary>
+    /// The Copy submenu and the four rows in it.
+    ///
+    /// A submenu rather than four siblings: four is where one earns its hover, and a context
+    /// menu that spends four of its rows on variations of copying reads as a menu about the
+    /// clipboard rather than about the document.
+    /// </summary>
+    private MenuFlyoutSubItem? _tabCopyMenu;
+
+    private MenuFlyoutItem? _tabCopyNameItem;
+    private MenuFlyoutItem? _tabCopyRelativeItem;
+    private MenuFlyoutItem? _tabCopyPathItem;
+    private MenuFlyoutItem? _tabCopyLinkItem;
+
+    /// <summary>The tab the menu was opened on, captured for the Copy items.</summary>
+    private DocumentTabViewModel? _clickedTab;
+
+    /// <summary>
+    /// The folder a relative path is measured from: where the document that was in front sat
+    /// when the menu opened, *before* the right-click selected the tab under the pointer.
+    ///
+    /// This is the whole of what makes Copy Relative Path mean anything. Right-clicking a tab
+    /// selects it — that is what lets every other item here use the same active-document command
+    /// the File menu uses — so by the time an item is chosen the clicked tab is the active one,
+    /// and a path measured from "the active document" would be that document relative to itself.
+    /// What the user wants is the path to write into the document they were already editing.
+    /// </summary>
+    private string? _tabMenuRelativeTo;
 
     /// <summary>
     /// The read-only tick. Its own field type because <see cref="ToggleMenuFlyoutItem"/> is a
@@ -111,6 +158,11 @@ public sealed partial class MainWindow
         }
 
         e.Handled = true;
+
+        // Both captured before the selection moves. See _tabMenuRelativeTo for why the order
+        // of these two lines is the feature rather than an incidental.
+        _clickedTab = tab;
+        _tabMenuRelativeTo = ViewModel.ActiveDocumentFolder;
 
         ViewModel.OnTabSelectedByUser(tab);
 
@@ -216,29 +268,57 @@ public sealed partial class MainWindow
         menu.Items.Add(_tabPrintItem);
         menu.Items.Add(new MenuFlyoutSeparator());
 
+        // Reveal and copy sit above the closing group rather than below it, which is where
+        // they used to be. Two reasons, and the second is the stronger. A menu's last group is
+        // the one a slipped pointer lands in, so it should not be the destructive one - which
+        // is where Explorer, Chrome and VS Code all put theirs. And since the menu bar's File
+        // menu gave these two up, this is the only place in the app they can be reached, so
+        // burying them under four ways to close things had them furthest from the pointer at
+        // exactly the moment they became load-bearing.
+        //
+        // Neither raises a dialog, so both take no part in the focus dance below: the flyout's
+        // Closed hands the keyboard back for them, as it does for a dismissal.
+        _tabRevealItem = new MenuFlyoutItem { Text = "Open in File Explorer" };
+        _tabRevealItem.Click += (_, _) => ViewModel.RevealInFolderCommand.Execute(null);
+
+        menu.Items.Add(_tabRevealItem);
+        menu.Items.Add(BuildTabCopyMenu());
+        menu.Items.Add(new MenuFlyoutSeparator());
+
         _tabCloseOthersItem = Item(
             "Close Other Tabs",
             null,
             () => ViewModel.CloseOtherTabsCommand.ExecuteAsync(null));
 
+        // The one people actually reach for: a chain of documents opened while following
+        // something through, done with, and wanted gone without taking the tabs to the left
+        // that the chain started from. Below Close Other Tabs rather than above it, so the
+        // three read from blunt to precise in the order Chrome, Visual Studio and VS Code
+        // have taught.
+        _tabCloseRightItem = Item(
+            "Close Tabs to the Right",
+            null,
+            () => ViewModel.CloseTabsToTheRightCommand.ExecuteAsync(null));
+
         menu.Items.Add(Item("Close Tab", "Ctrl+W", () => ViewModel.CloseTabCommand.ExecuteAsync(null)));
         menu.Items.Add(_tabCloseOthersItem);
+        menu.Items.Add(_tabCloseRightItem);
         menu.Items.Add(Item(
             "Close All Tabs",
             "Ctrl+Shift+W",
             () => ViewModel.CloseAllTabsCommand.ExecuteAsync(null)));
-        menu.Items.Add(new MenuFlyoutSeparator());
 
-        // The last two raise nothing, so they take no part in the focus dance below: the
-        // flyout's Closed hands the keyboard back for them, as it does for a dismissal.
-        _tabRevealItem = new MenuFlyoutItem { Text = "Open in File Explorer" };
-        _tabRevealItem.Click += (_, _) => ViewModel.RevealInFolderCommand.Execute(null);
+        // The undo of the four above it, and the reason it is in their group rather than in
+        // one of its own. It is also the one item here that answers about the workspace rather
+        // than about the clicked tab - see the note at the top of this file, which now says so.
+        // The strip is where you realize you closed the wrong thing and where your hand already
+        // is, which is why every browser carries it here too.
+        _tabReopenItem = Item(
+            "Reopen Closed Tab",
+            "Ctrl+Shift+T",
+            () => ViewModel.ReopenLastClosedTabCommand.ExecuteAsync(null));
 
-        _tabCopyPathItem = new MenuFlyoutItem { Text = "Copy Full Path" };
-        _tabCopyPathItem.Click += (_, _) => ViewModel.CopyPathCommand.Execute(null);
-
-        menu.Items.Add(_tabRevealItem);
-        menu.Items.Add(_tabCopyPathItem);
+        menu.Items.Add(_tabReopenItem);
 
         // Picking from the menu, or dismissing it, ends with the keyboard back in the
         // document. On Closed rather than on an item's Click, for the reason the document
@@ -279,6 +359,79 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// The Copy submenu: four ways to name the clicked document, from the shortest to the most
+    /// composed.
+    ///
+    /// The order is the order of usefulness in a markdown editor rather than of generality.
+    /// Name and Relative Path are what goes inside a link between two documents in the same
+    /// project, which is the common case; Full Path is what goes into a chat message or a bug
+    /// report; the markdown link is all of it written out.
+    ///
+    /// None of these goes through <see cref="RunTabActionAsync"/>. Copying raises no dialog, so
+    /// the flyout's Closed hands the keyboard back for them, exactly as it does for Open in File
+    /// Explorer above.
+    ///
+    /// Every one reads <see cref="_clickedTab"/> at click time rather than capturing a tab here.
+    /// These four items are built once and outlive every right-click - the same rule the pane
+    /// menus' suggestion slots follow, and for the same reason.
+    /// </summary>
+    private MenuFlyoutSubItem BuildTabCopyMenu()
+    {
+        var copy = new MenuFlyoutSubItem { Text = "Copy" };
+
+        _tabCopyNameItem = new MenuFlyoutItem { Text = "Name" };
+        _tabCopyNameItem.Click += (_, _) => CopyClickedTab(tab =>
+            tab.Document.DisplayName, "Name copied");
+
+        _tabCopyRelativeItem = new MenuFlyoutItem { Text = "Relative Path" };
+        _tabCopyRelativeItem.Click += (_, _) => CopyClickedTab(tab =>
+            MainViewModel.RelativeLink(_tabMenuRelativeTo, tab.Document.DisplayPath), "Relative path copied");
+
+        _tabCopyPathItem = new MenuFlyoutItem { Text = "Full Path" };
+        _tabCopyPathItem.Click += (_, _) => CopyClickedTab(tab => tab.Document.DisplayPath, "Path copied");
+
+        _tabCopyLinkItem = new MenuFlyoutItem { Text = "as Markdown Link" };
+        _tabCopyLinkItem.Click += (_, _) => CopyClickedTab(MarkdownLinkFor, "Markdown link copied");
+
+        copy.Items.Add(_tabCopyNameItem);
+        copy.Items.Add(_tabCopyRelativeItem);
+        copy.Items.Add(_tabCopyPathItem);
+        copy.Items.Add(new MenuFlyoutSeparator());
+        copy.Items.Add(_tabCopyLinkItem);
+
+        _tabCopyMenu = copy;
+
+        return copy;
+    }
+
+    /// <summary>
+    /// A finished markdown link to the clicked document, relative to the one that was in front.
+    ///
+    /// Null when there is no relative path to be had, rather than falling back to an absolute
+    /// one: a link to <c>C:/Users/...</c> works on exactly one machine, and writing one into a
+    /// document that is about to be shared is worse than the command being unavailable. The row
+    /// is grayed for that case anyway - this is the belt to that braces.
+    /// </summary>
+    private string? MarkdownLinkFor(DocumentTabViewModel tab) =>
+        MainViewModel.RelativeLink(_tabMenuRelativeTo, tab.Document.DisplayPath) is { } relative
+            ? $"[{MainViewModel.LinkTitleFor(tab)}]({MainViewModel.LinkTarget(relative)})"
+            : null;
+
+    /// <summary>
+    /// Runs one of the Copy items against whatever tab the menu was opened on.
+    ///
+    /// The tab is read from the field here rather than captured when the item was built, for the
+    /// reason <see cref="BuildTabCopyMenu"/> gives.
+    /// </summary>
+    private void CopyClickedTab(Func<DocumentTabViewModel, string?> value, string announcement)
+    {
+        if (_clickedTab is { } tab)
+        {
+            ViewModel.CopyForTab(value(tab), announcement);
+        }
+    }
+
+    /// <summary>
     /// Fits the menu to the tab it was opened on.
     ///
     /// Enabled state is read off the tab's own snapshot rather than left to each command's
@@ -298,17 +451,25 @@ public sealed partial class MainWindow
             || _tabReloadItem is null
             || _tabReadOnlyItem is null
             || _tabCloseOthersItem is null
+            || _tabCloseRightItem is null
+            || _tabReopenItem is null
             || _tabRevealItem is null
+            || _tabCopyMenu is null
+            || _tabCopyNameItem is null
+            || _tabCopyRelativeItem is null
             || _tabCopyPathItem is null
+            || _tabCopyLinkItem is null
             || _tabPrintItem is null)
         {
             return;
         }
 
         // Named, because this menu belongs to one tab rather than to "the document". The full
-        // name, never the tab's shortened one - the shortening exists because a tab is a fixed
-        // width, and a menu is not.
-        _tabSaveItem.Text = $"Save \"{tab.Title}\"";
+        // name rather than the tab's shortened one - the shortening exists because a tab is a
+        // fixed width - but capped all the same, because a menu is not unbounded either and a
+        // hundred-character file name would draw a flyout wider than the display. Cut through
+        // the middle by the same helper the tabs use, so a shortened name reads alike in both.
+        _tabSaveItem.Text = $"Save \"{TabTitleFitter.Clamp(tab.Title, MaximumNamedTitle)}\"";
 
         // The read-only half is not decoration here: this item does not go through the Save
         // command's CanExecute, so without it a marked document would offer a Save that the
@@ -336,11 +497,44 @@ public sealed partial class MainWindow
 
         _tabCloseOthersItem.IsEnabled = ViewModel.Tabs.Count > 1;
 
+        // Read off the strip rather than from the command, for the reason this method exists:
+        // the clicked tab knows where it is sooner than the view model does. Mirrors
+        // CanCloseTabsToTheRight.
+        int position = ViewModel.Tabs.IndexOf(tab);
+
+        _tabCloseRightItem.IsEnabled = position >= 0 && position < ViewModel.Tabs.Count - 1;
+
+        // The only item here that is not about the clicked tab, so it is the only one whose
+        // enabled state comes straight off its command.
+        _tabReopenItem.IsEnabled = ViewModel.ReopenLastClosedTabCommand.CanExecute(null);
+
         // Nothing to reveal or copy until the document has been written somewhere. Grayed
         // rather than dropped, so the menu keeps one shape whichever tab it is opened on and
         // its items do not move under the pointer.
         _tabRevealItem.IsEnabled = !tab.IsUntitled;
+        _tabCopyMenu.IsEnabled = !tab.IsUntitled;
+        _tabCopyNameItem.IsEnabled = !tab.IsUntitled;
         _tabCopyPathItem.IsEnabled = !tab.IsUntitled;
+
+        // The two relative rows need a second thing the other two do not: somewhere to be
+        // relative *to*. There is no relative path from an unsaved document, and none at all
+        // between two files on different drives - so rather than quietly handing back an
+        // absolute path from a command that promised a relative one, both rows go gray and say
+        // why. See MainViewModel.RelativeLink.
+        bool relative = !tab.IsUntitled
+            && MainViewModel.RelativeLink(_tabMenuRelativeTo, tab.Document.DisplayPath) is not null;
+
+        _tabCopyRelativeItem.IsEnabled = relative;
+        _tabCopyLinkItem.IsEnabled = relative;
+
+        string? why = relative
+            ? null
+            : _tabMenuRelativeTo is null
+                ? "The document you were in has not been saved, so there is nowhere to be relative to"
+                : "This document is on another drive, so there is no relative path between the two";
+
+        ToolTipService.SetToolTip(_tabCopyRelativeItem, why);
+        ToolTipService.SetToolTip(_tabCopyLinkItem, why);
 
         // Blank paper is not worth a sheet. The tab's own text rather than the view model's
         // HasContent, for the reason the rest of this method gives, and the same test

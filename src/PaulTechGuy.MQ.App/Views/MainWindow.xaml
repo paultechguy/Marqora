@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:PaulTechGuy.MQ.App.ViewModels"
     xmlns:controls="using:PaulTechGuy.MQ.App.Controls"
+    xmlns:views="using:PaulTechGuy.MQ.App.Views"
     mc:Ignorable="d">
 
     <!--
@@ -142,8 +143,80 @@
                             ToolTipService.ToolTip="All open documents"
                             AutomationProperties.Name="All open documents">
                         <FontIcon Glyph="&#xE712;" Style="{StaticResource MqIconStyle}" />
+                        <!--
+                            A Flyout holding a list rather than a MenuFlyout, which is what this
+                            was. The change buys one thing: a row can carry its own close button,
+                            and clicking it leaves the list standing so several documents can go
+                            in one opening. A MenuFlyoutItem has no content model to hang a second
+                            control on, and a MenuFlyout dismisses on any invoke, so neither half
+                            of that was reachable from where this started.
+
+                            What it costs is the implicit styling in Themes/Menus.xaml, which
+                            reached the old menu without being asked and does not reach a
+                            FlyoutPresenter. The padding and radius below restate it. That is the
+                            whole of the debt - the brushes are ThemeResource lookups resolved
+                            against this element's tree, which follows the theme the user chose
+                            rather than the operating system's; the trap Architecture.md records
+                            is a brush resolved in *code*, and there is none here.
+                        -->
                         <Button.Flyout>
-                            <MenuFlyout x:Name="TabListMenu" Placement="BottomEdgeAlignedRight" />
+                            <Flyout x:Name="TabListFlyout" Placement="BottomEdgeAlignedRight">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="4" />
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MaxWidth" Value="420" />
+                                        <Setter Property="MaxHeight" Value="520" />
+                                        <Setter Property="CornerRadius" Value="8" />
+                                        <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Disabled" />
+                                        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+
+                                <!--
+                                    SelectionMode None with ItemClick: picking a row is an action
+                                    rather than a selection, and a selected row left highlighted
+                                    behind a closed flyout would be claiming to remember something
+                                    it does not.
+                                -->
+                                <ListView x:Name="TabListView"
+                                          SelectionMode="None"
+                                          IsItemClickEnabled="True"
+                                          ItemClick="OnTabListItemClick">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DocumentTabViewModel">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!--
+                                                    DisplayTitle rather than Title: it carries the
+                                                    dirty, missing and changed marker, which is the
+                                                    same glyph the tab shows and the reason a row
+                                                    is worth reading rather than just clicking.
+                                                -->
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{x:Bind DisplayTitle, Mode=OneWay}"
+                                                           FontWeight="{x:Bind views:TabListRow.WeightFor(IsActive), Mode=OneWay}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           VerticalAlignment="Center" />
+
+                                                <Button Grid.Column="1"
+                                                        Style="{StaticResource MqCompactToolButtonStyle}"
+                                                        Click="OnTabListCloseClick"
+                                                        Tag="{x:Bind}"
+                                                        ToolTipService.ToolTip="{x:Bind views:TabListRow.CloseTooltipFor(Title), Mode=OneWay}"
+                                                        AutomationProperties.Name="{x:Bind views:TabListRow.CloseTooltipFor(Title), Mode=OneWay}">
+                                                    <FontIcon Glyph="&#xE711;" Style="{StaticResource MqIconStyle}" />
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Flyout>
                         </Button.Flyout>
                     </Button>
                 </Grid>
@@ -233,6 +306,18 @@
                          FontFamily="{ThemeResource MqMenuFontFamily}"
                          FontSize="{ThemeResource MqMenuFontSize}">
 
+                    <!--
+                        The bar runs File, Edit, View, Insert, Format, Tools, Help - the order
+                        Windows menus have used since CUA, and the one Office still ships. It
+                        used to run Format and Insert ahead of View, which read fine but cost a
+                        scan: a menu bar is found by position before it is read, and View sitting
+                        fifth is not where the hand goes.
+
+                        The Alt letters did not move with it. Alt+O is still Format and Alt+I is
+                        still Insert, because they are registered by name in RegisterAccelerators
+                        and in webshell/app.js rather than by position - so a keyboard habit
+                        survives the reorder and only the pointer has to learn anything.
+                    -->
                     <MenuBarItem x:Name="FileMenu" Title="File">
                         <MenuFlyoutItem Text="New Tab"
                                         Command="{x:Bind ViewModel.NewTabCommand}"
@@ -292,8 +377,6 @@
                                         Command="{x:Bind ViewModel.SaveAsCommand}"
                                         KeyboardAcceleratorTextOverride="Ctrl+Alt+S" />
 
-                        <MenuFlyoutSeparator />
-
                         <MenuFlyoutItem Text="Reload from Disk"
                                         Command="{x:Bind ViewModel.ReloadFromDiskCommand}"
                                         ToolTipService.ToolTip="Discard the buffer and reopen the file as it is on disk" />
@@ -313,6 +396,85 @@
 
                         <MenuFlyoutSeparator />
 
+                        <!--
+                            Getting the document out of the app, in one group: three file
+                            formats behind a submenu, the Folio pair, and paper.
+
+                            These four used to be split across two menus - Print here and the
+                            exports under Tools, on the reasoning that paper is a File idea and a
+                            produced file is a Tools idea. The reasoning holds up and the habit
+                            does not: Word, Acrobat, Affinity and every other Windows app that
+                            exports puts it on File, and a user who has been told otherwise still
+                            opens File first. Tools now holds what its name promises instead.
+
+                            Export is a submenu rather than three siblings so that absorbing five
+                            commands costs this menu two rows. The three inside keep their icons;
+                            the row itself has none, matching Open Recent above it.
+
+                            Open Folio is beside Share as Folio rather than inside Export because
+                            it is the other direction - it unpacks rather than produces - and it
+                            is still not on Open above, for the reason it never was: that picker
+                            offers markdown, a Folio is an .html file, and unpacking one writes a
+                            folder rather than opening a document.
+                        -->
+                        <MenuFlyoutSubItem Text="Export">
+                            <MenuFlyoutItem Text="Export to PDF..."
+                                            Command="{x:Bind ViewModel.ExportPdfCommand}"
+                                            ToolTipService.ToolTip="Export the preview as a PDF, exactly as it appears">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE749;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+
+                            <MenuFlyoutItem Text="Export to HTML..."
+                                            Command="{x:Bind ViewModel.ExportHtmlCommand}"
+                                            ToolTipService.ToolTip="Export as a single self-contained HTML file">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE943;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+
+                            <MenuFlyoutItem Text="Export to Word..."
+                                            Command="{x:Bind ViewModel.ExportWordCommand}"
+                                            ToolTipService.ToolTip="Export as a Word document with real styles, numbering and headings">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8A5;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+
+                        <MenuFlyoutItem Text="Share as Folio..."
+                                        Command="{x:Bind ViewModel.ShareFolioCommand}"
+                                        ToolTipService.ToolTip="Gather the open documents and every image they use into one shareable copy">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE72D;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Open Folio..."
+                                        Command="{x:Bind ViewModel.OpenFolioCommand}"
+                                        ToolTipService.ToolTip="Unpack a Folio back into its documents and images">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DA;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <!--
+                            Paper, below the three that produce files. It goes through the same
+                            print stylesheet an exported PDF does, so the editor pane stays out
+                            of it either way.
+                        -->
+                        <MenuFlyoutItem Text="Print..."
+                                        Command="{x:Bind ViewModel.PrintCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+P"
+                                        ToolTipService.ToolTip="Print the preview">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE749;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
                         <MenuFlyoutItem Text="Reopen Closed Tab"
                                         Command="{x:Bind ViewModel.ReopenLastClosedTabCommand}"
                                         KeyboardAcceleratorTextOverride="Ctrl+Shift+T"
@@ -329,33 +491,10 @@
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Open in File Explorer"
-                                        Command="{x:Bind ViewModel.RevealInFolderCommand}" />
-                        <MenuFlyoutItem Text="Copy Full Path"
-                                        Command="{x:Bind ViewModel.CopyPathCommand}" />
-
-                        <MenuFlyoutSeparator />
-
-                        <!--
-                            Paper, as opposed to the two exports under Tools, which produce
-                            files. It goes through the same print stylesheet an exported PDF
-                            does, so the editor pane stays out of it either way.
-                        -->
-                        <MenuFlyoutItem Text="Print..."
-                                        Command="{x:Bind ViewModel.PrintCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+P"
-                                        ToolTipService.ToolTip="Print the preview">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE749;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-
-                        <MenuFlyoutSeparator />
-
                         <!--
                             Directly above Exit, in its own group, where Windows has put
                             Options and Preferences since long before this app. Every setting
-                            the app has lives behind it, including the eight that are also on
+                            the app has lives behind it, including the ones that are also on
                             the View menu.
                         -->
                         <MenuFlyoutItem Text="Preferences..."
@@ -371,6 +510,15 @@
                         <MenuFlyoutItem Text="Exit"
                                         Command="{x:Bind ViewModel.ExitCommand}"
                                         KeyboardAcceleratorTextOverride="Alt+F4" />
+
+                        <!--
+                            Open in File Explorer and Copy Full Path are deliberately not here.
+                            Both are about the file behind the tab rather than about the
+                            document, both are on the tab's own right-click menu where that
+                            gesture already names one, and carrying them here as well pushed
+                            this menu past the height a flyout can use on a 1080p screen at the
+                            scaling Windows 11 picks by default. See MainWindow.TabContextMenu.cs.
+                        -->
                     </MenuBarItem>
 
                     <MenuBarItem x:Name="EditMenu" Title="Edit">
@@ -507,184 +655,238 @@
                                         IsEnabled="{x:Bind ViewModel.HasContent, Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+G" />
 
-                        <MenuFlyoutSeparator />
-
-                        <MenuFlyoutItem Text="Format Document"
-                                        Command="{x:Bind ViewModel.FormatDocumentCommand}"
-                                        KeyboardAcceleratorTextOverride="Shift+Alt+F"
-                                        ToolTipService.ToolTip="Tidy this document, or just the selected lines">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8A1;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-
-                        <MenuFlyoutItem Text="Format All Open Documents"
-                                        Command="{x:Bind ViewModel.FormatAllDocumentsCommand}"
-                                        ToolTipService.ToolTip="Tidy every open tab" />
-
-                        <MenuFlyoutItem Text="Format Markdown..."
-                                        Command="{x:Bind ViewModel.ShowFormatOptionsCommand}"
-                                        ToolTipService.ToolTip="Choose which tidy-up rules to apply" />
+                        <!--
+                            Format Document, Format All Open Documents and the options dialog
+                            behind them have moved to Tools. They were here because they act on
+                            the whole document rather than on a selection, which is an Edit
+                            idea - but three commands with "Format" in their names sitting one
+                            menu away from a menu called Format was a naming collision no
+                            amount of grouping could answer, and Tools was standing empty of
+                            anything a user would call a tool.
+                        -->
                     </MenuBarItem>
 
-                    <!--
-                        Every item here is enabled by HasDocument rather than HasContent:
-                        an empty new tab has no content, and pressing Ctrl+B in one is
-                        precisely how a document stops being empty.
+                    <MenuBarItem x:Name="ViewMenu" Title="View">
+                        <!--
+                            Nine rows, in three groups: what is on screen, how it is presented,
+                            and what color it is all painted.
 
-                        The accelerator text is display-only, as everywhere else in this
-                        menu. Real keys are registered once, in RegisterAccelerators, and
-                        again with Monaco, which owns them while the editor has focus.
-                    -->
-                    <!--
-                        Gated once, here, rather than on every item. Two writers to a
-                        MenuFlyoutItem's IsEnabled - a binding and the command's own
-                        CanExecute - race, and the binding wins whenever HasDocument next
-                        raises a notification, re-enabling an item whose command says no.
-                        CanExecute owns the items; this owns the menu.
-                    -->
-                    <MenuBarItem x:Name="FormatMenu"
-                                 Title="Format"
-                                 IsEnabled="{x:Bind ViewModel.CanFormat, Mode=OneWay}">
-                        <MenuFlyoutItem Text="Bold"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="Bold"
-                                        KeyboardAcceleratorTextOverride="Ctrl+B">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8DD;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                            It carried twenty-four until this pass, having become the place any
+                            new checkbox went because checkboxes were already here. At 32epx a
+                            row and 9 for a separator - see Themes/Menus.xaml - that came to
+                            roughly 848epx of flyout, and the work area on a 1080p screen at the
+                            125% scaling Windows 11 picks by default is about 826. The menu was
+                            scrolling, which hides items with no affordance at all.
 
-                        <MenuFlyoutItem Text="Italic"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="Italic"
-                                        KeyboardAcceleratorTextOverride="Ctrl+I">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8DB;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                            Three things left rather than moved into a submenu. Next Tab and
+                            Previous Tab are Ctrl+Tab and Ctrl+Shift+Tab, and the tab-list button
+                            in the title bar already lists every open document for the pointer.
+                            Reload Files Changed on Disk is a background policy set once, not
+                            something toggled while reading, so it lives on the Files page of
+                            Preferences alone. Close All Diagram Windows went to Tools.
 
-                        <MenuFlyoutItem Text="Strikethrough"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="Strikethrough"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+X" />
+                            The test for whether a toggle earns a row here: does it change what
+                            you are looking at, and would you reach for it more than once in a
+                            sitting? Everything below passes it.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Source"
+                                              IsChecked="{x:Bind ViewModel.IsSourceView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="Source"
+                                              KeyboardAcceleratorTextOverride="Alt+1" />
+                        <ToggleMenuFlyoutItem Text="Split"
+                                              IsChecked="{x:Bind ViewModel.IsSplitView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="SideBySide"
+                                              KeyboardAcceleratorTextOverride="Alt+2" />
+                        <ToggleMenuFlyoutItem Text="Preview"
+                                              IsChecked="{x:Bind ViewModel.IsPreviewView, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
+                                              CommandParameter="Preview"
+                                              KeyboardAcceleratorTextOverride="Alt+3" />
 
-                        <MenuFlyoutItem Text="Inline Code"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="InlineCode"
-                                        KeyboardAcceleratorTextOverride="Ctrl+`" />
+                        <!--
+                            The key and the item are the same command, so the accelerator
+                            text is the truth rather than an approximation of it. Showing the
+                            panel this way also puts the keyboard in it - the one place this
+                            differs from the toggles above - and Escape brings it back.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Outline"
+                                              IsChecked="{x:Bind ViewModel.ShowOutline, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleOutlineCommand}"
+                                              KeyboardAcceleratorTextOverride="Alt+4"
+                                              ToolTipService.ToolTip="List the document's headings beside it" />
 
-                        <MenuFlyoutSeparator />
+                        <!--
+                            Next to the outline because it is the other item here about
+                            headings, and because the two places it changes are the preview and
+                            that panel.
 
-                        <MenuFlyoutSubItem Text="Heading">
-                            <MenuFlyoutItem Text="Heading 1"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading1"
-                                            />
-                            <MenuFlyoutItem Text="Heading 2"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading2"
-                                            />
-                            <MenuFlyoutItem Text="Heading 3"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading3"
-                                            />
-                            <MenuFlyoutItem Text="Heading 4"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading4"
-                                            />
-                            <MenuFlyoutItem Text="Heading 5"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading5"
-                                            />
-                            <MenuFlyoutItem Text="Heading 6"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="Heading6"
-                                            />
+                            Named for the preference it answers to - "Number headings" on the
+                            Preview page.
 
-                            <MenuFlyoutSeparator />
+                            The only group in this menu that is not a preference: the checked
+                            row describes the document in front, and switching tabs moves it.
+                            See MainViewModel._numberingOverrides.
 
-                            <MenuFlyoutItem Text="Increase Level"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="HeadingIncrease"
-                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+]" />
-                            <MenuFlyoutItem Text="Decrease Level"
-                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                            CommandParameter="HeadingDecrease"
-                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+[" />
+                            Four rows rather than one check mark, because the thing a reader
+                            usually disagrees with someone else's document about is where the
+                            count starts, not whether to count at all. A document that writes
+                            "1.2 Scope" into its own heading text and starts at "##" is read
+                            correctly by moving the start down; standing the numbers down
+                            entirely is the answer only when nothing lines up.
 
-                            <MenuFlyoutSeparator />
+                            Headings here, sections in Tools. The two features used to be
+                            "Number Headings" and "Heading Numbers", which are the same two
+                            words in the other order for two permanently different things - one
+                            rewrites the file, this one only changes what is drawn. Splitting
+                            the noun is what keeps them apart at a glance; splitting the menu
+                            never did.
 
+                            Toggles rather than RadioMenuFlyoutItems, matching the Theme
+                            submenu in this same menu - the group is exclusive either way,
+                            because the view model only ever has one of the four true.
+                        -->
+                        <MenuFlyoutSubItem Text="Heading Numbers"
+                                           ToolTipService.ToolTip="Number this document's headings, for as long as its tab is open; the file is not changed">
                             <!--
-                                These two write into the markdown; View > Heading Numbers only
-                                changes what is shown. They live here rather than beside that
-                                submenu precisely so the two are not mistaken for each other -
-                                this menu is where a command that rewrites the document belongs,
-                                and the Heading submenu already collects the heading ones.
-
-                                The reason to want them at all is markdown that leaves Marqora:
-                                the preview, the exports and the printed page are numbered
-                                already, and a pull request or a wiki will not be.
+                                Alt+5 is a toggle and this row is not: the key turns the
+                                numbers off and back on again, while the row only turns them
+                                off. The text is here because off is where the key lands from
+                                everywhere else, and because a reader looking for the shortcut
+                                looks at the row that matches what they want.
                             -->
-                            <MenuFlyoutItem Text="Number Headings..."
-                                            Command="{x:Bind ViewModel.NumberHeadingsCommand}"
-                                            ToolTipService.ToolTip="Write section numbers into the markdown itself, so they travel with the text" />
-
-                            <MenuFlyoutItem Text="Remove Heading Numbers"
-                                            Command="{x:Bind ViewModel.RemoveHeadingNumbersCommand}"
-                                            ToolTipService.ToolTip="Take the author's hard-coded section numbers out of the heading text" />
+                            <ToggleMenuFlyoutItem Text="Off"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersOff, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="Off"
+                                                  KeyboardAcceleratorTextOverride="Alt+5"
+                                                  ToolTipService.ToolTip="Show this document's headings as the author wrote them; Alt+5 turns the numbers off and on again" />
+                            <ToggleMenuFlyoutItem Text="From Heading 1"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading1, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading1"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+1"
+                                                  ToolTipService.ToolTip="Count from the first heading level: 1, 1.1, 1.1.1" />
+                            <ToggleMenuFlyoutItem Text="From Heading 2"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading2, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading2"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+2"
+                                                  ToolTipService.ToolTip="Count from the second heading level, leaving the document's title unnumbered" />
+                            <ToggleMenuFlyoutItem Text="From Heading 3"
+                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading3, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
+                                                  CommandParameter="FromHeading3"
+                                                  KeyboardAcceleratorTextOverride="Alt+Shift+3"
+                                                  ToolTipService.ToolTip="Count from the third heading level, leaving the two above it unnumbered" />
                         </MenuFlyoutSubItem>
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Bullet List"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="BulletList"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+8">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8FD;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <!--
+                            Six rows of zoom behind one. The active-pane trio and the
+                            both-panes trio are the same three commands asked of one target or
+                            two, which is exactly the shape a submenu is for, and none of the
+                            six is reached often enough by pointer to mind the extra hover -
+                            Ctrl+Plus, Ctrl+Minus and Ctrl+0 are how zoom is actually used, and
+                            holding Shift with the wheel is how both panes are.
+                        -->
+                        <MenuFlyoutSubItem Text="Zoom">
+                            <MenuFlyoutItem Text="Zoom In"
+                                            Command="{x:Bind ViewModel.ZoomInCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Plus" />
+                            <MenuFlyoutItem Text="Zoom Out"
+                                            Command="{x:Bind ViewModel.ZoomOutCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Minus" />
+                            <MenuFlyoutItem Text="Reset Zoom"
+                                            Command="{x:Bind ViewModel.ZoomResetCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+0" />
 
-                        <MenuFlyoutItem Text="Numbered List"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="NumberedList"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+7" />
+                            <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Task List"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="TaskList"
-                                        />
+                            <MenuFlyoutItem Text="Zoom In Both Panes"
+                                            Command="{x:Bind ViewModel.ZoomBothInCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+Plus" />
+                            <MenuFlyoutItem Text="Zoom Out Both Panes"
+                                            Command="{x:Bind ViewModel.ZoomBothOutCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+Minus" />
+                            <MenuFlyoutItem Text="Reset Zoom Both Panes"
+                                            Command="{x:Bind ViewModel.ZoomBothResetCommand}"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+0" />
+                        </MenuFlyoutSubItem>
 
                         <!--
-                            Depth rather than marker, and the only two items here that do nothing
-                            at all off a list: indenting a paragraph in markdown makes a code
-                            block. Tab and Shift+Tab do the same thing inside a list; they cannot
-                            be shown here because Tab is the focus key and XAML would take it.
+                            How the panes present the document, as opposed to what they are
+                            showing. Synchronize Scrolling belongs with these four rather than
+                            on its own: it is a property of how the split is drawn, and the
+                            toolbar carries a dedicated toggle for it, so this is the
+                            discoverable route rather than the fast one.
                         -->
-                        <MenuFlyoutItem Text="Increase Indent"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="IncreaseIndent"
-                                        KeyboardAcceleratorTextOverride="Ctrl+]">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE291;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutSubItem Text="Display">
+                            <ToggleMenuFlyoutItem Text="Word Wrap"
+                                                  IsChecked="{x:Bind ViewModel.WordWrapEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleWordWrapCommand}"
+                                                  KeyboardAcceleratorTextOverride="Alt+Z" />
+                            <ToggleMenuFlyoutItem Text="Line Numbers"
+                                                  IsChecked="{x:Bind ViewModel.LineNumbersEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleLineNumbersCommand}" />
+                            <ToggleMenuFlyoutItem Text="Show Whitespace"
+                                                  IsChecked="{x:Bind ViewModel.ShowWhitespaceEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleShowWhitespaceCommand}" />
+                            <ToggleMenuFlyoutItem Text="Wrapped Line Markers"
+                                                  IsChecked="{x:Bind ViewModel.ShowWrapGlyphEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleWrapGlyphCommand}" />
+                            <ToggleMenuFlyoutItem Text="Synchronize Scrolling"
+                                                  IsChecked="{x:Bind ViewModel.ScrollSyncEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleScrollSyncCommand}" />
+                        </MenuFlyoutSubItem>
 
-                        <MenuFlyoutItem Text="Decrease Indent"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="DecreaseIndent"
-                                        KeyboardAcceleratorTextOverride="Ctrl+[">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE290;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <!--
+                            The three that underline something and tick the scrollbar, which is
+                            a different question from how the text is drawn: these are the app
+                            telling you about the document rather than presenting it. Word calls
+                            this Review and puts it on the bar; at three items it is a submenu
+                            here instead.
 
-                        <MenuFlyoutItem Text="Blockquote"
-                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
-                                        CommandParameter="Blockquote"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+." />
+                            All three name the scrollbar tick as well as the underline: the ticks are
+                            what a reader sees from across a document, and nothing else in the app says
+                            what a color means. Hue words rather than values, because the mq-tick tokens
+                            in webshell/app.css differ between the two themes. Re-tune one of those to a
+                            different hue and these three strings start lying.
+                        -->
+                        <MenuFlyoutSubItem Text="Proofing">
+                            <ToggleMenuFlyoutItem Text="Show Problems"
+                                                  IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
+                                                  ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax; amber ticks in the scrollbar, gray for missing alt text" />
+                            <ToggleMenuFlyoutItem Text="{x:Bind ViewModel.BlockedImagesMenuText, Mode=OneWay}"
+                                                  IsChecked="{x:Bind ViewModel.BlockedImagesEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleBlockedImagesCommand}"
+                                                  ToolTipService.ToolTip="Underline pictures that will not appear in the preview; violet ticks in the scrollbar" />
+                            <ToggleMenuFlyoutItem Text="Spell Check"
+                                                  IsChecked="{x:Bind ViewModel.SpellCheckEnabled, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.ToggleSpellCheckCommand}"
+                                                  KeyboardAcceleratorTextOverride="F7"
+                                                  ToolTipService.ToolTip="Underline words that are not in the dictionary; red ticks in the scrollbar" />
+                        </MenuFlyoutSubItem>
 
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutSubItem Text="Theme">
+                            <ToggleMenuFlyoutItem Text="Use System Setting"
+                                                  IsChecked="{x:Bind ViewModel.IsSystemTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="System" />
+                            <ToggleMenuFlyoutItem Text="Light"
+                                                  IsChecked="{x:Bind ViewModel.IsLightTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="Light" />
+                            <ToggleMenuFlyoutItem Text="Dark"
+                                                  IsChecked="{x:Bind ViewModel.IsDarkTheme, Mode=OneWay}"
+                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
+                                                  CommandParameter="Dark" />
+                        </MenuFlyoutSubItem>
                     </MenuBarItem>
 
                     <!--
@@ -760,264 +962,239 @@
                         <!--
                             Filled from the catalogue each time one opens, so a file dropped
                             into the snippets folder appears without restarting anything.
+
+                            Callouts is a sibling of the other two rather than a submenu inside
+                            Snippet, which is where it used to be: Insert, Snippet, Callouts,
+                            Note is three levels of cascade, and two is the ceiling. Five
+                            children is a properly sized submenu in its own right, and
+                            "Callouts" is a word somebody goes looking for - which is the other
+                            half of what makes a submenu worth its hover.
                         -->
+                        <MenuFlyoutSubItem x:Name="FormatCalloutMenu" Text="Callouts" />
                         <MenuFlyoutSubItem x:Name="FormatDiagramMenu" Text="Diagram" />
                         <MenuFlyoutSubItem x:Name="FormatSnippetMenu" Text="Snippet" />
                     </MenuBarItem>
 
-                    <MenuBarItem x:Name="ViewMenu" Title="View">
-                        <ToggleMenuFlyoutItem Text="Source"
-                                              IsChecked="{x:Bind ViewModel.IsSourceView, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
-                                              CommandParameter="Source"
-                                              KeyboardAcceleratorTextOverride="Alt+1" />
-                        <ToggleMenuFlyoutItem Text="Split"
-                                              IsChecked="{x:Bind ViewModel.IsSplitView, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
-                                              CommandParameter="SideBySide"
-                                              KeyboardAcceleratorTextOverride="Alt+2" />
-                        <ToggleMenuFlyoutItem Text="Preview"
-                                              IsChecked="{x:Bind ViewModel.IsPreviewView, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.SetViewModeCommand}"
-                                              CommandParameter="Preview"
-                                              KeyboardAcceleratorTextOverride="Alt+3" />
+                    <!--
+                        Every item here is enabled by HasDocument rather than HasContent:
+                        an empty new tab has no content, and pressing Ctrl+B in one is
+                        precisely how a document stops being empty.
+
+                        The accelerator text is display-only, as everywhere else in this
+                        menu. Real keys are registered once, in RegisterAccelerators, and
+                        again with Monaco, which owns them while the editor has focus.
+                    -->
+                    <!--
+                        Gated once, here, rather than on every item. Two writers to a
+                        MenuFlyoutItem's IsEnabled - a binding and the command's own
+                        CanExecute - race, and the binding wins whenever HasDocument next
+                        raises a notification, re-enabling an item whose command says no.
+                        CanExecute owns the items; this owns the menu.
+                    -->
+                    <MenuBarItem x:Name="FormatMenu"
+                                 Title="Format"
+                                 IsEnabled="{x:Bind ViewModel.CanFormat, Mode=OneWay}">
+                        <MenuFlyoutItem Text="Bold"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Bold"
+                                        KeyboardAcceleratorTextOverride="Ctrl+B">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DD;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Italic"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Italic"
+                                        KeyboardAcceleratorTextOverride="Ctrl+I">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8DB;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Strikethrough"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Strikethrough"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+X" />
+
+                        <MenuFlyoutItem Text="Inline Code"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="InlineCode"
+                                        KeyboardAcceleratorTextOverride="Ctrl+`" />
 
                         <MenuFlyoutSeparator />
 
                         <!--
-                            The key and the item are the same command, so the accelerator
-                            text is the truth rather than an approximation of it. Showing the
-                            panel this way also puts the keyboard in it - the one place this
-                            differs from the toggles above - and Escape brings it back.
+                            Applying a level, and nothing else. The two commands that write
+                            numbers into the heading text used to sit at the foot of this
+                            submenu and are on Tools now: they rewrite the file, which is a
+                            different kind of act from marking a line as a heading, and a
+                            submenu named Heading is not where a user looks for a document-wide
+                            rewrite.
                         -->
-                        <ToggleMenuFlyoutItem Text="Outline"
-                                              IsChecked="{x:Bind ViewModel.ShowOutline, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleOutlineCommand}"
-                                              KeyboardAcceleratorTextOverride="Alt+4"
-                                              ToolTipService.ToolTip="List the document's headings beside it" />
+                        <MenuFlyoutSubItem Text="Heading">
+                            <MenuFlyoutItem Text="Heading 1"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading1"
+                                            />
+                            <MenuFlyoutItem Text="Heading 2"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading2"
+                                            />
+                            <MenuFlyoutItem Text="Heading 3"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading3"
+                                            />
+                            <MenuFlyoutItem Text="Heading 4"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading4"
+                                            />
+                            <MenuFlyoutItem Text="Heading 5"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading5"
+                                            />
+                            <MenuFlyoutItem Text="Heading 6"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="Heading6"
+                                            />
 
-                        <!--
-                            Next to the outline because it is the other item here about
-                            headings, and because the two places it changes are the preview and
-                            that panel.
+                            <MenuFlyoutSeparator />
 
-                            Named for the preference it answers to - "Number headings" on the
-                            Preview page - and it reads as a pair with Line Numbers further
-                            down this same menu.
-
-                            The only group in this menu that is not a preference: the checked
-                            row describes the document in front, and switching tabs moves it.
-                            See MainViewModel._numberingOverrides.
-
-                            Four rows rather than one check mark, because the thing a reader
-                            usually disagrees with someone else's document about is where the
-                            count starts, not whether to count at all. A document that writes
-                            "1.2 Scope" into its own heading text and starts at "##" is read
-                            correctly by moving the start down; standing the numbers down
-                            entirely is the answer only when nothing lines up.
-
-                            Toggles rather than RadioMenuFlyoutItems, matching the Theme
-                            submenu in this same menu - the group is exclusive either way,
-                            because the view model only ever has one of the four true.
-                        -->
-                        <MenuFlyoutSubItem Text="Heading Numbers"
-                                           ToolTipService.ToolTip="Number this document's headings, for as long as its tab is open; the file is not changed">
-                            <!--
-                                Alt+5 is a toggle and this row is not: the key turns the
-                                numbers off and back on again, while the row only turns them
-                                off. The text is here because off is where the key lands from
-                                everywhere else, and because a reader looking for the shortcut
-                                looks at the row that matches what they want.
-                            -->
-                            <ToggleMenuFlyoutItem Text="Off"
-                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersOff, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
-                                                  CommandParameter="Off"
-                                                  KeyboardAcceleratorTextOverride="Alt+5"
-                                                  ToolTipService.ToolTip="Show this document's headings as the author wrote them; Alt+5 turns the numbers off and on again" />
-                            <ToggleMenuFlyoutItem Text="From Heading 1"
-                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading1, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
-                                                  CommandParameter="FromHeading1"
-                                                  KeyboardAcceleratorTextOverride="Alt+Shift+1"
-                                                  ToolTipService.ToolTip="Count from the first heading level: 1, 1.1, 1.1.1" />
-                            <ToggleMenuFlyoutItem Text="From Heading 2"
-                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading2, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
-                                                  CommandParameter="FromHeading2"
-                                                  KeyboardAcceleratorTextOverride="Alt+Shift+2"
-                                                  ToolTipService.ToolTip="Count from the second heading level, leaving the document's title unnumbered" />
-                            <ToggleMenuFlyoutItem Text="From Heading 3"
-                                                  IsChecked="{x:Bind ViewModel.IsHeadingNumbersFromHeading3, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetHeadingNumbersCommand}"
-                                                  CommandParameter="FromHeading3"
-                                                  KeyboardAcceleratorTextOverride="Alt+Shift+3"
-                                                  ToolTipService.ToolTip="Count from the third heading level, leaving the two above it unnumbered" />
+                            <MenuFlyoutItem Text="Increase Level"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="HeadingIncrease"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+]" />
+                            <MenuFlyoutItem Text="Decrease Level"
+                                            Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                            CommandParameter="HeadingDecrease"
+                                            KeyboardAcceleratorTextOverride="Ctrl+Shift+[" />
                         </MenuFlyoutSubItem>
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Next Tab"
-                                        Command="{x:Bind ViewModel.NextTabCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Tab" />
-                        <MenuFlyoutItem Text="Previous Tab"
-                                        Command="{x:Bind ViewModel.PreviousTabCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Tab" />
+                        <MenuFlyoutItem Text="Bullet List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="BulletList"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+8">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8FD;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
 
-                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Numbered List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="NumberedList"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+7" />
 
-                        <MenuFlyoutItem Text="Zoom In"
-                                        Command="{x:Bind ViewModel.ZoomInCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Plus" />
-                        <MenuFlyoutItem Text="Zoom Out"
-                                        Command="{x:Bind ViewModel.ZoomOutCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Minus" />
-                        <MenuFlyoutItem Text="Reset Zoom"
-                                        Command="{x:Bind ViewModel.ZoomResetCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+0" />
+                        <MenuFlyoutItem Text="Task List"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="TaskList"
+                                        />
 
-                        <MenuFlyoutSeparator />
-
-                        <MenuFlyoutItem Text="Zoom In Both Panes"
-                                        Command="{x:Bind ViewModel.ZoomBothInCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Plus" />
-                        <MenuFlyoutItem Text="Zoom Out Both Panes"
-                                        Command="{x:Bind ViewModel.ZoomBothOutCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+Minus" />
-                        <MenuFlyoutItem Text="Reset Zoom Both Panes"
-                                        Command="{x:Bind ViewModel.ZoomBothResetCommand}"
-                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+0" />
-
-                        <MenuFlyoutSeparator />
-
-                        <ToggleMenuFlyoutItem Text="Word Wrap"
-                                              IsChecked="{x:Bind ViewModel.WordWrapEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleWordWrapCommand}"
-                                              KeyboardAcceleratorTextOverride="Alt+Z" />
-                        <ToggleMenuFlyoutItem Text="Line Numbers"
-                                              IsChecked="{x:Bind ViewModel.LineNumbersEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleLineNumbersCommand}" />
-                        <ToggleMenuFlyoutItem Text="Show Whitespace"
-                                              IsChecked="{x:Bind ViewModel.ShowWhitespaceEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleShowWhitespaceCommand}" />
+                        <MenuFlyoutItem Text="Blockquote"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="Blockquote"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+." />
 
                         <!--
-                            These three name the scrollbar tick as well as the underline: the ticks are
-                            what a reader sees from across a document, and nothing else in the app says
-                            what a color means. Hue words rather than values, because the mq-tick tokens
-                            in webshell/app.css differ between the two themes. Re-tune one of those to a
-                            different hue and these three strings start lying.
+                            Depth rather than marker, which is why they are last in the group
+                            rather than beside the three list kinds: Blockquote moved above them
+                            so the four commands that choose a marker read as one run and these
+                            two as another. Also the only two items here that do nothing at all
+                            off a list - indenting a paragraph in markdown makes a code block.
+
+                            Tab and Shift+Tab do the same thing inside a list; they cannot be
+                            shown here because Tab is the focus key and XAML would take it.
                         -->
-                        <ToggleMenuFlyoutItem Text="Show Problems"
-                                              IsChecked="{x:Bind ViewModel.DiagnosticsEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleDiagnosticsCommand}"
-                                              ToolTipService.ToolTip="Underline broken links, missing images and untidy syntax; amber ticks in the scrollbar, gray for missing alt text" />
-                        <ToggleMenuFlyoutItem Text="{x:Bind ViewModel.BlockedImagesMenuText, Mode=OneWay}"
-                                              IsChecked="{x:Bind ViewModel.BlockedImagesEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleBlockedImagesCommand}"
-                                              ToolTipService.ToolTip="Underline pictures that will not appear in the preview; violet ticks in the scrollbar" />
-                        <ToggleMenuFlyoutItem Text="Spell Check"
-                                              IsChecked="{x:Bind ViewModel.SpellCheckEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleSpellCheckCommand}"
-                                              KeyboardAcceleratorTextOverride="F7"
-                                              ToolTipService.ToolTip="Underline words that are not in the dictionary; red ticks in the scrollbar" />
-                        <ToggleMenuFlyoutItem Text="Wrapped Line Markers"
-                                              IsChecked="{x:Bind ViewModel.ShowWrapGlyphEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleWrapGlyphCommand}" />
+                        <MenuFlyoutItem Text="Increase Indent"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="IncreaseIndent"
+                                        KeyboardAcceleratorTextOverride="Ctrl+]">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE291;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
 
-                        <MenuFlyoutSeparator />
-
-                        <ToggleMenuFlyoutItem Text="Synchronize Scrolling"
-                                              IsChecked="{x:Bind ViewModel.ScrollSyncEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleScrollSyncCommand}" />
-
-                        <ToggleMenuFlyoutItem Text="Reload Files Changed on Disk"
-                                              IsChecked="{x:Bind ViewModel.ReloadOnExternalChangeEnabled, Mode=OneWay}"
-                                              Command="{x:Bind ViewModel.ToggleReloadOnExternalChangeCommand}"
-                                              ToolTipService.ToolTip="Take an outside change straight away when the tab has no unsaved edits" />
-
-                        <MenuFlyoutSeparator />
-
-                        <MenuFlyoutItem Text="Close All Diagram Windows"
-                                        Command="{x:Bind ViewModel.CloseAllDiagramWindowsCommand}"
-                                        ToolTipService.ToolTip="Close every diagram opened from the preview" />
-
-                        <MenuFlyoutSeparator />
-
-                        <MenuFlyoutSubItem Text="Theme">
-                            <ToggleMenuFlyoutItem Text="Use System Setting"
-                                                  IsChecked="{x:Bind ViewModel.IsSystemTheme, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
-                                                  CommandParameter="System" />
-                            <ToggleMenuFlyoutItem Text="Light"
-                                                  IsChecked="{x:Bind ViewModel.IsLightTheme, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
-                                                  CommandParameter="Light" />
-                            <ToggleMenuFlyoutItem Text="Dark"
-                                                  IsChecked="{x:Bind ViewModel.IsDarkTheme, Mode=OneWay}"
-                                                  Command="{x:Bind ViewModel.SetThemeCommand}"
-                                                  CommandParameter="Dark" />
-                        </MenuFlyoutSubItem>
+                        <MenuFlyoutItem Text="Decrease Indent"
+                                        Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
+                                        CommandParameter="DecreaseIndent"
+                                        KeyboardAcceleratorTextOverride="Ctrl+[">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE290;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                     </MenuBarItem>
 
                     <!--
-                        Everything here turns the document into a file outside the app.
-                        Printing is the other half of that thought, but paper is a File
-                        menu idea, so it sits there instead; copying lives on the Edit menu
-                        with the other clipboard commands.
+                        Things done to the whole document at once, rather than at the caret.
+
+                        This menu used to hold the three exports and the Folio pair, which are
+                        now on File where every other Windows application puts them - so the
+                        name was describing a menu with no tools in it while the actual tools
+                        were spread across Edit and a submenu of Format. Both groups have come
+                        back here.
+
+                        Not gated on the MenuBarItem the way Format and Insert are: each command
+                        below answers for itself through CanExecute, and adding a binding on top
+                        of that is the race those two menus' notes describe.
                     -->
                     <MenuBarItem x:Name="ToolsMenu" Title="Tools">
-                        <MenuFlyoutItem Text="Export to PDF..."
-                                        Command="{x:Bind ViewModel.ExportPdfCommand}"
-                                        ToolTipService.ToolTip="Export the preview as a PDF, exactly as it appears">
+                        <MenuFlyoutItem Text="Format Document"
+                                        Command="{x:Bind ViewModel.FormatDocumentCommand}"
+                                        KeyboardAcceleratorTextOverride="Shift+Alt+F"
+                                        ToolTipService.ToolTip="Tidy this document, or just the selected lines">
                             <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE749;" />
+                                <FontIcon Glyph="&#xE8A1;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
 
-                        <MenuFlyoutItem Text="Export to HTML..."
-                                        Command="{x:Bind ViewModel.ExportHtmlCommand}"
-                                        ToolTipService.ToolTip="Export as a single self-contained HTML file">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE943;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Format All Open Documents"
+                                        Command="{x:Bind ViewModel.FormatAllDocumentsCommand}"
+                                        ToolTipService.ToolTip="Tidy every open tab" />
 
-                        <MenuFlyoutItem Text="Export to Word..."
-                                        Command="{x:Bind ViewModel.ExportWordCommand}"
-                                        ToolTipService.ToolTip="Export as a Word document with real styles, numbering and headings">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8A5;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <!--
+                            Renamed from "Format Markdown...". It opens a page of switches and
+                            runs nothing by itself, and a name in the imperative beside two
+                            commands that really do format something read as a third one.
+                        -->
+                        <MenuFlyoutItem Text="Formatting Options..."
+                                        Command="{x:Bind ViewModel.ShowFormatOptionsCommand}"
+                                        ToolTipService.ToolTip="Choose which tidy-up rules Format Document applies" />
 
                         <MenuFlyoutSeparator />
 
                         <!--
-                            Below the three exports rather than beside them: those take the
-                            document in front and turn it into one page, and this takes the
-                            whole set of open documents and everything they reference.
+                            These two write into the markdown; View, Heading Numbers only changes
+                            what is shown. They were "Number Headings..." and "Remove Heading
+                            Numbers", one menu away from a submenu called "Heading Numbers" -
+                            the same two words in the other order for the opposite kind of act.
+                            Sections here and headings there is what tells them apart in the
+                            half-second somebody spends reading a menu row.
+
+                            The reason to want them at all is markdown that leaves Marqora: the
+                            preview, the exports and the printed page are numbered already, and
+                            a pull request or a wiki will not be.
                         -->
-                        <MenuFlyoutItem Text="Share as Folio..."
-                                        Command="{x:Bind ViewModel.ShareFolioCommand}"
-                                        ToolTipService.ToolTip="Gather the open documents and every image they use into one shareable copy">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE72D;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Number Sections..."
+                                        Command="{x:Bind ViewModel.NumberHeadingsCommand}"
+                                        ToolTipService.ToolTip="Write section numbers into the markdown itself, so they travel with the text" />
+
+                        <MenuFlyoutItem Text="Remove Section Numbers"
+                                        Command="{x:Bind ViewModel.RemoveHeadingNumbersCommand}"
+                                        ToolTipService.ToolTip="Take the author's hard-coded section numbers out of the heading text" />
+
+                        <MenuFlyoutSeparator />
 
                         <!--
-                            The other direction, and beside the one it undoes. Not on the File
-                            menu with Open: that picker offers markdown, a Folio is an .html
-                            file, and unpacking writes a folder rather than opening a document.
+                            The weakest placement in this bar, and knowingly so: it manages
+                            windows, and there is no Window menu to hold it. Here rather than on
+                            View because it does not change what any pane is showing, and the
+                            diagrams it closes were opened from the preview by a command that
+                            acts on the document.
                         -->
-                        <MenuFlyoutItem Text="Open Folio..."
-                                        Command="{x:Bind ViewModel.OpenFolioCommand}"
-                                        ToolTipService.ToolTip="Unpack a Folio back into its documents and images">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE8DA;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Close All Diagram Windows"
+                                        Command="{x:Bind ViewModel.CloseAllDiagramWindowsCommand}"
+                                        ToolTipService.ToolTip="Close every diagram opened from the preview" />
                     </MenuBarItem>
 
                     <!--
@@ -1029,8 +1206,7 @@
                     <MenuBarItem x:Name="HelpMenu" Title="Help">
                         <!--
                             First, because it is where somebody who does not know the app yet
-                            should start. No ellipsis: it opens a tab rather than a dialog, the
-                            same as Open Log Folder below.
+                            should start. No ellipsis: it opens a tab rather than a dialog.
                         -->
                         <MenuFlyoutItem Text="Welcome to Marqora"
                                         Command="{x:Bind ViewModel.ShowWelcomeDocumentCommand}"
@@ -1052,9 +1228,16 @@
 
                         <MenuFlyoutSeparator />
 
-                        <MenuFlyoutItem Text="Open Log Folder" Click="OnOpenLogFolder" />
-
-                        <MenuFlyoutSeparator />
+                        <!--
+                            Renamed from "Check for Updates", which was the one label in this
+                            bar that promised something the app deliberately never does. Marqora
+                            cannot say whether an update exists - it never asks - so the item
+                            names the place the answer is kept rather than claiming to have
+                            fetched it. No ellipsis: it opens a page in the browser.
+                        -->
+                        <MenuFlyoutItem Text="Marqora Releases Online"
+                                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                        ToolTipService.ToolTip="Open the Marqora releases page in your browser" />
 
                         <!--
                             An outline heart rather than the filled one: this is a marker,
@@ -1068,18 +1251,18 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
 
-                        <!--
-                            No ellipsis: it opens a page in the browser rather than a dialog,
-                            the same as Open Log Folder above. Marqora cannot say whether an
-                            update exists - it never asks - so the item offers to take you
-                            where the answer is rather than claiming to have it.
-                        -->
-                        <MenuFlyoutItem Text="Check for Updates"
-                                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                                        ToolTipService.ToolTip="Open the Marqora releases page in your browser" />
+                        <MenuFlyoutSeparator />
 
                         <MenuFlyoutItem Text="About Marqora"
                                         Command="{x:Bind ViewModel.AboutCommand}" />
+
+                        <!--
+                            Open Log Folder has moved to the Advanced page of Preferences, beside
+                            "Open settings folder". The two answer the same question - where does
+                            the app keep its own files - and having one on Help and the other
+                            behind Preferences meant neither was where the other had taught you
+                            to look.
+                        -->
                     </MenuBarItem>
                 </MenuBar>
 

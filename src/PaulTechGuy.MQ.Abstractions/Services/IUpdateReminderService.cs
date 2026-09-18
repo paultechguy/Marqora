@@ -59,7 +59,7 @@ public interface IUpdateReminderService
     /// Records that the reader has just been pointed at the releases page, restarting the
     /// interval.
     ///
-    /// Called when the reminder appears, and when Help, Check for Updates is used. Showing it
+    /// Called when the reminder appears, and when Help, Marqora Releases Online is used. Showing it
     /// is what spends it: a reminder that stayed due because it was ignored would be back
     /// again tomorrow, which is the difference between a reminder and a nag.
     /// </summary>

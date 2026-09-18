@@ -63,7 +63,7 @@ internal sealed class HeadingNumberDialog : ContentDialog
         _headingLevels = headingLevels;
         _renumbering = renumbering;
 
-        Title = renumbering ? "Renumber Headings" : "Number Headings";
+        Title = renumbering ? "Renumber Sections" : "Number Sections";
         PrimaryButtonText = renumbering ? "Renumber" : "Number";
         CloseButtonText = "Cancel";
         DefaultButton = ContentDialogButton.Primary;

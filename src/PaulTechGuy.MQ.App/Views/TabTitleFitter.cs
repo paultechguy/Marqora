@@ -150,6 +150,24 @@ internal static class TabTitleFitter
         Ruler.FontWeight = MeasuringWeight;
     }
 
+    /// <summary>
+    /// Middle-ellipsis a name to at most <paramref name="maximum"/> characters, for somewhere
+    /// that has no pixel width to measure against.
+    ///
+    /// The tab menu's Save item is the caller: it names the document, and a menu is not a fixed
+    /// width the way a tab is - but it is not unbounded either, and a hundred-character file
+    /// name draws a flyout wider than the display. Characters rather than pixels because there
+    /// is no TextBlock to measure until the flyout is already up, and because the cap only has
+    /// to be generous rather than exact.
+    ///
+    /// Same middle cut as the tabs, through the same <see cref="Build"/>, so a shortened name
+    /// reads the same wherever it is shown.
+    /// </summary>
+    public static string Clamp(string full, int maximum) =>
+        string.IsNullOrEmpty(full) || full.Length <= maximum
+            ? full
+            : Build(full, Math.Max(MinimumKept, maximum));
+
     private static string Shorten(string full, double available)
     {
         if (Width(full) <= available)

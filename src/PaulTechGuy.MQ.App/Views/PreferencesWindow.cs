@@ -1080,7 +1080,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(NumberField("Wrap paragraphs at", _wrapColumn, EditorPage, "columns"));
 
         panel.Children.Add(Note(
-            "The width Format Document wraps to, and the width Format Markdown opens on. It "
+            "The width Format Document wraps to, and the width Formatting Options opens on. It "
             + "only takes effect when the formatter's \"Re-wrap paragraphs\" rule is on, "
             + "which it is not by default: re-wrapping rewrites every line of a paragraph."));
 
@@ -1167,8 +1167,8 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "Scope\". It is a reading decision and nothing is saved: View → Heading "
             + "Numbers turns them back on for any document you disagree about.\n\n"
             + "To write numbers into the markdown itself - for text going somewhere that will "
-            + "not number it, such as a pull request or a wiki - use Format → Heading → "
-            + "Number Headings. That one does change the file, and Ctrl+Z takes it back."));
+            + "not number it, such as a pull request or a wiki - use Tools → Number Sections. "
+            + "That one does change the file, and Ctrl+Z takes it back."));
 
         return panel;
     }
@@ -1243,6 +1243,15 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(NumberField("Keep logs for", _logRetention, AdvancedPage, "days"));
         panel.Children.Add(Note("Zero keeps every log. Takes effect the next time Marqora starts."));
 
+        // Moved here from Help, Open Log Folder, beside the settings folder further down this
+        // page. Both answer where Marqora keeps its own files, and having one on a menu and
+        // the other behind Preferences meant neither was where the other had taught you to
+        // look. See PreferencesViewModel.OpenLogFolderAsync.
+        var openLogs = new Button { Content = "Open log folder", Style = MqStyles.CommandButton };
+        openLogs.Click += (_, _) => ApplyAsync(_vm.OpenLogFolderAsync);
+
+        panel.Children.Add(openLogs);
+
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("UPDATES"));
         panel.Children.Add(NumberField(
@@ -1254,7 +1263,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "fetched, nothing is sent, and Marqora never learns which version is current.\n\n"
             + "The reminder waits for a pause in your typing, and appearing is what resets the "
             + "clock - it will not come back sooner because you ignored it. Zero never reminds "
-            + "you. Help, Check for Updates opens the same page at any time."));
+            + "you. Help, Marqora Releases Online opens the same page at any time."));
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SETTINGS FILE"));

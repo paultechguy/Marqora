@@ -76,7 +76,7 @@ public static class HeadingNumberDetector
         ///
         /// This is the reading that survives an edit. Insert a section into a numbered document
         /// and every number below it is now one out, so counting every heading agrees with almost
-        /// nothing and the document reads as unnumbered — which would make Number Headings
+        /// nothing and the document reads as unnumbered — which would make Number Sections
         /// prepend a second number to each heading instead of renumbering it. Renumbering after
         /// an insert is the main reason the command exists, so the detector has to survive
         /// exactly the state the document is in when someone reaches for it.

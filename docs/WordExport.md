@@ -1,6 +1,6 @@
 # Word export
 
-`Tools > Export to Word...` writes a `.docx` that Word treats as native: its own heading styles,
+`File > Export > Export to Word...` writes a `.docx` that Word treats as native: its own heading styles,
 its own numbering, a navigation pane that works, an updatable contents field, and page setup of
 the reader's choosing. The intent is not a screenshot of the preview in a Word wrapper — it is a
 document that looks like somebody wrote it in Word, carrying everything the markdown said.

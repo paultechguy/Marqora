@@ -30,7 +30,7 @@ namespace PaulTechGuy.MQ.Formatting;
 /// Nothing is reflowed, re-fenced or retabbed on the way through. The result is the input with
 /// prefixes and link targets spliced, so a document's line endings, its trailing spaces and its
 /// indentation come out exactly as they went in. That matters more than it sounds: this runs on
-/// a file the user did not necessarily write, and a command called "Remove Heading Numbers" that
+/// a file the user did not necessarily write, and a command called "Remove Section Numbers" that
 /// also normalized line endings would be a command nobody could safely run.
 /// </summary>
 public static class HeadingNumberRewriter

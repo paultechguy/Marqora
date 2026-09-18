@@ -1,6 +1,6 @@
 ﻿# Marqora vNext - What's New
 
-## A document you only meant to read
+## Mark a Document Read-Only
 
 Some documents are open to be consulted rather than written — a specification, a style guide,
 somebody else's README. Right-click its tab and tick **Read-Only**, or use `File > Read-Only`,
@@ -19,7 +19,7 @@ them somewhere else and the copy arrives unmarked. Closing the tab offers the sa
 This is Marqora's own mark, not the read-only tick in the file's Windows properties, which it
 never touches. Rename or move the file outside Marqora and the mark is left behind.
 
-## A callout takes the text you were looking at
+## Callouts Wrap the Selected Text
 
 A callout is almost always made *out of* something already written, and inserting one used to drop
 an empty one above it and leave you to retype the sentence. `Insert > Callouts` now takes what you
@@ -32,7 +32,7 @@ select the table first and it wraps.
 Your own snippets can do it too: `$SEL` in a snippet file is where the captured text goes, beside
 the `$0` that has always said where the caret lands.
 
-## Where a document's numbers start
+## Per-Document Heading Number Levels
 
 `Alt+5` has always let you drop Marqora's numbers from one document without touching the
 preference or any other tab — the answer to someone else's file that writes "1.2 Scope" into the
@@ -51,17 +51,17 @@ a document to start at `##`, press `Alt+5` to read the author's numbering on its
 again and you are back at `##` rather than somewhere you have to set again. Nothing here is
 written to your file or to your preferences, and it lasts as long as the tab does.
 
-## Heading numbers in the file itself
+## Number and Remove Section Numbers
 
 Everything Marqora produces is numbered already — the preview, the outline, Print, the PDF, HTML
 and Word exports, Copy as Rich Text — so numbers written into the markdown are for text that
 *leaves* Marqora: a pull request, a wiki, an issue, an email, anywhere nothing will number it on
-the way. `Format > Heading > Number Headings` writes them in, starting from whichever level the
-document is already showing, so the file ends up reading the way the screen did a moment earlier.
+the way. `Tools > Number Sections` writes them in, starting from whichever level the document is
+already showing, so the file ends up reading the way the screen did a moment earlier.
 
 It replaces rather than adds, which makes it a renumber. Insert a section into the middle of a
 numbered document, run it, and everything below it moves along one instead of being fixed by hand.
-`Remove Heading Numbers` is the other direction, for taking someone else's hard-coded numbers out
+`Remove Section Numbers` is the other direction, for taking someone else's hard-coded numbers out
 so Marqora's own can do the job — and it leaves alone any heading whose leading number was never a
 section number, so a "2026 Budget" sitting between "2" and "4" keeps its year.
 
@@ -70,6 +70,44 @@ to match and a hand-written table of contents keeps working; a link from another
 at the old anchor, and both commands say so before they run. A document that numbers its own
 headings now opens with Marqora's numbering already stood down rather than showing both sets at
 once, which `Preferences > Preview` can turn off. `Ctrl+Z` takes any of it back in one step.
+
+## Rearranged Menus
+
+The bar now runs File, Edit, View, Insert, Format, Tools, Help — the order Windows menus have
+used since long before Marqora, and the one Office still ships. View had been sitting fifth
+behind Format and Insert, which is not where a hand goes looking for it. The keys are
+unchanged: `Alt+O` is still Format and `Alt+I` still Insert, so nothing you press has moved, only
+where the pointer goes.
+
+`View` had grown to twenty-four rows and was long enough to scroll on a 1080p screen at the
+scaling Windows picks by default, which hides items with no sign that anything is hidden. It is
+nine now. Word wrap, line numbers, whitespace, wrapped-line markers and synchronized scrolling
+are together under `View > Display`; the three that underline something and tick the scrollbar —
+problems, blocked images, spell check — are under `View > Proofing`; and the six zoom commands
+are under `View > Zoom`. `F7`, `Alt+Z` and the zoom keys are untouched. Next Tab and Previous Tab
+have left the menu, `Ctrl+Tab` and the tab list in the title bar being the two ways anyone
+actually uses them, and **Reload files changed on disk** is now set in `Preferences > Files`
+alone, being a policy you choose once rather than something to toggle while reading.
+
+The three exports and the two Folio commands have moved to `File`, where Word, Acrobat and every
+other Windows application has always kept them: `File > Export` holds PDF, HTML and Word, with
+**Share as Folio...** and **Open Folio...** beside **Print...** below it. That leaves `Tools`
+holding what its name promises — Format Document, Format All Open Documents, the formatting
+options behind them, and the two commands that write section numbers into the file. **Open in
+File Explorer** and **Copy Full Path** are now on the tab's own right-click menu only, which is
+where that gesture already names a document.
+
+`Insert` has gained **Callouts** beside **Diagram** and **Snippet**, so a callout is two steps
+from the bar instead of three.
+
+Four commands have been renamed. What each of them does is unchanged. **Number Headings** and
+**Remove Heading Numbers** are **Number Sections** and **Remove Section Numbers**, so the two
+commands that write into your file no longer read as the same two words as `View > Heading
+Numbers`, which only changes what is drawn. **Format Markdown** is **Formatting Options**, because
+it opens a page of switches rather than formatting anything. **Check for Updates** is now
+**Marqora Releases Online**: Marqora has never checked for an update and still does not, and the
+old name promised otherwise. **Open Log Folder** has moved from `Help` to
+`Preferences > Advanced`, beside the button that opens the settings folder.
 
 ## Fixes
 

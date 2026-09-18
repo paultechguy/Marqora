@@ -74,13 +74,13 @@ public enum HeadingNumbering
 /// <summary>
 /// What sits between a hard-coded section number and the words after it.
 ///
-/// Only reaches a document that has been through <c>Number Headings</c>, which writes the
+/// Only reaches a document that has been through <c>Number Sections</c>, which writes the
 /// numbers into the markdown itself. It has nothing to say about the numbers the preview and
 /// the outline panel show — those are written by HeadingNumberPass and are not text the user
 /// owns, so there is nothing there to choose a separator for.
 ///
 /// <see cref="TwoSpaces"/> is member zero and the default because it is what the preview
-/// already inserts, which makes <c>Number Headings</c> on an untouched document produce a file
+/// already inserts, which makes <c>Number Sections</c> on an untouched document produce a file
 /// that reads the way the screen did a moment earlier. The rest are here because a document
 /// that has to match a house style, or a tool at the other end, usually differs in exactly this
 /// one character.

@@ -105,7 +105,7 @@ public sealed record FormatOptions
     /// Column to wrap at when <see cref="ReflowParagraphs"/> is on.
     ///
     /// This is the width Preferences | Editor sets, and the one Format Document uses. The
-    /// Format Markdown dialog starts from it but deliberately does not write back to it - a
+    /// Formatting Options dialog starts from it but deliberately does not write back to it - a
     /// width typed there is for that one reformat. See ShowFormatOptionsAsync, which is where
     /// that exception is made and explained.
     /// </summary>

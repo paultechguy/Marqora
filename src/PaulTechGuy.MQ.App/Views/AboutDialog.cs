@@ -58,7 +58,7 @@ internal sealed class AboutDialog : ContentDialog
     /// the app is doing and has no business recomputing it.
     /// </param>
     /// <param name="checkForUpdates">
-    /// Runs the same command as Help, Check for Updates, so opening the releases page from
+    /// Runs the same command as Help, Marqora Releases Online, so opening the releases page from
     /// here restarts the reminder's clock exactly as it does from the menu. Passed in rather
     /// than reached for, because this dialog is built with no view model of its own.
     /// </param>

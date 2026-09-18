@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
@@ -118,21 +117,24 @@ public sealed partial class MainWindow : Window
         // Link, the table and the diagrams live on the Insert menu, and what is left is the one
         // thing on this bar the user extends themselves.
         SnippetMenu.Opening += (_, _) => FillSnippetMenu(SnippetMenu.Items, SnippetGroup.General);
-        TabListMenu.Opening += (_, _) => RebuildTabListMenu();
+        TabListFlyout.Opening += (_, _) => RebuildTabList();
 
         // Picking a document from the list ends with the keyboard in it. On Closed rather
-        // than on the item's Click: a MenuFlyout holds focus while it is open and hands it
+        // than on the row's click: a flyout holds focus while it is open and hands it
         // back as it closes, which would undo a restore done any earlier. Dismissing the
-        // menu without picking anything lands here too, and the document is still the right
+        // list without picking anything lands here too, and the document is still the right
         // place for the keyboard to be - it is where the click came from.
-        TabListMenu.Closed += (_, _) => ViewModel.RestoreDocumentFocus();
+        //
+        // Closing a row with its own X does not reach here, because the flyout stays up; the
+        // close path restores focus for itself the way every other close does.
+        TabListFlyout.Closed += (_, _) => ViewModel.RestoreDocumentFocus();
 
         // The overflow copy is a submenu, which has no Opening of its own, so it is filled when
         // the overflow menu opens. It gets its own items: a MenuFlyoutItem cannot belong to two
         // parents at once.
         OverflowMenu.Opening += (_, _) => FillSnippetMenu(OverflowSnippet.Items, SnippetGroup.General);
 
-        // The Format menu's are MenuFlyoutSubItems, which have no Opening event, so they
+        // The Insert menu's three are MenuFlyoutSubItems, which have no Opening event, so they
         // are refreshed when the window is activated instead. That covers the way a
         // snippet actually gets added: switch to Explorer, drop a file in, come back.
         // Whether the clipboard holds text is refreshed on the same gesture, and for the
@@ -1074,41 +1076,60 @@ public sealed partial class MainWindow : Window
     /// tab order is already available on the strip itself. Names are shown in full — the
     /// shortening on the tabs exists because a tab is a fixed width, and a menu is not.
     /// </summary>
-    private void RebuildTabListMenu()
+    private void RebuildTabList() =>
+        TabListView.ItemsSource = ViewModel.Tabs
+            .OrderBy(tab => tab.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+    /// <summary>
+    /// A row was picked: go to that document and put the list away.
+    ///
+    /// Closing the flyout by hand, which a MenuFlyout used to do for itself. The keyboard is
+    /// handed back by the flyout's own Closed, below, exactly as it was before.
+    /// </summary>
+    private void OnTabListItemClick(object sender, ItemClickEventArgs e)
     {
-        TabListMenu.Items.Clear();
-
-        IOrderedEnumerable<DocumentTabViewModel> ordered = ViewModel.Tabs
-            .OrderBy(tab => tab.Title, StringComparer.CurrentCultureIgnoreCase);
-
-        foreach (DocumentTabViewModel tab in ordered)
-        {
-            var entry = new MenuFlyoutItem { Text = tab.DisplayTitle, Tag = tab };
-
-            // The open document is the one you are least likely to want, so it is marked
-            // rather than hidden: it says where you are in a list that is not in tab order.
-            if (ReferenceEquals(tab, ViewModel.ActiveTab))
-            {
-                entry.FontWeight = FontWeights.SemiBold;
-            }
-
-            ToolTipService.SetToolTip(entry, tab.Tooltip);
-            entry.Click += OnTabListEntryClick;
-            TabListMenu.Items.Add(entry);
-        }
-
-        if (TabListMenu.Items.Count == 0)
-        {
-            TabListMenu.Items.Add(new MenuFlyoutItem { Text = "No documents open", IsEnabled = false });
-        }
-    }
-
-    private void OnTabListEntryClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: DocumentTabViewModel tab })
+        if (e.ClickedItem is DocumentTabViewModel tab)
         {
             ViewModel.OnTabSelectedByUser(tab);
         }
+
+        TabListFlyout.Hide();
+    }
+
+    /// <summary>
+    /// The close button on one row.
+    ///
+    /// The list deliberately stays up. This is the surface somebody opens when the strip has
+    /// overflowed and they want three of twelve documents gone, and making them reopen the list
+    /// between each one would be answering a different question. The rows are rebuilt in place
+    /// instead, so the one that just went takes its row with it.
+    ///
+    /// The flyout does go away when the button that opened it is about to: the button is bound
+    /// to HasMultipleTabs, and a flyout left anchored to a control that has just been collapsed
+    /// is a popup with nothing underneath it.
+    /// </summary>
+    private async void OnTabListCloseClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: DocumentTabViewModel tab })
+        {
+            return;
+        }
+
+        // Ahead of the close rather than after it: once the tab is gone the count has already
+        // dropped, and this has to answer about what the strip will look like next.
+        bool lastPair = ViewModel.Tabs.Count <= 2;
+
+        await ViewModel.CloseTabAsync(tab).ConfigureAwait(true);
+
+        if (lastPair)
+        {
+            TabListFlyout.Hide();
+
+            return;
+        }
+
+        RebuildTabList();
     }
 
     /// <summary>
@@ -1822,17 +1843,9 @@ public sealed partial class MainWindow : Window
 
     // -------------------------------------------------------------------- help
 
-    private async void OnOpenLogFolder(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            await Launcher.LaunchFolderPathAsync(_paths.LogDirectory);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not open the log folder.");
-        }
-    }
+    // Open Log Folder used to be handled here, for the Help menu item of that name. It is on
+    // the Advanced page of Preferences now, beside the settings folder - see
+    // PreferencesViewModel.OpenLogFolderAsync.
 
     /// <summary>
     /// Handled here rather than through a Command binding on the menu item.
@@ -2300,7 +2313,10 @@ public sealed partial class MainWindow : Window
     /// one word naming two different sets is worse than duplication, so the code block became a
     /// button and the table a menu item, and what is left here is the catalogue alone.
     /// </summary>
-    private void FillSnippetMenu(IList<MenuFlyoutItemBase> items, SnippetGroup group)
+    private void FillSnippetMenu(
+        IList<MenuFlyoutItemBase> items,
+        SnippetGroup group,
+        bool nestCallouts = true)
     {
         items.Clear();
 
@@ -2343,12 +2359,21 @@ public sealed partial class MainWindow : Window
         // "Callouts" would look, rather than being pinned somewhere that has to be learned.
         //
         // Filled now, in the same breath as the menu holding it. A MenuFlyoutSubItem has no
-        // opening event, which is the same reason the two on the Format menu are refilled
+        // opening event, which is the same reason the two on the Insert menu are refilled
         // when the window is activated.
-        var callouts = new MenuFlyoutSubItem { Text = "Callouts" };
+        //
+        // Nested for the two toolbar surfaces and not for the Insert menu, which carries its
+        // own Callouts submenu beside Diagram and Snippet. Reaching a callout from the menu
+        // bar would otherwise be Insert, Snippet, Callouts, Note - three levels of cascade,
+        // where two is the ceiling. The toolbar dropdown starts a level lower, so nesting
+        // there costs the same hover the menu bar could not afford.
+        if (nestCallouts)
+        {
+            var callouts = new MenuFlyoutSubItem { Text = "Callouts" };
 
-        FillSnippetMenu(callouts.Items, SnippetGroup.Callout);
-        shipped.Add(callouts);
+            FillSnippetMenu(callouts.Items, SnippetGroup.Callout);
+            shipped.Add(callouts);
+        }
 
         // Name order for the general list, and the same comparison the catalogue sorts the
         // user's files with, so the two halves of the menu read alike. The curated groups
@@ -2449,8 +2474,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        FillSnippetMenu(FormatCalloutMenu.Items, SnippetGroup.Callout);
         FillSnippetMenu(FormatDiagramMenu.Items, SnippetGroup.Diagram);
-        FillSnippetMenu(FormatSnippetMenu.Items, SnippetGroup.General);
+
+        // nestCallouts: false - the callouts are the sibling submenu filled on the line
+        // above, and carrying them here as well would list every one of them twice.
+        FillSnippetMenu(FormatSnippetMenu.Items, SnippetGroup.General, nestCallouts: false);
 
         ViewModel.RefreshClipboardState();
         PlaceStartupFocus();

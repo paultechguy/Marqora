@@ -443,7 +443,7 @@ public sealed record AppSettings
     public HeadingNumbering HeadingNumbering { get; set; }
 
     /// <summary>
-    /// What <c>Number Headings</c> writes between a number and the words after it.
+    /// What <c>Number Sections</c> writes between a number and the words after it.
     ///
     /// Unlike <see cref="HeadingNumbering"/> this one does reach the document, because that
     /// command writes real text into the markdown. Member zero is two spaces, which is what the
@@ -592,7 +592,7 @@ public sealed record AppSettings
 
     /// <summary>
     /// When the reader was last pointed at the releases page, either by the reminder appearing
-    /// or by Help, Check for Updates. State rather than a preference, and listed as such in
+    /// or by Help, Marqora Releases Online. State rather than a preference, and listed as such in
     /// <see cref="SessionKeys"/>.
     ///
     /// It records what this installation has done, so carrying it to another machine would

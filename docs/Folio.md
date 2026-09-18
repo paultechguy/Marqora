@@ -5,8 +5,8 @@ document records what a Folio is, why it is one HTML file rather than an archive
 the obvious shortcuts were tried on paper and rejected — because most of them look correct until
 you ask what the person on the other end actually receives.
 
-> **Where this has got to.** All of it. `Tools > Share as Folio...` offers the three forms, and
-> `Tools > Open Folio...` - or dropping one on the window - takes a reading copy apart again into
+> **Where this has got to.** All of it. `File > Share as Folio...` offers the three forms, and
+> `File > Open Folio...` - or dropping one on the window - takes a reading copy apart again into
 > its documents and images. `PaulTechGuy.MQ.Folio` holds the planner, the writers, the link
 > rewriting, the payload and the unpacker, with 50 tests against a real temporary tree.
 >
@@ -18,7 +18,7 @@ you ask what the person on the other end actually receives.
 
 ## The problem
 
-`Tools > Export to HTML...` already writes one self-contained file, and it is good: images become
+`File > Export > Export to HTML...` already writes one self-contained file, and it is good: images become
 data URIs, the stylesheets and the KaTeX fonts travel inside it, and the README is entitled to
 say it survives being emailed on its own.
 

@@ -23,7 +23,7 @@ public static class ProjectLinks
     public const string LicenceUrl = RepositoryUrl + "/blob/master/LICENSE";
 
     /// <summary>
-    /// The releases page, which is where the update reminder and Help, Check for Updates send
+    /// The releases page, which is where the update reminder and Help, Marqora Releases Online send
     /// the reader.
     ///
     /// Built from the repository URL for the same reason as <see cref="LicenceUrl"/>. GitHub

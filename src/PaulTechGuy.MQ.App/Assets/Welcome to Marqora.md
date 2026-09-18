@@ -1,4 +1,4 @@
-﻿# Welcome to Marqora
+# Welcome to Marqora
 
 **A modern Markdown workspace for Windows 11 — a real editor, a live preview, and
 everything in between.**
@@ -96,12 +96,12 @@ small style slips the formatter would fix.
 so a long document can be scanned for problems without being scrolled through. Click a tick to
 jump to it. The color says what kind of mark it is:
 
-| Tick   | What it means                                       | Switch it off with           |
-| ------ | --------------------------------------------------- | ---------------------------- |
-| Red    | A misspelled or repeated word                       | `View > Spell Check`         |
-| Amber  | A broken link, a missing image or a dead anchor     | `View > Show Problems`       |
-| Gray   | A picture with no alt text — incomplete, not broken | `View > Show Problems`       |
-| Violet | A picture that will not appear in the preview       | `View > Show Blocked Images` |
+| Tick   | What it means                                       | Switch it off with                      |
+| ------ | --------------------------------------------------- | --------------------------------------- |
+| Red    | A misspelled or repeated word                       | `View > Proofing > Spell Check`         |
+| Amber  | A broken link, a missing image or a dead anchor     | `View > Proofing > Show Problems`       |
+| Gray   | A picture with no alt text — incomplete, not broken | `View > Proofing > Show Problems`       |
+| Violet | A picture that will not appear in the preview       | `View > Proofing > Show Blocked Images` |
 
 Those four are Marqora's own. The editor adds ticks of its own too — for find matches while
 `Ctrl+F` is open, and for the other places the word at the cursor appears.
@@ -172,13 +172,13 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 
 ## Taking it elsewhere
 
-| Export                             | What you get                                                                      |
-| ---------------------------------- | --------------------------------------------------------------------------------- |
-| `Ctrl+Shift+C` — Copy as Rich Text | The formatted page on the clipboard, ready for Word, Outlook or Confluence        |
-| `Tools > Export to PDF...`         | A printed copy, with paper size, orientation and margins of your choosing         |
-| `Tools > Export to HTML...`        | One self-contained `.html` file — styles inlined, images embedded, fonts included |
-| `Tools > Export to Word...`        | A real `.docx` — Word's own heading styles, numbering, tables and footnotes       |
-| `Tools > Share as Folio...`        | Every open document *and* the images they use, gathered into one thing to send    |
+| Export                              | What you get                                                                      |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `Ctrl+Shift+C` — Copy as Rich Text  | The formatted page on the clipboard, ready for Word, Outlook or Confluence        |
+| `File > Export > Export to PDF...`  | A printed copy, with paper size, orientation and margins of your choosing         |
+| `File > Export > Export to HTML...` | One self-contained `.html` file — styles inlined, images embedded, fonts included |
+| `File > Export > Export to Word...` | A real `.docx` — Word's own heading styles, numbering, tables and footnotes       |
+| `File > Share as Folio...`          | Every open document *and* the images they use, gathered into one thing to send    |
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
@@ -233,7 +233,7 @@ instead is a clock: every thirty days a line appears in the status bar suggestin
 and clicking it hands the releases page to your browser. Nothing is fetched and nothing is
 sent. The reminder waits for a pause in your typing, and appearing is what resets it, so it
 will not come back sooner because you ignored it. Change the interval on the Advanced page of
-Preferences, or set it to zero and never see it. `Help > Check for Updates` opens the same
+Preferences, or set it to zero and never see it. `Help > Marqora Releases Online` opens the same
 page whenever you want it.
 
 ---
@@ -259,17 +259,17 @@ page whenever you want it.
 
 ## The shortcuts worth memorizing
 
-| Command                  | Keys                      | Command                        | Keys                |
-| ------------------------ | ------------------------- | ------------------------------ | ------------------- |
-| Open                     | `Ctrl+O`                  | Bold / italic                  | `Ctrl+B` / `Ctrl+I` |
-| Open folder              | `Ctrl+Shift+O`            | Link                           | `Ctrl+K`            |
-| Save / Save all          | `Ctrl+S` / `Ctrl+Shift+S` | Format document                | `Shift+Alt+F`       |
-| New tab / close tab      | `Ctrl+N` / `Ctrl+W`       | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
-| Source / split / preview | `Alt+1` `Alt+2` `Alt+3`   | Cheatsheet                     | `Ctrl+F1`           |
-| Show / hide the outline  | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`       |
-| Spell check on / off     | `F7`                      | Correct the word at the cursor | `Ctrl+.`            |
-| Zoom the active pane     | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`             |
-| Heading numbers, this tab | `Alt+5`                  | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3` |
+| Command                   | Keys                      | Command                        | Keys                            |
+| ------------------------- | ------------------------- | ------------------------------ | ------------------------------- |
+| Open                      | `Ctrl+O`                  | Bold / italic                  | `Ctrl+B` / `Ctrl+I`             |
+| Open folder               | `Ctrl+Shift+O`            | Link                           | `Ctrl+K`                        |
+| Save / Save all           | `Ctrl+S` / `Ctrl+Shift+S` | Format document                | `Shift+Alt+F`                   |
+| New tab / close tab       | `Ctrl+N` / `Ctrl+W`       | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
+| Source / split / preview  | `Alt+1` `Alt+2` `Alt+3`   | Cheatsheet                     | `Ctrl+F1`                       |
+| Show / hide the outline   | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`                   |
+| Spell check on / off      | `F7`                      | Correct the word at the cursor | `Ctrl+.`                        |
+| Zoom the active pane      | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`                         |
+| Heading numbers, this tab | `Alt+5`                   | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3`            |
 
 Those are the keys; the syntax is one more. `Ctrl+F1` opens the Markdown cheatsheet — every
 construct on this page and a few that are not, each one's markup sitting beside its result, with

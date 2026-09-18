@@ -19,6 +19,7 @@ using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Finding;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
+using PaulTechGuy.MQ.Markdown;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -297,7 +298,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public partial bool ScreenClipAvailable { get; set; }
 
     /// <summary>The selected tab. TabView binds this two-way.</summary>
+    ///
+    /// Close Tabs to the Right is answered from where this one sits in the strip rather than
+    /// from how many tabs there are, so it has to be re-asked whenever the selection moves and
+    /// not only when the count does - the last tab can gain a right-hand neighbour without the
+    /// count changing, by being dragged.
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CloseTabsToTheRightCommand))]
     public partial DocumentTabViewModel? ActiveTab { get; set; }
 
     /// <summary>
@@ -2106,6 +2113,57 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RestoreDocumentFocusAfterChrome();
     }
 
+    /// <summary>
+    /// Closes everything after the active tab, leaving it and everything before it alone.
+    ///
+    /// The one bulk close people actually reach for: a chain of documents opened while
+    /// following something through, finished with, and wanted gone without taking the tabs to
+    /// the left that the chain started from. Close Other Tabs is the blunt version of the same
+    /// intent and keeps its place beside this - it is the right answer when the tab worth
+    /// keeping is in the middle.
+    ///
+    /// Strip order rather than the order they were opened in, because the tabs can be dragged
+    /// and what "to the right" means is whatever the user is looking at.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCloseTabsToTheRight))]
+    private async Task CloseTabsToTheRightAsync()
+    {
+        if (ActiveTab is not { } keep)
+        {
+            return;
+        }
+
+        int from = Tabs.IndexOf(keep);
+
+        if (from < 0)
+        {
+            return;
+        }
+
+        // Materialized before the loop, like CloseTabsOtherThanActiveAsync: closing a tab
+        // removes it from the collection being walked.
+        foreach (DocumentTabViewModel tab in Tabs.Skip(from + 1).ToList())
+        {
+            // Cancel stops the run where it stands rather than skipping one and going on.
+            // Answering "no" to a document means "stop closing things", which is what the
+            // same prompt means everywhere else in this file.
+            if (!await ConfirmDiscardAsync(tab).ConfigureAwait(true))
+            {
+                return;
+            }
+
+            RecordClosedTab(tab);
+            _workspace.Close(tab.Id);
+        }
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    private bool CanCloseTabsToTheRight() =>
+        ActiveTab is { } active
+        && Tabs.IndexOf(active) is int index and >= 0
+        && index < Tabs.Count - 1;
+
     private async Task CloseTabsOtherThanActiveAsync()
     {
         if (ActiveTab is not { } keep)
@@ -3308,6 +3366,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         HasMultipleTabs = Tabs.Count > 1;
 
         CloseOtherTabsCommand.NotifyCanExecuteChanged();
+        CloseTabsToTheRightCommand.NotifyCanExecuteChanged();
         NextTabCommand.NotifyCanExecuteChanged();
         PreviousTabCommand.NotifyCanExecuteChanged();
     }
@@ -6356,6 +6415,110 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RestoreDocumentFocusAfterChrome();
     }
 
+    /// <summary>
+    /// The folder the active document sits in, or null when it has never been written.
+    ///
+    /// Read by the tab menu the moment it opens, *before* the clicked tab is selected, because
+    /// a relative path is measured from the document you are going to paste into rather than
+    /// the one you right-clicked. See MainWindow.TabContextMenu.cs.
+    /// </summary>
+    public string? ActiveDocumentFolder =>
+        string.IsNullOrEmpty(DocumentPath) ? null : Path.GetDirectoryName(DocumentPath);
+
+    /// <summary>
+    /// One document's path written relative to a folder, in the form a markdown link wants, or
+    /// null when there is no such thing.
+    ///
+    /// Null rather than a silent fall back to the absolute path. Two documents on different
+    /// drives have no relative path between them at all, and handing back <c>C:\...</c> from a
+    /// command called "Copy Relative Path" would put something on the clipboard that looks like
+    /// what was asked for and is not - which is worse than the command being unavailable.
+    ///
+    /// Forward slashes always. Markdown is read by browsers, and a backslash in a link target
+    /// is an escape character rather than a separator.
+    /// </summary>
+    public static string? RelativeLink(string? fromFolder, string? targetPath)
+    {
+        if (string.IsNullOrEmpty(fromFolder) || string.IsNullOrEmpty(targetPath))
+        {
+            return null;
+        }
+
+        string relative;
+
+        try
+        {
+            relative = Path.GetRelativePath(fromFolder, targetPath);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+
+        // GetRelativePath hands the target straight back when the two share no root, which is
+        // the different-drive case rather than a relative path that happens to look absolute.
+        return Path.IsPathRooted(relative) ? null : relative.Replace('\\', '/');
+    }
+
+    /// <summary>
+    /// What a link to this document should call it: its first heading, falling back to the file
+    /// name without its extension.
+    ///
+    /// The heading is what an author would have typed, and the stem is what never surprises
+    /// anyone. Taking the heading when there is one means the fallback is invisible whenever it
+    /// works and merely plainer when it does not - it is never wrong, only less good.
+    ///
+    /// <see cref="HeadingScanner"/> rather than a scan for a line starting with "#": it skips
+    /// fenced blocks and front matter, so a shell comment in an opening code sample is not
+    /// mistaken for the document's title. Any hard-coded section number comes off with Title.
+    /// </summary>
+    public static string LinkTitleFor(DocumentTabViewModel tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+
+        string[] lines = tab.Document.Text.Split('\n');
+
+        foreach (HeadingScanner.ScannedHeading heading in HeadingScanner.Find(lines))
+        {
+            string title = heading.Title.Trim();
+
+            if (title.Length > 0)
+            {
+                return title;
+            }
+        }
+
+        return Path.GetFileNameWithoutExtension(tab.Document.DisplayPath) is { Length: > 0 } stem
+            ? stem
+            : tab.Title;
+    }
+
+    /// <summary>
+    /// Wraps a link target in angle brackets when it needs them.
+    ///
+    /// A space inside <c>(...)</c> ends the target as far as every markdown parser is concerned,
+    /// so "my notes.md" would link to "my" and leave "notes.md)" as text. CommonMark's answer is
+    /// the pointy-bracket form, which is more readable than percent-encoding and is what a
+    /// person editing the link afterwards would have written themselves.
+    /// </summary>
+    public static string LinkTarget(string relative) =>
+        relative is not null && relative.AsSpan().ContainsAny(' ', '(', ')') ? $"<{relative}>" : relative ?? string.Empty;
+
+    /// <summary>
+    /// Puts something about one tab's file on the clipboard, and says so in the status bar.
+    ///
+    /// Shared by the four Copy items on the tab menu so that one of them failing on a busy
+    /// clipboard reads the same as any other.
+    /// </summary>
+    public void CopyForTab(string? value, string announcement)
+    {
+        StatusText = string.IsNullOrEmpty(value)
+            ? "There is nothing to copy"
+            : ClipboardText.Set(value, _logger)
+                ? announcement
+                : "The clipboard is in use";
+    }
+
     // ------------------------------------------------------------------- export
 
     /// <summary>
@@ -8200,7 +8363,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         count == 1 ? $"{count} {noun}" : $"{count} {noun}s";
 
     /// <summary>
-    /// Help, Check for Updates - and the status bar reminder, which is the same action.
+    /// Help, Marqora Releases Online - and the status bar reminder, which is the same action.
     ///
     /// Marqora does not know whether there is anything to update to. It opens the releases
     /// page and the reader reads it, which is the whole of the feature. Using it restarts the

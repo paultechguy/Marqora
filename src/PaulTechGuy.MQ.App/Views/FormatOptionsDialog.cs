@@ -91,7 +91,7 @@ internal sealed class FormatOptionsDialog : ContentDialog
             _selectionOnly,
             "Lines outside the selection are left exactly as they are.");
 
-        Title = "Format Markdown";
+        Title = "Formatting Options";
         PrimaryButtonText = "Format";
         CloseButtonText = "Cancel";
         DefaultButton = ContentDialogButton.Primary;

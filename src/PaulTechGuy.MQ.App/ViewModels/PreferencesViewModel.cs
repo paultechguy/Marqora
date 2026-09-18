@@ -412,4 +412,27 @@ public sealed class PreferencesViewModel(
             logger.LogWarning(ex, "Could not open the settings folder.");
         }
     }
+
+    /// <summary>
+    /// Opens the folder holding the log files in File Explorer.
+    ///
+    /// This used to be Help, Open Log Folder. It is here because it answers the same question
+    /// as the settings folder above - where does Marqora keep its own files - and one of the
+    /// two being on a menu while the other was behind Preferences meant neither was where the
+    /// other had taught you to look.
+    ///
+    /// No flush, unlike the settings folder: nothing debounces a log write, so what is on disk
+    /// is already current.
+    /// </summary>
+    public async Task OpenLogFolderAsync()
+    {
+        try
+        {
+            await Launcher.LaunchFolderPathAsync(paths.LogDirectory);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not open the log folder.");
+        }
+    }
 }
