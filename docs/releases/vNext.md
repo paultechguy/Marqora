@@ -2,41 +2,21 @@
 
 ## A document you only meant to read
 
-Some documents are open to be consulted rather than written: a specification, a style guide,
-somebody else's README sitting beside the thing you are actually working on. Right-click its tab
-and tick **Read-Only**, or use `File > Read-Only`, and Marqora will not write that file again
-until you take the tick off. The mark is remembered per file, so it is still there when you open
-the document next week.
+Some documents are open to be consulted rather than written — a specification, a style guide,
+somebody else's README. Right-click its tab and tick **Read-Only**, or use `File > Read-Only`,
+and Marqora will not write that file until you take the tick off. The mark is remembered per
+file, so it is still there next week. Typing does nothing, and says so at the caret.
 
-Typing into one does nothing, and the editor says so where the caret is rather than leaving you
-to work out that the key did not land. The document is still a document otherwise: it scrolls,
-it searches, the preview follows it, and `Ctrl+Shift+F` finds in it exactly as before.
+Autosave is what this is for. One stray keystroke in a document you were only reading is enough
+to have it written, and with format on save the whole file is rewritten on the way to disk. A
+marked document is passed over by autosave, by Save and Save All, and by `Ctrl+Shift+H`, which
+leaves it out of the count rather than skipping it afterwards.
 
-It is worth having because of autosave. With autosave on, one stray keystroke in a document you
-were only reading is enough to have it saved — and if you also format on save, the whole file is
-reformatted on its way to disk, without a prompt. A marked document is skipped by autosave
-entirely, Save and Save All pass it by, `Ctrl+Shift+H` leaves it out of Replace All rather than
-counting it and then skipping it, and the commands that rewrite a document say so in the status
-bar instead of quietly doing nothing.
+Marking a document you have already edited keeps those edits, and undo with them. **Save As**
+writes them somewhere else and the copy arrives unmarked; closing the tab offers the same.
 
-Marking a document you have already started editing is allowed, and it does not take your
-editing away: the text stays, undo keeps working, and nothing reaches the file. **Save As** is
-how you keep such edits — it writes them somewhere else and the copy arrives unmarked, ready to
-be worked on normally. Closing that tab offers Save As rather than Save, for the same reason.
-
-Two things a mark deliberately does not do. It is Marqora's own, not the read-only tick in the
-file's Windows properties — this never touches that, in either direction. And it does not stop
-the document changing: a marked file rewritten by something else is still picked up the way any
-other open file is. It stops *Marqora* writing your file, which is the part that was happening
-by itself.
-
-Select All and Copy work as they always did. Cut copies instead of cutting, and says so.
-
-The mark follows the file's location, so renaming or moving a document outside Marqora leaves it
-behind — there is nothing left to match it against. Marks whose files have gone for good are
-dropped at startup and Marqora says how many, rather than letting a guard quietly stop guarding.
-A file that is merely out of reach, on a drive that is not attached or a share you are away from,
-keeps its mark.
+This is Marqora's own mark, not the read-only tick in the file's Windows properties, which it
+never touches. Rename or move the file outside Marqora and the mark is left behind.
 
 ## A callout takes the text you were looking at
 
