@@ -206,12 +206,12 @@
   <section class="hero">
     <p class="kicker">A markdown editor for Windows 11</p>
     <h1>Nothing you write here goes anywhere else.</h1>
-    <p class="standfirst">Split-pane editing with live preview, Mermaid diagrams, KaTeX math, real find-and-replace — the full set. Built on one rule underneath all of it: nothing happens that you didn't decide. No telemetry, no account. Ever.</p>
+    <p class="standfirst">Split-pane editing with live preview, Mermaid diagrams, KaTeX math, real find-and-replace — the whole modern set, built to be used every day rather than demonstrated once. And underneath all of it, one rule: nothing happens that you didn't decide. No telemetry, no account. Ever.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/paultechguy/Marqora/releases/latest">Download for Windows &rarr;</a>
       <a class="btn btn-ghost" href="https://github.com/paultechguy/Marqora">View source on GitHub</a>
     </div>
-    <p class="cta-meta">Free &middot; Open source &middot; Apache&#8209;2.0 &middot; one zip, about 84&nbsp;MB &middot; no admin rights required</p>
+    <p class="cta-meta">Free &middot; Open source &middot; Apache&#8209;2.0 &middot; one zip, about 93&nbsp;MB &middot; no admin rights required</p>
   </section>
 </div>
 
@@ -224,11 +224,17 @@
     </div>
     <div class="chapter-body">
       <h2>The room</h2>
-      <p>Start with something ordinary. You're writing notes nobody else is meant to see yet — a diagnosis, a legal memo still in draft, the internal design document for a system your company hasn't announced, a page of a journal you're not ready to show anyone. You open an editor, and before you've typed a full sentence you run the check that's become reflexive: is this going anywhere? Is it syncing the moment I stop typing? Who finds out I opened this file at eleven at night?</p>
+      <p>Start with something ordinary. You're writing notes nobody else is meant to see yet — a diagnosis, a legal memo still in draft, the internal design document for a system your company hasn't announced, a page of a journal you're not ready to show anyone. You open an editor, and before you've typed a full sentence you run the check that's become reflexive: is this going anywhere? Is it syncing the moment I stop typing? Who finds out I opened this file at eleven at night? None of that is a question about writing. You only wanted somewhere good to do it.</p>
       <p>Most markdown editors don't ask you to think about that on purpose. They just never gave you a reason not to. An account gets created because accounts are how software gets built now. A sync toggle turns itself on because sync is what people expect from an app with a cloud icon in the corner. A line in a settings page opts you into "anonymous usage statistics" because that's how the checkbox was drawn. None of it is usually malicious. Almost none of it was actually decided by you.</p>
       <p>There's a second question sitting under the first, and it's the sharper one. It isn't only who might look — it's what happens to the file once it's sitting on a server you don't control. That server gets breached eventually; on a long enough timeline, they all do. That company gets acquired, and the fine print changes under you. That account gets phished, or reused, or left signed in on a laptop that goes missing. None of it requires anyone to be watching you specifically. It only requires your document to be dancing around in a cloud that was never yours to secure in the first place.</p>
     </div>
   </section>
+
+  <div class="pullquote">
+    <div class="pullquote-inner">
+      <p>No server holding a copy for someone to breach, because there's no server.</p>
+    </div>
+  </div>
 
   <section class="chapter">
     <div class="chapter-rail">
@@ -241,7 +247,7 @@
 
       <div class="note-row">
         <p>Take something as small as checking for updates. Nearly every desktop app quietly asks its own server, the moment it opens, whether a newer version exists. Marqora doesn't — not because a version number is precious, but because nobody asked it to. That is the whole rule: the app does nothing on its own. What it keeps instead is a clock: after enough days pass, a line appears in the status bar suggesting you go look for yourself.</p>
-        <div class="margin-note">&gt; a thirty-day clock, not a ping. Help&nbsp;&gt;&nbsp;Check for Updates does the same thing by hand, any time.</div>
+        <div class="margin-note">&gt; a thirty-day clock, not a ping. Help&nbsp;&gt;&nbsp;Marqora Releases Online does the same thing by hand, any time.</div>
       </div>
 
       <div class="note-row">
@@ -255,6 +261,8 @@
         <p>And when a document is actually ready to leave — to go to someone else, on purpose — there's no link with an expiry date, and no account they have to make first. A Folio is one file: the document, every image it uses, all of it inlined into a page that opens by double-click, in any browser, offline. If the document points at pictures on the web, Marqora names the sites and offers to collect those too — so the person who opens it isn't quietly fetching from strangers either.</p>
         <div class="margin-note">&gt; one .html file. images embedded, diagrams already drawn. opens without Marqora — drop it back in and get the markdown out again.</div>
       </div>
+
+      <p>None of it adds up to a smaller editor. The restraint is pointed outward, at the network; it was never allowed to reach the writing. Inside the window the panes move together by source line, a table redraws the moment you close the row, a diagram appears underneath the words that describe it, the math is set the way a journal would set it, and the preview reads like a printed page rather than a browser's idea of one. The rule costs you a sync service. It doesn't cost you the editor.</p>
     </div>
   </section>
 
@@ -267,7 +275,7 @@
   <section class="features">
     <p class="kicker">The short version</p>
     <h2>What's actually in the box</h2>
-    <p class="sub">Everything below ships in the zip, works offline, and is reachable from the keyboard.</p>
+    <p class="sub">Everything below ships in the zip, works offline, and is reachable from the keyboard — the modern set in full, with nothing held back for a paid tier that doesn't exist.</p>
     <div class="feature-grid">
 
       <div class="feature-tile">
@@ -283,9 +291,27 @@
       </div>
 
       <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.6 3h4.8l-0.8 6 3.4 2.9V14H7v-2.1L10.4 9z" fill="currentColor" opacity="0.28" stroke="none"/><path d="M9.6 3h4.8l-0.8 6 3.4 2.9V14H7v-2.1L10.4 9z"/><line x1="12" y1="14" x2="12" y2="21"/></svg>
+        <h3>Tabs that remember</h3>
+        <p>Pin the one you keep to hand and it moves left, out of reach of Close Other Tabs. Reopen Closed Tab brings back what you didn't mean to close; a right-click copies a path, or a ready-made markdown link to it.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="10.4" width="17" height="9.6" rx="1.2" fill="currentColor" opacity="0.22" stroke="none"/><rect x="3.5" y="10.4" width="17" height="9.6" rx="1.2"/><path d="M7.6 10.4V7.4a4.4 4.4 0 0 1 8.8 0v3"/><line x1="12" y1="13.6" x2="12" y2="16.8"/></svg>
+        <h3>Read-only documents</h3>
+        <p>Tick Read-Only on a tab and Marqora will not write that file until you take the tick off — Save and Save All pass it over. It is Marqora's own mark, remembered per file, and it never touches the Windows one.</p>
+      </div>
+
+      <div class="feature-tile">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="3" y1="5" x2="20" y2="5"/><line x1="8" y1="10" x2="20" y2="10"/><line x1="8" y1="14.5" x2="20" y2="14.5"/><line x1="13" y1="19" x2="20" y2="19"/></svg>
         <h3>Outline panel</h3>
         <p>Every heading in one list, narrowed as you type, carrying the same section numbers the preview shows.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.5" y="4.1" width="3.6" height="3.6" rx="0.5" fill="currentColor" opacity="0.28" stroke="none"/><line x1="8.6" y1="5.9" x2="21" y2="5.9"/><rect x="5.1" y="10.2" width="3.6" height="3.6" rx="0.5" fill="currentColor" opacity="0.28" stroke="none"/><line x1="11.2" y1="12" x2="21" y2="12"/><rect x="7.7" y="16.3" width="3.6" height="3.6" rx="0.5" fill="currentColor" opacity="0.28" stroke="none"/><line x1="13.8" y1="18.1" x2="21" y2="18.1"/></svg>
+        <h3>Section numbers</h3>
+        <p>Headings are numbered on screen and in every export, from whichever level you pick — for one document or for all of them. Number Sections writes those numbers into the markdown itself, for text going somewhere that won't number it.</p>
       </div>
 
       <div class="feature-tile">
@@ -309,7 +335,7 @@
       <div class="feature-tile">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><line x1="7" y1="7.3" x2="10.2" y2="16"/><line x1="17" y1="7.3" x2="13.8" y2="16"/><line x1="7.2" y1="6" x2="16.8" y2="6"/></svg>
         <h3>Mermaid diagrams</h3>
-        <p>Flowcharts, sequence and state diagrams render inline as you type. Open one full size in its own window, or copy it straight out as a picture.</p>
+        <p>Flowcharts, sequence and state diagrams render inline as you type. Open one full size in its own window, or copy it straight out as a picture — and in an exported page or a Folio, a click lifts a diagram out to fit the window.</p>
       </div>
 
       <div class="feature-tile">
@@ -327,13 +353,13 @@
       <div class="feature-tile">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/><circle cx="9.5" cy="14" r="1.8" fill="currentColor" stroke="none" opacity="0.3"/><line x1="7" y1="18" x2="17" y2="18"/></svg>
         <h3>Folios</h3>
-        <p>Share a whole set of documents, with the images they use, as one self-contained file.</p>
+        <p>Unique to Marqora, a Folio shares a whole set of documents, with the images they use, as one self-contained file. It opens by double-click in any browser, so the person you send it to doesn't need Marqora.</p>
       </div>
 
       <div class="feature-tile">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 18h16"/></svg>
         <h3>Rich exports</h3>
-        <p>Self-contained HTML, print-ready PDF, and a real Word document with proper heading styles, numbering and an updatable contents.</p>
+        <p>Self-contained HTML, print-ready PDF, and a real Word document with proper heading styles, numbering and an updatable contents. Copy as Rich Text drops the same into Word or Outlook: tables that keep their header, diagrams as pictures, math as a real equation.</p>
       </div>
 
       <div class="feature-tile">
@@ -361,6 +387,7 @@
   <section class="closing">
     <p>Go back to that ordinary moment — the file you weren't ready to show anyone yet. Close the laptop. The document is exactly where you left it, on the machine you left it on. It got there without asking anyone's permission, and without telling anyone it exists.</p>
     <p>That's the whole idea. Not a bigger feature set, not a faster sync, not a smarter cloud. A room where what you write stays put — built for the people who already knew they wanted one.</p>
+    <p>What nobody expects is how quickly it stops being a decision. The document you were careful about is why you opened it; a week later it's open for the release notes, the shopping list, and the note to yourself nobody will ever read. Somewhere in there it stopped being the place you put what you'd rather not put in a cloud, and became the place you write.</p>
     <div class="signature">
       <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.6"/>
