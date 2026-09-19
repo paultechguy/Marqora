@@ -300,8 +300,15 @@ function Set-RepoVersion {
 
 # The newest tag by version order, or $null when nothing is tagged yet. Tags that are not
 # v<major>.<minor>.<patch> are ignored rather than guessed at.
+#
+# -Exclude leaves one tag out of the reckoning, which is what a republish needs: the version
+# being replaced is itself the newest tag, and without this it would fail its own "releases
+# only move forward" check.
 function Get-LatestVersionTag {
-    param([Parameter(Mandatory)][string] $RepoRoot)
+    param(
+        [Parameter(Mandatory)][string] $RepoRoot,
+        [string] $Exclude
+    )
 
     $tags = (Invoke-Git -Arguments @('-C', $RepoRoot, 'tag', '--list', 'v*')).Output
 
@@ -310,7 +317,7 @@ function Get-LatestVersionTag {
     }
 
     $parsed = $tags -split '\r?\n' |
-        Where-Object { $_ -match '^v(\d+\.\d+\.\d+)$' } |
+        Where-Object { $_ -match '^v(\d+\.\d+\.\d+)$' -and $_ -ne $Exclude } |
         ForEach-Object { [pscustomobject]@{ Tag = $_; Version = [version] $Matches[1] } } |
         Sort-Object -Property Version
 
@@ -480,48 +487,148 @@ blocks force-pushing and cannot be bypassed, so the fix is to merge '$Released' 
     Write-Done "$behind commit(s) to promote"
 }
 
-function Test-GateTagFree {
+# What already exists for a version: the tag here, the tag on origin, and the GitHub release.
+# Read-only, like every other gate helper, and the one place that knows how to ask. The tag
+# gate reads it to decide, and a republish tears down exactly what it reported, so the two
+# cannot disagree about what is there.
+function Get-ReleaseState {
     param(
         [Parameter(Mandatory)][string] $RepoRoot,
         [Parameter(Mandatory)][string] $Version
     )
 
-    Write-Check 'tag and release'
-
     $tag = "v$Version"
 
-    $local = (Invoke-Git -Arguments @('-C', $RepoRoot, 'tag', '--list', $tag)).Output
+    $local = [bool] (Invoke-Git -Arguments @('-C', $RepoRoot, 'tag', '--list', $tag)).Output
+    $remote = [bool] (Invoke-Git -Arguments @('-C', $RepoRoot, 'ls-remote', '--tags', 'origin', "refs/tags/$tag")).Output
 
-    if ($local) {
-        Write-Failed
-        throw "The tag '$tag' already exists locally. Delete it with 'git tag -d $tag' or pick another version."
-    }
+    $hasRelease = $false
+    $isDraft = $false
+    $url = ''
 
-    $remote = (Invoke-Git -Arguments @('-C', $RepoRoot, 'ls-remote', '--tags', 'origin', "refs/tags/$tag")).Output
-
-    if ($remote) {
-        Write-Failed
-        throw "The tag '$tag' is already on origin. Version $Version has been released; pick a newer one."
-    }
-
-    # Only meaningful when gh is available; New-ReleaseNotes.ps1 deliberately does not require it.
+    # gh is a hard requirement of the publish path and merely useful in the notes path, so an
+    # absent gh means "cannot say" rather than "there is no release".
     if (Get-Command gh -ErrorAction SilentlyContinue) {
-        $release = Invoke-Gh -Arguments @('release', 'view', $tag, '--repo', (Get-RepoSlug -RepoRoot $RepoRoot)) -AllowFailure
+        $view = Invoke-Gh -Arguments @(
+            'release', 'view', $tag,
+            '--repo', (Get-RepoSlug -RepoRoot $RepoRoot),
+            '--json', 'isDraft,url'
+        ) -AllowFailure
 
-        if ($release.ExitCode -eq 0) {
-            Write-Failed
-            throw "A GitHub release for '$tag' already exists. Delete it with 'gh release delete $tag' or pick another version."
+        if ($view.ExitCode -eq 0) {
+            $json = $view.Output | ConvertFrom-Json
+            $hasRelease = $true
+            $isDraft = [bool] $json.isDraft
+            $url = [string] $json.url
         }
     }
 
-    $latest = Get-LatestVersionTag -RepoRoot $RepoRoot
+    return [pscustomobject]@{
+        Tag        = $tag
+        LocalTag   = $local
+        RemoteTag  = $remote
+        HasRelease = $hasRelease
+        IsDraft    = $isDraft
+        Url        = $url
+        Anything   = ($local -or $remote -or $hasRelease)
+    }
+}
+
+# What a republish is about to delete, in the order it deletes it. The gate says it in one
+# line, and the confirmation says it again beside everything else that is about to happen.
+function Get-ReleaseStateSummary {
+    param([Parameter(Mandatory)] $State)
+
+    $parts = @()
+
+    if ($State.HasRelease) { $parts += 'draft' }
+    if ($State.RemoteTag) { $parts += 'tag on origin' }
+    if ($State.LocalTag) { $parts += 'local tag' }
+
+    if (-not $parts) {
+        return 'nothing'
+    }
+
+    return ($parts -join ', ')
+}
+
+function Test-GateTagFree {
+    param(
+        [Parameter(Mandatory)][string] $RepoRoot,
+        [Parameter(Mandatory)][string] $Version,
+        [switch] $Republish
+    )
+
+    Write-Check 'tag and release'
+
+    $tag = "v$Version"
+    $state = Get-ReleaseState -RepoRoot $RepoRoot -Version $Version
+
+    # Where the line is, with or without -Republish. A draft is private and yours to redo; a
+    # published release has been announced to whoever watches the repository, and its asset
+    # may already be on somebody's disk. Replacing one would change what a version means
+    # after people had it, so the answer to a bad published release is the next version.
+    if ($state.HasRelease -and -not $state.IsDraft) {
+        Write-Failed
+        throw @"
+The release '$tag' is published, so it cannot be replaced.
+
+A draft can be deleted and built again because nobody has seen it. A published release has
+been announced and may already have been downloaded. Bump the version and release that.
+"@
+    }
+
+    if (-not $Republish) {
+        # Origin first, local last. The branch gate fetches tags, so a tag on origin is always
+        # here too by the time this runs; leading with the local copy would send the reader
+        # after a tag that comes straight back on the next run.
+        if ($state.HasRelease) {
+            Write-Failed
+            throw @"
+A draft release for '$tag' already exists.
+
+  $($state.Url)
+
+Re-run with -Republish to delete that draft and its tag and build $Version again, or pick
+another version.
+"@
+        }
+
+        if ($state.RemoteTag) {
+            Write-Failed
+            throw @"
+The tag '$tag' is already on origin, so $Version has been released.
+
+Deleting it here will not help: the branch gate fetches tags, so it returns on the next run.
+Re-run with -Republish to replace it, or pick a newer version.
+"@
+        }
+
+        if ($state.LocalTag) {
+            Write-Failed
+            throw "The tag '$tag' exists here but not on origin. Delete it with 'git tag -d $tag' or pick another version."
+        }
+    }
+
+    # The version being replaced is itself the newest tag, so it sits out its own comparison.
+    $exclude = if ($Republish) { $tag } else { '' }
+    $latest = Get-LatestVersionTag -RepoRoot $RepoRoot -Exclude $exclude
 
     if ($latest -and [version] $Version -le $latest.Version) {
         Write-Failed
         throw "Version $Version does not come after the newest tag, $($latest.Tag). Releases only move forward."
     }
 
-    $note = if ($latest) { "$tag is free, after $($latest.Tag)" } else { "$tag is free, first release" }
+    $note = if ($Republish -and $state.Anything) {
+        "replacing $tag - $(Get-ReleaseStateSummary $state)"
+    }
+    elseif ($latest) {
+        "$tag is free, after $($latest.Tag)"
+    }
+    else {
+        "$tag is free, first release"
+    }
+
     Write-Done $note
 }
 

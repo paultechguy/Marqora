@@ -35,6 +35,11 @@
 .PARAMETER Check
     Run the gates and report, then stop. Nothing is written.
 
+.PARAMETER Republish
+    Allow a version that already has a draft release and a tag. Use it with -Force to rewrite
+    the notes of a version you are about to rebuild with Publish-Release.ps1 -Republish; it
+    changes nothing here beyond the tag gate's answer.
+
 .EXAMPLE
     pwsh .\build\New-ReleaseNotes.ps1 -Version 0.3.0
 
@@ -54,7 +59,9 @@ param(
 
     [switch] $Force,
 
-    [switch] $Check
+    [switch] $Check,
+
+    [switch] $Republish
 )
 
 Set-StrictMode -Version Latest
@@ -82,7 +89,7 @@ try {
     # second run with -Force works without making you revert the first one by hand.
     Test-GateTree -RepoRoot $repoRoot -Branch 'dev' -AllowDirty @('Directory.Build.props', $notesRelative)
     Test-GateAncestor -RepoRoot $repoRoot
-    Test-GateTagFree -RepoRoot $repoRoot -Version $Version
+    Test-GateTagFree -RepoRoot $repoRoot -Version $Version -Republish:$Republish
     Test-GateNotesAbsent -NotesPath $notesPath -Force:$Force
 
     Write-Host ''

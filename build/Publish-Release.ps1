@@ -18,6 +18,11 @@
         4  release body     the committed notes plus the generated footer
         5  draft            gh release create --draft, with both assets
 
+    With -Republish the run starts by deleting the draft and the tag left by a previous
+    attempt at this version, and then does all five again. That is what a draft is for: it is
+    private until you publish it, so a version whose draft fails its smoke test can be built
+    again under the number its release notes already carry.
+
     Nothing it does is unrecoverable. The fast-forward moves master to a commit already on
     dev. Tags sit outside the repository ruleset and can be deleted. A draft is private until
     you publish it, and deletes cleanly. The worst outcome is that you delete a draft and a
@@ -38,7 +43,12 @@
     have clicked Publish.
 
 .PARAMETER Yes
-    Skip the confirmation. For an unattended run.
+    Skip the confirmation, including the one -Republish asks for. For an unattended run.
+
+.PARAMETER Republish
+    Release a version that already has a draft, by deleting that draft and its tag - here and
+    on origin - and then building the version again from scratch. Refused once the release
+    has been published: a draft is private and yours to redo, and a published release is not.
 
 .PARAMETER ShowBuildOutput
     Stream the dotnet output instead of capturing it. Output is shown automatically when a
@@ -55,6 +65,11 @@
 .EXAMPLE
     pwsh .\build\Publish-Release.ps1 -Version 0.3.0 -Verify
 
+.EXAMPLE
+    pwsh .\build\Publish-Release.ps1 -Version 0.3.0 -Republish
+
+    Delete the 0.3.0 draft and its tag, then release 0.3.0 again from the current dev.
+
 .NOTES
     Exit codes: 0 success, 1 failure.
 #>
@@ -65,6 +80,8 @@ param(
     [string] $Version,
 
     [switch] $Verify,
+
+    [switch] $Republish,
 
     [switch] $Yes,
 
@@ -216,7 +233,7 @@ try {
     Test-GateTooling
     Test-GateTree -RepoRoot $repoRoot -Branch 'dev'
     Test-GateAncestor -RepoRoot $repoRoot
-    Test-GateTagFree -RepoRoot $repoRoot -Version $Version
+    Test-GateTagFree -RepoRoot $repoRoot -Version $Version -Republish:$Republish
     Test-GateVersionMatch -PropsPath $buildProps -Version $Version
     Test-GateNotesReady -NotesPath $notesPath -TemplatePath $notesTemplate -Version $Version
     Test-GateTests -Solution $solution -Configuration $configuration -Stream:$ShowBuildOutput
@@ -231,15 +248,35 @@ try {
     $devSha = (Invoke-Git -Arguments @('-C', $repoRoot, 'rev-parse', '--short', 'origin/dev')).Output
     $promoting = (Invoke-Git -Arguments @('-C', $repoRoot, 'rev-list', '--count', 'origin/master..origin/dev')).Output
 
-    Write-Host '  About to release' -ForegroundColor White
+    # Asked again rather than carried down from the gate, so that what the confirmation lists
+    # and what the replace step deletes are one answer read at one moment.
+    $state = if ($Republish) { Get-ReleaseState -RepoRoot $repoRoot -Version $Version } else { $null }
+    $replacing = [bool] ($state -and $state.Anything)
+
+    $heading = if ($replacing) { "  About to replace $tag" } else { '  About to release' }
+
+    Write-Host $heading -ForegroundColor White
     Write-Host ''
+
+    if ($replacing) {
+        Write-Host "    delete    $(Get-ReleaseStateSummary $state), for $tag" -ForegroundColor Gray
+    }
+
     Write-Host "    promote   master $masterSha -> $devSha ($promoting commit(s), fast-forward)" -ForegroundColor Gray
     Write-Host "    build     $zipName from master" -ForegroundColor Gray
     Write-Host "    tag       $tag on master, annotated" -ForegroundColor Gray
     Write-Host "    publish   draft release on $slug" -ForegroundColor Gray
     Write-Host ''
-    Write-Host '    All of this is reversible: the fast-forward only moves master to a commit' -ForegroundColor DarkGray
-    Write-Host '    already on dev, and tags and drafts can both be deleted.' -ForegroundColor DarkGray
+
+    if ($replacing) {
+        Write-Host '    The draft being deleted was never public, and the tag comes back on the' -ForegroundColor DarkGray
+        Write-Host '    commit master is about to carry. Nothing anyone has downloaded changes.' -ForegroundColor DarkGray
+    }
+    else {
+        Write-Host '    All of this is reversible: the fast-forward only moves master to a commit' -ForegroundColor DarkGray
+        Write-Host '    already on dev, and tags and drafts can both be deleted.' -ForegroundColor DarkGray
+    }
+
     Write-Host ''
 
     if ($dryRun) {
@@ -247,9 +284,19 @@ try {
         Write-Host ''
     }
     elseif (-not $Yes) {
-        $answer = Read-Host '  Continue? [y/N]'
+        # A replace types the version back rather than answering y. The whole risk of the
+        # switch is that it is pointed at the wrong version, and a version cannot be typed
+        # out of habit the way a y can.
+        if ($replacing) {
+            $answer = Read-Host "  Type $Version to delete that draft and release it again"
+            $agreed = ($answer -eq $Version)
+        }
+        else {
+            $answer = Read-Host '  Continue? [y/N]'
+            $agreed = ($answer -in @('y', 'Y', 'yes', 'Yes'))
+        }
 
-        if ($answer -notin @('y', 'Y', 'yes', 'Yes')) {
+        if (-not $agreed) {
             Write-Host ''
             Write-Host '  Nothing done.' -ForegroundColor DarkGray
             Write-Host ''
@@ -259,10 +306,48 @@ try {
         Write-Host ''
     }
 
-    Initialize-TaskList -Total 5
+    Initialize-TaskList -Total $(if ($replacing) { 6 } else { 5 })
     $returnToDev = $false
 
     try {
+        # ---- replace the previous attempt, with -Republish only
+        #
+        # First, so that a failure here leaves master where it was. The draft goes before the
+        # tag: a draft holds a tag name whether or not the tag exists, and deleting the tag
+        # under a live draft would leave a release pointing at nothing.
+        if ($replacing) {
+            Write-Task "replace $tag"
+
+            if ($dryRun) {
+                Write-Skipped 'what-if'
+
+                if ($state.HasRelease) { Write-Hint "gh release delete $tag --repo $slug --yes" }
+                if ($state.RemoteTag) { Write-Hint "git push --delete origin $tag" }
+                if ($state.LocalTag) { Write-Hint "git tag -d $tag" }
+            }
+            else {
+                if ($state.HasRelease) {
+                    Invoke-Gh `
+                        -Arguments @('release', 'delete', $tag, '--repo', $slug, '--yes') `
+                        -FailureMessage "Could not delete the draft release $tag." | Out-Null
+                }
+
+                if ($state.RemoteTag) {
+                    Invoke-Git `
+                        -Arguments @('-C', $repoRoot, 'push', '--delete', 'origin', $tag) `
+                        -FailureMessage "Could not delete $tag from origin." | Out-Null
+                }
+
+                if ($state.LocalTag) {
+                    Invoke-Git `
+                        -Arguments @('-C', $repoRoot, 'tag', '-d', $tag) `
+                        -FailureMessage "Could not delete the local tag $tag." | Out-Null
+                }
+
+                Write-Done (Get-ReleaseStateSummary $state)
+            }
+        }
+
         # ---- 1. promote master
         Write-Task 'promote master'
 
@@ -406,8 +491,10 @@ try {
         }
     }
 
+    $ending = if ($replacing) { 'Draft replaced' } else { 'Draft created' }
+
     Write-Host ''
-    Write-Host '  Draft created. It is private until you publish it.' -ForegroundColor White
+    Write-Host "  $ending. It is private until you publish it." -ForegroundColor White
     Write-Host ''
 
     if ($draftUrl) {

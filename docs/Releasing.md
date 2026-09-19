@@ -106,8 +106,40 @@ gh release download v0.3.0 --dir $env:TEMP\marqora-0.3.0
 #   extract it, run Install.cmd, launch, check Help > About says 0.3.0
 ```
 
-Happy with it? Click **Publish release** on the draft page. Not happy? The script printed the
-two commands that delete the draft and the tag.
+Happy with it? Click **Publish release** on the draft page. Not happy? Fix what is wrong on
+`dev` and republish the same version — the next section.
+
+## If the draft is wrong — republish the same version
+
+A draft exists so that a version can fail. It is private, nobody has been told about it, and
+its asset has been downloaded by you alone. So a version that fails its smoke test is built
+again under the same number, rather than burning a version on a release nobody saw:
+
+```powershell
+#   ... fix it on dev, commit, push ...
+pwsh .\build\Publish-Release.ps1 -Version 0.3.0 -Republish
+```
+
+`-Republish` adds one step ahead of the other five. It deletes the draft, then the tag on
+origin, then the tag here, and releases 0.3.0 again from wherever `dev` now stands — which
+means the fix you just pushed is in the artifact and in the commit `master` is tagged at.
+
+The confirmation asks you to type the version rather than `y`:
+
+```
+  About to replace v0.3.0
+
+    delete    draft, tag on origin, local tag, for v0.3.0
+    promote   master 1a2b3c4 -> 5d6e7f8 (2 commit(s), fast-forward)
+    ...
+
+  Type 0.3.0 to delete that draft and release it again:
+```
+
+The one thing it will not do is replace a release you have already published. A published
+release has been announced to whoever watches the repository and its zip may already be on
+somebody's disk; changing what that version means after the fact is worse than the wrong
+release. Once **Publish release** is clicked, the only way forward is the next version.
 
 ## Step 5 — Confirm what shipped
 
@@ -131,7 +163,7 @@ release should happen at all.
 | tooling | `gh` is missing or not signed in |
 | branch and tree | You are not on `dev`, the tree is dirty, or `dev` and `origin/dev` disagree |
 | `master` ancestor of `dev` | `master` has commits `dev` does not — the fast-forward would fail |
-| tag and release | `v<version>` exists locally, on origin, or as a GitHub release; or the version does not come after the newest tag |
+| tag and release | `v<version>` exists locally, on origin, or as a GitHub release and `-Republish` was not given; the release is already published, with or without `-Republish`; or the version does not come after the newest tag |
 | version | `Directory.Build.props` disagrees with `-Version` |
 | release notes | Missing, still carrying placeholders, or saying nothing the template did not |
 | tests | `dotnet test` fails |
@@ -204,6 +236,10 @@ own date anyway.
 | Tag pushed | `git push --delete origin v0.3.0` then `git tag -d v0.3.0` |
 | Draft created | `gh release delete v0.3.0 --yes` |
 | Published | `gh release delete` removes the page, though watchers were already notified |
+
+The tag and draft rows above are for abandoning a release. To redo one under the same number,
+do not work through them by hand — `Publish-Release.ps1 -Version 0.3.0 -Republish` deletes the
+draft and both copies of the tag itself, and then releases again.
 
 Tags sit outside the ruleset, so they can always be deleted. Branch commits cannot be
 rewritten — but the worst thing a wrong one says is "Release notes for 0.3.0" for a release
