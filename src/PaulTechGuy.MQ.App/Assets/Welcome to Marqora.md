@@ -21,6 +21,7 @@ on its own.
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
 - [ ] Press `Ctrl+Shift+H` and replace across all of them, in one step
+- [ ] Right-click this tab and tick **Pinned**, or **Read-Only** to stop yourself editing it
 - [ ] Type a word wrong on purpose, watch the scrollbar, then press `Ctrl+.` on it
 
 > [!NOTE]
@@ -73,6 +74,18 @@ syntax highlighting inside fenced code blocks.
 **Documents in tabs.** Every tab keeps its own undo history, cursor and scroll position, so
 switching costs nothing and loses nothing. `Ctrl+1`–`Ctrl+8` jump straight to a tab,
 `Ctrl+Tab` walks along them, and dragging reorders them.
+
+**Pinned tabs stay put.** Right-click a tab and tick **Pinned**: it moves to the left of the
+strip, wears a pin, and Close Other Tabs, Close Tabs to the Right and Close All Tabs leave it
+alone. Drag a tab into or out of the pinned group to pin or unpin it without the menu. The pin
+is remembered per file, so the document you keep to hand is still there next week.
+
+**Read-Only, when a document is for reading.** A specification, a style guide, somebody else's
+README — right-click the tab and tick **Read-Only**, or use `File > Read-Only`, and Marqora will
+not write that file until you take the tick off. Typing does nothing and says so at the caret,
+and Save, Save All and `Ctrl+Shift+H` leave the document out rather than reaching it and
+stopping. It is Marqora's own mark, remembered per file — not the read-only tick in the file's
+Windows properties, which it never touches.
 
 **Your session comes back.** Close Marqora with a dozen documents open and they are all there
 next time, with the same tab in front.
@@ -182,7 +195,9 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
-leaves the building.
+leaves the building — and a diagram takes a little of its behavior with it: in an exported
+HTML file or a Folio it reads **Click to view**, and a click lifts it out of the page onto a
+card of its own, clear of the text around it. Click again and it goes back.
 
 Word is the one that works differently, because it has to. A `.docx` is not a web page, so the
 document is read again and written into Word's own constructs: headings that the navigation
@@ -204,6 +219,14 @@ this window unpacks it into the documents it was made from.
 > [!IMPORTANT]
 > A Folio is the only export that takes more than the document in front of you — and the only
 > one you can drop back on this window to get those documents back.
+
+One kind of leaving is not an export at all: Markdown pasted into a pull request, a wiki or an
+issue, where nothing will number your headings on the way. The numbers Marqora draws from
+`View > Heading Numbers` are never written to your file, so `Tools > Number Sections...` is the
+command that writes them in — it asks where to count from, and replaces rather than adds, which
+makes it a renumber: drop a section into the middle, run it again, and everything below moves
+along one. **Remove Section Numbers** is the other direction, for taking somebody else's
+hard-coded numbers out so Marqora's own can do the job. Either is one `Ctrl+Z`.
 
 ---
 
@@ -242,6 +265,10 @@ page whenever you want it.
 
 - **One window.** Opening a document while Marqora is running adds a tab to the window you
   already have, rather than starting a second copy.
+- **The tab menu holds the rest.** `Ctrl+Shift+T` reopens the tab you just closed, **Close Tabs
+  to the Right** clears everything after this one, and **Copy** hands you the document's name,
+  its relative path, its full path, or a finished Markdown link — the last being what you want
+  when linking one of your documents to another.
 - **`Ctrl+Shift+O` opens a whole folder**, one tab per Markdown file — and deliberately not its
   subfolders, so pointing it at a repository does not produce hundreds of tabs.
 - **Files are watched.** If a document changes on disk and you have no unsaved edits in it, the
@@ -259,17 +286,17 @@ page whenever you want it.
 
 ## The shortcuts worth memorizing
 
-| Command                   | Keys                      | Command                        | Keys                            |
-| ------------------------- | ------------------------- | ------------------------------ | ------------------------------- |
-| Open                      | `Ctrl+O`                  | Bold / italic                  | `Ctrl+B` / `Ctrl+I`             |
-| Open folder               | `Ctrl+Shift+O`            | Link                           | `Ctrl+K`                        |
-| Save / Save all           | `Ctrl+S` / `Ctrl+Shift+S` | Format document                | `Shift+Alt+F`                   |
-| New tab / close tab       | `Ctrl+N` / `Ctrl+W`       | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
-| Source / split / preview  | `Alt+1` `Alt+2` `Alt+3`   | Cheatsheet                     | `Ctrl+F1`                       |
-| Show / hide the outline   | `Alt+4`                   | Go to the outline, and back    | `Alt+Shift+4`                   |
-| Spell check on / off      | `F7`                      | Correct the word at the cursor | `Ctrl+.`                        |
-| Zoom the active pane      | `Ctrl` `+` `-` `0`        | Word wrap                      | `Alt+Z`                         |
-| Heading numbers, this tab | `Alt+5`                   | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3`            |
+| Command                   | Keys                             | Command                        | Keys                            |
+| ------------------------- | -------------------------------- | ------------------------------ | ------------------------------- |
+| Open                      | `Ctrl+O`                         | Bold / italic                  | `Ctrl+B` / `Ctrl+I`             |
+| Open folder               | `Ctrl+Shift+O`                   | Link                           | `Ctrl+K`                        |
+| Save / Save all           | `Ctrl+S` / `Ctrl+Shift+S`        | Format document                | `Shift+Alt+F`                   |
+| New / close / reopen tab  | `Ctrl+N` `Ctrl+W` `Ctrl+Shift+T` | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
+| Source / split / preview  | `Alt+1` `Alt+2` `Alt+3`          | Cheatsheet                     | `Ctrl+F1`                       |
+| Show / hide the outline   | `Alt+4`                          | Go to the outline, and back    | `Alt+Shift+4`                   |
+| Spell check on / off      | `F7`                             | Correct the word at the cursor | `Ctrl+.`                        |
+| Zoom the active pane      | `Ctrl` `+` `-` `0`               | Word wrap                      | `Alt+Z`                         |
+| Heading numbers, this tab | `Alt+5`                          | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3`            |
 
 Those are the keys; the syntax is one more. `Ctrl+F1` opens the Markdown cheatsheet — every
 construct on this page and a few that are not, each one's markup sitting beside its result, with
