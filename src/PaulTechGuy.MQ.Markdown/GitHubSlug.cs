@@ -49,7 +49,10 @@ public static class GitHubSlug
             {
                 builder.Append(c);
             }
-            else if (char.IsWhiteSpace(c))
+            // The ASCII space alone, not whitespace in general. GitHub drops every other
+            // separator with the punctuation, so "Foo&nbsp;Bar" is foobar there - a
+            // non-breaking space becoming a hyphen here would be an anchor GitHub never gives.
+            else if (c == ' ')
             {
                 builder.Append('-');
             }

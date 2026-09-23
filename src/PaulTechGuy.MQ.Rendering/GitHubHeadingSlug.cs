@@ -48,7 +48,7 @@ internal static class GitHubHeadingSlug
                 continue;
             }
 
-            string text = MarkdownHeadingReader.ToPlainText(heading.Inline);
+            string text = InlinePlainText.OfHeading(heading);
 
             if (text.Length == 0)
             {

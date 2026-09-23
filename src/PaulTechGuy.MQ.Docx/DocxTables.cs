@@ -5,7 +5,7 @@ using System.Globalization;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
-using Markdig.Syntax.Inlines;
+using PaulTechGuy.MQ.Rendering;
 using MarkdigTable = Markdig.Extensions.Tables.Table;
 using MarkdigTableCell = Markdig.Extensions.Tables.TableCell;
 using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
@@ -157,7 +157,7 @@ internal static class DocxTables
 
                 if (at < columns)
                 {
-                    longest[at] = Math.Max(longest[at], TextLengthOf(cell));
+                    longest[at] = Math.Max(longest[at], TableCellText.LengthOf(cell));
                 }
 
                 index += Math.Max(1, cell.ColumnSpan);
@@ -178,23 +178,6 @@ internal static class DocxTables
         }
 
         return longest;
-    }
-
-    /// <summary>
-    /// How much text a cell holds, counted in characters and ignoring every kind of markup
-    /// around it. A cell holding a bold word is exactly as wide as one holding the same word
-    /// plain, which is what a column-width estimate wants to know.
-    /// </summary>
-    private static int TextLengthOf(MarkdigTableCell cell)
-    {
-        int length = 0;
-
-        foreach (LiteralInline literal in cell.Descendants<LiteralInline>())
-        {
-            length += literal.Content.Length;
-        }
-
-        return length;
     }
 
     /// <summary>

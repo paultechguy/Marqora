@@ -156,6 +156,19 @@ public class ImageTests : IDisposable
     }
 
     /// <summary>
+    /// Markdig decodes an entity into its own inline rather than a literal, and the alt text
+    /// used to be read from the literals alone - so "Q&amp;amp;A" stood in for the picture as
+    /// "[QA]".
+    /// </summary>
+    [Fact]
+    public async Task An_entity_in_the_alt_text_survives_into_the_placeholder()
+    {
+        using var exported = await ExportAsync("![Q&amp;A&nbsp;chart](nowhere.png)\n");
+
+        exported.PlainText().ShouldContain("[Q&A chart]");
+    }
+
+    /// <summary>
     /// The same containment rule the preview applies when it serves an image: a path that
     /// climbs out of the document's folder is refused rather than followed.
     /// </summary>

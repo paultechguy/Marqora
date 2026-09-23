@@ -60,6 +60,8 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
             IReadOnlyDictionary<HeadingBlock, string> numbers =
                 HeadingNumberPass.Apply(document, headingNumbering);
 
+            ShortColumnPass.Apply(document);
+
             using var writer = new StringWriter();
             var renderer = new Markdig.Renderers.HtmlRenderer(writer);
             _pipeline.Setup(renderer);
@@ -124,9 +126,10 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
                 Length = link.Span.Length,
 
                 // The label is the LinkInline's own children, so this reads what the parse
-                // already built rather than going back to the text. Concatenated because the
-                // label can be several inlines - "![the **new** logo](x.png)" is three.
-                Text = string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString())),
+                // already built rather than going back to the text. Walked rather than taken
+                // whole because the label can be several inlines - "![the **new** logo](x.png)"
+                // is three, and "![Q&amp;A](x.png)" is an entity between two literals.
+                Text = InlinePlainText.Of(link),
 
                 // A badge is an image inside a link, and Markdig models exactly that: the image
                 // is a child of the link inline that wraps it.
