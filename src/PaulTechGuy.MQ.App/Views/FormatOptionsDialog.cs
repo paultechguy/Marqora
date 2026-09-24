@@ -22,6 +22,9 @@ internal sealed class FormatOptionsDialog : ContentDialog
 {
     private const int Columns = 3;
 
+    /// <summary>Wide enough for three columns of the longest rule labels.</summary>
+    private const double ContentMinWidth = 620;
+
     /// <summary>A rule: its label, how to read it, and how to write it back.</summary>
     private sealed record Rule(
         string Label,
@@ -96,6 +99,13 @@ internal sealed class FormatOptionsDialog : ContentDialog
         CloseButtonText = "Cancel";
         DefaultButton = ContentDialogButton.Primary;
 
+        // ContentDialog caps itself at 548 wide through this theme resource, whatever its
+        // content asks for, and the three-column grid below needs ContentMinWidth. Left at the
+        // default, the dialog clipped the third column and the notes under the wrap row.
+        // Must be set before the template is applied, which is why it is here and not in
+        // BuildContent. The 48 is the dialog's own padding, 24 each side.
+        Resources["ContentDialogMaxWidth"] = ContentMinWidth + 48;
+
         for (int i = 0; i < Rules.Length; i++)
         {
             _boxes[i] = new CheckBox
@@ -165,7 +175,7 @@ internal sealed class FormatOptionsDialog : ContentDialog
 
     private StackPanel BuildContent()
     {
-        var panel = new StackPanel { Spacing = 14, MinWidth = 620 };
+        var panel = new StackPanel { Spacing = 14, MinWidth = ContentMinWidth };
 
         panel.Children.Add(new TextBlock
         {

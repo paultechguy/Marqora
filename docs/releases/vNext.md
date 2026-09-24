@@ -28,3 +28,16 @@ export left "[QA]" in its place. Both now show the character it stands for. Link
 are unchanged, with one small exception: a heading containing a non-breaking space typed as the
 character itself, or a tab, now gets the same anchor GitHub gives it.
 
+**A table with emoji in it lines up.** Format Document pads each cell so the pipes fall in one
+column, but it measured by characters rather than by the room they take on screen. A ✅ or ❌ is
+one character drawn two columns wide, so in a table with a status column of them every emoji row
+ran one column past the header and the divider. Cells are now measured the way the editor draws
+them: an emoji, or a Chinese, Japanese or Korean character, takes two columns, and a joined emoji
+or a flag counts once. Arrows, dashes and check boxes such as `☐` are drawn one column wide and
+still count as one.
+
+**Formatting Options shows all of its rules.** The dialog lays its rules out in three columns,
+but it was held to a width too narrow for them, so the third column — Blockquote space, Table
+formatting, Code fences, Underlined headings and Emphasis markers — was cut off at the right edge,
+along with the ends of the two notes beneath. The dialog is now wide enough for everything on it.
+
