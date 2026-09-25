@@ -2458,15 +2458,20 @@
   }
 
   /// Asks the host to start a comment on the selection. The Comment button, and Ctrl+Shift+M.
-  function requestComment() {
+  // quiet: said nothing when there is no selection to take, rather than a problem - Start
+  // Commenting asks this way, taking a selection the reader already had and not asking for one.
+  function requestComment(quiet) {
     hideCommentButton();
 
     if (!activeReview()) {
+      if (quiet) { return; }
       post('commentRequested', { documentId: state.activeTabId, problem: 'inactive' });
       return;
     }
 
     var read = readCommentSelection();
+
+    if (quiet && (read.problem || read.activate)) { return; }
 
     if (read.activate) {
       post('commentActivated', { documentId: state.activeTabId, id: read.activate });
@@ -5614,8 +5619,8 @@
     },
 
     /// Ctrl+Shift+M pressed while the window rather than this page had the keyboard.
-    captureComment: function () {
-      requestComment();
+    captureComment: function (p) {
+      requestComment(!!(p && p.quiet));
     },
 
     requestReviewHtml: function (p) {

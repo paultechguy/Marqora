@@ -181,7 +181,7 @@ public static class CommentMarkup
     }
 
     /// <summary>Joins neighbours in the same style, so a caller draws one run where it can.</summary>
-    private static IReadOnlyList<CommentSpan> Merge(List<CommentSpan> spans)
+    private static List<CommentSpan> Merge(List<CommentSpan> spans)
     {
         var merged = new List<CommentSpan>(spans.Count);
 

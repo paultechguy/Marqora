@@ -726,7 +726,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     public Task HoverCommentAsync(Guid documentId, Guid? commentId) =>
         SendAsync("hoverComment", new { documentId, id = commentId?.ToString() ?? string.Empty });
 
-    public Task CaptureCommentAsync() => SendAsync("captureComment", new { });
+    public Task CaptureCommentAsync(bool quiet = false) => SendAsync("captureComment", new { quiet });
 
     /// <summary>Outstanding review-page requests, matched by id like the HTML ones above.</summary>
     private readonly Dictionary<Guid, TaskCompletionSource<string>> _reviewRequests = [];

@@ -609,7 +609,12 @@ public interface IPreviewHost
     /// <see cref="CommentRequested"/>. For Ctrl+Shift+M pressed while the window, rather than
     /// the page, has the keyboard.
     /// </summary>
-    Task CaptureCommentAsync();
+    /// <param name="quiet">
+    /// Say nothing when there is no selection to comment on, rather than answering with a
+    /// problem. For Start Commenting, which takes a selection if the reader had one and is not
+    /// asking for one if they did not.
+    /// </param>
+    Task CaptureCommentAsync(bool quiet = false);
 
     /// <summary>
     /// The preview as the reviewer sees it, made into a review page's body: each comment's

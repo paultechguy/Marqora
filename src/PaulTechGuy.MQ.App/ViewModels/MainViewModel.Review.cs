@@ -212,6 +212,12 @@ public sealed partial class MainViewModel
         if (_host is not null)
         {
             await _host.FocusPaneAsync(EditorPane.Preview).ConfigureAwait(true);
+
+            // A passage already selected in the preview is what the reader meant to comment on,
+            // so it becomes the first card straight away. Quietly: with nothing selected the
+            // shell says nothing, and the status above stands. Sent after the focus request, so
+            // the card that comes back is the last thing to take the keyboard.
+            await _host.CaptureCommentAsync(quiet: true).ConfigureAwait(true);
         }
     }
 
