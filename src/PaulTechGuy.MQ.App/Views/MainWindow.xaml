@@ -2034,18 +2034,18 @@
         </InfoBar>
 
         <!--
-            The review banner, while the document in front is under review. Informational and
-            not closable: it is the only thing in the window saying why typing does nothing, and
-            when the file changes on disk it is what says so, in place of the external-change
-            bar above - which RefreshExternalNotice keeps shut for a document under review,
-            because the Reload it offers is the one thing a review holds back.
+            The review banner, while the document in front is under review. Informational, and
+            closable once read: a close holds until the banner has something new to say - the
+            file changing on disk, which it reports in place of the external-change bar above
+            (RefreshExternalNotice keeps that one shut for a document under review, because the
+            Reload it offers is the one thing a review holds back), or a review saved.
         -->
         <InfoBar x:Name="ReviewBar"
                  Margin="10,8,10,0"
-                 IsOpen="{x:Bind ViewModel.IsReviewPanelVisible, Mode=OneWay}"
+                 IsOpen="{x:Bind ViewModel.IsReviewBarOpen, Mode=TwoWay}"
                  Severity="Informational"
                  Title="{x:Bind ViewModel.ReviewNotice, Mode=OneWay}"
-                 IsClosable="False">
+                 IsClosable="True">
             <InfoBar.Content>
                 <StackPanel Orientation="Horizontal"
                             Margin="0,0,0,10"
@@ -2293,9 +2293,7 @@
 
                                                 <!-- Reading face. -->
                                                 <StackPanel Spacing="4" Visibility="{x:Bind IsViewing, Mode=OneWay}">
-                                                    <TextBlock Text="{x:Bind Note, Mode=OneWay}"
-                                                               TextWrapping="Wrap"
-                                                               IsTextSelectionEnabled="True" />
+                                                    <controls:CommentText Markup="{x:Bind Note, Mode=OneWay}" />
                                                     <StackPanel Orientation="Horizontal"
                                                                 HorizontalAlignment="Right"
                                                                 Spacing="{StaticResource MqButtonGroupSpacing}">
@@ -2315,6 +2313,7 @@
                                                     <TextBox x:Name="ReviewBox"
                                                              Text="{x:Bind EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                              PlaceholderText="Write a comment"
+                                                             ToolTipService.ToolTip="**bold** (Ctrl+B)   *italic* (Ctrl+I)   ++underline++ (Ctrl+U)   ==highlight== (Ctrl+Shift+H)   `code` (Ctrl+`)"
                                                              AcceptsReturn="True"
                                                              TextWrapping="Wrap"
                                                              MinHeight="64"

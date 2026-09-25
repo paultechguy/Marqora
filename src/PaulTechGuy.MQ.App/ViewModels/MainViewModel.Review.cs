@@ -63,6 +63,34 @@ public sealed partial class MainViewModel
     [ObservableProperty]
     public partial string ReviewNotice { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Whether the banner is showing. Closable: once the reader has read "the source is locked"
+    /// it has done its job. A close holds only until the banner has something new to say - the
+    /// file changing on disk, a review saved with its two buttons - because those are news.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsReviewBarOpen { get; set; }
+
+    /// <summary>
+    /// The messages the reader has closed this review. Per message rather than one flag, so the
+    /// lock message closed once does not come back after every share, while news - a changed
+    /// file, a saved review - still shows the first time it is said.
+    /// </summary>
+    private readonly HashSet<string> _dismissedReviewNotices = new(StringComparer.Ordinal);
+
+    // Only a close made while the banner could be seen counts as the reader dismissing it. The
+    // bar also shuts because the review's tab went to the back, and that is not a decision.
+    partial void OnIsReviewBarOpenChanged(bool value)
+    {
+        if (!value && IsReviewPanelVisible && !_refreshingReviewBar)
+        {
+            _dismissedReviewNotices.Add(ReviewNotice);
+        }
+    }
+
+    /// <summary>Set while RefreshReviewState moves the bar itself, so the move is not read as a close.</summary>
+    private bool _refreshingReviewBar;
+
     /// <summary>The page the last share wrote, for the banner's Show in Folder and Copy File.</summary>
     [ObservableProperty]
     public partial string LastReviewPath { get; set; } = string.Empty;
@@ -95,6 +123,7 @@ public sealed partial class MainViewModel
         host.CommentRequested += OnCommentRequested;
         host.CommentActivated += OnCommentActivated;
         host.CommentHovered += OnCommentHovered;
+        host.CommentEditRequested += OnCommentEditRequested;
     }
 
     // ---------------------------------------------------------------- start / end
@@ -409,6 +438,16 @@ public sealed partial class MainViewModel
         ReviewCommentFocusRequested?.Invoke(this, card);
     });
 
+    /// <summary>A double-click on a comment in the preview: open its card for editing.</summary>
+    private void OnCommentEditRequested(object? sender, CommentActivatedEventArgs e) => _ui.Post(() =>
+    {
+        if (_review?.DocumentId == e.DocumentId
+            && ReviewComments.FirstOrDefault(c => c.Id == e.CommentId) is { } card)
+        {
+            EditComment(card);
+        }
+    });
+
     private void OnCommentHovered(object? sender, CommentHoveredEventArgs e) => _ui.Post(() =>
     {
         if (_review?.DocumentId != e.DocumentId)
@@ -531,6 +570,14 @@ public sealed partial class MainViewModel
             return;
         }
 
+        // Already open - a draft, or an edit in progress: take the reader to it, and leave what is
+        // in the box alone. Starting over from the saved note would throw their typing away.
+        if (card.IsEditing)
+        {
+            ReviewCommentFocusRequested?.Invoke(this, card);
+            return;
+        }
+
         card.EditText = card.Note;
         card.IsEditing = true;
         ReviewCommentFocusRequested?.Invoke(this, card);
@@ -619,6 +666,8 @@ public sealed partial class MainViewModel
         {
             IsReviewPanelVisible = false;
             ReviewNotice = string.Empty;
+            SetReviewBarOpen(false);
+            _dismissedReviewNotices.Clear();
             ReviewStatus = string.Empty;
             return;
         }
@@ -633,13 +682,30 @@ public sealed partial class MainViewModel
                 ? $"{count} · Changed since the last share"
                 : $"{count} · Not shared yet";
 
-        ReviewNotice = HasSharedReviewFile && review.IsShared
+        string notice = HasSharedReviewFile && review.IsShared
             ? $"Review saved: {Path.GetFileName(LastReviewPath)}"
             : document.External == ExternalState.Changed
                 ? $"{document.DisplayName} changed on disk. Your comments refer to the version you're reading."
                 : document.External == ExternalState.Missing
                     ? $"{document.DisplayName} was deleted on disk. Your comments refer to the version you're reading."
                     : $"Commenting on {document.DisplayName}. The source is locked so your comments match what you read.";
+
+        ReviewNotice = notice;
+        SetReviewBarOpen(IsReviewPanelVisible && !_dismissedReviewNotices.Contains(notice));
+    }
+
+    private void SetReviewBarOpen(bool open)
+    {
+        _refreshingReviewBar = true;
+
+        try
+        {
+            IsReviewBarOpen = open;
+        }
+        finally
+        {
+            _refreshingReviewBar = false;
+        }
     }
 
     /// <summary>What a read-only refusal calls the document: a review is not the reader's mark.</summary>
@@ -701,7 +767,7 @@ public sealed partial class MainViewModel
         }
 
         IReadOnlyList<ReviewComment> ordered = review.Ordered;
-        ReviewNote[] notes = [.. ordered.Select((c, i) => new ReviewNote(c.Id, i + 1, c.Note))];
+        ReviewNote[] notes = [.. ordered.Select((c, i) => new ReviewNote(c.Id, i + 1, CommentMarkup.ToHtml(c.Note)))];
 
         try
         {

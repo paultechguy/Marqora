@@ -88,6 +88,9 @@ public static partial class ReviewPage
               scroll-margin-top: 4rem;
             }
 
+            /* Inside inline code, rounded to nest in the code box's own corners, as the preview has it. */
+            .mq-review .mq-preview :not(pre) > code mark.mq-comment { border-radius: 3px; }
+
             .mq-review a.mq-comment-ref {
               font-size: 0.75em;
               font-weight: 700;
@@ -167,6 +170,11 @@ public static partial class ReviewPage
         {
             builder.Append(CultureInfo.InvariantCulture, $".mq-review:has(mark.mq-comment[data-note=\"{n}\"]:hover) #mq-note-{n} {{ background: var(--mq-review-note-hot); }}\n");
             builder.Append(CultureInfo.InvariantCulture, $".mq-review:has(#mq-note-{n}:hover) mark.mq-comment[data-note=\"{n}\"] {{ background: var(--mq-review-mark-hot); }}\n");
+
+            // The comment lit whole: one passage across bold or code words is several marks, and
+            // :hover or :target on its own would light only the one under the pointer or the first.
+            builder.Append(CultureInfo.InvariantCulture, $".mq-review:has(mark.mq-comment[data-note=\"{n}\"]:hover) mark.mq-comment[data-note=\"{n}\"] {{ background: var(--mq-review-mark-hot); }}\n");
+            builder.Append(CultureInfo.InvariantCulture, $".mq-review:has(#mq-mark-{n}:target) mark.mq-comment[data-note=\"{n}\"] {{ background: var(--mq-review-mark-hot); }}\n");
         }
 
         return builder.ToString();

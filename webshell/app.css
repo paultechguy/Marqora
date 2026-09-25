@@ -1064,13 +1064,51 @@ a.mq-blocked-media {
   color: var(--mq-accent);
 }
 
+/*
+  Inside inline code the comment follows the code box's shape. The mark sits within the box's padding,
+  and square corners there read as a second, different box; rounded one pixel under the code's own
+  4px, they nest inside it. The shared page carries the same rule (ReviewPage.Css).
+*/
+.mq-preview :not(pre) > code mark.mq-comment { border-radius: 3px; }
+
+/*
+  A reviewed document read back in: the CriticMarkup a review's Copy as Markdown writes, drawn as
+  comments rather than as the author's yellow highlight (see CriticMarkupPass). The passage wears
+  the comments' teal from end to end, and code inside it is tinted to match, because inline code
+  draws its own background and would otherwise break the passage into pieces. The note sits
+  after it, small and edged in teal, the way a margin note is on the shared page.
+*/
+.mq-preview mark.mq-critic {
+  background: color-mix(in srgb, var(--mq-accent) 22%, transparent);
+  color: inherit;
+  border-radius: 0;
+  padding: 0;
+  border-bottom: 2px solid var(--mq-accent);
+}
+
+.mq-preview mark.mq-critic code {
+  background: color-mix(in srgb, var(--mq-accent) 30%, var(--mq-bg));
+  border-color: color-mix(in srgb, var(--mq-accent) 45%, var(--mq-bg));
+}
+
+.mq-preview .mq-critic-note {
+  margin-left: 0.3em;
+  padding: 0.05em 0.5em;
+  border-left: 3px solid var(--mq-accent);
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--mq-accent) 10%, var(--mq-bg));
+  font-size: 0.88em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* A comment still being written: there, but not yet said. */
 .mq-preview mark.mq-comment-draft {
   background: color-mix(in srgb, var(--mq-accent) 12%, transparent);
   border-bottom-style: dashed;
 }
 
-.mq-preview mark.mq-comment:hover,
+/* Lit by class, all segments at once - see lightComment in app.js - never by :hover alone. */
 .mq-preview mark.mq-comment-hot,
 .mq-preview mark.mq-comment-flash {
   background: color-mix(in srgb, var(--mq-accent) 40%, transparent);
@@ -1086,13 +1124,12 @@ a.mq-blocked-media {
   Fixed rather than placed inside the preview, and hidden on scroll: inside the article it would
   be part of every export and copy taken from it.
 
-  A solid fill in the document teal, which breaks the rule the rest of the app keeps - accent only
-  on a button that commits - on purpose. It floats over text the reader is looking at, appears
-  only when asked for by a selection, and is the whole of how a comment is started; in the page's
-  own quiet colors it read as part of the text and was walked past. The teal is the comments'
-  own color (the highlight, the sidebar numbers), so it says "this is about commenting" rather
-  than "this is the default action". The label takes the page background, which is white on the
-  light teal and near-black on the dark one - readable in both.
+  In the comments' own teal, as everything about commenting is - the marks, the sidebar's numbers,
+  the wash over a card the pointer is on - and the fill is that same wash: the teal at the strength
+  of the card's hover (MqListRowSelectedBrush), laid over the page so the button is solid over the
+  text it floats on. A solid teal border and a semibold label in the page's own text color make it
+  stand out without shouting; in the page's quiet grays it read as part of the text and was
+  walked past.
 */
 .mq-comment-button {
   position: fixed;
@@ -1102,8 +1139,8 @@ a.mq-blocked-media {
   padding: 0 var(--mq-btn-padding-x);
   border: 1px solid var(--mq-accent);
   border-radius: var(--mq-btn-radius);
-  background: var(--mq-accent);
-  color: var(--mq-bg);
+  background: color-mix(in srgb, var(--mq-accent) 22%, var(--mq-bg));
+  color: var(--mq-text);
   font-family: var(--mq-font-ui);
   font-size: var(--mq-btn-font-size);
   font-weight: 600;
@@ -1112,7 +1149,7 @@ a.mq-blocked-media {
 }
 
 .mq-comment-button[hidden] { display: none; }
-.mq-comment-button:hover { filter: brightness(1.1); }
+.mq-comment-button:hover { background: color-mix(in srgb, var(--mq-accent) 34%, var(--mq-bg)); }
 .mq-comment-button:active { opacity: 0.7; }
 
 .mq-preview abbr { text-decoration-style: dotted; cursor: help; }

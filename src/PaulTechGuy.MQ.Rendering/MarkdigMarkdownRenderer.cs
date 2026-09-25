@@ -62,9 +62,13 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
 
             ShortColumnPass.Apply(document);
 
+            // A reviewed document's comments, written by Copy as Markdown, drawn as comments.
+            CriticMarkupPass.Apply(document);
+
             using var writer = new StringWriter();
             var renderer = new Markdig.Renderers.HtmlRenderer(writer);
             _pipeline.Setup(renderer);
+            renderer.ObjectRenderers.Add(new CriticNoteRenderer());
             renderer.Render(document);
             writer.Flush();
 

@@ -43,13 +43,24 @@ save lifecycle with a live data-loss bug, and this design has none of the three.
    Untitled text is allowed: pasted AI output is the common case, and it has no autosave to
    lose. The source is locked, and the window switches to the preview alone: comments are made
    there, and a locked source beside it is only in the way. The view the reader had comes back
-   when the review ends, unless they chose another in the meantime.
+   when the review ends, unless they chose another in the meantime. A banner says why typing does
+   nothing. It can be closed, and each message stays closed once closed, while news - the file
+   changing on disk, a review saved - still shows the first time it is said.
 2. **Comment.** The reader selects a passage in the preview. A small **Add comment** button appears
    above it; the button or Ctrl+Shift+M opens a card in the sidebar with its box focused.
    Ctrl+Enter or Save keeps the note - both wait for more than whitespace - and Escape cancels
    it. Tab goes from the box to Save, then Cancel. Hovering a comment in the preview lights its
    card, and hovering a card lights its comment. Share Review... and Copy as Markdown stay grayed
    until there is a saved comment to send.
+   Double-clicking a comment in the preview opens its card for editing.
+
+   A comment may carry five styles, written the way the preview reads them: `**bold**`,
+   `*italic*`, `++underline++`, `==highlight==` and `` `code` ``, or put on the selected words with
+   Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Shift+H and Ctrl+Backtick (`CommentMarkup.Toggle`). One parser,
+   `CommentMarkup`, reads them for both places a comment is shown: the card builds its runs from
+   it, and the shared page is handed each note as HTML from it rather than parsing the markup a
+   second time in the page. A marker with no partner is text; the CriticMarkup copy keeps the
+   markdown as written.
 3. **Share Review...** writes `<name> (review).html`. The first time the save dialog opens in
    Documents, and after that wherever the last one went. Windows remembers it through the
    dialog's own client id, so no setting holds it. The banner then offers **Show in Folder** and
@@ -179,6 +190,12 @@ not placed inline becomes a standalone `{>>On "passage": comment<<}` after its b
 text an emoji shortcode or entity changed on its way to the screen, a code block (never
 altered), and a comment overlapping another. In a table row or heading, a note's line breaks
 become spaces and pilcrows, and in a table row its pipes are escaped.
+
+Marqora reads this markup back, too. `CriticMarkupPass` runs over the parsed document, so a reviewed
+copy pasted into a tab shows its comments as comments: the passage classed `mq-critic` and drawn in
+the comments' teal - code inside it included, so the passage is not broken into pieces - and the
+note gathered into one element after it. Nothing is rewritten before the parse, so the positions the
+analyzer and scroll sync depend on stay where they were.
 
 ---
 

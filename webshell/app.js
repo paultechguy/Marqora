@@ -2475,6 +2475,13 @@
 
     read.documentId = state.activeTabId;
     post('commentRequested', read);
+
+    // Taken, so let go of it. The passage is about to wear its comment mark, and a selection
+    // left over it would be clipped by the new mark into a stray piece of highlighted text.
+    if (!read.problem) {
+      var selection = window.getSelection();
+      if (selection) { selection.removeAllRanges(); }
+    }
   }
 
   // Takes a comment's marks out, putting its text back as it was.
@@ -2687,12 +2694,38 @@
     post('commentHovered', { documentId: state.activeTabId, id: id || '' });
   }
 
+  // The comment is lit whole, every segment of it, rather than by CSS :hover - which lights only
+  // the segment under the pointer, and a comment across bold or code words is several segments.
   els.preview.addEventListener('mouseover', function (e) {
     var mark = activeReview() && e.target.closest ? e.target.closest('mark.mq-comment') : null;
-    reportHoveredComment(mark ? mark.getAttribute('data-comment') : null);
+    var id = mark ? mark.getAttribute('data-comment') : null;
+
+    if (id !== hoveredComment) { lightComment(id); }
+    reportHoveredComment(id);
   });
 
-  els.preview.addEventListener('mouseleave', function () { reportHoveredComment(null); });
+  els.preview.addEventListener('mouseleave', function () {
+    if (hoveredComment) { lightComment(null); }
+    reportHoveredComment(null);
+  });
+
+  /*
+    A double-click anywhere in a comment opens it for editing in the sidebar. The browser's own
+    double-click selects the word under the pointer, which would leave a stray selection over
+    the comment and offer Add comment for text already commented on, so that is undone first.
+  */
+  els.preview.addEventListener('dblclick', function (e) {
+    var mark = activeReview() && e.target.closest ? e.target.closest('mark.mq-comment') : null;
+    if (!mark) { return; }
+
+    e.preventDefault();
+
+    var selection = window.getSelection();
+    if (selection) { selection.removeAllRanges(); }
+    hideCommentButton();
+
+    post('commentEditRequested', { documentId: state.activeTabId, id: mark.getAttribute('data-comment') });
+  });
 
   function lightComment(id) {
     var lit = els.preview.querySelectorAll('mark.mq-comment-hot');
@@ -2748,7 +2781,9 @@
     node.parentNode.insertBefore(note, node.nextSibling);
   }
 
-  function buildNote(number, text) {
+  // The note's words arrive as HTML from CommentMarkup.ToHtml on the host - encoded there, with
+  // its five styles already turned into elements - so the markup has one reader, not two.
+  function buildNote(number, html) {
     var note = document.createElement('span');
     note.className = 'mq-sidenote';
     note.id = 'mq-note-' + number;
@@ -2758,21 +2793,7 @@
     back.href = '#mq-mark-' + number;
     back.textContent = String(number);
     note.appendChild(back);
-
-    String(text || '').replace(/\r\n/g, '\n').trim().split(/\n\s*\n/).forEach(function (paragraph, i) {
-      var target = note;
-
-      if (i > 0) {
-        target = document.createElement('span');
-        target.className = 'mq-sidenote-para';
-        note.appendChild(target);
-      }
-
-      paragraph.split('\n').forEach(function (line, k) {
-        if (k > 0) { target.appendChild(document.createElement('br')); }
-        target.appendChild(document.createTextNode(line));
-      });
-    });
+    back.insertAdjacentHTML('afterend', String(html || ''));
 
     return note;
   }
@@ -2812,7 +2833,7 @@
       reference.textContent = String(number);
       last.appendChild(reference);
 
-      placeNote(last, buildNote(number, entry.text));
+      placeNote(last, buildNote(number, entry.html));
     });
 
     // Anything still carrying a comment id was not in the list the host sent: not a comment.

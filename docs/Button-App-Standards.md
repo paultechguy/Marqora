@@ -265,13 +265,13 @@ There is deliberately **no accent button on that toolbar**. Its five controls ar
 actions and none of them commits anything, so the one-accent-per-surface rule has nothing to
 place. Do not add one for the sake of consistency.
 
-The Comment button is the one deliberate exception to the accent rule. It is filled with the
-document teal - not the Windows accent, which stays with Share Review... in the sidebar - because
-it floats over text the reader is looking at and is the whole of how a comment is started, and in
-the page's quiet colors it read as part of the text and was walked past. The teal is the
-comments' own color, so the fill says "this is about commenting", not "this is the default
-action". It is fixed to the page rather than placed in the article, so it can never be part of an
-export, a print or a copy.
+The Add comment button wears the comments' own teal, not the Windows accent: everything about
+commenting is teal - the marks, the sidebar's numbers, the wash over a card - and the button is
+part of that family rather than a primary button of the chrome's. Its fill is the same wash as a
+card under the pointer, with a solid teal border and a semibold label in the page's text color,
+which is enough to be seen over a paragraph without competing with Share Review..., the one accent
+in the sidebar. The Windows accent was tried and set aside for that reason. The button is fixed to the page rather than placed in the article,
+so it can never be part of an export, a print or a copy.
 
 **On keeping the two sides in step.** Marqora's rule for a value shared between C# and the web is
 that one side owns it and pushes it to the other: `MatchColors` holds the search-match colors,

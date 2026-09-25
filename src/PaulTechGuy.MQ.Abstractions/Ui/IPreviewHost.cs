@@ -234,8 +234,11 @@ public sealed class CommentHoveredEventArgs(Guid documentId, Guid? commentId) : 
 /// <summary>One comment as the preview draws it: where, what number, and whether it is still being written.</summary>
 public sealed record ReviewMark(Guid Id, int Number, ReviewAnchor Anchor, bool Draft);
 
-/// <summary>One comment as the review page carries it: its number and what it says.</summary>
-public sealed record ReviewNote(Guid Id, int Number, string Text);
+/// <summary>
+/// One comment as the review page carries it: its number, and what it says as HTML from
+/// <see cref="CommentMarkup.ToHtml"/> - built here so the page does not parse the markup a second time.
+/// </summary>
+public sealed record ReviewNote(Guid Id, int Number, string Html);
 
 /// <summary>
 /// The bridge to the WebView-hosted editor and preview surface.
@@ -294,6 +297,9 @@ public interface IPreviewHost
 
     /// <summary>The reviewer clicked an existing comment in the preview.</summary>
     event EventHandler<CommentActivatedEventArgs>? CommentActivated;
+
+    /// <summary>The reviewer double-clicked a comment in the preview, to edit it.</summary>
+    event EventHandler<CommentActivatedEventArgs>? CommentEditRequested;
 
     /// <summary>The pointer moved onto a comment in the preview, or off it.</summary>
     event EventHandler<CommentHoveredEventArgs>? CommentHovered;

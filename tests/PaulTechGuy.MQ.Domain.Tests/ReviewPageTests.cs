@@ -109,6 +109,10 @@ public sealed class ReviewPageTests
         {
             css.ShouldContain($"mark.mq-comment[data-note=\"{n}\"]:hover) #mq-note-{n}");
             css.ShouldContain($":has(#mq-note-{n}:hover) mark.mq-comment[data-note=\"{n}\"]");
+
+            // Every segment of a comment lights together, on hover and when jumped to.
+            css.ShouldContain($":has(mark.mq-comment[data-note=\"{n}\"]:hover) mark.mq-comment[data-note=\"{n}\"]");
+            css.ShouldContain($":has(#mq-mark-{n}:target) mark.mq-comment[data-note=\"{n}\"]");
         }
 
         ReviewPage.HoverCss(0).ShouldBeEmpty();
@@ -120,5 +124,8 @@ public sealed class ReviewPageTests
     {
         ReviewPage.Css(760).ShouldContain("max-width: calc(760px + var(--mq-note-width) + var(--mq-note-gap));");
         ReviewPage.Css(0).ShouldContain("max-width: none;");
+
+        // A comment inside inline code keeps the code box's rounded shape, as in the preview.
+        ReviewPage.Css(0).ShouldContain(".mq-review .mq-preview :not(pre) > code mark.mq-comment { border-radius: 3px; }");
     }
 }

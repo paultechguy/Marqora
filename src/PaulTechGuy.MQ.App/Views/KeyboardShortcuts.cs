@@ -134,6 +134,10 @@ internal static class KeyboardShortcuts
             new("Comment on the text selected in the preview", "Ctrl+Shift+M"),
             new("Save the comment being written", "Ctrl+Enter"),
             new("Cancel the comment being written", "Esc"),
+            new("Comment text: bold, italic, underline", "Ctrl+B / Ctrl+I / Ctrl+U"),
+            new("Comment text: highlight", "Ctrl+Shift+H"),
+            new("Comment text: inline code", "Ctrl+`"),
+            new("Edit a comment", "Double-click it in the preview"),
         ]),
 
         new("Help",

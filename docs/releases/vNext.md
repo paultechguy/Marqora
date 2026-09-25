@@ -9,11 +9,22 @@ comment, and see it highlighted in the page with the note in a sidebar beside it
 
 - **Nothing changes in the document.** While you comment, the text is locked and the window shows
   the preview alone. The comments are kept in memory for this sitting only and are never written
-  into the file. Your previous view comes back when you end the review.
-- **Select, then Add comment.** An Add comment button appears over the text you select; click it or press
-  Ctrl+Shift+M, type the note in the sidebar, and press Save or Ctrl+Enter. Hovering a comment in
-  the page lights its card, and hovering a card lights its comment. Each card can be edited or
-  deleted, and the numbers run down the page in reading order.
+  into the file, and your previous view comes back when you end the review. A banner says why
+  typing does nothing; close it once you have read it, and it comes back only with news - the
+  file changing on disk, or a review saved.
+- **Select, then Add comment.** Select a passage and an **Add comment** button appears over it;
+  click it or press Ctrl+Shift+M, and a card opens in the sidebar with the cursor already in it.
+  Save (or Ctrl+Enter) stays grayed until there is something to save, Escape cancels, and Tab
+  goes from the box to Save and then Cancel. The numbers run down the page in reading order.
+- **Double-click a comment to edit it.** Double-click anywhere in a highlighted passage and its
+  card opens for editing. Each card also has **Edit** and **Delete Comment**. Hovering a comment
+  in the page lights its card, and hovering a card lights its comment - the whole passage, bold
+  and code words included.
+- **A little formatting in a comment**: **bold**, *italic*, underline, highlight and `code`,
+  written the way the preview reads them - `**bold**`, `*italic*`, `++underline++`,
+  `==highlight==` and `` `code` `` - or put on the selected words with Ctrl+B, Ctrl+I, Ctrl+U,
+  Ctrl+Shift+H and Ctrl+Backtick. Pressing a key again takes the style off. The card and the
+  shared page show it formatted; the markdown copy keeps it as written.
 - **Share Review...** saves one read-only HTML page for the author: the document as you read it,
   with every comment highlighted and its note in the margin, and a line at the top saying which
   version you reviewed and when. It opens in any browser, needs nothing installed, and runs no
@@ -22,9 +33,12 @@ comment, and see it highlighted in the page with the note in a sidebar beside it
   ready to paste into an email or chat as an attachment.
 - **Copy as Markdown** puts the source on the clipboard with every comment written in beside the
   words it is about, in CriticMarkup (`{==passage==}{>>comment<<}`). It is the form to paste into
-  an AI and ask it to act on the comments. The shared page carries the same copy inside it.
-- **End Commenting** asks first if you have comments nobody has seen, and closing the tab or the
-  app asks the same. Ending is final: the comments go with it.
+  an AI and ask it to act on the comments, and the shared page carries the same copy inside it.
+  Opened in Marqora, that markdown shows its comments as comments: the passage in teal, its note
+  beside it. Share Review... and Copy as Markdown stay grayed until there is a saved comment.
+- **End Commenting**, at the foot of the sidebar, asks there first if you have comments nobody
+  has seen - Discard and End, or Keep Commenting - and closing the tab or the app asks the same.
+  Ending is final: the comments go with it.
 
 One document is reviewed at a time. A document with unsaved changes has to be saved before it
 can be commented on, because the review locks it; pasted text in a new tab can be commented on

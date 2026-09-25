@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using PaulTechGuy.MQ.App.ViewModels;
+using PaulTechGuy.MQ.Domain;
 using Windows.System;
 using Windows.UI.Core;
 
@@ -162,6 +163,32 @@ public sealed partial class MainWindow
         {
             e.Handled = true;
             save.Focus(FocusState.Keyboard);
+            return;
+        }
+
+        // The five styles a comment may carry, on the keys Word uses where it has them. Each wraps
+        // the selection in its markup, or takes it off again; see CommentMarkup.Toggle. Handled
+        // here, before the window's own accelerators for the same keys - Ctrl+B there is Bold on
+        // the document, and Ctrl+Shift+H is Replace All.
+        CommentStyle? style = (e.Key, control, shift) switch
+        {
+            (VirtualKey.B, true, false) => CommentStyle.Bold,
+            (VirtualKey.I, true, false) => CommentStyle.Italic,
+            (VirtualKey.U, true, false) => CommentStyle.Underline,
+            (VirtualKey.H, true, true) => CommentStyle.Highlight,
+            ((VirtualKey)192, true, false) => CommentStyle.Code,
+            _ => null,
+        };
+
+        if (style is { } chosen && sender is TextBox box)
+        {
+            e.Handled = true;
+
+            (string text, int start, int length) = CommentMarkup.Toggle(
+                box.Text, box.SelectionStart, box.SelectionLength, chosen);
+
+            box.Text = text;
+            box.Select(start, length);
             return;
         }
 

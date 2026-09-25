@@ -146,6 +146,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler<CommentActivatedEventArgs>? CommentActivated;
 
+    public event EventHandler<CommentActivatedEventArgs>? CommentEditRequested;
+
     public event EventHandler<CommentHoveredEventArgs>? CommentHovered;
 
     public event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
@@ -747,7 +749,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             {
                 requestId = id,
                 documentId,
-                notes = notes.Select(n => new { id = n.Id, number = n.Number, text = n.Text }).ToArray(),
+                notes = notes.Select(n => new { id = n.Id, number = n.Number, html = n.Html }).ToArray(),
             }).ConfigureAwait(true);
 
             Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(10)))
@@ -1391,6 +1393,14 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     && Guid.TryParse(ReadString(payload, "id"), out Guid activatedComment))
                 {
                     CommentActivated?.Invoke(this, new CommentActivatedEventArgs(activatedDocument, activatedComment));
+                }
+                break;
+
+            case "commentEditRequested":
+                if (Guid.TryParse(ReadString(payload, "documentId"), out Guid editDocument)
+                    && Guid.TryParse(ReadString(payload, "id"), out Guid editComment))
+                {
+                    CommentEditRequested?.Invoke(this, new CommentActivatedEventArgs(editDocument, editComment));
                 }
                 break;
 
