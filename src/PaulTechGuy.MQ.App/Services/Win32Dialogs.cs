@@ -54,12 +54,25 @@ internal static class Win32Dialogs
     }
 
     /// <summary>Shows the Save As dialog. Returns null when the user cancels.</summary>
+    /// <param name="purpose">
+    /// Gives this dialog a memory of its own. Windows keeps the last folder per client id, so a
+    /// dialog with one opens where it was last used for that purpose rather than wherever the
+    /// process last saved anything. Null shares the process-wide memory, which is every other
+    /// dialog's behavior.
+    /// </param>
+    /// <param name="defaultFolder">
+    /// Where to open when there is no memory yet - the first time for a <paramref name="purpose"/>.
+    /// Windows ignores it once it remembers a folder, which is the point: it is a first answer,
+    /// not a fixed one.
+    /// </param>
     public static string? SaveFile(
         IntPtr owner,
         string title,
         string? suggestedFileName,
         IReadOnlyList<string> extensions,
-        string filterLabel = "Markdown")
+        string filterLabel = "Markdown",
+        Guid? purpose = null,
+        string? defaultFolder = null)
     {
         var dialog = (IFileSaveDialog)new FileSaveDialogRcw();
 
@@ -68,6 +81,25 @@ internal static class Win32Dialogs
             dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST | FOS_STRICTFILETYPES);
             dialog.SetTitle(title);
             SetFilters(dialog, extensions, includeAllFiles: false, filterLabel);
+
+            if (purpose is Guid id)
+            {
+                dialog.SetClientGuid(ref id);
+            }
+
+            if (!string.IsNullOrWhiteSpace(defaultFolder)
+                && Directory.Exists(defaultFolder)
+                && SHCreateItemFromParsingName(defaultFolder, IntPtr.Zero, typeof(IShellItem).GUID, out IShellItem folder) == 0)
+            {
+                try
+                {
+                    dialog.SetDefaultFolder(folder);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(folder);
+                }
+            }
 
             if (extensions.Count > 0)
             {
@@ -172,6 +204,15 @@ internal static class Win32Dialogs
     }
 
     // ------------------------------------------------------------------- interop
+
+    // DllImport rather than LibraryImport, matching the rest of the app's interop: one call,
+    // and it hands back a COM interface the classic marshaller already knows how to build.
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+    private static extern int SHCreateItemFromParsingName(
+        [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+        IntPtr pbc,
+        [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+        out IShellItem ppv);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct COMDLG_FILTERSPEC

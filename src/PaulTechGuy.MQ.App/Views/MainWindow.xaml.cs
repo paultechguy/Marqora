@@ -151,6 +151,7 @@ public sealed partial class MainWindow : Window
         ViewModel.MenuRequested += (_, name) => OpenMenuByName(name);
 
         InitializeOutline();
+        InitializeReview();
 
         RootGrid.Loaded += OnLoaded;
         RootGrid.SizeChanged += OnRootSizeChanged;
@@ -635,6 +636,13 @@ public sealed partial class MainWindow : Window
         // The cheatsheet. F1 alone is left for Windows' own help conventions.
         Add(VirtualKey.F1, ctrl, () => ViewModel.ToggleCheatsheetCommand.Execute(null));
 
+        // Review. Both stand down while a text box has the keyboard, like the Edit group below:
+        // the comment being written is in one, and Ctrl+Shift+R there would end the review in the
+        // middle of a sentence. Ctrl+Shift+M from the chrome asks the page for its selection,
+        // since the page is where the selection is.
+        Add(VirtualKey.R, ctrlShift, () => RunReview(ViewModel.ToggleReviewCommand));
+        Add(VirtualKey.M, ctrlShift, () => RunReview(ViewModel.AddCommentCommand));
+
         // Opening the menus from the keyboard. Format takes O because File has F, the way
         // Windows menus have always split those two.
         Add(VirtualKey.F, alt, () => OpenMenu(FileMenu));
@@ -642,6 +650,7 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.O, alt, () => OpenMenu(FormatMenu));
         Add(VirtualKey.V, alt, () => OpenMenu(ViewMenu));
         Add(VirtualKey.T, alt, () => OpenMenu(ToolsMenu));
+        Add(VirtualKey.R, alt, () => OpenMenu(ReviewMenu));
         Add(VirtualKey.H, alt, () => OpenMenu(HelpMenu));
 
         /*
@@ -672,7 +681,27 @@ public sealed partial class MainWindow : Window
             ViewModel.EditActionCommand.Execute(command);
         }
 
-        void RunMarkdown(string command) => ViewModel.ApplyMarkdownCommand.Execute(command);
+        // The Format keys too. In a text box Ctrl+B belongs to the box, and sent on to a document
+        // under review it would only say that Bold did nothing.
+        void RunMarkdown(string command)
+        {
+            if (IsTextInputFocused())
+            {
+                return;
+            }
+
+            ViewModel.ApplyMarkdownCommand.Execute(command);
+        }
+
+        void RunReview(System.Windows.Input.ICommand command)
+        {
+            if (IsTextInputFocused())
+            {
+                return;
+            }
+
+            command.Execute(null);
+        }
 
         void Add(VirtualKey key, VirtualKeyModifiers modifiers, Action action)
         {
@@ -985,6 +1014,7 @@ public sealed partial class MainWindow : Window
             "insert" => InsertMenu,
             "view" => ViewMenu,
             "tools" => ToolsMenu,
+            "review" => ReviewMenu,
             "help" => HelpMenu,
             _ => null,
         };

@@ -353,9 +353,13 @@ public sealed class MarkdownFormatter : IMarkdownFormatter
 
                 if (options.UnifyEmphasis)
                 {
-                    text = MarkdownLineRules.OutsideCodeSpans(
-                        text,
+                    string Unify(string part) => MarkdownLineRules.OutsideCodeSpans(
+                        part,
                         segment => MarkdownLineRules.UnifyEmphasis(segment, options.Emphasis));
+
+                    text = MarkdownLineRules.IsTableRow(text)
+                        ? MarkdownLineRules.PerTableCell(text, Unify)
+                        : Unify(text);
                 }
             }
 

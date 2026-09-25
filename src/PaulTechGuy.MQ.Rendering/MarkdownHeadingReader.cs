@@ -1,11 +1,8 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Text;
-using Markdig.Extensions.Abbreviations;
 using Markdig.Renderers.Html;
 using Markdig.Syntax;
-using Markdig.Syntax.Inlines;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Markdown;
 using MarkdigDocument = Markdig.Syntax.MarkdownDocument;
@@ -29,9 +26,9 @@ internal static class MarkdownHeadingReader
 
         foreach (HeadingBlock heading in document.Descendants<HeadingBlock>())
         {
-            // The number span is an HtmlInline, which the walk below ignores, so this is
+            // The number span is an HtmlInline, which the plain-text walk ignores, so this is
             // the heading's own words whether the document has been numbered or not.
-            string text = ToPlainText(heading.Inline);
+            string text = InlinePlainText.OfHeading(heading);
 
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -54,45 +51,5 @@ internal static class MarkdownHeadingReader
         }
 
         return headings;
-    }
-
-    internal static string ToPlainText(ContainerInline? container)
-    {
-        if (container is null)
-        {
-            return string.Empty;
-        }
-
-        var builder = new StringBuilder();
-        Append(container, builder);
-        return builder.ToString().Trim();
-    }
-
-    private static void Append(ContainerInline container, StringBuilder builder)
-    {
-        foreach (Inline inline in container)
-        {
-            switch (inline)
-            {
-                case LiteralInline literal:
-                    builder.Append(literal.Content.AsSpan());
-                    break;
-                case CodeInline code:
-                    builder.Append(code.Content);
-                    break;
-                case LineBreakInline:
-                    builder.Append(' ');
-                    break;
-                // A leaf, not a container: *[HTML]: ... turns every later "HTML" into one of
-                // these, and its own children are always empty. What was actually written is
-                // the short form on the abbreviation itself, not its title-attribute expansion.
-                case AbbreviationInline abbreviation:
-                    builder.Append(abbreviation.Abbreviation?.Label);
-                    break;
-                case ContainerInline nested:
-                    Append(nested, builder);
-                    break;
-            }
-        }
     }
 }

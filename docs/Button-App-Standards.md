@@ -44,7 +44,7 @@ invent metrics.
 |---|---|---|---|
 | **Command** | Commits or dismisses a dialog, window or notice — OK, Cancel, Export, Reload, Find All, Browse files | `MqCommandButtonStyle`, `MqPrimaryCommandButtonStyle` | MinWidth 96, MinHeight 32, framework padding `11,5,11,6`, radius 4, font 14 |
 | **Chrome** | The main window's toolbar and format bar. Quiet until the pointer arrives | `MqToolButtonStyle`, `MqToolToggleStyle`, `MqDropDownStyle` | MinWidth 36, Height 34, padding `10,6`, radius 6 (`MqPillRadius`), font 13 |
-| **Compact chrome** | The same idea inside a palette window's toolbar | `MqCompactToolButtonStyle`, and its CSS twin in `webshell/diagram.css` | MinWidth 32, Height 28, padding `10,0`, radius 6, font 13 |
+| **Compact chrome** | The same idea inside a palette window's toolbar | `MqCompactToolButtonStyle`, and its CSS twins in `webshell/diagram.css` and `webshell/app.css` | MinWidth 32, Height 28, padding `10,0`, radius 6, font 13 |
 | **Icon** | Square, glyph only — tab list, search history, pin, remove | `MqIconButtonStyle` | 34 × 34, padding 0, radius 6, glyph 15 (`MqIconStyle`) |
 | **Link** | Reads as text and only grows a hit target on hover | `MqPathLinkStyle` | padding `5,1`, radius 4, negative left margin |
 | **Segment** | The source / split / preview switcher | `MqSegmentStyle` | 30 tall, font 12.5 — carries its own `ControlTemplate` on purpose. See §7 |
@@ -241,12 +241,12 @@ pixels are both in `MainWindow.xaml.cs` and are about title-bar insets, not butt
 
 ## 8. The web tier
 
-Almost the entire app is native. The one exception is the diagram window's zoom toolbar, which is
-HTML inside a WebView (`webshell/diagram.html`, styled by `webshell/diagram.css`) — `app.css` has
-no button rules at all, and neither does the cheatsheet.
+Almost the entire app is native. There are two exceptions, both HTML inside a WebView: the
+diagram window's zoom toolbar (`webshell/diagram.html`, styled by `webshell/diagram.css`), and the
+**Add comment** button that appears over a selection in the preview while a review is on (`app.js`,
+styled by `webshell/app.css`). The cheatsheet has no buttons.
 
-Those five buttons are **Compact chrome**, and the CSS states the tier's numbers once, at the top
-of the file:
+All of them are **Compact chrome**, and each stylesheet states the tier's numbers once, at its top:
 
 ```css
 :root {
@@ -265,14 +265,23 @@ There is deliberately **no accent button on that toolbar**. Its five controls ar
 actions and none of them commits anything, so the one-accent-per-surface rule has nothing to
 place. Do not add one for the sake of consistency.
 
+The Add comment button wears the comments' own teal, not the Windows accent: everything about
+commenting is teal - the marks, the sidebar's numbers, the wash over a card - and the button is
+part of that family rather than a primary button of the chrome's. Its fill is the same wash as a
+card under the pointer, with a solid teal border and a semibold label in the page's text color,
+which is enough to be seen over a paragraph without competing with Share Review..., the one accent
+in the sidebar. The Windows accent was tried and set aside for that reason. The button is fixed to the page rather than placed in the article,
+so it can never be part of an export, a print or a copy.
+
 **On keeping the two sides in step.** Marqora's rule for a value shared between C# and the web is
 that one side owns it and pushes it to the other: `MatchColors` holds the search-match colors,
 `WebViewPreviewHost` sends them across, `app.js` installs them as custom properties, and `app.css`
 deliberately never names them. That is the right shape for a *color*, which changes with theme
 and selection.
 
-These are metrics, and five zoom buttons do not justify a runtime bridge. So they are duplicated
-on purpose, and `build/Test-ButtonStandards.ps1` compares the two files and fails if they drift.
+These are metrics, and six web buttons do not justify a runtime bridge. So they are duplicated
+on purpose, and `build/Test-ButtonStandards.ps1` compares each stylesheet with App.xaml and fails
+if either drifts.
 A test is the cheaper source of truth here; a copy nobody checks is what this document exists to
 stop.
 

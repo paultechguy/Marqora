@@ -207,16 +207,20 @@ internal static partial class MarkdownLineRules
         return segment;
     }
 
-    [GeneratedRegex(@"(?<![\w\\_])__(?=\S)(.+?)(?<=\S)__(?![\w_])")]
+    // The text inside may not begin or end with either emphasis character. A delimiter is
+    // exactly the characters matched, so "**____**" is not "__" opening on its first two
+    // underscores; and "**____**" is not bold to convert either, since rewriting its asterisks
+    // as underscores fuses them with the ones inside into a single run of eight.
+    [GeneratedRegex(@"(?<![\w\\_])__(?![\s_*])(.+?)(?<![\s_*])__(?![\w_])")]
     private static partial Regex UnderscoreBold();
 
-    [GeneratedRegex(@"(?<![\w\\_])_(?=\S)([^_]+?)(?<=\S)_(?![\w_])")]
+    [GeneratedRegex(@"(?<![\w\\_])_(?![\s_*])([^_]+?)(?<![\s_*])_(?![\w_])")]
     private static partial Regex UnderscoreItalic();
 
-    [GeneratedRegex(@"(?<![\w\\*])\*\*(?=\S)(.+?)(?<=\S)\*\*(?![\w*])")]
+    [GeneratedRegex(@"(?<![\w\\*])\*\*(?![\s_*])(.+?)(?<![\s_*])\*\*(?![\w*])")]
     private static partial Regex AsteriskBold();
 
-    [GeneratedRegex(@"(?<![\w\\*])\*(?=\S)([^*]+?)(?<=\S)\*(?![\w*])")]
+    [GeneratedRegex(@"(?<![\w\\*])\*(?![\s_*])([^*]+?)(?<![\s_*])\*(?![\w*])")]
     private static partial Regex AsteriskItalic();
 
     /// <summary>
@@ -244,6 +248,38 @@ internal static partial class MarkdownLineRules
         }
 
         return spaces >= 2 ? trimmed + "  " : trimmed;
+    }
+
+    /// <summary>
+    /// Applies a transform to each cell of a table row separately.
+    ///
+    /// A table's cells are split before anything inside them is read, so emphasis can never
+    /// run from one cell into the next. Handing a rule the whole row let <c>**____** | **____**</c>
+    /// be read as a single bold span. The pipes and the spacing around them come back
+    /// exactly as they were; an escaped <c>\|</c> belongs to its cell.
+    /// </summary>
+    public static string PerTableCell(string line, Func<string, string> transform)
+    {
+        var builder = new StringBuilder(line.Length);
+        int start = 0;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '\\')
+            {
+                i++;
+                continue;
+            }
+
+            if (line[i] == '|')
+            {
+                builder.Append(transform(line[start..i])).Append('|');
+                start = i + 1;
+            }
+        }
+
+        builder.Append(transform(line[start..]));
+        return builder.ToString();
     }
 
     /// <summary>

@@ -38,6 +38,7 @@ internal static class KeyboardShortcuts
             new("Insert menu", "Alt+I"),
             new("Format menu", "Alt+O"),
             new("Tools menu", "Alt+T"),
+            new("Review menu", "Alt+R"),
             new("Help menu", "Alt+H"),
         ]),
 
@@ -125,6 +126,18 @@ internal static class KeyboardShortcuts
             new("Word wrap", "Alt+Z"),
             new("Zoom the active pane", "Ctrl+= / Ctrl+- / Ctrl+0"),
             new("Zoom both panes", "Ctrl+Shift+= / Ctrl+Shift+- / Ctrl+Shift+0"),
+        ]),
+
+        new("Review",
+        [
+            new("Start or end commenting", "Ctrl+Shift+R"),
+            new("Comment on the text selected in the preview", "Ctrl+Shift+M"),
+            new("Save the comment being written", "Ctrl+Enter"),
+            new("Cancel the comment being written", "Esc"),
+            new("Comment text: bold, italic, underline", "Ctrl+B / Ctrl+I / Ctrl+U"),
+            new("Comment text: highlight", "Ctrl+Shift+H"),
+            new("Comment text: inline code", "Ctrl+`"),
+            new("Edit a comment", "Double-click it in the preview"),
         ]),
 
         new("Help",

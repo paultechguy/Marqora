@@ -2214,6 +2214,18 @@
   });
 
   els.preview.addEventListener('click', function (e) {
+    // A comment wins over a link it sits on while a review is on: the reviewer is reading, and
+    // following the link would take them away from the comment they just clicked. A click that
+    // ends a drag is a selection, not a click on the comment under the pointer.
+    var comment = e.target.closest ? e.target.closest('mark.mq-comment') : null;
+    var dragged = window.getSelection && !window.getSelection().isCollapsed;
+
+    if (comment && activeReview() && !dragged) {
+      e.preventDefault();
+      post('commentActivated', { documentId: state.activeTabId, id: comment.getAttribute('data-comment') });
+      return;
+    }
+
     var anchor = e.target.closest ? e.target.closest('a[href]') : null;
     if (!anchor) { return; }
 
@@ -2244,6 +2256,11 @@
     els.preview.innerHTML = html;
     state.lineMapDirty = true;
 
+    // The comment marks went with the old markup, and wait for this render to finish before
+    // they are drawn again. See applyCommentMarks.
+    var generation = ++state.renderGeneration;
+    hideCommentButton();
+
     wrapWideTables();
     rewriteRelativeUrls();
     markBlockedMedia();
@@ -2254,6 +2271,11 @@
 
     return Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
       buildLineMap();
+
+      if (generation === state.renderGeneration) {
+        state.renderSettled = generation;
+        applyCommentMarks();
+      }
 
       if (resetScroll) {
         els.previewPane.scrollTop = 0;
@@ -2267,6 +2289,562 @@
         scrollPreviewToLine(anchorLine);
       }
     });
+  }
+
+  // --------------------------------------------------------- review comments
+
+  /*
+    A reviewer selects a passage in the preview and attaches a comment to it. The host keeps the
+    comments - see ReviewSession - and pushes them here with setReview; this side draws them,
+    reads new selections, and builds the page Share writes.
+
+    Everything here is anchored to a block and a character range in that block's text, never to
+    DOM nodes: the preview is thrown away and rebuilt on every render, so the marks are redrawn
+    from the anchors each time a render settles. "The block's text" is the text nodes under it
+    with two exclusions, and the same walker is used to take an anchor and to put one back, so
+    the two can never disagree about where character 40 is:
+
+      - a heading's number, which Marqora writes into the render rather than the source and
+        which the reader can switch on or off mid-review;
+      - KaTeX's hidden MathML copy of each equation, which is text nobody sees.
+
+    A comment's number is generated content (see app.css), never a text node, for the same
+    reason: text in a mark would be text in the block.
+  */
+
+  var COMMENT_SKIP = '.mq-heading-number, .katex-mathml';
+  var COMMENT_UNSUPPORTED = 'svg, img, video, iframe, .katex, pre.mermaid, .mq-blocked-media';
+  var INLINE_TAGS = /^(A|ABBR|B|BDI|BDO|CITE|CODE|DEL|DFN|EM|I|INS|KBD|MARK|Q|S|SAMP|SMALL|SPAN|STRONG|SUB|SUP|U|VAR)$/;
+
+  /// Which render of the preview is the latest, and which one has finished drawing.
+  state.renderGeneration = 0;
+  state.renderSettled = 0;
+
+  function activeReview() {
+    var tab = state.activeTabId ? state.tabs[state.activeTabId] : null;
+    return tab && tab.review && tab.review.active ? tab.review : null;
+  }
+
+  /// The innermost block element holding a node, or null outside the preview.
+  function commentBlockOf(node) {
+    var element = node && (node.nodeType === 1 ? node : node.parentElement);
+    var block = element ? element.closest('[data-src-line]') : null;
+
+    return block && els.preview.contains(block) ? block : null;
+  }
+
+  function commentTextNodes(block) {
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        return node.parentElement && node.parentElement.closest(COMMENT_SKIP)
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    var nodes = [];
+    for (var node = walker.nextNode(); node; node = walker.nextNode()) { nodes.push(node); }
+
+    return nodes;
+  }
+
+  function commentBlockText(block) {
+    return commentTextNodes(block).map(function (node) { return node.nodeValue; }).join('');
+  }
+
+  /// Where a DOM position falls in the block's text, counted the way commentTextNodes counts.
+  function commentOffset(block, container, offset) {
+    var point = document.createRange();
+    point.setStart(container, offset);
+    point.collapse(true);
+
+    var nodes = commentTextNodes(block);
+    var total = 0;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+
+      if (node === container) { return total + offset; }
+
+      // The first text node wholly after the point: the point sits in front of it.
+      if (point.comparePoint(node, 0) > 0) { return total; }
+
+      total += node.nodeValue.length;
+    }
+
+    return total;
+  }
+
+  /*
+    Reads the preview's selection as an anchor, or says why it cannot be one.
+
+    One block only: an anchor names a single block, and a comment across two paragraphs could
+    not be put back beside its words in the source either. The exception is the one the mouse
+    makes by itself - a triple-click selects a paragraph by ending at the very start of the
+    next block - which is pulled back to the end of the first.
+  */
+  function readCommentSelection() {
+    var selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { return { problem: 'none' }; }
+
+    var range = selection.getRangeAt(0);
+    if (!els.preview.contains(range.commonAncestorContainer)) { return { problem: 'none' }; }
+
+    var block = commentBlockOf(range.startContainer);
+    var endBlock = commentBlockOf(range.endContainer);
+    var endContainer = range.endContainer;
+    var endOffset = range.endOffset;
+
+    if (block && endBlock && block !== endBlock
+        && commentOffset(endBlock, endContainer, endOffset) === 0) {
+      // A list item with a list inside it: the end is already in this item's text, at the
+      // point its nested list begins, so only the block it is counted against changes.
+      if (!block.contains(endBlock)) {
+        var whole = document.createRange();
+        whole.selectNodeContents(block);
+        endContainer = whole.endContainer;
+        endOffset = whole.endOffset;
+      }
+
+      endBlock = block;
+    }
+
+    if (!block || block !== endBlock) { return { problem: 'multiBlock' }; }
+
+    var probe = document.createRange();
+    probe.setStart(range.startContainer, range.startOffset);
+    probe.setEnd(endContainer, endOffset);
+
+    var start = commentOffset(block, range.startContainer, range.startOffset);
+    var end = commentOffset(block, endContainer, endOffset);
+
+    // Inside a comment already: that comment is what the reader is pointing at.
+    var marks = block.querySelectorAll('mark.mq-comment');
+    for (var i = 0; i < marks.length; i++) {
+      var markStart = commentOffset(block, marks[i], 0);
+      var markEnd = markStart + marks[i].textContent.length;
+
+      if (start >= markStart && end <= markEnd) {
+        return { activate: marks[i].getAttribute('data-comment') };
+      }
+
+      if (start < markEnd && end > markStart) { return { problem: 'overlap' }; }
+    }
+
+    var unsupported = block.closest(COMMENT_UNSUPPORTED) ? [block] : block.querySelectorAll(COMMENT_UNSUPPORTED);
+    for (var j = 0; j < unsupported.length; j++) {
+      if (probe.intersectsNode(unsupported[j])) { return { problem: 'unsupported' }; }
+    }
+
+    var text = commentBlockText(block);
+
+    // Whitespace at either end is where the drag happened to stop, not what was meant.
+    while (start < end && /\s/.test(text.charAt(start))) { start++; }
+    while (end > start && /\s/.test(text.charAt(end - 1))) { end--; }
+
+    if (end <= start) { return { problem: 'none' }; }
+
+    var line = Number(block.getAttribute('data-src-line'));
+    var siblings = els.preview.querySelectorAll('[data-src-line="' + line + '"]');
+
+    return {
+      line: line,
+      index: Array.prototype.indexOf.call(siblings, block),
+      start: start,
+      end: end,
+      quote: text.slice(start, end)
+    };
+  }
+
+  /// Asks the host to start a comment on the selection. The Comment button, and Ctrl+Shift+M.
+  // quiet: said nothing when there is no selection to take, rather than a problem - Start
+  // Commenting asks this way, taking a selection the reader already had and not asking for one.
+  function requestComment(quiet) {
+    hideCommentButton();
+
+    if (!activeReview()) {
+      if (quiet) { return; }
+      post('commentRequested', { documentId: state.activeTabId, problem: 'inactive' });
+      return;
+    }
+
+    var read = readCommentSelection();
+
+    if (quiet && (read.problem || read.activate)) { return; }
+
+    if (read.activate) {
+      post('commentActivated', { documentId: state.activeTabId, id: read.activate });
+      return;
+    }
+
+    read.documentId = state.activeTabId;
+    post('commentRequested', read);
+
+    // Taken, so let go of it. The passage is about to wear its comment mark, and a selection
+    // left over it would be clipped by the new mark into a stray piece of highlighted text.
+    if (!read.problem) {
+      var selection = window.getSelection();
+      if (selection) { selection.removeAllRanges(); }
+    }
+  }
+
+  // Takes a comment's marks out, putting its text back as it was.
+  function unwrapCommentMarks(root, selector) {
+    var marks = root.querySelectorAll(selector || 'mark.mq-comment');
+    var parents = [];
+
+    for (var i = 0; i < marks.length; i++) {
+      var mark = marks[i];
+      var parent = mark.parentNode;
+
+      while (mark.firstChild) { parent.insertBefore(mark.firstChild, mark); }
+      parent.removeChild(mark);
+
+      if (parents.indexOf(parent) < 0) { parents.push(parent); }
+    }
+
+    // Rejoins the text nodes a mark split, so the next pass walks what a fresh render would.
+    parents.forEach(function (parent) { parent.normalize(); });
+
+    return root;
+  }
+
+  /// A copy of the markup with no comment in it: every export and copy but the review page.
+  function withoutCommentMarks(root) {
+    return unwrapCommentMarks(root);
+  }
+
+  function wrapCommentRange(block, start, end, comment) {
+    var nodes = commentTextNodes(block);
+    var segments = [];
+    var position = 0;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var nodeStart = position;
+      var nodeEnd = position + nodes[i].nodeValue.length;
+      position = nodeEnd;
+
+      if (nodeEnd <= start || nodeStart >= end) { continue; }
+
+      segments.push({ node: nodes[i], from: Math.max(start, nodeStart) - nodeStart, to: Math.min(end, nodeEnd) - nodeStart });
+    }
+
+    // Never into an equation or a diagram. A selection there is refused before it becomes a
+    // comment, but placeComment's search by quote could still land on the same words inside
+    // one; better unplaced than drawn through KaTeX's markup.
+    for (var k = 0; k < segments.length; k++) {
+      if (segments[k].node.parentElement && segments[k].node.parentElement.closest(COMMENT_UNSUPPORTED)) { return false; }
+    }
+
+    var marks = [];
+
+    segments.forEach(function (segment) {
+      var target = segment.node;
+
+      // Whitespace between list items or table rows is not somewhere a mark can go.
+      if (!target.nodeValue.slice(segment.from, segment.to).trim()
+          && /^(UL|OL|TABLE|THEAD|TBODY|TR)$/.test(target.parentNode.nodeName)) {
+        return;
+      }
+
+      if (segment.to < target.nodeValue.length) { target.splitText(segment.to); }
+      if (segment.from > 0) { target = target.splitText(segment.from); }
+
+      var mark = document.createElement('mark');
+      mark.className = comment.draft ? 'mq-comment mq-comment-draft' : 'mq-comment';
+      mark.setAttribute('data-comment', comment.id);
+      target.parentNode.insertBefore(mark, target);
+      mark.appendChild(target);
+      marks.push(mark);
+    });
+
+    if (marks.length > 0 && comment.number) {
+      marks[marks.length - 1].setAttribute('data-n', String(comment.number));
+    }
+
+    return marks.length > 0;
+  }
+
+  /*
+    Puts one comment back. The block it was taken from first, checked by its text; then any block
+    on that line whose text still says the same thing there; then the first place on the line the
+    quote appears at all. The last is what keeps a comment through a heading number switched on
+    mid-review, which moves every offset in the heading.
+  */
+  function placeComment(comment) {
+    var candidates = Array.prototype.slice.call(
+      els.preview.querySelectorAll('[data-src-line="' + comment.line + '"]'));
+
+    if (candidates.length === 0) { return false; }
+
+    var preferred = candidates[comment.index];
+    if (preferred) { candidates = [preferred].concat(candidates.filter(function (c) { return c !== preferred; })); }
+
+    for (var i = 0; i < candidates.length; i++) {
+      if (commentBlockText(candidates[i]).slice(comment.start, comment.end) === comment.quote) {
+        return wrapCommentRange(candidates[i], comment.start, comment.end, comment);
+      }
+    }
+
+    for (var j = 0; j < candidates.length; j++) {
+      var at = commentBlockText(candidates[j]).indexOf(comment.quote);
+      if (at >= 0) { return wrapCommentRange(candidates[j], at, at + comment.quote.length, comment); }
+    }
+
+    return false;
+  }
+
+  /*
+    Redraws the active tab's comments from scratch. Idempotent: it takes every mark out first,
+    so running it twice - a setReview landing just as a render settles - draws each comment once.
+
+    It waits for a render to finish. Marks put in while KaTeX's auto-render is still to run can
+    split a \( ... \) across text nodes, and the equation would never be recognized.
+  */
+  function applyCommentMarks() {
+    if (state.renderSettled !== state.renderGeneration) { return; }
+
+    unwrapCommentMarks(els.preview);
+
+    var review = activeReview();
+    if (!review) { return; }
+
+    var missing = [];
+
+    review.comments.forEach(function (comment) {
+      if (!placeComment(comment)) { missing.push(comment.id); }
+    });
+
+    if (missing.length > 0) {
+      report('info', 'Could not place ' + missing.length + ' comment(s) in the preview', missing.join(','));
+    }
+  }
+
+  // ------------------------------------------------------- the Comment button
+
+  var commentButton = document.createElement('button');
+  commentButton.type = 'button';
+  commentButton.className = 'mq-comment-button';
+  commentButton.textContent = 'Add comment';
+  commentButton.title = 'Comment on the selection (Ctrl+Shift+M)';
+  commentButton.hidden = true;
+  document.body.appendChild(commentButton);
+
+  // Pressing the button must not take the selection it is about to comment on.
+  commentButton.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  commentButton.addEventListener('click', function (e) {
+    e.preventDefault();
+    requestComment();
+  });
+
+  function hideCommentButton() {
+    commentButton.hidden = true;
+  }
+
+  /// Shows the button above a selection that could become a comment, and hides it otherwise.
+  function updateCommentButton() {
+    if (!activeReview()) { hideCommentButton(); return; }
+
+    var read = readCommentSelection();
+    if (read.problem || read.activate) { hideCommentButton(); return; }
+
+    var selection = window.getSelection();
+    var rects = selection.getRangeAt(0).getClientRects();
+    var first = rects.length > 0 ? rects[0] : selection.getRangeAt(0).getBoundingClientRect();
+    var pane = els.previewPane.getBoundingClientRect();
+
+    commentButton.hidden = false;
+
+    var width = commentButton.offsetWidth;
+    var height = commentButton.offsetHeight;
+    var left = Math.min(Math.max(first.left, pane.left + 4), pane.right - width - 4);
+    var top = first.top - height - 6;
+
+    // No room above: below the line instead.
+    if (top < pane.top + 4) { top = first.bottom + 6; }
+
+    commentButton.style.left = left + 'px';
+    commentButton.style.top = top + 'px';
+  }
+
+  els.preview.addEventListener('mouseup', function () {
+    // After the click has settled the selection, not while it still might.
+    window.setTimeout(updateCommentButton, 0);
+  });
+
+  els.preview.addEventListener('keyup', function (e) {
+    if (e.shiftKey || e.key === 'Shift') { updateCommentButton(); }
+  });
+
+  document.addEventListener('selectionchange', function () {
+    var selection = window.getSelection();
+    if (!selection || selection.isCollapsed) { hideCommentButton(); }
+  });
+
+  els.previewPane.addEventListener('scroll', hideCommentButton, { passive: true });
+
+  /*
+    Hover pairs a comment in the page with its card in the sidebar, both ways, as the shared
+    page pairs a highlight with its margin note. The page says which comment the pointer is on -
+    only when that changes, so moving across one comment is one message - and the sidebar asks
+    for a comment to be lit while the pointer is over its card.
+  */
+  var hoveredComment = null;
+
+  function reportHoveredComment(id) {
+    if (id === hoveredComment) { return; }
+
+    hoveredComment = id;
+    post('commentHovered', { documentId: state.activeTabId, id: id || '' });
+  }
+
+  // The comment is lit whole, every segment of it, rather than by CSS :hover - which lights only
+  // the segment under the pointer, and a comment across bold or code words is several segments.
+  els.preview.addEventListener('mouseover', function (e) {
+    var mark = activeReview() && e.target.closest ? e.target.closest('mark.mq-comment') : null;
+    var id = mark ? mark.getAttribute('data-comment') : null;
+
+    if (id !== hoveredComment) { lightComment(id); }
+    reportHoveredComment(id);
+  });
+
+  els.preview.addEventListener('mouseleave', function () {
+    if (hoveredComment) { lightComment(null); }
+    reportHoveredComment(null);
+  });
+
+  /*
+    A double-click anywhere in a comment opens it for editing in the sidebar. The browser's own
+    double-click selects the word under the pointer, which would leave a stray selection over
+    the comment and offer Add comment for text already commented on, so that is undone first.
+  */
+  els.preview.addEventListener('dblclick', function (e) {
+    var mark = activeReview() && e.target.closest ? e.target.closest('mark.mq-comment') : null;
+    if (!mark) { return; }
+
+    e.preventDefault();
+
+    var selection = window.getSelection();
+    if (selection) { selection.removeAllRanges(); }
+    hideCommentButton();
+
+    post('commentEditRequested', { documentId: state.activeTabId, id: mark.getAttribute('data-comment') });
+  });
+
+  function lightComment(id) {
+    var lit = els.preview.querySelectorAll('mark.mq-comment-hot');
+    for (var i = 0; i < lit.length; i++) { lit[i].classList.remove('mq-comment-hot'); }
+
+    if (!id) { return; }
+
+    var marks = els.preview.querySelectorAll('mark.mq-comment[data-comment="' + CSS.escape(id) + '"]');
+    for (var j = 0; j < marks.length; j++) { marks[j].classList.add('mq-comment-hot'); }
+  }
+
+  /// Brings a comment into view and flashes it, for a click on its card in the sidebar.
+  function revealComment(id) {
+    var marks = els.preview.querySelectorAll('mark.mq-comment[data-comment="' + CSS.escape(id) + '"]');
+    if (marks.length === 0) { return; }
+
+    marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    Array.prototype.forEach.call(marks, function (mark) { mark.classList.add('mq-comment-flash'); });
+    window.setTimeout(function () {
+      Array.prototype.forEach.call(marks, function (mark) { mark.classList.remove('mq-comment-flash'); });
+    }, 900);
+  }
+
+  // ----------------------------------------------------------- the review page
+
+  /*
+    Where a comment's note goes in the page Share writes.
+
+    Beside the passage, as a float into the margin - but not literally beside the mark. A note
+    inside a link would become part of the link, and one inside bold text would be bold, so it
+    goes after the outermost inline element holding the mark. A float cannot leave a table cell
+    or a code block at all, so a note there is hosted just before the table or block instead.
+  */
+  function placeNote(mark, note) {
+    var host = mark.closest('.mq-table-scroll') || mark.closest('table') || mark.closest('pre');
+
+    if (host) {
+      var holder = document.createElement('div');
+      holder.className = 'mq-note-host';
+      holder.appendChild(note);
+      host.parentNode.insertBefore(holder, host);
+      return;
+    }
+
+    var block = mark.closest('[data-src-line]');
+    var node = mark;
+
+    while (node.parentElement && node.parentElement !== block && INLINE_TAGS.test(node.parentElement.nodeName)) {
+      node = node.parentElement;
+    }
+
+    node.parentNode.insertBefore(note, node.nextSibling);
+  }
+
+  // The note's words arrive as HTML from CommentMarkup.ToHtml on the host - encoded there, with
+  // its five styles already turned into elements - so the markup has one reader, not two.
+  function buildNote(number, html) {
+    var note = document.createElement('span');
+    note.className = 'mq-sidenote';
+    note.id = 'mq-note-' + number;
+
+    var back = document.createElement('a');
+    back.className = 'mq-sidenote-number';
+    back.href = '#mq-mark-' + number;
+    back.textContent = String(number);
+    note.appendChild(back);
+    back.insertAdjacentHTML('afterend', String(html || ''));
+
+    return note;
+  }
+
+  /*
+    The preview as the reviewer sees it, made into the body of the review page: drafts dropped,
+    each comment's number a link to its note, each note placed in the margin.
+
+    Built from a copy, so the live preview is untouched. Refused - an empty answer - for any
+    document but the one on screen, because the live preview is the only one there is.
+  */
+  function buildReviewHtml(documentId, notes) {
+    if (documentId !== state.activeTabId || !activeReview()) { return ''; }
+
+    var clone = withoutBlockedChips(els.preview);
+
+    unwrapCommentMarks(clone, 'mark.mq-comment-draft');
+
+    notes.forEach(function (entry) {
+      var marks = clone.querySelectorAll('mark.mq-comment[data-comment="' + CSS.escape(entry.id) + '"]');
+      if (marks.length === 0) { return; }
+
+      var number = entry.number;
+
+      Array.prototype.forEach.call(marks, function (mark) {
+        mark.removeAttribute('data-n');
+        mark.removeAttribute('data-comment');
+        mark.setAttribute('data-note', String(number));
+      });
+
+      marks[0].id = 'mq-mark-' + number;
+
+      var last = marks[marks.length - 1];
+      var reference = document.createElement('a');
+      reference.className = 'mq-comment-ref';
+      reference.href = '#mq-note-' + number;
+      reference.textContent = String(number);
+      last.appendChild(reference);
+
+      placeNote(last, buildNote(number, entry.html));
+    });
+
+    // Anything still carrying a comment id was not in the list the host sent: not a comment.
+    unwrapCommentMarks(clone, 'mark.mq-comment[data-comment]');
+
+    return clone.innerHTML;
   }
 
   // ------------------------------------------------------ active block cue
@@ -2992,6 +3570,11 @@
     { ctrl: true, shift: true, code: 'KeyC', run: 'copyRichText' },
     { ctrl: true, code: 'F1', run: 'cheatsheet' },
 
+    // Review. Adding a comment is answered here, because the selection it reads is on this
+    // page; starting and ending a review is the host's.
+    { ctrl: true, shift: true, code: 'KeyR', run: 'review.toggle' },
+    { ctrl: true, shift: true, code: 'KeyM', run: requestComment },
+
     /*
       The Format menu.
 
@@ -3023,6 +3606,7 @@
     { alt: true, code: 'KeyI', run: 'menu.insert' },
     { alt: true, code: 'KeyV', run: 'menu.view' },
     { alt: true, code: 'KeyT', run: 'menu.tools' },
+    { alt: true, code: 'KeyR', run: 'menu.review' },
     { alt: true, code: 'KeyH', run: 'menu.help' }
   ];
 
@@ -4463,7 +5047,11 @@
 
       // Whether this document takes typing. Per tab because one editor serves all of them;
       // the host sets it and activateTab puts it back on. See setReadOnly.
-      readOnly: false
+      readOnly: false,
+
+      // A reviewer's comments, when this document is under review: { active, comments }. Per
+      // tab so a tab switch redraws the right ones. See setReview.
+      review: null
     };
   }
 
@@ -4486,14 +5074,22 @@
   */
   var READ_ONLY_MESSAGE = { value: 'This document is read-only' };
 
-  function applyReadOnly(readOnly) {
+  // The same refusal while a review holds the document, said the way the rest of the app says it:
+  // the reader did not mark this document, and "read-only" would send them looking for a mark.
+  var REVIEW_MESSAGE = { value: 'Commenting — the text is locked until the review ends' };
+
+  function applyReadOnly(readOnly, reviewing) {
     if (!state.editor) { return; }
 
     state.editor.updateOptions({
       readOnly: readOnly,
       domReadOnly: readOnly,
-      readOnlyMessage: READ_ONLY_MESSAGE
+      readOnlyMessage: reviewing ? REVIEW_MESSAGE : READ_ONLY_MESSAGE
     });
+  }
+
+  function applyTabReadOnly(tab) {
+    applyReadOnly(tab.readOnly, !!(tab.review && tab.review.active));
   }
 
   function activateTab(id) {
@@ -4526,7 +5122,7 @@
     // Before the view state is restored, so the incoming document's answer is on the editor
     // from the first frame. The option lives on the editor and the answer lives on the tab, so
     // without this an ordinary document would inherit whatever the last marked one left behind.
-    applyReadOnly(tab.readOnly);
+    applyTabReadOnly(tab);
 
     if (tab.viewState) {
       state.editor.restoreViewState(tab.viewState);
@@ -4905,7 +5501,7 @@
 
       tab.readOnly = !!p.readOnly;
 
-      if (p.documentId === state.activeTabId) { applyReadOnly(tab.readOnly); }
+      if (p.documentId === state.activeTabId) { applyTabReadOnly(tab); }
     },
 
     setShowWhitespace: function (p) {
@@ -4988,9 +5584,49 @@
       the reply by request id rather than assuming the next message back is the answer.
     */
     requestRenderedHtml: function (p) {
+      // Without comment marks: the HTML export, Word and the diagram artifacts are the
+      // document, not a review of it. Only requestReviewHtml keeps them.
       post('renderedHtml', {
         requestId: p.requestId,
-        html: withoutBlockedChips(els.preview).innerHTML
+        html: withoutCommentMarks(withoutBlockedChips(els.preview)).innerHTML
+      });
+    },
+
+    /*
+      A reviewer's comments on a document: the whole list, every time it changes. Drawn now if
+      the document is on screen and its render has settled, and otherwise when it is.
+    */
+    setReview: function (p) {
+      var tab = state.tabs[p.documentId];
+      if (!tab) { return; }
+
+      tab.review = p.active ? { active: true, comments: p.comments || [] } : null;
+
+      if (p.documentId === state.activeTabId) {
+        if (!p.active) { hideCommentButton(); }
+        applyTabReadOnly(tab);
+        applyCommentMarks();
+      }
+    },
+
+    revealComment: function (p) {
+      if (p.documentId === state.activeTabId) { revealComment(p.id); }
+    },
+
+    /// The pointer is over a comment's card in the sidebar, or has left it (no id).
+    hoverComment: function (p) {
+      if (p.documentId === state.activeTabId) { lightComment(p.id || null); }
+    },
+
+    /// Ctrl+Shift+M pressed while the window rather than this page had the keyboard.
+    captureComment: function (p) {
+      requestComment(!!(p && p.quiet));
+    },
+
+    requestReviewHtml: function (p) {
+      post('reviewHtml', {
+        requestId: p.requestId,
+        html: buildReviewHtml(p.documentId, p.notes || [])
       });
     },
 
@@ -5431,7 +6067,7 @@
       // inlining a computed style onto spans that are about to be dropped.
       post('previewHtml', {
         requestId: p.requestId,
-        html: withInlineStyles(withMathmlOnly(withoutBlockedChips(source))),
+        html: withInlineStyles(withMathmlOnly(withoutCommentMarks(withoutBlockedChips(source)))),
         text: text
       });
     },

@@ -12,6 +12,7 @@ using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Rendering;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -484,8 +485,7 @@ internal sealed class InlineRenderer
         return run;
     }
 
-    private static string AltTextOf(LinkInline image) =>
-        string.Concat(image.Descendants<LiteralInline>().Select(l => l.Content.ToString()));
+    private static string AltTextOf(LinkInline image) => InlinePlainText.Of(image);
 
     private static void Append(Paragraph paragraph, Run run) => paragraph.AppendChild(run);
 }

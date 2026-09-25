@@ -74,4 +74,29 @@ public class GitHubHeadingSlugTests
     [Fact]
     public void An_abbreviation_inside_a_heading_contributes_its_short_form() =>
         SlugOf("*[HTML]: HyperText Markup Language\n\n## Raw HTML\n").ShouldBe("raw-html");
+
+    /// <summary>
+    /// An entity is its own inline in Markdig, not a literal, and the plain-text walk used to
+    /// skip it - the outline showed "Q&amp;amp;A" as "QA".
+    /// </summary>
+    [Theory]
+    [InlineData("## Q&amp;A", "Q&A")]
+    [InlineData("## Foo&nbsp;Bar", "Foo Bar")]
+    [InlineData("## Caf&#233;", "Café")]
+    public void An_entity_in_a_heading_reaches_the_outline_decoded(string markdown, string expected) =>
+        Renderer.Render(markdown).Outline.Single().Text.ShouldBe(expected);
+
+    /// <summary>
+    /// GitHub turns the ASCII space into a hyphen and drops every other separator with the
+    /// punctuation. Now that the entity reaches the slug rule it has to be dropped there, or a
+    /// link written against GitHub's "#foobar" stops resolving.
+    /// </summary>
+    [Theory]
+    [InlineData("## Foo&nbsp;Bar", "foobar")]
+    [InlineData("## Foo Bar", "foobar")]
+    [InlineData("## Q&amp;A", "qa")]
+    [InlineData("## Foo &amp; Bar", "foo--bar")]
+    [InlineData("## Caf&#233;", "café")]
+    public void An_entity_in_a_heading_slugs_the_way_GitHub_does(string markdown, string expected) =>
+        SlugOf(markdown).ShouldBe(expected);
 }

@@ -192,6 +192,7 @@ matter, auto-links, emoji :rocket:, ==highlighting==, super^script^ and sub~scri
 | `File > Export > Export to HTML...` | One self-contained `.html` file — styles inlined, images embedded, fonts included |
 | `File > Export > Export to Word...` | A real `.docx` — Word's own heading styles, numbering, tables and footnotes       |
 | `File > Share as Folio...`          | Every open document *and* the images they use, gathered into one thing to send    |
+| `Review > Share Review...`          | This document with your comments in its margin, one read-only page to send back   |
 
 Exports come from the preview you are looking at rather than from a fresh render, so diagrams
 are already drawn, math is already typeset and code is already colored. What you see is what
@@ -227,6 +228,44 @@ command that writes them in — it asks where to count from, and replaces rather
 makes it a renumber: drop a section into the middle, run it again, and everything below moves
 along one. **Remove Section Numbers** is the other direction, for taking somebody else's
 hard-coded numbers out so Marqora's own can do the job. Either is one `Ctrl+Z`.
+
+---
+
+## Commenting on someone else's document
+
+Reading a colleague's design, or a plan an AI has just written, and wanting to say something about
+it no longer means typing notes into their text. `Review > Start Commenting` (`Ctrl+Shift+R`)
+works the way Word and Acrobat do: the document is locked so nothing you do can change it, the
+window shows the preview alone, and a sidebar opens beside it.
+Try it on this page: press `Ctrl+Shift+R`, select a sentence you have an opinion about, and
+say so.
+
+Select a passage in the preview and an **Add comment** button appears over it. Click it, or press
+`Ctrl+Shift+M`, and type the note into the card that opens; `Ctrl+Enter` saves it and `Esc` lets
+it go. The passage is highlighted in teal and numbered, the numbers run down the page in reading
+order, and pointing at a comment lights its card, and the other way round. **Double-click** a
+comment in the page to edit it.
+
+A comment can carry a little formatting, written the way the preview reads it or put on the
+selected words with a key:
+
+| Style         | Write            | Or press            |
+| ------------- | ---------------- | ------------------- |
+| **Bold**      | `**bold**`       | `Ctrl+B`            |
+| *Italic*      | `*italic*`       | `Ctrl+I`            |
+| Underline     | `++underline++`  | `Ctrl+U`            |
+| ==Highlight== | `==highlight==`  | `Ctrl+Shift+H`      |
+| `Code`        | `` `code` ``     | `` Ctrl+` ``        |
+
+When you are done, **Share Review...** saves one read-only page for the author: the document as
+you read it, each comment highlighted with its note in the margin, and a line at the top saying
+which version you reviewed. It opens in any browser without Marqora. **Copy as Markdown** puts
+the same comments on the clipboard written into the text itself, the form an AI can act on — and
+opened back in Marqora, that text shows its comments as comments.
+
+> [!NOTE]
+> Comments live for this sitting only. Nothing is written into the file, and **End Commenting**
+> throws them away — after asking, if you have not shared them yet.
 
 ---
 
@@ -297,6 +336,7 @@ page whenever you want it.
 | Spell check on / off      | `F7`                             | Correct the word at the cursor | `Ctrl+.`                        |
 | Zoom the active pane      | `Ctrl` `+` `-` `0`               | Word wrap                      | `Alt+Z`                         |
 | Heading numbers, this tab | `Alt+5`                          | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3`            |
+| Start / end commenting    | `Ctrl+Shift+R`                   | Comment on the selection       | `Ctrl+Shift+M`                  |
 
 Those are the keys; the syntax is one more. `Ctrl+F1` opens the Markdown cheatsheet — every
 construct on this page and a few that are not, each one's markup sitting beside its result, with

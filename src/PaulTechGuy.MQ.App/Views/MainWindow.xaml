@@ -334,7 +334,7 @@
                          FontSize="{ThemeResource MqMenuFontSize}">
 
                     <!--
-                        The bar runs File, Edit, View, Insert, Format, Tools, Help - the order
+                        The bar runs File, Edit, View, Insert, Format, Tools, Review, Help - the order
                         Windows menus have used since CUA, and the one Office still ships. It
                         used to run Format and Insert ahead of View, which read fine but cost a
                         scan: a menu bar is found by position before it is read, and View sitting
@@ -1225,6 +1225,41 @@
                     </MenuBarItem>
 
                     <!--
+                        Commenting on a document, where Word keeps it: after the tools, before
+                        Help. Alt+R, which neither the bar nor the page had used. The first item
+                        reads Start or End depending on whether a review is on; the rest act on
+                        that review, and say so when there is none.
+                    -->
+                    <MenuBarItem x:Name="ReviewMenu" Title="Review">
+                        <MenuFlyoutItem Text="{x:Bind ViewModel.ReviewMenuLabel, Mode=OneWay}"
+                                        Command="{x:Bind ViewModel.ToggleReviewCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+R"
+                                        ToolTipService.ToolTip="Comment on this document without changing it">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE90A;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+
+                        <MenuFlyoutItem Text="Add Comment"
+                                        Command="{x:Bind ViewModel.AddCommentCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+M"
+                                        IsEnabled="{x:Bind ViewModel.IsReviewing, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Comment on the text selected in the preview" />
+
+                        <MenuFlyoutSeparator />
+
+                        <MenuFlyoutItem Text="Share Review..."
+                                        Command="{x:Bind ViewModel.ShareReviewCommand}"
+                                        IsEnabled="{x:Bind ViewModel.IsReviewing, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Save the page with your comments in its margin, to send to the author" />
+
+                        <MenuFlyoutItem Text="Copy Review as Markdown"
+                                        Command="{x:Bind ViewModel.CopyReviewMarkdownCommand}"
+                                        IsEnabled="{x:Bind ViewModel.IsReviewing, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Copy the source with your comments written into it" />
+                    </MenuBarItem>
+
+                    <!--
                         The introduction and the reference first, then the two ways out to
                         somewhere else. The cheatsheet lives here rather than under Tools
                         because it teaches markdown; Tools is for the things that act on the
@@ -1898,8 +1933,9 @@
             open or not, and a nullable link in the middle of one is a fault waiting for the
             one frame where it matters.
         -->
+        <StackPanel Grid.Row="3">
+
         <InfoBar x:Name="ExternalChangeBar"
-                 Grid.Row="3"
                  Margin="10,8,10,0"
                  IsOpen="{x:Bind ViewModel.HasExternalNotice, Mode=TwoWay}"
                  Severity="{x:Bind ViewModel.ExternalNotice.Severity, Mode=OneWay}"
@@ -1997,6 +2033,37 @@
             </InfoBar.Content>
         </InfoBar>
 
+        <!--
+            The review banner, while the document in front is under review. Informational, and
+            closable once read: a close holds until the banner has something new to say - the
+            file changing on disk, which it reports in place of the external-change bar above
+            (RefreshExternalNotice keeps that one shut for a document under review, because the
+            Reload it offers is the one thing a review holds back), or a review saved.
+        -->
+        <InfoBar x:Name="ReviewBar"
+                 Margin="10,8,10,0"
+                 IsOpen="{x:Bind ViewModel.IsReviewBarOpen, Mode=TwoWay}"
+                 Severity="Informational"
+                 Title="{x:Bind ViewModel.ReviewNotice, Mode=OneWay}"
+                 IsClosable="True">
+            <InfoBar.Content>
+                <StackPanel Orientation="Horizontal"
+                            Margin="0,0,0,10"
+                            Spacing="{StaticResource MqButtonGroupSpacing}"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.HasSharedReviewFile), Mode=OneWay}">
+                    <Button Content="Show in Folder"
+                            Style="{StaticResource MqCommandButtonStyle}"
+                            Command="{x:Bind ViewModel.ShowReviewInFolderCommand}" />
+                    <Button Content="Copy File"
+                            Style="{StaticResource MqCommandButtonStyle}"
+                            Command="{x:Bind ViewModel.CopyReviewFileCommand}"
+                            ToolTipService.ToolTip="Put the page on the clipboard, to paste into a message as an attachment" />
+                </StackPanel>
+            </InfoBar.Content>
+        </InfoBar>
+
+        </StackPanel>
+
         <!-- ============================================================== content -->
 
         <Grid Grid.Row="4">
@@ -2017,6 +2084,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!--
@@ -2134,6 +2202,211 @@
                   Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}" />
 
             <!--
+                The comments sidebar, while the document in front is under review.
+
+                Its own column to the right of the WebView rather than something drawn in the
+                page, for the reason the outline is: it is chrome, it takes Fluent theming and
+                real text boxes, and it cannot reach a print or an export. The preview is the
+                right-hand pane inside the page, so this still sits beside the text it is about.
+
+                Fixed width. Wide enough for the footer's two buttons side by side and a comment
+                that reads as a paragraph; a splitter would be the next thing, not the first.
+
+                The card buttons are Command tier, neutral: filled and bordered so they read as
+                buttons against the card, where the flat Chrome tier read as text. None is an
+                accent - the footer's Share Review... is the one on this surface. See
+                docs/Button-App-Standards.md.
+            -->
+            <Border x:Name="ReviewPanel"
+                    Grid.Column="3"
+                    Width="340"
+                    BorderThickness="1,0,0,0"
+                    BorderBrush="{ThemeResource MqChromeRuleBrush}"
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsReviewPanelVisible), Mode=OneWay}">
+
+                <Grid RowSpacing="8" Padding="12,10,12,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel>
+                        <TextBlock Text="Comments" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.ReviewStatus, Mode=OneWay}"
+                                   Style="{StaticResource MqCaptionTextStyle}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="ReviewScroller"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="8">
+
+                            <TextBlock Style="{StaticResource MqCaptionTextStyle}"
+                                       TextWrapping="Wrap"
+                                       Visibility="{x:Bind CollapsedWhen(ViewModel.HasReviewComments), Mode=OneWay}"
+                                       Text="Select a passage in the preview, then choose Add comment or press Ctrl+Shift+M." />
+
+                            <ItemsRepeater x:Name="ReviewCards" ItemsSource="{x:Bind ViewModel.ReviewComments}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="8" />
+                                </ItemsRepeater.Layout>
+
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ReviewCommentViewModel">
+                                        <!--
+                                            Two layers under the content: the card, and a teal wash over it while
+                                            the pointer is on this comment in the preview or on the card itself.
+                                            The wash is the outline's selected-row tint, so "this one" looks the
+                                            same wherever the app says it.
+                                        -->
+                                        <Grid Tag="{x:Bind}"
+                                              Tapped="OnReviewCardTapped"
+                                              PointerEntered="OnReviewCardPointerEntered"
+                                              PointerExited="OnReviewCardPointerExited">
+                                            <Border CornerRadius="6"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                                            <Border CornerRadius="6"
+                                                    BorderThickness="2"
+                                                    BorderBrush="{ThemeResource MqAccentBrush}"
+                                                    Background="{ThemeResource MqListRowSelectedBrush}"
+                                                    IsHitTestVisible="False"
+                                                    Visibility="{x:Bind IsHighlighted, Mode=OneWay}" />
+                                            <StackPanel Spacing="6" Margin="10,8">
+
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{x:Bind Number, Mode=OneWay}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{ThemeResource MqAccentBrush}" />
+                                                    <TextBlock Text="{x:Bind Quote}"
+                                                               FontStyle="Italic"
+                                                               Style="{StaticResource MqCaptionTextStyle}"
+                                                               MaxLines="2"
+                                                               TextWrapping="Wrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="270" />
+                                                </StackPanel>
+
+                                                <!-- Reading face. -->
+                                                <StackPanel Spacing="4" Visibility="{x:Bind IsViewing, Mode=OneWay}">
+                                                    <controls:CommentText Markup="{x:Bind Note, Mode=OneWay}" />
+                                                    <StackPanel Orientation="Horizontal"
+                                                                HorizontalAlignment="Right"
+                                                                Spacing="{StaticResource MqButtonGroupSpacing}">
+                                                        <Button Content="Edit"
+                                                                Style="{StaticResource MqCommandButtonStyle}"
+                                                                Tag="{x:Bind}"
+                                                                Click="OnReviewEditClick" />
+                                                        <Button Content="Delete Comment"
+                                                                Style="{StaticResource MqCommandButtonStyle}"
+                                                                Tag="{x:Bind}"
+                                                                Click="OnReviewDeleteClick" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <!-- Writing face. Ctrl+Enter saves and Escape cancels; see OnReviewBoxKeyDown. -->
+                                                <StackPanel Spacing="6" Visibility="{x:Bind IsEditing, Mode=OneWay}">
+                                                    <TextBox x:Name="ReviewBox"
+                                                             Text="{x:Bind EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             PlaceholderText="Write a comment"
+                                                             ToolTipService.ToolTip="**bold** (Ctrl+B)   *italic* (Ctrl+I)   ++underline++ (Ctrl+U)   ==highlight== (Ctrl+Shift+H)   `code` (Ctrl+`)"
+                                                             AcceptsReturn="True"
+                                                             TextWrapping="Wrap"
+                                                             MinHeight="64"
+                                                             MaxHeight="240"
+                                                             Tag="{x:Bind}"
+                                                             PreviewKeyDown="OnReviewBoxKeyDown" />
+                                                    <StackPanel Orientation="Horizontal"
+                                                                HorizontalAlignment="Right"
+                                                                Spacing="{StaticResource MqButtonGroupSpacing}">
+                                                        <Button Content="Save"
+                                                                Style="{StaticResource MqCommandButtonStyle}"
+                                                                IsEnabled="{x:Bind CanSave, Mode=OneWay}"
+                                                                Tag="{x:Bind}"
+                                                                Click="OnReviewSaveClick"
+                                                                PreviewKeyDown="OnReviewSaveKeyDown"
+                                                                ToolTipService.ToolTip="Save (Ctrl+Enter)" />
+                                                        <Button Content="Cancel"
+                                                                Style="{StaticResource MqCommandButtonStyle}"
+                                                                Tag="{x:Bind}"
+                                                                Click="OnReviewCancelClick"
+                                                                PreviewKeyDown="OnReviewSaveKeyDown"
+                                                                ToolTipService.ToolTip="Cancel (Esc)" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!--
+                        The footer, in two parts under a rule.
+
+                        Above it, sending: Share Review... commits the review to a file and is
+                        the one accent here; Copy as Markdown is the alternative.
+
+                        Below it, ending - one place for all of it. End Commenting sits there, and
+                        when it is asked with something that would be lost, the same spot turns
+                        into the question and its two answers, and End Commenting steps aside:
+                        a question on screen beside the button that asked it would offer the
+                        same choice twice. Nothing blocks, and both answers are neutral because
+                        neither commits. Share stays in reach above, which is the answer most
+                        worth having to hand at that moment.
+                    -->
+                    <StackPanel Grid.Row="2" Spacing="10">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="{StaticResource MqButtonGroupSpacing}">
+                            <Button Content="Share Review..."
+                                    Style="{StaticResource MqPrimaryCommandButtonStyle}"
+                                    PreviewKeyDown="OnReviewShareKeyDown"
+                                    Command="{x:Bind ViewModel.ShareReviewCommand}"
+                                    ToolTipService.ToolTip="Save the page with your comments in its margin, to send to the author" />
+                            <Button Content="Copy as Markdown"
+                                    Style="{StaticResource MqCommandButtonStyle}"
+                                    Command="{x:Bind ViewModel.CopyReviewMarkdownCommand}"
+                                    ToolTipService.ToolTip="Copy the source with your comments written into it, for pasting into an AI or a message" />
+                        </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource MqChromeRuleBrush}" />
+
+                        <Button Content="End Commenting"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource MqCommandButtonStyle}"
+                                Command="{x:Bind ViewModel.EndReviewCommand}"
+                                Visibility="{x:Bind CollapsedWhen(ViewModel.IsEndWarningVisible), Mode=OneWay}"
+                                ToolTipService.ToolTip="End the review and discard its comments (Ctrl+Shift+R)" />
+
+                        <StackPanel x:Name="ReviewEndQuestion"
+                                    Spacing="8"
+                                    Visibility="{x:Bind VisibleWhen(ViewModel.IsEndWarningVisible), Mode=OneWay}">
+                            <TextBlock Text="{x:Bind ViewModel.EndWarning, Mode=OneWay}"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        Spacing="{StaticResource MqButtonGroupSpacing}">
+                                <Button Content="Discard and End"
+                                        Style="{StaticResource MqCommandButtonStyle}"
+                                        Command="{x:Bind ViewModel.DiscardReviewCommand}" />
+                                <Button x:Name="KeepCommentingButton"
+                                        Content="Keep Commenting"
+                                        Style="{StaticResource MqCommandButtonStyle}"
+                                        Command="{x:Bind ViewModel.KeepCommentingCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!--
                 Empty state: the drop target and the way back into recent work.
 
                 Spans all three columns. With no document open the outline and its handle are
@@ -2141,7 +2414,7 @@
                 the window rather than in whatever is left beside a panel.
             -->
             <ScrollViewer Grid.Column="0"
-                          Grid.ColumnSpan="3"
+                          Grid.ColumnSpan="4"
                           Visibility="{x:Bind CollapsedWhen(ViewModel.HasDocument), Mode=OneWay}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">

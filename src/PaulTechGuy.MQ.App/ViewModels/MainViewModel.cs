@@ -914,6 +914,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         host.ImagePasteRequested += OnImagePasteRequested;
         host.ExternalLinkActivated += OnExternalLinkActivated;
         host.SelectionCopied += OnSelectionCopied;
+
+        AttachReviewHost(host);
     }
 
     /// <summary>
@@ -975,12 +977,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _host.SetZoomAsync(EditorPane.Source, new ZoomLevel(current.SourceZoomPercent)).ConfigureAwait(true);
         await _host.SetZoomAsync(EditorPane.Preview, new ZoomLevel(current.PreviewZoomPercent)).ConfigureAwait(true);
 
+        // A shell that restarted after a crash has forgotten which documents it was told not to
+        // take typing for, so what was sent is forgotten here too and each is told again.
+        _editorReadOnly.Clear();
+
         // Documents opened before the shell was ready still need their tabs created.
         foreach (MarkdownDocument document in _workspace.Documents)
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
             await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
+            await ApplyEditorReadOnlyAsync(document).ConfigureAwait(true);
         }
 
         if (_workspace.Active is { } active)
@@ -988,6 +995,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             await _host.ActivateTabAsync(active.Id, active.Path).ConfigureAwait(true);
             await PublishLinkTargetsAsync(active.Id, active.Path).ConfigureAwait(true);
         }
+
+        await RestoreReviewAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -1595,7 +1604,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _workspace.ReloadAsync(document.Id).ConfigureAwait(true);
+            if (!await _workspace.ReloadAsync(document.Id).ConfigureAwait(true))
+            {
+                ShowReadOnlyStatus($"{ReadOnlyWord(document)} — {document.DisplayName} was not reloaded");
+                return;
+            }
+
             StatusText = $"Reloaded {document.DisplayName}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1753,7 +1767,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // nothing about what Ctrl+S will do.
         if (document.IsReadOnly)
         {
-            ShowReadOnlyStatus($"Read-only — {document.DisplayName} was not saved");
+            ShowReadOnlyStatus($"{ReadOnlyWord(document)} — {document.DisplayName} was not saved");
             return;
         }
 
@@ -1850,12 +1864,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private bool RefuseIfReadOnly(Guid id, string what)
     {
-        if (_workspace.Find(id) is not { IsReadOnly: true })
+        if (_workspace.Find(id) is not { IsReadOnly: true } document)
         {
             return false;
         }
 
-        ShowReadOnlyStatus($"Read-only — {what} did nothing");
+        ShowReadOnlyStatus($"{ReadOnlyWord(document)} — {what} did nothing");
         return true;
     }
 
@@ -2054,6 +2068,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_workspace.Find(id) is not { } document)
         {
+            return;
+        }
+
+        // Save As would carry the review to a new path and then offer to move the images, and
+        // that step rewrites the text through the editor - which a review has to hold still.
+        if (document.IsUnderReview)
+        {
+            ShowReadOnlyStatus($"Commenting — end the review before saving {document.DisplayName} somewhere else");
             return;
         }
 
@@ -2370,6 +2392,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<bool> ConfirmDiscardAsync(DocumentTabViewModel tab)
     {
+        // Comments first, and as a question of their own: see ConfirmEndReviewForCloseAsync.
+        if (!await ConfirmEndReviewForCloseAsync(tab).ConfigureAwait(true))
+        {
+            return false;
+        }
+
         if (!tab.IsDirty)
         {
             return true;
@@ -2441,7 +2469,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         UpdateExternalStatus();
 
         if (_workspace.Active is not { HasExternalChange: true } active
-            || _dismissedExternal.Contains(active.Id))
+            || _dismissedExternal.Contains(active.Id)
+            // A review says so in its own banner, and offers nothing: reloading is what it holds back.
+            || active.IsUnderReview)
         {
             HasExternalNotice = false;
             ExternalNotice = ExternalChangeNotice.None;
@@ -2869,8 +2899,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _workspace.ReloadAsync(id).ConfigureAwait(true);
-            return true;
+            // A document under review answers false: counting it as reloaded would put a number
+            // in the sweep's message for a file nothing was taken from.
+            return await _workspace.ReloadAsync(id).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -3471,6 +3502,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _numberingOverrides.Remove(id);
         _renderedNumbering.Remove(id);
 
+        // A review of it, too: the comments were about a document that is no longer open.
+        ForgetReviewOf(id);
+
         if (FindTab(id) is { } tab)
         {
             _isSyncingTabs = true;
@@ -3663,6 +3697,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             FindTab(document.Id)?.Update(document);
         }
+
+        RefreshReviewState();
 
         RefreshOutlineForActiveDocument();
 
@@ -5805,7 +5841,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // word "Cut" over a document that still has every line it had a moment ago.
             case "cut" when _workspace.Active is { IsReadOnly: true }:
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
-                ShowReadOnlyStatus("Read-only — copied instead of cut");
+                ShowReadOnlyStatus($"{ReadOnlyWord(_workspace.Active)} — copied instead of cut");
                 return;
 
             case "cut":
@@ -9755,6 +9791,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 // rather than reaching the window's own accelerators.
                 case not null when command.StartsWith("menu.", StringComparison.Ordinal):
                     MenuRequested?.Invoke(this, command["menu.".Length..]);
+                    break;
+
+                case "review.toggle":
+                    await ToggleReviewCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "copyRichText" when CopyAsRichTextCommand.CanExecute(null):

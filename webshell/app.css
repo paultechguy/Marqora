@@ -12,6 +12,19 @@
   where it would otherwise have been named.
 */
 
+/*
+  The Compact chrome button tier, for the one button this page draws - the Comment button over a
+  selection in a review. Mirrors MqCompactToolButtonStyle in App.xaml and the same block in
+  diagram.css; build/Test-ButtonStandards.ps1 fails if either copy drifts from App.xaml.
+*/
+:root {
+  --mq-btn-height: 28px;
+  --mq-btn-min-width: 32px;
+  --mq-btn-padding-x: 10px;
+  --mq-btn-radius: 6px;
+  --mq-btn-font-size: 13px;
+}
+
 :root {
   color-scheme: light;
 
@@ -843,6 +856,17 @@ a.mq-blocked-media {
 }
 
 /*
+  A column of short cells, marked by ShortColumnPass, keeps its words on one line.
+
+  Without it a column of prose beside it squeezes a "Due date" header down to its longest word.
+  The pass decides which columns qualify and caps how many, so this rule can stay a single
+  declaration: the budget there is what stops a table of unwrappable columns overflowing.
+*/
+.mq-preview .mq-nowrap {
+  white-space: nowrap;
+}
+
+/*
   The header row carries the accent; the body stays neutral.
 
   One colored element per table is the whole of the rule. A table is usually somebody's data
@@ -1011,6 +1035,122 @@ a.mq-blocked-media {
 }
 
 .mq-preview mark { background: var(--mq-mark); color: inherit; border-radius: 3px; padding: 0 0.15em; }
+
+/*
+  A reviewer's comment on a passage, while a review is on (see applyCommentMarks in app.js).
+
+  Teal rather than the ==mark== yellow above, so a highlight the author wrote and one a reviewer
+  put on it are never mistaken for each other, and one class deeper so this wins over that rule
+  whatever order the two are read in. The number is generated content, never a text node: text
+  in the mark would be text in the block, and every offset, quote and copy taken from the preview
+  would carry the digits along with the words.
+*/
+.mq-preview mark.mq-comment {
+  background: color-mix(in srgb, var(--mq-accent) 22%, transparent);
+  color: inherit;
+  border-radius: 0;
+  padding: 0;
+  border-bottom: 2px solid var(--mq-accent);
+  cursor: pointer;
+}
+
+.mq-preview mark.mq-comment[data-n]::after {
+  content: attr(data-n);
+  margin-left: 1px;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 0;
+  vertical-align: super;
+  color: var(--mq-accent);
+}
+
+/*
+  Inside inline code the comment follows the code box's shape. The mark sits within the box's padding,
+  and square corners there read as a second, different box; rounded one pixel under the code's own
+  4px, they nest inside it. The shared page carries the same rule (ReviewPage.Css).
+*/
+.mq-preview :not(pre) > code mark.mq-comment { border-radius: 3px; }
+
+/*
+  A reviewed document read back in: the CriticMarkup a review's Copy as Markdown writes, drawn as
+  comments rather than as the author's yellow highlight (see CriticMarkupPass). The passage wears
+  the comments' teal from end to end, and code inside it is tinted to match, because inline code
+  draws its own background and would otherwise break the passage into pieces. The note sits
+  after it, small and edged in teal, the way a margin note is on the shared page.
+*/
+.mq-preview mark.mq-critic {
+  background: color-mix(in srgb, var(--mq-accent) 22%, transparent);
+  color: inherit;
+  border-radius: 0;
+  padding: 0;
+  border-bottom: 2px solid var(--mq-accent);
+}
+
+.mq-preview mark.mq-critic code {
+  background: color-mix(in srgb, var(--mq-accent) 30%, var(--mq-bg));
+  border-color: color-mix(in srgb, var(--mq-accent) 45%, var(--mq-bg));
+}
+
+.mq-preview .mq-critic-note {
+  margin-left: 0.3em;
+  padding: 0.05em 0.5em;
+  border-left: 3px solid var(--mq-accent);
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--mq-accent) 10%, var(--mq-bg));
+  font-size: 0.88em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* A comment still being written: there, but not yet said. */
+.mq-preview mark.mq-comment-draft {
+  background: color-mix(in srgb, var(--mq-accent) 12%, transparent);
+  border-bottom-style: dashed;
+}
+
+/* Lit by class, all segments at once - see lightComment in app.js - never by :hover alone. */
+.mq-preview mark.mq-comment-hot,
+.mq-preview mark.mq-comment-flash {
+  background: color-mix(in srgb, var(--mq-accent) 40%, transparent);
+}
+
+.mq-preview mark.mq-comment-flash { transition: background 600ms ease-out; }
+
+/*
+  The Comment button that appears over a selection. Compact chrome, the tier the diagram
+  window's zoom strip uses and the only other button in the web layer; the metrics are the
+  tokens at the top of this file, which build/Test-ButtonStandards.ps1 holds to App.xaml.
+
+  Fixed rather than placed inside the preview, and hidden on scroll: inside the article it would
+  be part of every export and copy taken from it.
+
+  In the comments' own teal, as everything about commenting is - the marks, the sidebar's numbers,
+  the wash over a card the pointer is on - and the fill is that same wash: the teal at the strength
+  of the card's hover (MqListRowSelectedBrush), laid over the page so the button is solid over the
+  text it floats on. A solid teal border and a semibold label in the page's own text color make it
+  stand out without shouting; in the page's quiet grays it read as part of the text and was
+  walked past.
+*/
+.mq-comment-button {
+  position: fixed;
+  z-index: 20;
+  min-width: var(--mq-btn-min-width);
+  height: var(--mq-btn-height);
+  padding: 0 var(--mq-btn-padding-x);
+  border: 1px solid var(--mq-accent);
+  border-radius: var(--mq-btn-radius);
+  background: color-mix(in srgb, var(--mq-accent) 22%, var(--mq-bg));
+  color: var(--mq-text);
+  font-family: var(--mq-font-ui);
+  font-size: var(--mq-btn-font-size);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.mq-comment-button[hidden] { display: none; }
+.mq-comment-button:hover { background: color-mix(in srgb, var(--mq-accent) 34%, var(--mq-bg)); }
+.mq-comment-button:active { opacity: 0.7; }
 
 .mq-preview abbr { text-decoration-style: dotted; cursor: help; }
 
@@ -1278,4 +1418,18 @@ a.mq-blocked-media {
   */
   .mq-active-block:not(:is(h1, h2, h3, h4, h5, h6))::before,
   :is(h1, h2, h3, h4, h5, h6).mq-active-block::after { display: none; }
+
+  /*
+    Print and PDF paint this very page rather than a copy of it, so comments made during a
+    review would reach paper. They belong only in the review page Share writes.
+  */
+  .mq-preview mark.mq-comment {
+    background: none;
+    border-bottom: none;
+  }
+
+  /* With the [data-n] of the rule that draws the number, or that rule outranks this one. */
+  .mq-preview mark.mq-comment[data-n]::after { content: none; }
+
+  .mq-comment-button { display: none; }
 }

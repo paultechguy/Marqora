@@ -142,7 +142,7 @@ internal static class MarkdownTableFormatter
 
             for (int c = 0; c < rows[r].Length && c < columns; c++)
             {
-                widths[c] = Math.Max(widths[c], rows[r][c].Trim().Length);
+                widths[c] = Math.Max(widths[c], DisplayWidth.Of(rows[r][c].Trim()));
             }
         }
 
@@ -216,7 +216,7 @@ internal static class MarkdownTableFormatter
             string value = c < cells.Length ? cells[c].Trim() : string.Empty;
             Alignment a = c < alignments.Length ? alignments[c] : Alignment.None;
             int width = widths[c];
-            int slack = width - value.Length;
+            int slack = width - DisplayWidth.Of(value);
 
             string padded = a switch
             {

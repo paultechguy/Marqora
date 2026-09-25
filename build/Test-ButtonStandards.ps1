@@ -15,7 +15,7 @@
       geometry    no size, padding, radius or font set inline on a button
       dialogs     every ContentDialog names a DefaultButton
       destructive a destructive confirm does not leave Enter on the destructive answer
-      web         webshell/diagram.css agrees with App.xaml about the compact metrics
+      web         webshell/diagram.css and app.css agree with App.xaml about the compact metrics
 
     What it cannot do is judge design. It cannot tell a commit from a dismissal, so it cannot
     say which button in a row deserves the accent; it cannot know that "Clear" is destructive
@@ -57,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appXaml = Join-Path $repoRoot 'src/PaulTechGuy.MQ.App/App.xaml'
-$diagramCss = Join-Path $repoRoot 'webshell/diagram.css'
+$webCssFiles = @('webshell/diagram.css', 'webshell/app.css')
 
 $findings = New-Object System.Collections.Generic.List[object]
 $waived = New-Object System.Collections.Generic.List[object]
@@ -382,15 +382,17 @@ foreach ($file in $csFiles) {
 # ------------------------------------------------------------- rule: web
 
 <#
-    webshell/diagram.css and App.xaml have to agree.
+    The web layer's buttons and App.xaml have to agree.
 
-    The one duplication the standard allows: five zoom buttons do not justify pushing metrics
-    across the WebView bridge the way MatchColors pushes colours, but they do justify a test.
-    This is that test, and it is the only thing keeping the copy honest.
+    The one duplication the standard allows: a handful of web buttons do not justify pushing
+    metrics across the WebView bridge the way MatchColors pushes colors, but they do justify a
+    test. This is that test, and it is the only thing keeping the copies honest. Two
+    stylesheets carry the Compact chrome tokens - the diagram window's zoom strip and the
+    preview's floating Comment button - and each is checked on its own, so one drifting cannot
+    hide behind the other agreeing.
 #>
-if ((Test-Path $appXaml) -and (Test-Path $diagramCss)) {
+if (Test-Path $appXaml) {
     $xamlText = Get-Content -Raw $appXaml
-    $cssText = Get-Content -Raw $diagramCss
 
     function Get-XamlDouble {
         param([string]$Key)
@@ -398,52 +400,61 @@ if ((Test-Path $appXaml) -and (Test-Path $diagramCss)) {
         return $null
     }
 
-    function Get-CssPixels {
-        param([string]$Name)
-        if ($cssText -match "--$Name\s*:\s*(\d+)px") { return $Matches[1] }
-        return $null
-    }
+    foreach ($webCss in $webCssFiles) {
+        $cssPath = Join-Path $repoRoot $webCss
 
-    $pairs = @(
-        @{ Xaml = 'MqCompactButtonHeight'; Css = 'mq-btn-height'; What = 'compact button height' }
-    )
+        if (-not (Test-Path $cssPath)) { continue }
 
-    foreach ($pair in $pairs) {
-        $left = Get-XamlDouble $pair.Xaml
-        $right = Get-CssPixels $pair.Css
+        $cssText = Get-Content -Raw $cssPath
+        $cssName = Split-Path -Leaf $webCss
 
-        if ($null -eq $left -or $null -eq $right) {
-            $findings.Add([pscustomobject]@{
-                File    = 'webshell/diagram.css'
-                Line    = 0
-                Rule    = 'web'
-                Message = "Could not read the $($pair.What) from both App.xaml and diagram.css."
-            })
-            continue
+        function Get-CssPixels {
+            param([string]$Name)
+            if ($cssText -match "--$Name\s*:\s*(\d+)px") { return $Matches[1] }
+            return $null
         }
 
-        if ([double]$left -ne [double]$right) {
-            $findings.Add([pscustomobject]@{
-                File    = 'webshell/diagram.css'
-                Line    = 0
-                Rule    = 'web'
-                Message = "The $($pair.What) is $left in App.xaml and $right in diagram.css."
-            })
+        $pairs = @(
+            @{ Xaml = 'MqCompactButtonHeight'; Css = 'mq-btn-height'; What = 'compact button height' }
+        )
+
+        foreach ($pair in $pairs) {
+            $left = Get-XamlDouble $pair.Xaml
+            $right = Get-CssPixels $pair.Css
+
+            if ($null -eq $left -or $null -eq $right) {
+                $findings.Add([pscustomobject]@{
+                    File    = $webCss
+                    Line    = 0
+                    Rule    = 'web'
+                    Message = "Could not read the $($pair.What) from both App.xaml and $cssName."
+                })
+                continue
+            }
+
+            if ([double]$left -ne [double]$right) {
+                $findings.Add([pscustomobject]@{
+                    File    = $webCss
+                    Line    = 0
+                    Rule    = 'web'
+                    Message = "The $($pair.What) is $left in App.xaml and $right in $cssName."
+                })
+            }
         }
-    }
 
-    # The radius is a CornerRadius rather than a Double, so it is read on its own terms.
-    if ($xamlText -match '<CornerRadius x:Key="MqPillRadius">(\d+)</CornerRadius>') {
-        $pill = $Matches[1]
-        $cssRadius = Get-CssPixels 'mq-btn-radius'
+        # The radius is a CornerRadius rather than a Double, so it is read on its own terms.
+        if ($xamlText -match '<CornerRadius x:Key="MqPillRadius">(\d+)</CornerRadius>') {
+            $pill = $Matches[1]
+            $cssRadius = Get-CssPixels 'mq-btn-radius'
 
-        if ($null -ne $cssRadius -and [double]$pill -ne [double]$cssRadius) {
-            $findings.Add([pscustomobject]@{
-                File    = 'webshell/diagram.css'
-                Line    = 0
-                Rule    = 'web'
-                Message = "The button radius is $pill in App.xaml (MqPillRadius) and $cssRadius in diagram.css."
-            })
+            if ($null -ne $cssRadius -and [double]$pill -ne [double]$cssRadius) {
+                $findings.Add([pscustomobject]@{
+                    File    = $webCss
+                    Line    = 0
+                    Rule    = 'web'
+                    Message = "The button radius is $pill in App.xaml (MqPillRadius) and $cssRadius in $cssName."
+                })
+            }
         }
     }
 }

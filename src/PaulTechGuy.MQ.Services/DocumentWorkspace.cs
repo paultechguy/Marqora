@@ -431,8 +431,44 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         return true;
     }
 
-    public Task ReloadAsync(Guid id, CancellationToken cancellationToken = default) =>
+    public Task<bool> ReloadAsync(Guid id, CancellationToken cancellationToken = default) =>
         ReloadCoreAsync(id, automatic: false, cancellationToken);
+
+    public bool SetUnderReview(Guid id, bool underReview)
+    {
+        int index = _documents.FindIndex(d => d.Id == id);
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        if (_documents[index].IsUnderReview == underReview)
+        {
+            return true;
+        }
+
+        _documents[index] = _documents[index] with { IsUnderReview = underReview };
+
+        _logger.LogInformation(
+            "{Path} is {State}.",
+            _documents[index].DisplayPath,
+            underReview ? "under review" : "no longer under review");
+
+        Raise(WorkspaceChange.LockChanged, _documents[index]);
+
+        // A change that arrived during the review was recorded rather than taken. Settle it now
+        // the way the watcher would have, had there been no review: a clean document reloads if
+        // the preference says so, and anything else keeps the notice that is already up.
+        if (!underReview
+            && _documents[index] is { External: ExternalState.Changed, IsDirty: false, Path: { } path }
+            && _settings.Current.ReloadOnExternalChange)
+        {
+            _ = ReloadSafelyAsync(id, path);
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Takes what is on disk, either because the user asked or because the watcher found a
@@ -448,17 +484,49 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
     /// just watched this document be replaced by their own hand; telling them about it later
     /// would be reporting their own action back to them.
     /// </summary>
-    private async Task ReloadCoreAsync(Guid id, bool automatic, CancellationToken cancellationToken)
+    private async Task<bool> ReloadCoreAsync(Guid id, bool automatic, CancellationToken cancellationToken)
     {
         int index = _documents.FindIndex(d => d.Id == id);
 
         if (index < 0 || _documents[index].Path is not { } path)
         {
-            return;
+            return false;
+        }
+
+        // A reload assigns the text directly rather than going through ApplyEdit, so the
+        // read-only backstop there never sees it. That is right for a marked document - reading
+        // is not writing - but not for one under review, whose comments are anchored in the text
+        // as it stood when the review began.
+        if (_documents[index].IsUnderReview)
+        {
+            _logger.LogInformation("Did not reload {Path}: it is under review.", path);
+            return false;
         }
 
         (string text, Encoding encoding, FileStamp? stamp) = await Task
             .Run(() => ReadAllText(path), cancellationToken).ConfigureAwait(false);
+
+        // Found again after the read rather than trusted from before it. The list can change
+        // while the file is read - a tab closed, one moved, one opened - and the index taken
+        // above would then name some other document, which would have this file's text written
+        // over it and be marked clean. Ending a review and closing its tab in the same breath
+        // does exactly that: the review's end starts a deferred reload, and the close follows.
+        index = _documents.FindIndex(d => d.Id == id);
+
+        if (index < 0
+            || !string.Equals(_documents[index].Path, path, StringComparison.OrdinalIgnoreCase)
+            || _documents[index].IsUnderReview)
+        {
+            _logger.LogInformation("Dropped a reload of {Path}: the document moved on while it was read.", path);
+            return false;
+        }
+
+        // Nobody asked for this one, so it must not take edits typed while the file was read.
+        if (automatic && _documents[index].IsDirty)
+        {
+            MarkExternal(id, ExternalState.Changed);
+            return false;
+        }
 
         _encodings[id] = encoding;
 
@@ -474,6 +542,8 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         _logger.LogInformation("Reloaded {Path} from disk.", path);
         Raise(WorkspaceChange.ReloadedFromDisk, _documents[index]);
+
+        return true;
     }
 
     /// <summary>
@@ -691,7 +761,9 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
         // Silently reloading over unsaved edits would destroy the user's work, so a dirty
         // buffer turns an external change into a prompt instead.
-        if (document.IsDirty || !_settings.Current.ReloadOnExternalChange)
+        // A document under review is held to the text its comments are anchored in; the change
+        // is recorded and settled when the review ends.
+        if (document.IsDirty || document.IsUnderReview || !_settings.Current.ReloadOnExternalChange)
         {
             _logger.LogInformation("External change to {Path} needs the user to decide.", path);
             MarkExternal(id, ExternalState.Changed);

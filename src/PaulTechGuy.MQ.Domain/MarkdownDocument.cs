@@ -76,6 +76,18 @@ public sealed record MarkdownDocument
     /// </summary>
     public bool IsPinned { get; init; }
 
+    /// <summary>
+    /// Whether a reviewer is commenting on this document.
+    ///
+    /// Held only in memory, unlike the mark and the pin: a review lasts from Start Commenting to
+    /// End, and a document reopened tomorrow is not under review. It folds into
+    /// <see cref="IsReadOnly"/>, which is what makes every refusal the mark already has - the
+    /// buffer, the editor, save, autosave, Replace All, the formatter - apply here too without a
+    /// second list of call sites to keep in step. The comments are anchored in the text as it
+    /// stood when the review began, and a document that changed under them would move every one.
+    /// </summary>
+    public bool IsUnderReview { get; init; }
+
     public bool IsUntitled => Path is null;
 
     /// <summary>Tab label: the file name, or the placeholder name when never saved.</summary>
@@ -127,8 +139,12 @@ public sealed record MarkdownDocument
     /// file made the document clean, the editor locked on that transition, and redo went with
     /// it, so the edits could not be recovered at all. Locking at once loses undo but loses
     /// nothing else, and taking the mark off hands it straight back.
+    ///
+    /// A review holds even over a missing file. The missing-file clause exists so the buffer can
+    /// be written back, and a reviewer who wants that has End Commenting one click away; letting
+    /// the text move under the comments instead would silently misplace every one of them.
     /// </summary>
-    public bool IsReadOnly => IsLocked && External != ExternalState.Missing;
+    public bool IsReadOnly => (IsLocked && External != ExternalState.Missing) || IsUnderReview;
 
     public MarkdownDocument WithText(string text) => this with { Text = text };
 

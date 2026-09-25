@@ -37,6 +37,12 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     public const string DirtyMarker = "● ";
 
     /// <summary>
+    /// Shown while a reviewer is commenting on the document. U+270E, the text-style pencil: its
+    /// neighbor U+270F is the one font stacks draw as a color emoji.
+    /// </summary>
+    public const string ReviewMarker = "✎ ";
+
+    /// <summary>
     /// Every marker <see cref="DisplayTitle"/> can put in front of a name.
     ///
     /// Listed rather than left implicit in the switch below because the tab strip books room
@@ -44,7 +50,7 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     /// added here and nowhere else is booked for automatically; one added only to the switch
     /// would resize its tab the moment it appeared.
     /// </summary>
-    public static IReadOnlyList<string> Markers { get; } = [MissingMarker, ChangedMarker, DirtyMarker];
+    public static IReadOnlyList<string> Markers { get; } = [MissingMarker, ChangedMarker, ReviewMarker, DirtyMarker];
 
     /// <summary>
     /// The marker in front of this tab's name, or empty when there is none.
@@ -52,6 +58,10 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     /// External state outranks the unsaved dot. A missing file is already dirty - that is what
     /// puts Ctrl+S back within reach - so the dot would be true but would say the smaller of
     /// two things.
+    ///
+    /// A review sits between the two. It outranks the dot because pasted text under review is
+    /// always unsaved, and the dot would hide the one thing about the tab that is new; the
+    /// external markers outrank it because they are news about the file the review is of.
     ///
     /// An exclamation mark rather than a warning sign: several Windows font stacks render
     /// U+26A0 as a color emoji, which lands at the wrong size and weight beside tab text and
@@ -61,7 +71,9 @@ public sealed partial class DocumentTabViewModel : ObservableObject
     {
         ExternalState.Missing => MissingMarker,
         ExternalState.Changed => ChangedMarker,
-        _ => _document.IsDirty ? DirtyMarker : string.Empty,
+        _ => _document.IsUnderReview ? ReviewMarker
+            : _document.IsDirty ? DirtyMarker
+            : string.Empty,
     };
 
     /// <summary>
@@ -122,6 +134,12 @@ public sealed partial class DocumentTabViewModel : ObservableObject
                 text += _document.IsDirty
                     ? "\nRead-only — unmark or Save As to reach the unsaved edits"
                     : "\nRead-only";
+            }
+
+            // What the pencil in front of the name means, and why typing does nothing.
+            if (_document.IsUnderReview)
+            {
+                text += "\nCommenting — the text is locked until the review ends";
             }
 
             // Said here as well as shown, because what the glyph cannot say is the half that is
