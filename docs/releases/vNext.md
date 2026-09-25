@@ -32,18 +32,42 @@ comment, and see it highlighted in the page with the note in a sidebar beside it
   **Show in Folder** and **Copy File** follow, and the second puts the file on the clipboard,
   ready to paste into an email or chat as an attachment.
 - **Copy as Markdown** puts the source on the clipboard with every comment written in beside the
-  words it is about, in CriticMarkup (`{==passage==}{>>comment<<}`). It is the form to paste into
-  an AI and ask it to act on the comments, and the shared page carries the same copy inside it.
+  words it is about, in CriticMarkup (`{==passage==}{>>comment<<}`). It is the form to **paste into
+  an AI** and ask it to act on the comments, and the shared page carries the same copy inside it.
   Opened in Marqora, that markdown shows its comments as comments: the passage in teal, its note
   beside it. Share Review... and Copy as Markdown stay grayed until there is a saved comment.
 - **End Commenting**, at the foot of the sidebar, asks there first if you have comments nobody
   has seen - Discard and End, or Keep Commenting - and closing the tab or the app asks the same.
-  Ending is final: the comments go with it.
+  **Ending is final: the comments are removed; Share before ending.**
 
 One document is reviewed at a time. A document with unsaved changes has to be saved before it
 can be commented on, because the review locks it; pasted text in a new tab can be commented on
 straight away. If the file changes on disk during a review, the banner says so and the comments
 stay with the version you are reading. Pictures, diagrams and equations cannot be commented on.
+
+## Renumber a List in One Step
+
+Numbering every item `1.` - or `0.` - is the markdown habit that lets you slip a new step
+anywhere in a list without renumbering everything below it, and the preview still counts 1, 2, 3.
+Switching a list between that and ordinary counting used to mean retyping each number by hand.
+**Format > Renumber List...** (Ctrl+Shift+9) does it for the whole list at once.
+
+- **Put the caret anywhere in the list**, or select across it. There is no need to select every
+  item; the command finds the list's first and last items for itself. Selecting across two lists
+  renumbers both.
+- **Choose All 0s, All 1s or Sequential.** The dialog opens on the choice that changes
+  something: a list that counts up is offered All 1s, and a list of repeated numbers is offered
+  Sequential, which always counts from 1. Going there and back is Ctrl+Shift+9 and Enter, each
+  way.
+- **Only that list's own level changes.** A list nested inside it keeps its numbers, and anything
+  under an item stays inside it when a number grows from 9 to 10. A code block inside an item
+  does not restart the count.
+- **All 0s is grayed out where it would break the list.** Markdown only lets a list start
+  directly under a line of text - a sub-list written straight under its parent item, for one -
+  when its first number is 1; at 0 its lines would join the paragraph above. The dialog says so,
+  and a blank line above the list makes 0s available. The preview counts a list of 0s as 0, 1, 2.
+- The command is also on the editor's right-click menu when the caret is on a numbered item, and
+  one Ctrl+Z undoes it. Format Document leaves a list of repeated numbers exactly as it is.
 
 ## Fixes
 

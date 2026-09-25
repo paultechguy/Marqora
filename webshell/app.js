@@ -3590,6 +3590,7 @@
     { ctrl: true, shift: true, code: 'Period', run: 'md.blockquote' },
     { ctrl: true, shift: true, code: 'Digit8', run: 'md.bulletList' },
     { ctrl: true, shift: true, code: 'Digit7', run: 'md.numberedList' },
+    { ctrl: true, shift: true, code: 'Digit9', run: 'renumberList' },
     { ctrl: true, shift: true, code: 'BracketRight', run: 'md.headingIncrease' },
     { ctrl: true, shift: true, code: 'BracketLeft', run: 'md.headingDecrease' },
 

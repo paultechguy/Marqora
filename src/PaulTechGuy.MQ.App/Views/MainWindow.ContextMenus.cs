@@ -115,6 +115,9 @@ public sealed partial class MainWindow
     /// <summary>Shown only when the clipboard is actually carrying a picture.</summary>
     private MenuFlyoutItem? _pasteImageItem;
 
+    /// <summary>Shown only when the caret is on a numbered list item.</summary>
+    private MenuFlyoutItem? _renumberListItem;
+
     /// <summary>The dead link that was right-clicked, captured for the item handlers.</summary>
     private LinkFindingHit? _clickedLink;
 
@@ -161,6 +164,12 @@ public sealed partial class MainWindow
             // Collapsed rather than disabled, for the same reason the preview's Copy Link is:
             // an item that can never do anything on this clipboard is not worth a grayed row.
             Show(_pasteImageItem, ViewModel.ClipboardHasImage);
+
+            // Read from the toolbar's Numbered List state, which the shell keeps current as the
+            // caret moves, rather than a round trip for the whole document on every right-click.
+            // It only sees item lines, so a caret on a continuation line hides the item; the Format
+            // menu and Ctrl+Shift+9 still reach the list from there.
+            Show(_renumberListItem, ViewModel.IsNumberedListActive);
         }
         else
         {
@@ -593,6 +602,15 @@ public sealed partial class MainWindow
 
         format.Click += (_, _) => ViewModel.FormatDocumentCommand.Execute(null);
         menu.Items.Add(NeedsContent(format));
+
+        _renumberListItem = new MenuFlyoutItem
+        {
+            Text = "Renumber List...",
+            KeyboardAcceleratorTextOverride = "Ctrl+Shift+9",
+        };
+
+        _renumberListItem.Click += (_, _) => ViewModel.RenumberListCommand.Execute(null);
+        menu.Items.Add(_renumberListItem);
 
         _sourceMenu = menu;
         return menu;

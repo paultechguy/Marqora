@@ -185,6 +185,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RenumberListCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleHeadingNumbersCommand))]
     [NotifyCanExecuteChangedFor(nameof(SetHeadingNumbersCommand))]
     [NotifyPropertyChangedFor(nameof(CanFormat))]
@@ -350,6 +351,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(IsSplitView))]
     [NotifyPropertyChangedFor(nameof(CanFormat))]
     [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RenumberListCommand))]
     public partial ViewMode ViewMode { get; set; }
 
     [ObservableProperty]
@@ -8048,6 +8050,86 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Renumbers the numbered list at the caret, or the lists the selection touches, as all 0s,
+    /// all 1s or 1, 2, 3 - whichever the prompt is answered with.
+    ///
+    /// The shape of <see cref="RunEditAsync"/> with a question in the middle, which is why it is
+    /// not simply another <see cref="MarkdownEditCommand"/>: what the prompt opens on, and whether
+    /// it can offer 0s at all, depends on the list, so the lines are read before it is shown and
+    /// the edits worked out from those same lines after. The prompt is a ContentDialog, so nothing
+    /// can be typed while it is up; the version check in the shell is there if that ever changes.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanFormat))]
+    private async Task RenumberListAsync()
+    {
+        if (RefuseActiveIfReadOnly("renumbering the list"))
+        {
+            return;
+        }
+
+        if (_host is null || !CanFormat || _editInFlight)
+        {
+            return;
+        }
+
+        _editInFlight = true;
+
+        try
+        {
+            // The whole document: a list's first item is at no known distance above the caret.
+            if (await _host.GetEditContextAsync(EditContextScope.Document).ConfigureAwait(true) is not { } context)
+            {
+                return;
+            }
+
+            if (_editor.DescribeOrderedList(context) is not { } list)
+            {
+                StatusText = "Renumber List did nothing: the caret is not in a numbered list";
+                await _host.FocusEditorAsync().ConfigureAwait(true);
+
+                return;
+            }
+
+            if (await _formatDialogs.RequestListNumberingAsync(list).ConfigureAwait(true) is not { } numbering)
+            {
+                await _host.FocusEditorAsync().ConfigureAwait(true);
+
+                return;
+            }
+
+            EditResult result = _editor.RenumberList(numbering, context);
+
+            if (result.IsEmpty)
+            {
+                StatusText = "Nothing to change: the list is already numbered that way";
+                await _host.FocusEditorAsync().ConfigureAwait(true);
+
+                return;
+            }
+
+            await _host.ApplyEditsAsync(result, context.Version).ConfigureAwait(true);
+
+            string items = list.Items == 1 ? "1 item" : $"{list.Items} items";
+            string how = numbering switch
+            {
+                ListNumbering.Zeros => "as all 0s",
+                ListNumbering.Ones => "as all 1s",
+                _ => "as 1, 2, 3",
+            };
+
+            StatusText = $"Renumbered {items} {how}. Ctrl+Z undoes it";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Renumber List failed.");
+        }
+        finally
+        {
+            _editInFlight = false;
+        }
+    }
+
+    /// <summary>
     /// Puts a snippet in at the caret, and — for the callouts, and any snippet of the user's own
     /// carrying <c>$SEL</c> — takes the selection or the caret's paragraph in with it.
     ///
@@ -8910,6 +8992,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
     [NotifyCanExecuteChangedFor(nameof(ApplyMarkdownCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RenumberListCommand))]
     [NotifyCanExecuteChangedFor(nameof(InsertSnippetCommand))]
     public partial bool OutlineHasFocus { get; set; }
 
@@ -9748,6 +9831,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 case "formatDocument" when FormatDocumentCommand.CanExecute(null):
                     await FormatDocumentCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "renumberList" when RenumberListCommand.CanExecute(null):
+                    await RenumberListCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
                 case "cheatsheet":

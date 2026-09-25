@@ -102,6 +102,7 @@ internal static class KeyboardShortcuts
             new("Blockquote", "Ctrl+Shift+."),
             new("Bullet list", "Ctrl+Shift+8"),
             new("Numbered list", "Ctrl+Shift+7"),
+            new("Renumber list as 0s, 1s or 1, 2, 3", "Ctrl+Shift+9"),
             new("Increase heading level", "Ctrl+Shift+]"),
             new("Decrease heading level", "Ctrl+Shift+["),
             new("Increase list indent", "Tab or Ctrl+]"),

@@ -96,4 +96,18 @@ public sealed class MarkdownEditor : IMarkdownEditor
 
         return context.Lines.Count == 0 ? EditResult.None : ImageInsert.Apply(context, references);
     }
+
+    public OrderedListSummary? DescribeOrderedList(EditContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.Lines.Count == 0 ? null : ListRenumber.Describe(context);
+    }
+
+    public EditResult RenumberList(ListNumbering numbering, EditContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return context.Lines.Count == 0 ? EditResult.None : ListRenumber.Apply(context, numbering);
+    }
 }

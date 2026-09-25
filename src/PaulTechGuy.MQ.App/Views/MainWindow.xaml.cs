@@ -616,6 +616,7 @@ public sealed partial class MainWindow : Window
         Add((VirtualKey)190, ctrlShift, () => RunMarkdown("Blockquote"));
         Add(VirtualKey.Number8, ctrlShift, () => RunMarkdown("BulletList"));
         Add(VirtualKey.Number7, ctrlShift, () => RunMarkdown("NumberedList"));
+        Add(VirtualKey.Number9, ctrlShift, () => ViewModel.RenumberListCommand.Execute(null));
         Add((VirtualKey)221, ctrlShift, () => RunMarkdown("HeadingIncrease"));
         Add((VirtualKey)219, ctrlShift, () => RunMarkdown("HeadingDecrease"));
 
