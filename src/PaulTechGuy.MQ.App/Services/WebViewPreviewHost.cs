@@ -142,6 +142,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler<DiagramActivatedEventArgs>? DiagramActivated;
 
+    public event EventHandler<CommentRequestedEventArgs>? CommentRequested;
+
+    public event EventHandler<CommentActivatedEventArgs>? CommentActivated;
+
+    public event EventHandler<CommentHoveredEventArgs>? CommentHovered;
+
     public event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
 
     public event EventHandler<Guid>? DiagramRemoved;
@@ -689,6 +695,75 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         finally
         {
             _htmlRequests.Remove(id);
+        }
+    }
+
+    // ------------------------------------------------------------------ review
+
+    public Task SetReviewAsync(Guid documentId, bool active, IReadOnlyList<ReviewMark> comments) =>
+        SendAsync("setReview", new
+        {
+            documentId,
+            active,
+            comments = comments.Select(c => new
+            {
+                id = c.Id,
+                number = c.Number,
+                line = c.Anchor.Line,
+                index = c.Anchor.Index,
+                start = c.Anchor.Start,
+                end = c.Anchor.End,
+                quote = c.Anchor.Quote,
+                draft = c.Draft,
+            }).ToArray(),
+        });
+
+    public Task RevealCommentAsync(Guid documentId, Guid commentId) =>
+        SendAsync("revealComment", new { documentId, id = commentId });
+
+    public Task HoverCommentAsync(Guid documentId, Guid? commentId) =>
+        SendAsync("hoverComment", new { documentId, id = commentId?.ToString() ?? string.Empty });
+
+    public Task CaptureCommentAsync() => SendAsync("captureComment", new { });
+
+    /// <summary>Outstanding review-page requests, matched by id like the HTML ones above.</summary>
+    private readonly Dictionary<Guid, TaskCompletionSource<string>> _reviewRequests = [];
+
+    public async Task<string> GetReviewHtmlAsync(Guid documentId, IReadOnlyList<ReviewNote> notes)
+    {
+        if (!IsReady)
+        {
+            return string.Empty;
+        }
+
+        var id = Guid.NewGuid();
+        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _reviewRequests[id] = completion;
+
+        try
+        {
+            await SendAsync("requestReviewHtml", new
+            {
+                requestId = id,
+                documentId,
+                notes = notes.Select(n => new { id = n.Id, number = n.Number, text = n.Text }).ToArray(),
+            }).ConfigureAwait(true);
+
+            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(10)))
+                .ConfigureAwait(true);
+
+            if (finished != completion.Task)
+            {
+                _logger.LogWarning("The preview did not return the review page within ten seconds.");
+                return string.Empty;
+            }
+
+            return await completion.Task.ConfigureAwait(true);
+        }
+        finally
+        {
+            _reviewRequests.Remove(id);
         }
     }
 
@@ -1280,6 +1355,51 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     && _htmlRequests.TryGetValue(requestId, out TaskCompletionSource<string>? pending))
                 {
                     pending.TrySetResult(ReadString(payload, "html"));
+                }
+                break;
+
+            case "reviewHtml":
+                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid reviewId)
+                    && _reviewRequests.TryGetValue(reviewId, out TaskCompletionSource<string>? reviewPending))
+                {
+                    reviewPending.TrySetResult(ReadString(payload, "html"));
+                }
+                break;
+
+            case "commentRequested":
+                if (Guid.TryParse(ReadString(payload, "documentId"), out Guid commentDocument))
+                {
+                    string problem = ReadString(payload, "problem");
+
+                    ReviewAnchor? anchor = problem.Length > 0
+                        ? null
+                        : new ReviewAnchor(
+                            ReadInt(payload, "line", 0),
+                            ReadInt(payload, "index", 0),
+                            ReadInt(payload, "start", 0),
+                            ReadInt(payload, "end", 0),
+                            ReadString(payload, "quote"));
+
+                    CommentRequested?.Invoke(
+                        this,
+                        new CommentRequestedEventArgs(commentDocument, anchor, problem.Length > 0 ? problem : null));
+                }
+                break;
+
+            case "commentActivated":
+                if (Guid.TryParse(ReadString(payload, "documentId"), out Guid activatedDocument)
+                    && Guid.TryParse(ReadString(payload, "id"), out Guid activatedComment))
+                {
+                    CommentActivated?.Invoke(this, new CommentActivatedEventArgs(activatedDocument, activatedComment));
+                }
+                break;
+
+            case "commentHovered":
+                if (Guid.TryParse(ReadString(payload, "documentId"), out Guid hoveredDocument))
+                {
+                    Guid? hovered = Guid.TryParse(ReadString(payload, "id"), out Guid hoveredComment) ? hoveredComment : null;
+
+                    CommentHovered?.Invoke(this, new CommentHoveredEventArgs(hoveredDocument, hovered));
                 }
                 break;
 

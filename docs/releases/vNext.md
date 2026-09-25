@@ -1,6 +1,43 @@
 ﻿# Marqora vNext - What's New
 
+## Comment on a Document Without Changing It
+
+Reading someone else's markdown and wanting to say something about it used to mean typing a
+callout into the text, saving a copy, and sending the copy back. **Review > Start Commenting**
+(Ctrl+Shift+R) does it the way Word and Acrobat do: select a passage in the preview, attach a
+comment, and see it highlighted in the page with the note in a sidebar beside it.
+
+- **Nothing changes in the document.** While you comment, the text is locked and the window shows
+  the preview alone. The comments are kept in memory for this sitting only and are never written
+  into the file. Your previous view comes back when you end the review.
+- **Select, then Add comment.** An Add comment button appears over the text you select; click it or press
+  Ctrl+Shift+M, type the note in the sidebar, and press Save or Ctrl+Enter. Hovering a comment in
+  the page lights its card, and hovering a card lights its comment. Each card can be edited or
+  deleted, and the numbers run down the page in reading order.
+- **Share Review...** saves one read-only HTML page for the author: the document as you read it,
+  with every comment highlighted and its note in the margin, and a line at the top saying which
+  version you reviewed and when. It opens in any browser, needs nothing installed, and runs no
+  script. The first review is offered in Documents; later ones go wherever you last saved one.
+  **Show in Folder** and **Copy File** follow, and the second puts the file on the clipboard,
+  ready to paste into an email or chat as an attachment.
+- **Copy as Markdown** puts the source on the clipboard with every comment written in beside the
+  words it is about, in CriticMarkup (`{==passage==}{>>comment<<}`). It is the form to paste into
+  an AI and ask it to act on the comments. The shared page carries the same copy inside it.
+- **End Commenting** asks first if you have comments nobody has seen, and closing the tab or the
+  app asks the same. Ending is final: the comments go with it.
+
+One document is reviewed at a time. A document with unsaved changes has to be saved before it
+can be commented on, because the review locks it; pasted text in a new tab can be commented on
+straight away. If the file changes on disk during a review, the banner says so and the comments
+stay with the version you are reading. Pictures, diagrams and equations cannot be commented on.
+
 ## Fixes
+
+**A reload can no longer land in the wrong tab.** Reloading a document from disk and closing its
+tab straight afterwards could, while the file was still being read, write that file's text into
+whichever tab had taken the closed one's place, and mark it saved, which lost that tab's unsaved
+changes without a prompt. A reload now checks that its document is still there when the read
+finishes, and one nobody asked for never overwrites edits typed in the meantime.
 
 **Format Document leaves `**____**` alone.** A table with a bold blank to fill in, written as
 `**____**`, came back from Format Document as `****__**` in one cell and `**__****` in the next,

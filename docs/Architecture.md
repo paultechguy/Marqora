@@ -122,10 +122,12 @@ host -> shell   openTab, activateTab, closeTab, updatePreview, setTabText, clear
                 scrollToLine, focusPane, editorCommand, requestSelection, insertText,
                 replaceText, requestEditContext, applyEdits,
                 setDiagnostics, clearDiagnostics, setSpelling, clearSpelling,
-                setLinkFindings, clearLinkFindings, setLinkTargets
+                setLinkFindings, clearLinkFindings, setLinkTargets,
+                setReview, revealComment, captureComment, requestReviewHtml
 shell -> host   ready, editorTextChanged, zoomChanged, splitterMoved, linkActivated,
                 command, paneFocused, stats, selectionCopied, contextMenu, imagePaste,
-                editContext, caretState, log
+                editContext, caretState, log, commentRequested, commentActivated,
+                reviewHtml
 ```
 
 `requestEditContext` and `editContext` are the authoring pair: the host asks for the live
@@ -820,6 +822,13 @@ every image it references, and the paths repointed so the copy resolves somewher
 this machine. It is a feature rather than a variation, and `docs/Folio.md` covers it — what a
 Folio is, why it is an `.html` file that carries its own sources, how the off-screen render
 finishes documents that are not on screen, and why `AssetRelocation` could not be reused for it.
+
+**A review** is the fifth, and the one that is not the document but something said about it: the
+preview with a reader's comments highlighted and their notes in the margin, carrying the
+reviewed source with the comments written in. It is also the one export that keeps what the
+others strip - `withoutCommentMarks` takes the marks out of every other copy of the preview, and
+print neutralizes them, because print paints the live page. `docs/Review.md` covers it, including
+why a document under review is held read-only and the three paths that needed more than that.
 
 ---
 

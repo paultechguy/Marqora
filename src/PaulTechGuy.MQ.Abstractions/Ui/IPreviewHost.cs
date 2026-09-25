@@ -195,6 +195,49 @@ public sealed class DiagramInvalidEventArgs(Guid diagramId, string message) : Ev
 }
 
 /// <summary>
+/// The reviewer asked to comment on the preview's selection - with the Comment button, or
+/// Ctrl+Shift+M - and the shell has read it.
+///
+/// Either <see cref="Anchor"/> is set, or <see cref="Problem"/> says why the selection cannot be
+/// one: <c>none</c> (nothing selected), <c>multiBlock</c> (it spans two blocks), <c>overlap</c>
+/// (it runs into an existing comment), <c>unsupported</c> (a picture, diagram or equation is in
+/// it) or <c>inactive</c> (no review is on).
+/// </summary>
+public sealed class CommentRequestedEventArgs(Guid documentId, ReviewAnchor? anchor, string? problem) : EventArgs
+{
+    public Guid DocumentId { get; } = documentId;
+
+    public ReviewAnchor? Anchor { get; } = anchor;
+
+    public string? Problem { get; } = problem;
+}
+
+/// <summary>The reviewer clicked a comment in the preview, or selected inside one.</summary>
+public sealed class CommentActivatedEventArgs(Guid documentId, Guid commentId) : EventArgs
+{
+    public Guid DocumentId { get; } = documentId;
+
+    public Guid CommentId { get; } = commentId;
+}
+
+/// <summary>
+/// The pointer moved onto a comment in the preview, or off every comment
+/// (<see cref="CommentId"/> null). Reported only when it changes.
+/// </summary>
+public sealed class CommentHoveredEventArgs(Guid documentId, Guid? commentId) : EventArgs
+{
+    public Guid DocumentId { get; } = documentId;
+
+    public Guid? CommentId { get; } = commentId;
+}
+
+/// <summary>One comment as the preview draws it: where, what number, and whether it is still being written.</summary>
+public sealed record ReviewMark(Guid Id, int Number, ReviewAnchor Anchor, bool Draft);
+
+/// <summary>One comment as the review page carries it: its number and what it says.</summary>
+public sealed record ReviewNote(Guid Id, int Number, string Text);
+
+/// <summary>
 /// The bridge to the WebView-hosted editor and preview surface.
 ///
 /// The shell keeps one editor model and one cached preview per open document, so switching
@@ -245,6 +288,15 @@ public interface IPreviewHost
 
     /// <summary>Raised when the user double-clicks a rendered diagram in the preview.</summary>
     event EventHandler<DiagramActivatedEventArgs>? DiagramActivated;
+
+    /// <summary>The reviewer asked to comment on the preview's selection.</summary>
+    event EventHandler<CommentRequestedEventArgs>? CommentRequested;
+
+    /// <summary>The reviewer clicked an existing comment in the preview.</summary>
+    event EventHandler<CommentActivatedEventArgs>? CommentActivated;
+
+    /// <summary>The pointer moved onto a comment in the preview, or off it.</summary>
+    event EventHandler<CommentHoveredEventArgs>? CommentHovered;
 
     /// <summary>Raised when a diagram named by <see cref="WatchDiagrams"/> re-rendered.</summary>
     event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
@@ -530,6 +582,36 @@ public interface IPreviewHost
     /// re-rendering, so what is exported is what was on screen.
     /// </summary>
     Task<string> GetRenderedHtmlAsync();
+
+    // ------------------------------------------------------------------ review
+
+    /// <summary>
+    /// A document's comments, the whole list every time, or <paramref name="active"/> false to
+    /// take them all away. The shell draws them whenever the document is on screen and its
+    /// render has settled, and redraws them after every render.
+    /// </summary>
+    Task SetReviewAsync(Guid documentId, bool active, IReadOnlyList<ReviewMark> comments);
+
+    /// <summary>Scrolls a comment into view in the preview and flashes it.</summary>
+    Task RevealCommentAsync(Guid documentId, Guid commentId);
+
+    /// <summary>Lights a comment in the preview while the pointer is over its card, or none (null).</summary>
+    Task HoverCommentAsync(Guid documentId, Guid? commentId);
+
+    /// <summary>
+    /// Asks the shell to read the preview's selection as a comment, answered by
+    /// <see cref="CommentRequested"/>. For Ctrl+Shift+M pressed while the window, rather than
+    /// the page, has the keyboard.
+    /// </summary>
+    Task CaptureCommentAsync();
+
+    /// <summary>
+    /// The preview as the reviewer sees it, made into a review page's body: each comment's
+    /// number a link to its note, each note placed in the margin, drafts left out. Empty when
+    /// the document is not the one on screen or the shell did not answer, which the caller must
+    /// treat as a failure rather than write out.
+    /// </summary>
+    Task<string> GetReviewHtmlAsync(Guid documentId, IReadOnlyList<ReviewNote> notes);
 
     /// <summary>
     /// Finishes markup for a document that is not on screen: mermaid, KaTeX and highlighting

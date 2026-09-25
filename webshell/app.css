@@ -12,6 +12,19 @@
   where it would otherwise have been named.
 */
 
+/*
+  The Compact chrome button tier, for the one button this page draws - the Comment button over a
+  selection in a review. Mirrors MqCompactToolButtonStyle in App.xaml and the same block in
+  diagram.css; build/Test-ButtonStandards.ps1 fails if either copy drifts from App.xaml.
+*/
+:root {
+  --mq-btn-height: 28px;
+  --mq-btn-min-width: 32px;
+  --mq-btn-padding-x: 10px;
+  --mq-btn-radius: 6px;
+  --mq-btn-font-size: 13px;
+}
+
 :root {
   color-scheme: light;
 
@@ -1023,6 +1036,85 @@ a.mq-blocked-media {
 
 .mq-preview mark { background: var(--mq-mark); color: inherit; border-radius: 3px; padding: 0 0.15em; }
 
+/*
+  A reviewer's comment on a passage, while a review is on (see applyCommentMarks in app.js).
+
+  Teal rather than the ==mark== yellow above, so a highlight the author wrote and one a reviewer
+  put on it are never mistaken for each other, and one class deeper so this wins over that rule
+  whatever order the two are read in. The number is generated content, never a text node: text
+  in the mark would be text in the block, and every offset, quote and copy taken from the preview
+  would carry the digits along with the words.
+*/
+.mq-preview mark.mq-comment {
+  background: color-mix(in srgb, var(--mq-accent) 22%, transparent);
+  color: inherit;
+  border-radius: 0;
+  padding: 0;
+  border-bottom: 2px solid var(--mq-accent);
+  cursor: pointer;
+}
+
+.mq-preview mark.mq-comment[data-n]::after {
+  content: attr(data-n);
+  margin-left: 1px;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 0;
+  vertical-align: super;
+  color: var(--mq-accent);
+}
+
+/* A comment still being written: there, but not yet said. */
+.mq-preview mark.mq-comment-draft {
+  background: color-mix(in srgb, var(--mq-accent) 12%, transparent);
+  border-bottom-style: dashed;
+}
+
+.mq-preview mark.mq-comment:hover,
+.mq-preview mark.mq-comment-hot,
+.mq-preview mark.mq-comment-flash {
+  background: color-mix(in srgb, var(--mq-accent) 40%, transparent);
+}
+
+.mq-preview mark.mq-comment-flash { transition: background 600ms ease-out; }
+
+/*
+  The Comment button that appears over a selection. Compact chrome, the tier the diagram
+  window's zoom strip uses and the only other button in the web layer; the metrics are the
+  tokens at the top of this file, which build/Test-ButtonStandards.ps1 holds to App.xaml.
+
+  Fixed rather than placed inside the preview, and hidden on scroll: inside the article it would
+  be part of every export and copy taken from it.
+
+  A solid fill in the document teal, which breaks the rule the rest of the app keeps - accent only
+  on a button that commits - on purpose. It floats over text the reader is looking at, appears
+  only when asked for by a selection, and is the whole of how a comment is started; in the page's
+  own quiet colors it read as part of the text and was walked past. The teal is the comments'
+  own color (the highlight, the sidebar numbers), so it says "this is about commenting" rather
+  than "this is the default action". The label takes the page background, which is white on the
+  light teal and near-black on the dark one - readable in both.
+*/
+.mq-comment-button {
+  position: fixed;
+  z-index: 20;
+  min-width: var(--mq-btn-min-width);
+  height: var(--mq-btn-height);
+  padding: 0 var(--mq-btn-padding-x);
+  border: 1px solid var(--mq-accent);
+  border-radius: var(--mq-btn-radius);
+  background: var(--mq-accent);
+  color: var(--mq-bg);
+  font-family: var(--mq-font-ui);
+  font-size: var(--mq-btn-font-size);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.mq-comment-button[hidden] { display: none; }
+.mq-comment-button:hover { filter: brightness(1.1); }
+.mq-comment-button:active { opacity: 0.7; }
+
 .mq-preview abbr { text-decoration-style: dotted; cursor: help; }
 
 .mq-preview kbd {
@@ -1289,4 +1381,18 @@ a.mq-blocked-media {
   */
   .mq-active-block:not(:is(h1, h2, h3, h4, h5, h6))::before,
   :is(h1, h2, h3, h4, h5, h6).mq-active-block::after { display: none; }
+
+  /*
+    Print and PDF paint this very page rather than a copy of it, so comments made during a
+    review would reach paper. They belong only in the review page Share writes.
+  */
+  .mq-preview mark.mq-comment {
+    background: none;
+    border-bottom: none;
+  }
+
+  /* With the [data-n] of the rule that draws the number, or that rule outranks this one. */
+  .mq-preview mark.mq-comment[data-n]::after { content: none; }
+
+  .mq-comment-button { display: none; }
 }

@@ -156,7 +156,21 @@ public interface IWorkspaceService
     /// </summary>
     Task<bool> SetPinnedAsync(Guid id, bool pinned, CancellationToken cancellationToken = default);
 
-    Task ReloadAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Takes the file's content from disk. False when nothing was reloaded: no such document, no
+    /// file behind it, or a document under review, whose text the comments are anchored in.
+    /// </summary>
+    Task<bool> ReloadAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Puts a document under review, or takes it out, raising <see cref="WorkspaceChange.LockChanged"/>.
+    ///
+    /// Nothing is remembered: a review lives in memory only. While one is on, the document
+    /// refuses every change including a reload, and an external change is recorded rather than
+    /// taken. Ending it settles that change the way the watcher would have at the time - reloads
+    /// a clean document if the preference says so, otherwise leaves the notice standing.
+    /// </summary>
+    bool SetUnderReview(Guid id, bool underReview);
 
     /// <summary>
     /// Accepts the buffer as the answer to a pending external change and clears the marker,

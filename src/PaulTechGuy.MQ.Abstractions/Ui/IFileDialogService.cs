@@ -20,6 +20,16 @@ public interface IFileDialogService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Save dialog for a shared review page.
+    ///
+    /// Its own folder memory, kept by Windows rather than a setting: the first review is offered
+    /// in Documents, and every one after that where the last was saved. A review usually leaves
+    /// the machine, so the document's own folder - often the author's repository - is the wrong
+    /// first guess.
+    /// </summary>
+    Task<string?> PickReviewFileAsync(string suggestedFileName, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Open dialog for a file that is not a document: a preferences file to import.
     ///
     /// Separate from <see cref="PickOpenFileAsync"/> rather than a parameter on it, because

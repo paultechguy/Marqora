@@ -87,6 +87,32 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
         }
     }
 
+    /// <summary>The review dialog's own folder memory. Fixed forever: changing it forgets where reviews go.</summary>
+    private static readonly Guid ReviewDialogPurpose = new("5b0f6d52-8c1e-4e8a-9a51-2f7c3d9e41b6");
+
+    public Task<string?> PickReviewFileAsync(string suggestedFileName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string? path = Win32Dialogs.SaveFile(
+                RequireOwner(),
+                "Share Review",
+                suggestedFileName,
+                [".html"],
+                "HTML document",
+                ReviewDialogPurpose,
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+
+            logger.LogInformation("Review dialog returned {Result}.", path ?? "(cancelled)");
+            return Task.FromResult(path);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The review dialog failed.");
+            return Task.FromResult<string?>(null);
+        }
+    }
+
     public Task<string?> PickImportFileAsync(
         string title,
         string filterLabel,
