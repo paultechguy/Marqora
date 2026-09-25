@@ -23,7 +23,7 @@ internal static class AppImages
     /// </summary>
     public static string IconPath { get; } = Path.Combine(Root, "MarqoraLogo.ico");
 
-    private static readonly string LogoPath = Path.Combine(Root, "MarqoraLogo.png");
+    public static string LogoPath { get; } = Path.Combine(Root, "MarqoraLogo.png");
 
     public static bool HasIcon => File.Exists(IconPath);
 

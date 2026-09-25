@@ -66,18 +66,18 @@ public static partial class ReviewPage
             .mq-review-stamp {
               {{stampWidth}}
               margin: 0 auto 1.5rem;
-              padding: 0.6rem 0.9rem;
               display: flex;
-              flex-wrap: wrap;
-              gap: 0.25rem 1.25rem;
-              font-size: 0.8125rem;
-              color: var(--mq-text-secondary, #656d76);
-              border: 1px solid var(--mq-border, #d0d7de);
-              border-radius: 6px;
+              align-items: center;
+              gap: 0.75rem;
+              font-size: 0.9375rem;
+              line-height: 1.35;
+              color: var(--mq-text, #1f2328);
             }
 
-            .mq-review-stamp strong { color: var(--mq-text, #1f2328); font-weight: 600; }
-            .mq-review-stamp .mq-review-badge { color: var(--mq-review-accent); font-weight: 600; }
+            .mq-review-stamp .mq-review-logo { flex: none; width: 2.75rem; height: 2.75rem; }
+            .mq-review-stamp .mq-review-lines { min-width: 0; }
+            .mq-review-stamp .mq-review-line { display: block; overflow-wrap: anywhere; }
+            .mq-review-stamp .mq-review-note { color: var(--mq-text-secondary, #656d76); }
 
             .mq-review .mq-preview mark.mq-comment {
               background: var(--mq-review-mark);
@@ -181,21 +181,69 @@ public static partial class ReviewPage
     }
 
     /// <summary>
-    /// The line at the top of the page saying exactly which version was reviewed, so an author
+    /// The header at the top of the page saying exactly which version was reviewed, so an author
     /// who has edited since knows the comments are about an earlier draft.
+    ///
+    /// The source hash is kept as an attribute rather than shown: it tells two drafts apart for
+    /// a tool, and a reader has the date for that. A long file name is shortened in the text and
+    /// given whole as the hover title.
     /// </summary>
-    public static string Stamp(string fileName, string reviewed, string shortHash, int count)
+    /// <param name="logoDataUri">The logo as a data URI, or null to leave it out.</param>
+    public static string Stamp(string fileName, string reviewed, string shortHash, int count, string? logoDataUri = null)
     {
         string comments = count == 1 ? "1 comment" : string.Create(CultureInfo.InvariantCulture, $"{count} comments");
+        string shortName = ShortFileName(fileName);
+        string nameTitle = shortName == fileName ? string.Empty : " title=\"" + WebUtility.HtmlEncode(fileName) + "\"";
+        string logo = string.IsNullOrEmpty(logoDataUri)
+            ? string.Empty
+            : "<img class=\"mq-review-logo\" src=\"" + WebUtility.HtmlEncode(logoDataUri) + "\" alt=\"Marqora\" />";
 
-        return "<header class=\"mq-review-stamp\">"
-            + "<span class=\"mq-review-badge\">Review</span>"
-            + "<span>of <strong>" + WebUtility.HtmlEncode(fileName) + "</strong></span>"
-            + "<span>reviewed " + WebUtility.HtmlEncode(reviewed) + "</span>"
-            + "<span>source <code>sha256:" + WebUtility.HtmlEncode(shortHash) + "</code></span>"
-            + "<span>" + comments + "</span>"
-            + "<span>A snapshot: later edits to the source are not reflected here.</span>"
+        return "<header class=\"mq-review-stamp\" data-source-sha256=\"" + WebUtility.HtmlEncode(shortHash) + "\">"
+            + logo
+            + "<div class=\"mq-review-lines\">"
+            + "<span class=\"mq-review-line\">Review of <span" + nameTitle + ">" + WebUtility.HtmlEncode(shortName) + "</span>"
+            + " • " + WebUtility.HtmlEncode(reviewed)
+            + " • " + comments + "</span>"
+            + "<span class=\"mq-review-line mq-review-note\">Later edits to the source are not reflected here.</span>"
+            + "</div>"
             + "</header>";
+    }
+
+    /// <summary>The longest file name the header shows whole.</summary>
+    private const int LongestShownName = 30;
+
+    /// <summary>
+    /// A file name short enough for the header: the start of the name, "...", then the last few
+    /// characters and the extension, so both the beginning a reader recognizes and the end that
+    /// tells versions apart survive. <c>qzT7maKb9xR2vL38dioseusoeJEHp8Nc4WdY6sF1jHa3Bg5Ue0Xi7Po2Zr6.md</c>
+    /// becomes <c>qzT7maKb9xR2vL3...Po2Zr6.md</c>. Counted in text elements, so an emoji or an accented
+    /// letter is never cut in half.
+    /// </summary>
+    public static string ShortFileName(string fileName)
+    {
+        ArgumentNullException.ThrowIfNull(fileName);
+
+        const int head = 15;
+        const int tail = 6;
+        const string ellipsis = "...";
+
+        if (new StringInfo(fileName).LengthInTextElements <= LongestShownName)
+        {
+            return fileName;
+        }
+
+        string extension = Path.GetExtension(fileName);
+        var stem = new StringInfo(fileName[..^extension.Length]);
+
+        if (stem.LengthInTextElements <= head + ellipsis.Length + tail)
+        {
+            return fileName;
+        }
+
+        return stem.SubstringByTextElements(0, head)
+            + ellipsis
+            + stem.SubstringByTextElements(stem.LengthInTextElements - tail)
+            + extension;
     }
 
     /// <summary>
@@ -233,12 +281,12 @@ public static partial class ReviewPage
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..7];
     }
 
-    /// <summary>The page's own file name: "notes.md" is shared as "notes (review).html".</summary>
+    /// <summary>The page's own file name: "notes.md" is shared as "notes (review by Marqora).html".</summary>
     public static string FileName(string displayName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
-        return Path.GetFileNameWithoutExtension(displayName) + " (review).html";
+        return Path.GetFileNameWithoutExtension(displayName) + " (review by Marqora).html";
     }
 
     [GeneratedRegex(@"</script|<!--|<script", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

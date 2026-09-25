@@ -71,15 +71,52 @@ public sealed class ReviewPageTests
     {
         string stamp = ReviewPage.Stamp("<Plans> & Notes.md", "Sep 24, 2026 2:32 PM", "a41c9e2", 6);
 
-        stamp.ShouldContain("&lt;Plans&gt; &amp; Notes.md");
-        stamp.ShouldContain("reviewed Sep 24, 2026 2:32 PM");
-        stamp.ShouldContain("sha256:a41c9e2");
-        stamp.ShouldContain("6 comments");
+        stamp.ShouldContain("Review of <span>&lt;Plans&gt; &amp; Notes.md</span> • Sep 24, 2026 2:32 PM • 6 comments");
+        stamp.ShouldContain("data-source-sha256=\"a41c9e2\"");
+        stamp.ShouldContain("Later edits to the source are not reflected here.");
     }
 
     [Fact]
     public void One_comment_is_singular() =>
         ReviewPage.Stamp("a.md", "now", "0000000", 1).ShouldContain("1 comment<");
+
+    [Fact]
+    public void The_stamp_carries_the_logo_only_when_given_one()
+    {
+        ReviewPage.Stamp("a.md", "now", "0000000", 1, "data:image/png;base64,AAAA")
+            .ShouldContain("<img class=\"mq-review-logo\" src=\"data:image/png;base64,AAAA\" alt=\"Marqora\" />");
+        ReviewPage.Stamp("a.md", "now", "0000000", 1).ShouldNotContain("<img");
+    }
+
+    /// <summary>A shortened name is still available whole, on hover.</summary>
+    [Fact]
+    public void A_long_name_is_shortened_in_the_stamp_and_whole_in_its_title()
+    {
+        const string name = "qzT7maKb9xR2vL38dioseusoeJEHp8Nc4WdY6sF1jHa3Bg5Ue0Xi7Po2Zr6.md";
+
+        string stamp = ReviewPage.Stamp(name, "now", "0000000", 2);
+
+        stamp.ShouldContain("<span title=\"" + name + "\">qzT7maKb9xR2vL3...Po2Zr6.md</span>");
+    }
+
+    [Theory]
+    [InlineData("qzT7maKb9xR2vL38dioseusoeJEHp8Nc4WdY6sF1jHa3Bg5Ue0Xi7Po2Zr6.md", "qzT7maKb9xR2vL3...Po2Zr6.md")]
+    [InlineData("SUMMARY.md", "SUMMARY.md")]
+    [InlineData("A thirty character file name.md", "A thirty charac...e name.md")]
+    [InlineData("Exactly thirty characters!!.md", "Exactly thirty characters!!.md")]
+    [InlineData("no-extension-but-a-very-long-name-indeed", "no-extension-bu...indeed")]
+    public void Long_file_names_keep_their_start_and_end(string name, string expected) =>
+        ReviewPage.ShortFileName(name).ShouldBe(expected);
+
+    /// <summary>A name made of emoji is cut between them, never through one.</summary>
+    [Fact]
+    public void Shortening_never_splits_a_character()
+    {
+        string name = string.Concat(Enumerable.Repeat("😀", 40)) + ".md";
+
+        ReviewPage.ShortFileName(name).ShouldBe(
+            string.Concat(Enumerable.Repeat("😀", 15)) + "..." + string.Concat(Enumerable.Repeat("😀", 6)) + ".md");
+    }
 
     [Fact]
     public void The_short_hash_is_seven_lowercase_hex_digits()
@@ -93,9 +130,9 @@ public sealed class ReviewPageTests
     }
 
     [Theory]
-    [InlineData("Offline-Sync.md", "Offline-Sync (review).html")]
-    [InlineData("notes.markdown", "notes (review).html")]
-    [InlineData("Untitled 2", "Untitled 2 (review).html")]
+    [InlineData("Offline-Sync.md", "Offline-Sync (review by Marqora).html")]
+    [InlineData("notes.markdown", "notes (review by Marqora).html")]
+    [InlineData("Untitled 2", "Untitled 2 (review by Marqora).html")]
     public void The_page_is_named_after_the_document(string document, string expected) =>
         ReviewPage.FileName(document).ShouldBe(expected);
 

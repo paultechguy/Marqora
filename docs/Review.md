@@ -61,7 +61,7 @@ save lifecycle with a live data-loss bug, and this design has none of the three.
    it, and the shared page is handed each note as HTML from it rather than parsing the markup a
    second time in the page. A marker with no partner is text; the CriticMarkup copy keeps the
    markdown as written.
-3. **Share Review...** writes `<name> (review).html`. The first time the save dialog opens in
+3. **Share Review...** writes `<name> (review by Marqora).html`. The first time the save dialog opens in
    Documents, and after that wherever the last one went. Windows remembers it through the
    dialog's own client id, so no setting holds it. The banner then offers **Show in Folder** and
    **Copy File**; the second puts the file itself on the clipboard, so pasting into a message

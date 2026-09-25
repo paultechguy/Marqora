@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using PaulTechGuy.MQ.App.Views;
 using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Services;
@@ -76,5 +77,27 @@ internal static class ReviewPageWriter
             .ConfigureAwait(false);
 
         return skipped;
+    }
+
+    /// <summary>
+    /// The logo for the page's header, as a data URI so the page stays one file. The PNG rather
+    /// than the SVG master, for the reason <see cref="AppImages"/> gives: the SVG draws its letter
+    /// with a font the reader may not have. Null when the file is missing, and the header then
+    /// simply has no logo.
+    /// </summary>
+    public static string? LogoDataUri()
+    {
+        try
+        {
+            return "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(AppImages.LogoPath));
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }

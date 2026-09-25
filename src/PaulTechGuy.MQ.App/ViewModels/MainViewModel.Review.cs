@@ -792,7 +792,7 @@ public sealed partial class MainViewModel
 
             string markdown = ReviewMarkdown(review);
             string reviewed = DateTimeOffset.Now.ToString("MMM d, yyyy h:mm tt", CultureInfo.GetCultureInfo("en-US"));
-            string stamp = ReviewPage.Stamp(document.DisplayName, reviewed, ReviewPage.ShortHash(review.SourceText), ordered.Count);
+            string stamp = ReviewPage.Stamp(document.DisplayName, reviewed, ReviewPage.ShortHash(review.SourceText), ordered.Count, ReviewPageWriter.LogoDataUri());
 
             IReadOnlyList<string> skipped = await ReviewPageWriter.WriteAsync(
                 _packager,
