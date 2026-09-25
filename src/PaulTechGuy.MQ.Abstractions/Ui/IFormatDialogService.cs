@@ -55,4 +55,14 @@ public interface IFormatDialogService
         IReadOnlyList<int> headingLevels,
         bool renumbering,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks how Renumber List should number <paramref name="list"/>, opening on its
+    /// <see cref="OrderedListSummary.Suggested"/> choice.
+    ///
+    /// Returns null if the user cancelled, in which case nothing is written.
+    /// </summary>
+    Task<ListNumbering?> RequestListNumberingAsync(
+        OrderedListSummary list,
+        CancellationToken cancellationToken = default);
 }

@@ -59,6 +59,13 @@ internal static class Edits
     public static string TextFromSnippet(EditContext context, string body) =>
         string.Concat(Editor.Insert(body, context).Edits.Select(e => e.Text));
 
+    /// <summary>The document after Renumber List.</summary>
+    public static string Renumber(EditContext context, ListNumbering numbering) =>
+        Apply(context, Editor.RenumberList(numbering, context));
+
+    /// <summary>What the Renumber List prompt would be shown for this caret or selection.</summary>
+    public static OrderedListSummary? DescribeList(EditContext context) => Editor.DescribeOrderedList(context);
+
     /// <summary>What the toolbar would show for this selection.</summary>
     public static MarkdownMarkState Describe(EditContext context) => Editor.Describe(context);
 

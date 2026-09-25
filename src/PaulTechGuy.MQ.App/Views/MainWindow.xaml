@@ -1113,6 +1113,10 @@
                                         CommandParameter="NumberedList"
                                         KeyboardAcceleratorTextOverride="Ctrl+Shift+7" />
 
+                        <MenuFlyoutItem Text="Renumber List..."
+                                        Command="{x:Bind ViewModel.RenumberListCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+Shift+9" />
+
                         <MenuFlyoutItem Text="Task List"
                                         Command="{x:Bind ViewModel.ApplyMarkdownCommand}"
                                         CommandParameter="TaskList"

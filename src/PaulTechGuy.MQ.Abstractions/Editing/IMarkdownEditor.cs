@@ -58,4 +58,21 @@ public interface IMarkdownEditor
     /// alt text.
     /// </summary>
     EditResult InsertImages(IReadOnlyList<string> references, EditContext context);
+
+    /// <summary>
+    /// The numbered list the caret is in, or the lists the selection touches, described for the
+    /// Renumber List prompt. Null when there is no numbered list there, so the caller can say so
+    /// rather than ask a question with no answer.
+    ///
+    /// Needs <see cref="EditContextScope.Document"/>: a list's first item is at no known distance
+    /// above the caret, and a fence above it decides whether it is a list at all.
+    /// </summary>
+    OrderedListSummary? DescribeOrderedList(EditContext context);
+
+    /// <summary>
+    /// Rewrites the numbers of the list <see cref="DescribeOrderedList"/> described. Only the
+    /// markers of that list's own level change; nested lists keep theirs, and move only when a
+    /// wider marker would otherwise leave them outside their item.
+    /// </summary>
+    EditResult RenumberList(ListNumbering numbering, EditContext context);
 }

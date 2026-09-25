@@ -66,4 +66,27 @@ public sealed class FormatDialogService(WindowContext window, ILogger<FormatDial
             return null;
         }
     }
+
+    public async Task<ListNumbering?> RequestListNumberingAsync(
+        OrderedListSummary list,
+        CancellationToken cancellationToken = default)
+    {
+        if (window.XamlRoot is null)
+        {
+            logger.LogWarning("Cannot show the list numbering dialog: no window is available yet.");
+            return null;
+        }
+
+        try
+        {
+            var dialog = new ListNumberingDialog(list).AnchorTo(window.Root);
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Numbering : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The list numbering dialog failed.");
+            return null;
+        }
+    }
 }
