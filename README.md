@@ -209,6 +209,7 @@ would rather not reach for the mouse.
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
+| 💬  | **Review comments**                      | Comment on a document without changing it, then share one read-only page with your notes in the margin. Drop that page back in later to pick the review up again, pictures and all                                                         |
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
 | 🌗  | **Light, dark or system**                | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included                                                                                                                                             |
@@ -599,6 +600,8 @@ you did not edit.
 | `Tools > Export to Word...`                 | A real `.docx`: Word's own heading styles, numbering, tables, footnotes and equations, with page setup of your choosing  |
 | `Tools > Share as Folio...`                 | Every open document, and every image they use, as one thing to send                                                      |
 | `Tools > Open Folio...`                     | A Folio unpacked back into its documents and images                                                                      |
+| `Review > Share Review...`                  | The document with your comments in its margin, one read-only page to send back                                           |
+| `Review > Resume Shared Review...`          | A page you shared, taken back up: the reviewed text, its pictures, and every comment where it was                        |
 
 All four exports are enabled whenever a document is open, and the three file exports default the
 filename to the document's own name with the new extension.
