@@ -136,6 +136,24 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         return document;
     }
 
+    public MarkdownDocument CreateSnapshot(string text, string name)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        // Named without touching the untitled counter, so the next File > New is still the
+        // number it would have been.
+        MarkdownDocument document = MarkdownDocument.CreateUntitled(name).WithText(text).AsSaved();
+
+        _documents.Add(document);
+
+        _logger.LogInformation("Created {Name}, a snapshot of {Length} characters.", name, text.Length);
+        Raise(WorkspaceChange.Opened, document);
+
+        Activate(document.Id);
+        return document;
+    }
+
     public async Task RestoreAsync(
         IReadOnlyList<string> paths,
         int activeIndex,

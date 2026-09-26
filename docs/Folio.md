@@ -257,8 +257,10 @@ routes reject a Folio today. Adding `.html` to that list is the wrong fix; it wo
 open any web page as Markdown. The marker check goes *ahead* of the extension test, on the WinUI
 `Drop` handler and on the preview's `NavigationStarting` interception alike.
 
-**A Folio is the only untrusted input Marqora reads.** Everything else in the app comes off the
-user's own disk; this arrives by email. So:
+**A Folio is one of two untrusted inputs Marqora reads.** The other is a shared review page
+dropped back in to resume it (`docs/Review.md`), which is checked the same way: its state is
+refused whole unless it holds together, and its pictures are recognized by their bytes and held
+in memory. Everything else in the app comes off the user's own disk; these arrive by email. So:
 
 - every path in the payload is checked to be relative and inside the chosen folder before
   anything is written, using the same containment rule the rest of the app uses;
@@ -300,6 +302,50 @@ from outside the document's folder — is precisely what `AssetRelocation` refus
 refuses for a good reason that Save As still depends on. It is not a filter to widen. The Folio
 gets its own planner, in the same pure paths-in-plan-out shape, and the containment and scheme
 tests are extracted so that there is one copy rather than two.
+
+---
+
+## A review resumed from its page
+
+A review resumed from its shared page (`docs/Review.md`) is the one untitled document a Folio
+includes. It has no folder, but it has the pictures its page carried, so at the start of a share
+it is set down as a **stand-in**: `FolioStandIn` writes those pictures into a folder of its own
+inside the share's temporary folder, at the paths the text names them by, and the planner is
+handed that path. From there the planner, the writers, the shrinker and the fetcher treat it as
+any saved document. The preflight names it as its tab is, `notes.md (review)`, so it cannot be
+taken for the author's own file. What it carries is the text as reviewed, without the comments.
+
+Two rules keep a page somebody sent from turning a share into something else:
+
+- **`FolioSource.ContainedOnly`.** The planner collects a stand-in's pictures only from inside
+  its own folder. An absolute path, a `..\` or a path into another stand-in is reported "not in
+  the review page" and not so much as tested for - its text came from a file somebody sent, and
+  without this it could gather files from the reader's own disk into their Folio.
+- **The name must match the bytes.** A picture is written only when its extension is what
+  `ImageFileTypes` says its bytes are, inside the stand-in's folder, and as a new file. A page
+  cannot leave an `.hta` or a `desktop.ini` that merely starts the way a PNG does. The document
+  itself is never written; the planner takes the text from the buffer.
+
+### The temporary folder
+
+Everything a share makes along the way - reduced copies, pictures fetched from the web, stand-ins
+- goes into one folder, `%TEMP%\marqora-folio\<guid>`, made by `FolioScratch.Create` and holding a
+`.lock` file open with no sharing for as long as the share runs.
+
+| Ends by | What removes it |
+|---|---|
+| Done, failed, cancelled in the preflight or at the save dialog | `WriteFolioAsync`'s `finally` |
+| Closing Marqora with the preflight open | `MainViewModel.Dispose`, which the host calls at shutdown; the preflight is modeless, so the share never reaches its `finally` |
+| Killed, crashed, powered off | `FolioScratch.SweepStale`, off the UI thread, at the next start and at the start of every share - a Folio or a review page |
+
+A shared review page is written through the same folder when it is on the temp folder's drive
+(`SafeFileWriter`), so a crash part way through that write is swept the same way.
+
+The sweep goes by the lock rather than by age. A folder whose `.lock` it can delete belongs to
+nothing and goes at once; one whose lock is held belongs to a share still running in another
+window - a preflight can sit open overnight - and is left. A folder with no lock at all is from a
+build before the lock and goes only once it is an hour old. Only folders named as `Create` names
+them are touched, and nothing that is a junction or symbolic link is followed or removed.
 
 ---
 

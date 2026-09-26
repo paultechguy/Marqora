@@ -69,6 +69,14 @@ public partial class App : Application
         // every later call to it comes from. Deliberately not awaited: nothing waits on spelling.
         _ = Services.GetRequiredService<WindowsSpellingEngine>().WarmUpAsync();
 
+        // What a Folio share left in the temp folder when the process stopped before it could
+        // clear up - pictures from a review page among it. Once, off the UI thread; a folder a
+        // share in another window is still using is locked, and left alone.
+        Microsoft.Extensions.Logging.ILogger scratchLogger = Services
+            .GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+            .CreateLogger(typeof(PaulTechGuy.MQ.Services.FolioScratch).FullName!);
+        _ = Task.Run(() => PaulTechGuy.MQ.Services.FolioScratch.SweepStale(scratchLogger));
+
         if (_startupFiles.Count > 0)
         {
             Log.Information("Opening {Count} file(s) from the command line.", _startupFiles.Count);

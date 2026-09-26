@@ -59,6 +59,20 @@ internal sealed class FolioWorkspace : IDisposable
         return this;
     }
 
+    /// <summary>
+    /// Adds a review resumed from its page: a stand-in path whose folder holds only what the page
+    /// carried, planned with nothing outside that folder collectable.
+    /// </summary>
+    public FolioWorkspace StandIn(string relativePath, string text)
+    {
+        string full = Path.Combine(_root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        _sources.Add(new FolioSource(full, text, Renderer.Render(text).Links, ContainedOnly: true));
+
+        return this;
+    }
+
     /// <summary>The documents added so far, for a test that needs to call the planner itself.</summary>
     public IReadOnlyList<FolioSource> Sources => _sources;
 

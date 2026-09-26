@@ -1502,6 +1502,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsDragOver = false;
 
         List<string> supported = [];
+        string? legacyReview = null;
 
         foreach (string path in paths)
         {
@@ -1524,10 +1525,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 return;
             }
+            else if (LooksLikeReviewPage(path))
+            {
+                // A shared review page, dropped back in: the review is taken up again, on the
+                // text the page holds. Like a Folio, it is the whole of what the drop meant.
+                await ResumeReviewAsync(path).ConfigureAwait(true);
+
+                return;
+            }
+            else if (LooksLikeLegacyReviewPage(path))
+            {
+                legacyReview ??= path;
+            }
             else if (MarkdownFileTypes.IsSupported(path))
             {
                 supported.Add(path);
             }
+        }
+
+        // Said after whatever else the drop opens, rather than instead of it.
+        if (legacyReview is not null && supported.Count == 0)
+        {
+            await ExplainLegacyReviewPageAsync(legacyReview).ConfigureAwait(true);
+            return;
         }
 
         if (supported.Count == 0)
@@ -1561,6 +1581,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             : $"Opened {supported.Count} files";
 
         await OpenManyAsync(supported, status).ConfigureAwait(true);
+
+        if (legacyReview is not null)
+        {
+            await ExplainLegacyReviewPageAsync(legacyReview).ConfigureAwait(true);
+        }
     }
 
     // ------------------------------------------------------------------- saving
@@ -2086,7 +2111,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // a question they have no way to answer.
         _workspace.Activate(id);
 
-        string? path = await _fileDialogs.PickSaveFileAsync(document.DisplayName).ConfigureAwait(true);
+        // A review resumed from its page is labeled "notes.md (review)"; the file it is a copy
+        // of was "notes.md", and that is the name to offer.
+        _snapshots.TryGetValue(id, out ReviewSnapshot? snapshot);
+
+        string suggested = snapshot is { IsResumed: true } ? snapshot.FileName : document.DisplayName;
+        string? path = await _fileDialogs.PickSaveFileAsync(suggested).ConfigureAwait(true);
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -2105,6 +2135,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             await _recent.AddAsync(path).ConfigureAwait(true);
 
             StatusText = $"Saved as {Path.GetFileName(path)}";
+
+            // Now a file of its own, with a folder its pictures resolve against. A resumed
+            // review's pictures were only ever in its page, and are not written beside it.
+            if (snapshot is { IsResumed: true, Assets.Count: > 0 } resumed)
+            {
+                StatusText = resumed.Assets.Count == 1
+                    ? $"Saved as {Path.GetFileName(path)} — 1 image stayed in the review page and wasn't saved beside it"
+                    : $"Saved as {Path.GetFileName(path)} — {resumed.Assets.Count} images stayed in the review page and weren't saved beside it";
+            }
+
+            ForgetSnapshotOf(id);
 
             await CarryAssetsAsync(id, moves).ConfigureAwait(true);
         }
@@ -3504,8 +3545,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _numberingOverrides.Remove(id);
         _renderedNumbering.Remove(id);
 
-        // A review of it, too: the comments were about a document that is no longer open.
+        // A review of it, too: the comments were about a document that is no longer open. And
+        // what it knew about its review pages, with the pictures a resumed one was shown with.
         ForgetReviewOf(id);
+        ForgetSnapshotOf(id);
 
         if (FindTab(id) is { } tab)
         {
@@ -3781,7 +3824,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _highlightExpiry?.Cancel();
         _highlightExpiry?.Dispose();
+
+        // A Folio share still waiting on its preflight when the window closed never reaches the
+        // end of WriteFolioAsync, so its scratch folder - a resumed review's pictures among what
+        // it can hold - is removed here instead. Whatever cannot go now is unlocked, and the
+        // next start's sweep takes it.
+        foreach (FolioScratchFolder scratch in _liveScratch.ToArray())
+        {
+            scratch.Dispose();
+        }
+
+        _liveScratch.Clear();
     }
+
+    /// <summary>The scratch folders of Folio shares still running; see WriteFolioAsync and Dispose.</summary>
+    private readonly HashSet<FolioScratchFolder> _liveScratch = [];
 
     /// <summary>Records the open documents so the next launch can restore them.</summary>
     private void PersistSession()
@@ -6942,9 +6999,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 await FetchDiagramPicturesAsync(selection.Html).ConfigureAwait(true);
 
             // Embedding images means reading and encoding them, which is not something to
-            // do on the UI thread for a document full of screenshots.
+            // do on the UI thread for a document full of screenshots. Where they are is asked
+            // here, on it, since the answer comes from state the UI thread owns.
+            DocumentImages images = ImagesFor(document);
             string fragment = await Task
-                .Run(() => _packager.BuildFragment(selection.Html, document.Path, diagrams))
+                .Run(() => _packager.BuildFragment(selection.Html, images, diagrams))
                 .ConfigureAwait(true);
 
             bool wholeDocument = selection.Text.Length == 0;
@@ -7052,7 +7111,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     path,
                     document.DisplayName,
                     rendered,
-                    document.Path,
+                    ImagesFor(document),
                     _settings.Current.PreviewMaxWidth)
                 .ConfigureAwait(true);
 
@@ -7098,17 +7157,152 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RestoreDocumentFocusAfterChrome();
     }
 
+    /// <summary>
+    /// The share, inside a temporary folder that exists for exactly as long as it does.
+    ///
+    /// Everything a share makes along the way - reduced copies, fetched pictures, a resumed
+    /// review's stand-in - goes into that one folder, and it goes when the share ends however it
+    /// ends: cancelled in the preflight, cancelled at the save dialog, failed, or done. It is also
+    /// registered while it lives, so closing Marqora with a preflight open still removes it - the
+    /// preflight is modeless, and the window closing does not wait for this method to finish.
+    /// </summary>
     private async Task WriteFolioAsync()
     {
-        // A document that has never been saved has no folder for its relative references to
-        // resolve against, so there is nothing to collect for it. Same rule as image paste.
-        List<MarkdownDocument> saved = [.. _workspace.Documents.Where(d => d.Path is not null)];
+        SweepScratchInBackground();
 
-        if (saved.Count == 0)
+        FolioScratchFolder scratch;
+
+        try
+        {
+            scratch = FolioScratch.Create(_logger);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Could not make a scratch folder for a Folio.");
+            await _dialogs.ShowMessageAsync("Could not share", ex.Message).ConfigureAwait(true);
+            return;
+        }
+
+        _liveScratch.Add(scratch);
+
+        try
+        {
+            await WriteFolioCoreAsync(scratch.Path).ConfigureAwait(true);
+        }
+        finally
+        {
+            _liveScratch.Remove(scratch);
+            scratch.Dispose();
+        }
+    }
+
+    private async Task WriteFolioCoreAsync(string scratch)
+    {
+        /*
+            What can be shared: every saved document, and every review resumed from its page.
+
+            A document that has never been saved has no folder for its relative references to
+            resolve against, so there is nothing to collect for it - the same rule as image paste.
+            A resumed review has no folder either, but it has the pictures its page carried, so it
+            is set down as a stand-in: a folder of its own inside this share's scratch folder,
+            holding those pictures at the paths the text names them by. The planner then takes it
+            like any saved document, except that nothing outside that folder may be collected -
+            its text came from a file somebody sent. See FolioStandIn and FolioSource.ContainedOnly.
+        */
+        string standInRoot = Path.Combine(scratch, ".stand-in");
+        Dictionary<Guid, string> standIns = [];
+
+        // Written before the preflight opens and off the UI thread: a resumed review can carry a
+        // lot of pictures, and the preflight asks for its list from its own constructor.
+        foreach (MarkdownDocument document in _workspace.Documents)
+        {
+            if (document.Path is null
+                && _snapshots.TryGetValue(document.Id, out ReviewSnapshot? snapshot)
+                && snapshot is { IsResumed: true, Assets: { } assets })
+            {
+                string fileName = snapshot.FileName;
+
+                try
+                {
+                    standIns[document.Id] = await Task
+                        .Run(() => FolioStandIn.Write(standInRoot, fileName, assets).DocumentPath)
+                        .ConfigureAwait(true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Not offered, rather than the whole share refused for one review.
+                    _logger.LogWarning(ex, "Could not set down {Document} for the Folio.", document.DisplayName);
+                }
+            }
+        }
+
+        // A review resumed while the preflight is open is set down the first time the list is
+        // asked for, on the spot. Guarded: a stand-in that cannot be written is simply not offered.
+        string? StandInFor(MarkdownDocument document)
+        {
+            if (standIns.TryGetValue(document.Id, out string? known))
+            {
+                return known;
+            }
+
+            if (document.Path is not null
+                || !_snapshots.TryGetValue(document.Id, out ReviewSnapshot? snapshot)
+                || snapshot is not { IsResumed: true, Assets: { } assets })
+            {
+                return null;
+            }
+
+            try
+            {
+                return standIns[document.Id] = FolioStandIn.Write(standInRoot, snapshot.FileName, assets).DocumentPath;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Could not set down {Document} for the Folio.", document.DisplayName);
+                return null;
+            }
+        }
+
+        // In tab order, rebuilt on every call: the preflight is modeless, and the workspace can
+        // move underneath it.
+        List<(string Path, MarkdownDocument Document)> ShareableInOrder()
+        {
+            List<(string, MarkdownDocument)> shareable = [];
+
+            foreach (MarkdownDocument document in _workspace.Documents)
+            {
+                if ((document.Path ?? StandInFor(document)) is { } path)
+                {
+                    shareable.Add((path, document));
+                }
+            }
+
+            return shareable;
+        }
+
+        // Path to document: a saved document's own path, or a resumed review's stand-in. What the
+        // planner, the report and the page's numbering all look a document up by.
+        Dictionary<string, MarkdownDocument> Shareable()
+        {
+            Dictionary<string, MarkdownDocument> byPath = new(StringComparer.OrdinalIgnoreCase);
+
+            foreach ((string path, MarkdownDocument document) in ShareableInOrder())
+            {
+                byPath[path] = document;
+            }
+
+            return byPath;
+        }
+
+        bool IsStandIn(string path) =>
+            PathContainment.Contains(standInRoot, path);
+
+        if (Shareable().Count == 0)
         {
             await _dialogs.ShowMessageAsync(
                 "Nothing to share",
-                "A Folio is built from saved documents. Save this one first and try again.")
+                "A Folio is built from saved documents, or from reviews resumed from their page. "
+                + "Save this one first and try again.")
                 .ConfigureAwait(true);
 
             return;
@@ -7128,17 +7322,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Dictionary<string, (string Text, IReadOnlyList<LinkReference> Links)> parsed =
             new(StringComparer.OrdinalIgnoreCase);
 
-        IReadOnlyList<string> Documents() =>
-            [.. _workspace.Documents.Where(d => d.Path is not null).Select(d => d.Path!)];
+        IReadOnlyList<string> Documents() => [.. ShareableInOrder().Select(s => s.Path)];
+
+        // A resumed review is named in the preflight as its tab is, "notes.md (review)", so it
+        // cannot be taken for the author's file of the same name.
+        string? Describe(string path) =>
+            IsStandIn(path) && Shareable().TryGetValue(path, out MarkdownDocument? document)
+                ? document.DisplayName
+                : null;
 
         FolioPlan PlanFor(
             IReadOnlyList<string> chosen,
             int maxImageWidth,
             IReadOnlyDictionary<string, string>? fetched = null)
         {
-            Dictionary<string, MarkdownDocument> open = _workspace.Documents
-                .Where(d => d.Path is not null)
-                .ToDictionary(d => d.Path!, d => d, StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, MarkdownDocument> open = Shareable();
 
             List<FolioSource> sources = [];
 
@@ -7158,7 +7356,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     parsed[path] = cached;
                 }
 
-                sources.Add(new FolioSource(document.Path!, cached.Text, cached.Links));
+                sources.Add(new FolioSource(path, cached.Text, cached.Links, ContainedOnly: IsStandIn(path)));
             }
 
             return FolioPlanner.Plan(sources, maxImageWidth, fetched);
@@ -7169,7 +7367,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // been fetched yet. Naming the sites after going to them would be asking permission for
         // something already done.
         FolioChoice? choice = await _folioDialogs
-            .RequestFolioAsync(Documents, (chosen, width) => PlanFor(chosen, width))
+            .RequestFolioAsync(Documents, (chosen, width) => PlanFor(chosen, width), Describe)
             .ConfigureAwait(true);
 
         if (choice is null || choice.DocumentPaths.Count == 0)
@@ -7204,8 +7402,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             destination = Path.Combine(destination, suggested);
         }
 
-        // Reduced copies live here and nowhere else: a share must not edit what it is sharing.
-        string scratch = Path.Combine(Path.GetTempPath(), "marqora-folio", Guid.NewGuid().ToString("n"));
+        // Reduced copies live in scratch and nowhere else: a share must not edit what it is
+        // sharing. The folder came from WriteFolioAsync, which removes it when this returns.
 
         // The report is built from the plan afterwards, so nothing needs holding here - but the
         // preflight has closed by then, and if the plan's warnings are not shown again they are
@@ -7220,21 +7418,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // may well have typed something else over it. Naming it as the source produced
             // "written from Folio-2026-09-14-100417" - a thing the reader has never seen, which
             // is not a document, and which is not even the file that was written.
+            //
+            // Named as the tab is, so a resumed review reads "notes.md (review)" here too.
+            Dictionary<string, MarkdownDocument> byPath = Shareable();
+
+            string NameOf(string sourcePath) =>
+                byPath.TryGetValue(sourcePath, out MarkdownDocument? named)
+                    ? named.DisplayName
+                    : Path.GetFileName(sourcePath);
+
             string source = built.Documents.Count == 1
-                ? Path.GetFileName(built.Documents[0].SourcePath)
+                ? NameOf(built.Documents[0].SourcePath)
                 : $"{built.Documents.Count.ToString(CultureInfo.CurrentCulture)} documents";
 
             List<ExportIssue> issues = [];
 
             foreach (FolioWarning warning in built.Warnings)
             {
-                MarkdownDocument? document = _workspace.Documents
-                    .FirstOrDefault(d => string.Equals(
-                        d.Path,
-                        warning.DocumentPath,
-                        StringComparison.OrdinalIgnoreCase));
-
-                if (document is null)
+                if (!byPath.TryGetValue(warning.DocumentPath, out MarkdownDocument? document))
                 {
                     continue;
                 }
@@ -7248,7 +7449,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                     // Named on the row only when there is more than one document to tell apart.
                     DocumentName = built.Documents.Count > 1
-                        ? Path.GetFileName(warning.DocumentPath)
+                        ? NameOf(warning.DocumentPath)
                         : string.Empty,
                     Problem = FolioProblem(warning.Kind),
                     Item = ExportReportItem(warning),
@@ -7269,13 +7470,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             foreach (FolioDocumentPlan planned in built.Documents)
             {
-                MarkdownDocument? document = _workspace.Documents
-                    .FirstOrDefault(d => string.Equals(
-                        d.Path,
-                        planned.SourcePath,
-                        StringComparison.OrdinalIgnoreCase));
-
-                if (document is not null && parsed.TryGetValue(planned.SourcePath, out var cached))
+                if (byPath.TryGetValue(planned.SourcePath, out MarkdownDocument? document)
+                    && parsed.TryGetValue(planned.SourcePath, out var cached))
                 {
                     exported[document.Id] = cached.Text;
                 }
@@ -7356,7 +7552,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     break;
 
                 case FolioForm.SingleFile:
-                    written = await WriteFolioPageAsync(plan, destination, suggested)
+                    written = await WriteFolioPageAsync(plan, destination, suggested, Shareable())
                         .ConfigureAwait(true);
                     break;
 
@@ -7387,20 +7583,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            // Only the busy state here: the scratch folder is removed by WriteFolioAsync, which
+            // also covers the ways out that never reach this block - a cancelled preflight, a
+            // cancelled save dialog.
             IsBusy = false;
-
-            try
-            {
-                if (Directory.Exists(scratch))
-                {
-                    Directory.Delete(scratch, recursive: true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Temp files left behind are not worth troubling anyone about.
-                _logger.LogDebug(ex, "Could not clear the Folio scratch folder {Path}.", scratch);
-            }
         }
     }
 
@@ -7419,7 +7605,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// False when there was no shell to finish the documents with, in which case nothing was
     /// written - and the caller must not announce a file that is not there.
     /// </returns>
-    private async Task<bool> WriteFolioPageAsync(FolioPlan plan, string path, string title)
+    /// <param name="byPath">
+    /// The documents by the path the plan knows them by: a saved document's own, or a resumed
+    /// review's stand-in.
+    /// </param>
+    private async Task<bool> WriteFolioPageAsync(
+        FolioPlan plan,
+        string path,
+        string title,
+        IReadOnlyDictionary<string, MarkdownDocument> byPath)
     {
         if (_host is null)
         {
@@ -7439,9 +7633,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // that matters: one contributor's chapter numbering its own headings does not make
         // the other eleven unnumbered. Keyed by path, as the planner keys its own lookup,
         // because a plan carries where a document came from rather than which tab it is.
-        Dictionary<string, HeadingNumbering> numbering = _workspace.Documents
-            .Where(d => d.Path is not null)
-            .ToDictionary(d => d.Path!, d => NumberingFor(d.Id), StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, HeadingNumbering> numbering = byPath
+            .ToDictionary(p => p.Key, p => NumberingFor(p.Value.Id), StringComparer.OrdinalIgnoreCase);
 
         for (int i = 0; i < plan.Documents.Count; i++)
         {
@@ -7714,6 +7907,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             string markdown = document.Text;
             string title = document.DisplayName;
             string? source = document.Path;
+            DocumentImages images = ImagesFor(document);
 
             // This document's answer, not the preference: a tab whose numbers were switched
             // off because the author writes their own must not export with both sets. What is
@@ -7733,7 +7927,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     numbering,
                     source,
                     rendered,
-                    RequestDiagramPngAsync))
+                    RequestDiagramPngAsync,
+                    images))
                 .ConfigureAwait(true);
 
             _logger.LogInformation(
@@ -9913,7 +10108,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // dropped onto the preview, which the browser turns into a navigation.
             if (uri.IsFile && File.Exists(uri.LocalPath))
             {
-                if (MarkdownFileTypes.IsSupported(uri.LocalPath) || LooksLikeFolio(uri.LocalPath))
+                // Checked here rather than in OpenPathAsync, which the command line and Recent
+                // share: a review page is resumed only when someone hands it over.
+                if (LooksLikeReviewPage(uri.LocalPath))
+                {
+                    await ResumeReviewAsync(uri.LocalPath).ConfigureAwait(true);
+                }
+                else if (LooksLikeLegacyReviewPage(uri.LocalPath))
+                {
+                    await ExplainLegacyReviewPageAsync(uri.LocalPath).ConfigureAwait(true);
+                }
+                else if (MarkdownFileTypes.IsSupported(uri.LocalPath) || LooksLikeFolio(uri.LocalPath))
                 {
                     await OpenPathAsync(uri.LocalPath).ConfigureAwait(true);
                 }

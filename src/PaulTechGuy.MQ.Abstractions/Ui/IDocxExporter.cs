@@ -51,6 +51,11 @@ public interface IDocxExporter
     /// Passed in rather than reached for because rasterizing happens in the web shell, which
     /// this layer cannot see and should not learn about.
     /// </param>
+    /// <param name="images">
+    /// Where the document's relative images are, when that is not simply its folder: a review
+    /// resumed from its page carries its pictures in memory. Null asks the folder of
+    /// <paramref name="sourceDocumentPath"/>, as every caller did before.
+    /// </param>
     /// <returns>
     /// Anything that could not be carried into the file - an image that is not on this
     /// machine, a remote image that would need the network, a diagram that never rendered -
@@ -69,5 +74,6 @@ public interface IDocxExporter
         string? sourceDocumentPath,
         string? renderedPreviewHtml,
         Func<string, Task<byte[]?>>? diagramPng = null,
+        DocumentImages? images = null,
         CancellationToken cancellationToken = default);
 }

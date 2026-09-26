@@ -32,8 +32,14 @@ public interface IFolioDialogService
     /// unticked and dragged - and a preflight showing figures for a set the author has already
     /// changed is worse than no preflight.
     /// </param>
+    /// <param name="describe">
+    /// The name to show for a document whose path is not its own - a review resumed from its
+    /// page, which is offered from a temporary stand-in and shown as its tab is,
+    /// "notes.md (review)". Null for every ordinary document, which is shown by its file name.
+    /// </param>
     Task<FolioChoice?> RequestFolioAsync(
         Func<IReadOnlyList<string>> documents,
         Func<IReadOnlyList<string>, int, FolioPlan> plan,
+        Func<string, string?>? describe = null,
         CancellationToken cancellationToken = default);
 }

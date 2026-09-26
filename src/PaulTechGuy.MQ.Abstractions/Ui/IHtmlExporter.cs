@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using PaulTechGuy.MQ.Domain;
+
 namespace PaulTechGuy.MQ.Abstractions.Ui;
 
 /// <summary>
@@ -15,9 +17,10 @@ public interface IHtmlExporter
     /// <param name="outputPath">Where to write the file.</param>
     /// <param name="title">Document title, used for the page title.</param>
     /// <param name="renderedHtml">The preview markup, as rendered.</param>
-    /// <param name="sourceDocumentPath">
-    /// The markdown file's own path, used to resolve relative images. Null for a document
-    /// that has never been saved, in which case images are left as they are.
+    /// <param name="images">
+    /// Where the document's relative images are: its folder, or for a review resumed from its
+    /// page, the pictures the page carried. <see cref="DocumentImages.None"/> for a document that
+    /// has never been saved, whose images are left as they are.
     /// </param>
     /// <remarks>
     /// Heading numbers, when they are switched on, are already in <paramref name="renderedHtml"/>:
@@ -42,7 +45,7 @@ public interface IHtmlExporter
         string outputPath,
         string title,
         string renderedHtml,
-        string? sourceDocumentPath,
+        DocumentImages images,
         int measurePixels = 0,
         CancellationToken cancellationToken = default);
 }

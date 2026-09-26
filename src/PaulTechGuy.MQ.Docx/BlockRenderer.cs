@@ -66,7 +66,7 @@ internal sealed class BlockRenderer
         BookmarkTable bookmarks,
         NumberingPlan numbering,
         int usableWidthTwips,
-        string? sourceDocumentPath,
+        DocumentImages images,
         ExportReport report,
         PreviewHarvest preview,
         IReadOnlyDictionary<string, byte[]> diagrams,
@@ -80,7 +80,7 @@ internal sealed class BlockRenderer
         _diagrams = diagrams;
         _report = report;
         _logger = logger;
-        _images = new DocxImages(main, sourceDocumentPath, report, logger);
+        _images = new DocxImages(main, images, report, logger);
         _footnotes = new DocxFootnotes(main);
         _inlines = new InlineRenderer(
             main, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, logger);

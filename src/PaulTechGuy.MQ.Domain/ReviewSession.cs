@@ -7,8 +7,10 @@ namespace PaulTechGuy.MQ.Domain;
 /// A reviewer's comments on one document, held in memory from Start Commenting to End.
 ///
 /// Nothing here is ever written to disk. Share turns the session into a file somewhere the
-/// reviewer chose, and ending it throws the comments away; that is the whole lifecycle, and
-/// it is why there is no load, no save and no format of Marqora's own to keep compatible.
+/// reviewer chose, and ending it throws the comments away. The page a share wrote carries a
+/// <see cref="ReviewState"/>, and <see cref="Restore"/> takes the review back up from it - so
+/// after its first share a review's save file is its page, and there is still no file of
+/// Marqora's own beside the document.
 ///
 /// <see cref="SourceText"/> is the document as it stood when the session began. The workspace
 /// refuses every change to a document under review, so it is also the document as it stands
@@ -24,16 +26,51 @@ public sealed class ReviewSession
 {
     private readonly List<ReviewComment> _comments = [];
 
-    public ReviewSession(Guid documentId, string sourceText, DateTimeOffset startedUtc)
+    /// <param name="sessionId">
+    /// The review this continues, when it was resumed from a shared page or restarted on a
+    /// snapshot of one; a new review gets a new id.
+    /// </param>
+    public ReviewSession(Guid documentId, string sourceText, DateTimeOffset startedUtc, Guid? sessionId = null)
     {
         ArgumentNullException.ThrowIfNull(sourceText);
 
         DocumentId = documentId;
         SourceText = sourceText;
         StartedUtc = startedUtc;
+        SessionId = sessionId ?? Guid.NewGuid();
+    }
+
+    /// <summary>
+    /// A review taken back up from the page it was shared to: the same text, the same comments
+    /// with their ids, and counted as shared - the page holds exactly this, so ending or closing
+    /// straight away loses nothing and asks nothing.
+    /// </summary>
+    public static ReviewSession Restore(Guid documentId, ReviewState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        var session = new ReviewSession(documentId, state.Source, state.StartedUtc, state.SessionId);
+
+        foreach (ReviewStateComment comment in state.Comments)
+        {
+            session.Add(
+                new ReviewAnchor(comment.Line, comment.Index, comment.Start, comment.End, comment.Quote),
+                comment.Note,
+                comment.Id);
+        }
+
+        session.MarkShared(state.SharedUtc);
+
+        return session;
     }
 
     public Guid DocumentId { get; }
+
+    /// <summary>
+    /// Which review this is, across the pages it has been shared to and the sittings it has
+    /// been resumed in. It is what lets a share recognize a page as this review's own.
+    /// </summary>
+    public Guid SessionId { get; }
 
     /// <summary>The document's text when the session began, and the text every comment is about.</summary>
     public string SourceText { get; }

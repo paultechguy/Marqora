@@ -328,6 +328,76 @@ public class ImageTests : IDisposable
         exported.Issues[1].Line.ShouldBe(3);
     }
 
+    // ---- a review resumed from its page: no folder, its pictures in memory
+
+    private static DocumentImages Page(params (string Key, ReviewAsset Asset)[] assets) =>
+        DocumentImages.FromPage(assets.ToDictionary(a => a.Key, a => a.Asset, StringComparer.OrdinalIgnoreCase));
+
+    [Fact]
+    public async Task An_unsaved_document_with_a_page_embeds_its_pictures()
+    {
+        DocumentImages page = Page(("img/a b.png", new ReviewAsset("image/png", PngBytes(400, 300))));
+
+        using var exported = await ExportedDocument.FromAsync("![A picture](img/a%20b.png)\n", images: page);
+
+        exported.Skipped.ShouldBeEmpty();
+        exported.DocumentXml().ShouldContain("<w:drawing>");
+
+        using WordprocessingDocument file = WordprocessingDocument.Open(exported.Path, false);
+        file.MainDocumentPart!.ImageParts.Single().ContentType.ShouldBe("image/png");
+    }
+
+    [Fact]
+    public async Task A_page_picture_used_twice_is_stored_once()
+    {
+        DocumentImages page = Page(("a.png", new ReviewAsset("image/png", PngBytes(40, 30))));
+
+        using var exported = await ExportedDocument.FromAsync("![One](a.png)\n\n![Two](./a.png)\n", images: page);
+
+        exported.Skipped.ShouldBeEmpty();
+        ImagePartCount(exported.Path).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_picture_the_page_did_not_carry_is_not_found()
+    {
+        using var exported = await ExportedDocument.FromAsync("![Gone](gone.png)\n", images: Page());
+
+        exported.Skipped.ShouldBe(["Line 1: Not found - Gone"]);
+    }
+
+    /// <summary>A page can carry a WebP, which Word does not draw from memory any more than from disk.</summary>
+    [Fact]
+    public async Task A_page_picture_Word_cannot_draw_is_said_so()
+    {
+        DocumentImages page = Page(("a.webp", new ReviewAsset("image/webp", [1, 2, 3])));
+
+        using var exported = await ExportedDocument.FromAsync("![Modern](a.webp)\n", images: page);
+
+        exported.Skipped.ShouldBe(["Line 1: Not a picture Word can show - Modern"]);
+    }
+
+    /// <summary>A resumed review is never given a file that happens to sit where its picture once did.</summary>
+    [Fact]
+    public async Task A_page_never_reads_a_file_of_the_same_name()
+    {
+        WritePng("a.png", 400, 300);
+        string source = Path.Combine(_folder, "document.md");
+
+        using var exported = await ExportedDocument.FromAsync(
+            "![Here](a.png)\n", sourceDocumentPath: source, images: Page());
+
+        exported.Skipped.ShouldBe(["Line 1: Not found - Here"]);
+    }
+
+    [Fact]
+    public async Task An_unsaved_document_with_no_page_says_it_has_not_been_saved()
+    {
+        using var exported = await ExportedDocument.FromAsync("![Picture](a.png)\n");
+
+        exported.Skipped.ShouldBe(["Line 1: The document has not been saved, so its images cannot be found - Picture"]);
+    }
+
     private async Task<ExportedDocument> ExportAsync(string markdown)
     {
         string source = Path.Combine(_folder, "document.md");

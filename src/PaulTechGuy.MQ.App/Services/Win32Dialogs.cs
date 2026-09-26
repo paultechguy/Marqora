@@ -65,6 +65,7 @@ internal static class Win32Dialogs
     /// Windows ignores it once it remembers a folder, which is the point: it is a first answer,
     /// not a fixed one.
     /// </param>
+    /// <param name="forceFolder">Where to open regardless of what Windows remembers, or null.</param>
     public static string? SaveFile(
         IntPtr owner,
         string title,
@@ -72,7 +73,8 @@ internal static class Win32Dialogs
         IReadOnlyList<string> extensions,
         string filterLabel = "Markdown",
         Guid? purpose = null,
-        string? defaultFolder = null)
+        string? defaultFolder = null,
+        string? forceFolder = null)
     {
         var dialog = (IFileSaveDialog)new FileSaveDialogRcw();
 
@@ -98,6 +100,22 @@ internal static class Win32Dialogs
                 finally
                 {
                     Marshal.ReleaseComObject(folder);
+                }
+            }
+
+            // Opens here over whatever is remembered, for the one case that has a better answer
+            // than memory: the folder of the page a resumed review came from.
+            if (!string.IsNullOrWhiteSpace(forceFolder)
+                && Directory.Exists(forceFolder)
+                && SHCreateItemFromParsingName(forceFolder, IntPtr.Zero, typeof(IShellItem).GUID, out IShellItem forced) == 0)
+            {
+                try
+                {
+                    dialog.SetFolder(forced);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(forced);
                 }
             }
 

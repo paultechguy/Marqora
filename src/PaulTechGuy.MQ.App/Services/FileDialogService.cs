@@ -90,7 +90,7 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
     /// <summary>The review dialog's own folder memory. Fixed forever: changing it forgets where reviews go.</summary>
     private static readonly Guid ReviewDialogPurpose = new("5b0f6d52-8c1e-4e8a-9a51-2f7c3d9e41b6");
 
-    public Task<string?> PickReviewFileAsync(string suggestedFileName, CancellationToken cancellationToken = default)
+    public Task<string?> PickReviewFileAsync(string suggestedFileName, string? folder = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -101,7 +101,8 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
                 [".html"],
                 "HTML document",
                 ReviewDialogPurpose,
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                folder);
 
             logger.LogInformation("Review dialog returned {Result}.", path ?? "(cancelled)");
             return Task.FromResult(path);

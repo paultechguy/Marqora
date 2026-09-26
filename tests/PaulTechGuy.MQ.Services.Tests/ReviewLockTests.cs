@@ -76,6 +76,26 @@ public sealed class ReviewLockTests : IDisposable
         ChangesFor(document.Id).ShouldBe([WorkspaceChange.LockChanged]);
     }
 
+    /// <summary>
+    /// A review resumed from its page opens as a snapshot: named for the review, clean because
+    /// the page still holds the text, and the untitled counter left where it was.
+    /// </summary>
+    [Fact]
+    public void A_snapshot_is_clean_named_and_can_be_reviewed()
+    {
+        MarkdownDocument snapshot = _workspace.CreateSnapshot("# Plan\n", "notes.md (review)");
+        MarkdownDocument untitled = _workspace.CreateUntitled();
+
+        snapshot.IsUntitled.ShouldBeTrue();
+        snapshot.DisplayName.ShouldBe("notes.md (review)");
+        snapshot.Text.ShouldBe("# Plan\n");
+        snapshot.IsDirty.ShouldBeFalse();
+        untitled.DisplayName.ShouldBe("Untitled 1");
+
+        _workspace.SetUnderReview(snapshot.Id, true).ShouldBeTrue();
+        Current(snapshot.Id).IsReadOnly.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task An_edit_is_refused_during_a_review()
     {

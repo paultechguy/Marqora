@@ -289,6 +289,27 @@ public static partial class ReviewPage
         return Path.GetFileNameWithoutExtension(displayName) + " (review by Marqora).html";
     }
 
-    [GeneratedRegex(@"</script|<!--|<script", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// The tab's label for a review resumed from its page: "notes.md (review)", or
+    /// "notes.md (review 2)" when that one is already open. A label, not a file name - the tab
+    /// has no file behind it.
+    /// </summary>
+    /// <param name="isTaken">Whether a label is already on an open tab.</param>
+    public static string ResumeLabel(string fileName, Func<string, bool> isTaken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentNullException.ThrowIfNull(isTaken);
+
+        string label = $"{fileName} (review)";
+
+        for (int n = 2; isTaken(label); n++)
+        {
+            label = string.Create(CultureInfo.InvariantCulture, $"{fileName} (review {n})");
+        }
+
+        return label;
+    }
+
+    [GeneratedRegex(@"</script|<!--|<script",RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DangerousInScript();
 }

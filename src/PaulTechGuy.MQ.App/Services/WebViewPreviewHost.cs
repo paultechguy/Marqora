@@ -52,6 +52,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     private string? _documentDirectory;
 
+    /// <summary>The tab the preview is showing, so a request can be answered for the right document.</summary>
+    private Guid? _activeDocumentId;
+
+    /// <summary>
+    /// Pictures for documents that have no folder: a review resumed from its page. Keyed by
+    /// document, and each by <see cref="ReviewAssets.NormalizeKey"/>. Touched only on the UI
+    /// thread, which is where WebView2 raises its resource requests.
+    /// </summary>
+    private readonly Dictionary<Guid, IReadOnlyDictionary<string, ReviewAsset>> _documentAssets = [];
+
     /// <summary>
     /// The effective theme, as last known here.
     ///
@@ -149,6 +159,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     public event EventHandler<CommentActivatedEventArgs>? CommentEditRequested;
 
     public event EventHandler<CommentHoveredEventArgs>? CommentHovered;
+
+    public event EventHandler<CommentsPlacedEventArgs>? CommentsPlaced;
 
     public event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
 
@@ -349,8 +361,29 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// that is not a file gets a 404 rather than falling through, because falling through
     /// would leave the request to Chromium, and marqora.document is not a real host.
     /// </summary>
+    /// <summary>
+    /// Added to every picture served for a document. Two things depend on it. The address is
+    /// the same for every tab - https://marqora.document/img/a.png names a different file in
+    /// each document's folder - so a cached answer could show one tab's picture in another.
+    /// And a resumed review's pictures came from a page somebody sent; kept out of the browser's
+    /// disk cache, they live only as long as the tab that holds them.
+    /// </summary>
+    private const string NoStore = "\r\nCache-Control: no-store";
+
     private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
+        if (ResolveDocumentAsset(e.Request.Uri) is { } asset)
+        {
+            // The type is the one the bytes were recognized as when the page was read, never the
+            // one the page claimed - see ReviewAssets.
+            e.Response = sender.Environment.CreateWebResourceResponse(
+                new MemoryStream(asset.Bytes, writable: false).AsRandomAccessStream(),
+                200,
+                "OK",
+                $"Content-Type: {asset.MediaType}{NoStore}");
+            return;
+        }
+
         string? path = ResolveDocumentFile(e.Request.Uri);
 
         if (path is null)
@@ -367,7 +400,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 stream.AsRandomAccessStream(),
                 200,
                 "OK",
-                $"Content-Type: {ContentTypeFor(path)}");
+                $"Content-Type: {ContentTypeFor(path)}{NoStore}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -406,6 +439,39 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// The picture a marqora.document URL names, for a tab with no folder that was handed its
+    /// pictures - a review resumed from its page. Null for every tab that has a folder, so a
+    /// document on disk is always shown what is on disk.
+    /// </summary>
+    private ReviewAsset? ResolveDocumentAsset(string url)
+    {
+        if (_documentDirectory is not null
+            || _activeDocumentId is not { } id
+            || !_documentAssets.TryGetValue(id, out IReadOnlyDictionary<string, ReviewAsset>? assets)
+            || !url.StartsWith(DocumentBaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return ReviewAssets.NormalizeKey(url[DocumentBaseUrl.Length..]) is { } key
+            && assets.TryGetValue(key, out ReviewAsset? asset)
+                ? asset
+                : null;
+    }
+
+    public void SetDocumentAssets(Guid documentId, IReadOnlyDictionary<string, ReviewAsset>? assets)
+    {
+        if (assets is null || assets.Count == 0)
+        {
+            _documentAssets.Remove(documentId);
+        }
+        else
+        {
+            _documentAssets[documentId] = assets;
+        }
+    }
+
     private static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".png" => "image/png",
@@ -439,6 +505,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         // The folder mapping has to move before the preview is drawn, or the incoming tab's
         // relative images would resolve against the outgoing tab's folder.
         SetDocumentLocation(documentPath);
+        _activeDocumentId = documentId;
 
         // The path is for the printed page header, which names the file the output came from.
         return SendAsync(
@@ -446,7 +513,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             new { id = documentId, documentBaseUrl = DocumentBaseUrl, documentPath = documentPath ?? string.Empty });
     }
 
-    public Task CloseTabAsync(Guid documentId) => SendAsync("closeTab", new { id = documentId });
+    public Task CloseTabAsync(Guid documentId)
+    {
+        _documentAssets.Remove(documentId);
+
+        return SendAsync("closeTab", new { id = documentId });
+    }
 
     public Task UpdatePreviewAsync(Guid documentId, RenderedMarkdown rendered) =>
         SendAsync("updatePreview", new { id = documentId, html = rendered.Html });
@@ -457,6 +529,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     public Task ClearAsync()
     {
         SetDocumentLocation(null);
+        _activeDocumentId = null;
         return SendAsync("clearSurface", new { });
     }
 
@@ -1410,6 +1483,28 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     Guid? hovered = Guid.TryParse(ReadString(payload, "id"), out Guid hoveredComment) ? hoveredComment : null;
 
                     CommentHovered?.Invoke(this, new CommentHoveredEventArgs(hoveredDocument, hovered));
+                }
+                break;
+
+            case "commentsPlaced":
+                if (Guid.TryParse(ReadString(payload, "documentId"), out Guid placedDocument))
+                {
+                    List<Guid> missing = [];
+
+                    if (payload.ValueKind == JsonValueKind.Object
+                        && payload.TryGetProperty("missing", out JsonElement ids)
+                        && ids.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (JsonElement each in ids.EnumerateArray())
+                        {
+                            if (each.ValueKind == JsonValueKind.String && Guid.TryParse(each.GetString(), out Guid id))
+                            {
+                                missing.Add(id);
+                            }
+                        }
+                    }
+
+                    CommentsPlaced?.Invoke(this, new CommentsPlacedEventArgs(placedDocument, missing));
                 }
                 break;
 

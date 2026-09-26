@@ -57,7 +57,7 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// </param>
     public string BuildFragment(
         string renderedHtml,
-        string? sourceDocumentPath,
+        DocumentImages images,
         IReadOnlyDictionary<string, byte[]>? diagrams = null)
     {
         var builder = new StringBuilder();
@@ -73,7 +73,7 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
 
         // The clipboard has nowhere to report a skipped image and no second chance to ask, so
         // this is the one caller that discards the list rather than showing it.
-        string body = EmbedLocalImages(renderedHtml, sourceDocumentPath, out _);
+        string body = EmbedLocalImages(renderedHtml, images, out _);
 
         // Before the table pass, so that a diagram is already a picture rather than an SVG full
         // of text nodes by the time anything else walks the markup.
@@ -193,6 +193,10 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// exists only inside the app. Reading the bytes here rather than in the page avoids the
     /// content-security policy and the cross-origin rules entirely: the host already knows
     /// where the document lives and can simply open the file.
+    ///
+    /// Where a picture is comes from <see cref="DocumentImages"/>, the lookup every export asks:
+    /// the document's folder, or for a review resumed from its page, the pictures that page
+    /// carried.
     /// </summary>
     /// <param name="skipped">
     /// Images that were left as links because they are past <see cref="MaxEmbeddedImageBytes"/>,
@@ -201,39 +205,60 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     /// Only the size skips. A reference with no file behind it is a dead link, which the
     /// analyzer already underlines in the source as you write - but a picture that is simply too
     /// big is invisible until somebody opens the exported file somewhere else and finds a hole
-    /// in it, and nothing else in the app will ever mention it.
+    /// in it, and nothing else in the app will ever mention it. The ceiling holds for a page's
+    /// pictures too: a page is a file somebody sent, and one enormous picture in it would
+    /// otherwise become several times its size in base64 on the way to a file or the clipboard.
+    /// </param>
+    /// <param name="markAssets">
+    /// Adds <c>data-mq-asset</c> naming the path each embedded image was written under, so a
+    /// shared review page can hand its pictures back when it is resumed. Off for every export,
+    /// whose output stays as it was.
     /// </param>
     public string EmbedLocalImages(
         string html,
-        string? sourceDocumentPath,
-        out IReadOnlyList<string> skipped)
+        DocumentImages images,
+        out IReadOnlyList<string> skipped,
+        bool markAssets = false)
     {
         ArgumentNullException.ThrowIfNull(html);
+        ArgumentNullException.ThrowIfNull(images);
 
         List<string> tooLarge = [];
 
         skipped = tooLarge;
 
-        string? folder = string.IsNullOrWhiteSpace(sourceDocumentPath)
-            ? null
-            : Path.GetDirectoryName(Path.GetFullPath(sourceDocumentPath));
-
-        if (folder is null || !Directory.Exists(folder))
+        if (!images.HasSource || (!images.IsPage && (images.Folder is null || !Directory.Exists(images.Folder))))
         {
             return html;
         }
 
         return DocumentAssetReference().Replace(html, match =>
         {
-            string relative = WebUtility.UrlDecode(match.Groups["path"].Value);
+            DocumentImage image = images.Find(match.Groups["path"].Value);
 
-            // Refuses to walk outside the document's folder. See PathContainment for why the
-            // test is on where the path resolves rather than on how it is spelled.
-            if (PathContainment.ResolveWithin(folder, relative) is not { } full || !File.Exists(full))
+            if (image.Status != DocumentImageStatus.Found)
             {
-                logger.LogDebug("Leaving {Reference} as-is; no readable file behind it.", match.Value);
+                logger.LogDebug("Leaving {Reference} as-is; no readable picture behind it.", match.Value);
                 return match.Value;
             }
+
+            string? key = ReviewAssets.NormalizeKey(match.Groups["path"].Value);
+            string mark = markAssets && key is not null
+                ? $"data-mq-asset=\"{WebUtility.HtmlEncode(key)}\" "
+                : string.Empty;
+
+            if (image.Asset is { } asset)
+            {
+                if (asset.Bytes.LongLength > MaxEmbeddedImageBytes)
+                {
+                    tooLarge.Add($"{image.Reference} ({asset.Bytes.LongLength / (1024.0 * 1024.0):0.0} MB)");
+                    return match.Value;
+                }
+
+                return $"{mark}{match.Groups["attr"].Value}=\"data:{asset.MediaType};base64,{Convert.ToBase64String(asset.Bytes)}\"";
+            }
+
+            string full = image.FilePath!;
 
             try
             {
@@ -245,14 +270,14 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
                         "{Path} is {Size:N0} bytes, too large to embed; left as a link.", full, info.Length);
 
                     tooLarge.Add(
-                        $"{relative} ({info.Length / (1024.0 * 1024.0):0.0} MB)");
+                        $"{image.Reference} ({info.Length / (1024.0 * 1024.0):0.0} MB)");
 
                     return match.Value;
                 }
 
                 string data = Convert.ToBase64String(File.ReadAllBytes(full));
 
-                return $"{match.Groups["attr"].Value}=\"data:{MediaTypeFor(full)};base64,{data}\"";
+                return $"{mark}{match.Groups["attr"].Value}=\"data:{MediaTypeFor(full)};base64,{data}\"";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

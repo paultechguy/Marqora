@@ -27,7 +27,7 @@ namespace PaulTechGuy.MQ.Docx;
 internal sealed class DocxImages
 {
     private readonly MainDocumentPart _main;
-    private readonly string? _documentFolder;
+    private readonly DocumentImages _images;
     private readonly ExportReport _report;
     private readonly ILogger _logger;
 
@@ -43,17 +43,14 @@ internal sealed class DocxImages
 
     public DocxImages(
         MainDocumentPart main,
-        string? sourceDocumentPath,
+        DocumentImages images,
         ExportReport report,
         ILogger logger)
     {
         _main = main;
+        _images = images;
         _report = report;
         _logger = logger;
-
-        _documentFolder = sourceDocumentPath is { Length: > 0 }
-            ? Path.GetDirectoryName(Path.GetFullPath(sourceDocumentPath))
-            : null;
     }
 
     /// <summary>
@@ -90,22 +87,30 @@ internal sealed class DocxImages
             return TryBuildFromDataUri(url, altText, maximumWidthTwips, sourceLine);
         }
 
-        if (_documentFolder is null)
+        // The document's folder, or the pictures a review page carried - the same lookup the
+        // HTML export asks, with the same containment rule the preview uses when it serves an
+        // image: a path that resolves outside the document's own folder is refused rather than
+        // followed.
+        DocumentImage image = _images.Find(url);
+
+        switch (image.Status)
         {
-            Skip(sourceLine, altText, url, "The document has not been saved, so its images cannot be found");
-            return null;
+            case DocumentImageStatus.NoSource:
+                Skip(sourceLine, altText, url, "The document has not been saved, so its images cannot be found");
+                return null;
+
+            case DocumentImageStatus.Outside:
+            case DocumentImageStatus.NotFound:
+                Skip(sourceLine, altText, url, "Not found");
+                return null;
         }
 
-        string decoded = Uri.UnescapeDataString(url);
-
-        // The same containment check the preview uses when it serves an image: a path that
-        // resolves outside the document's own folder is refused rather than followed.
-        if (PathContainment.ResolveWithin(_documentFolder, decoded) is not { } full
-            || !File.Exists(full))
+        if (image.Asset is { } asset)
         {
-            Skip(sourceLine, altText, url, "Not found");
-            return null;
+            return BuildFromAsset(asset, image.Reference, altText, maximumWidthTwips, sourceLine);
         }
+
+        string full = image.FilePath!;
 
         try
         {
@@ -227,11 +232,43 @@ internal sealed class DocxImages
             return null;
         }
 
+        return BuildFromBytes(bytes, embedded.Type, altText, embedded.Name, maximumWidthTwips);
+    }
+
+    /// <summary>
+    /// A picture a review page carried, for a review resumed from it: bytes already in hand,
+    /// typed by what they are rather than by a file name. Word draws the same kinds it draws
+    /// from a file, and a WebP or an SVG is refused here exactly as it is on disk.
+    /// </summary>
+    private Run? BuildFromAsset(ReviewAsset asset, string reference, string altText, int maximumWidthTwips, int sourceLine)
+    {
+        if (EmbeddedTypeFor(asset.MediaType) is not { } embedded)
+        {
+            Skip(sourceLine, altText, reference, "Not a picture Word can show");
+            return null;
+        }
+
+        if (asset.Bytes.Length == 0)
+        {
+            Skip(sourceLine, altText, reference, "Could not be read");
+            return null;
+        }
+
+        // Named after the path the document wrote, as a picture from a file is.
+        return BuildFromBytes(asset.Bytes, embedded.Type, altText, reference, maximumWidthTwips);
+    }
+
+    /// <summary>
+    /// The part and the run for a picture whose bytes are in memory. Keyed on a hash of the
+    /// bytes, so the same picture used twenty times is stored once.
+    /// </summary>
+    private Run BuildFromBytes(byte[] bytes, PartTypeInfo type, string altText, string name, int maximumWidthTwips)
+    {
         string key = $"data:{Convert.ToHexString(SHA256.HashData(bytes))}";
 
         if (!_parts.TryGetValue(key, out string? relationshipId))
         {
-            ImagePart part = _main.AddImagePart(embedded.Type);
+            ImagePart part = _main.AddImagePart(type);
 
             using (var source = new MemoryStream(bytes))
             {
@@ -244,7 +281,7 @@ internal sealed class DocxImages
 
         (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips);
 
-        return BuildRun(relationshipId, altText, embedded.Name, width, height);
+        return BuildRun(relationshipId, altText, name, width, height);
     }
 
     private Run? Build(string path, string altText, int maximumWidthTwips, int sourceLine)

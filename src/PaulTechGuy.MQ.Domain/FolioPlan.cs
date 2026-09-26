@@ -10,7 +10,13 @@ namespace PaulTechGuy.MQ.Domain;
 /// is no folder for its relative references to resolve against - and is excluded before here.</param>
 /// <param name="Text">The buffer, not the file. Unsaved edits travel.</param>
 /// <param name="Links">Every link and image, from the parse that already happened.</param>
-public sealed record FolioSource(string Path, string Text, IReadOnlyList<LinkReference> Links);
+/// <param name="ContainedOnly">
+/// Only pictures inside <paramref name="Path"/>'s own folder may be collected. For a review
+/// resumed from its page, which stands in for a document as a temporary folder holding the
+/// pictures that page carried: its text came from a file somebody sent, and an absolute path or a
+/// "..\" in it must not be able to gather files from the reader's own disk into their Folio.
+/// </param>
+public sealed record FolioSource(string Path, string Text, IReadOnlyList<LinkReference> Links, bool ContainedOnly = false);
 
 /// <summary>What is wrong with a document, in the author's terms rather than the planner's.</summary>
 public enum FolioWarningKind

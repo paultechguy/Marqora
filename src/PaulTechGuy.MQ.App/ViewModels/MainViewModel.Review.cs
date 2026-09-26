@@ -124,6 +124,7 @@ public sealed partial class MainViewModel
         host.CommentActivated += OnCommentActivated;
         host.CommentHovered += OnCommentHovered;
         host.CommentEditRequested += OnCommentEditRequested;
+        host.CommentsPlaced += OnCommentsPlaced;
     }
 
     // ---------------------------------------------------------------- start / end
@@ -186,23 +187,15 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _review = new ReviewSession(document.Id, document.Text, DateTimeOffset.Now);
-        _workspace.SetUnderReview(document.Id, true);
+        // A review started again on text it has already shared is the same review, so a share
+        // recognizes the pages it wrote before. Text that has changed since is a new review.
+        Guid? continues = _snapshots.TryGetValue(document.Id, out ReviewSnapshot? snapshot)
+            && string.Equals(snapshot.SourceSha256, ReviewState.Sha256(document.Text), StringComparison.Ordinal)
+                ? snapshot.SessionId
+                : null;
 
-        IsEndWarningVisible = false;
-        HasSharedReviewFile = false;
-        LastReviewPath = string.Empty;
-        ReviewComments.Clear();
-
-        // Comments are made in the preview, and the source is locked for the whole review, so the
-        // review gets the window to itself. Not saved as the preference, and the view the reader
-        // had is put back when the review ends - see EndReviewCore.
-        _viewBeforeReview = ViewMode;
-
-        if (ViewMode != ViewMode.Preview)
-        {
-            await ApplyViewModeAsync(ViewMode.Preview, persist: false, takeFocus: false).ConfigureAwait(true);
-        }
+        await BeginReviewAsync(document, new ReviewSession(document.Id, document.Text, DateTimeOffset.Now, continues))
+            .ConfigureAwait(true);
 
         RefreshReviewState();
         await PushReviewAsync().ConfigureAwait(true);
@@ -219,6 +212,35 @@ public sealed partial class MainViewModel
             // the card that comes back is the last thing to take the keyboard.
             await _host.CaptureCommentAsync(quiet: true).ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// What starting a review and resuming one have in common: the session becomes the review,
+    /// the document is held still, the sidebar starts empty, and the window switches to the
+    /// preview.
+    /// </summary>
+    private async Task BeginReviewAsync(MarkdownDocument document, ReviewSession session)
+    {
+        _review = session;
+        _workspace.SetUnderReview(document.Id, true);
+
+        _resumedThisSitting = false;
+        IsEndWarningVisible = false;
+        HasSharedReviewFile = false;
+        LastReviewPath = string.Empty;
+        ReviewComments.Clear();
+
+        // Comments are made in the preview, and the source is locked for the whole review, so the
+        // review gets the window to itself. Not saved as the preference, and the view the reader
+        // had is put back when the review ends - see EndReviewCore.
+        _viewBeforeReview = ViewMode;
+
+        if (ViewMode != ViewMode.Preview)
+        {
+            await ApplyViewModeAsync(ViewMode.Preview, persist: false, takeFocus: false).ConfigureAwait(true);
+        }
+
+        _logger.LogDebug("Review of {Document} began.", document.DisplayName);
     }
 
     /// <summary>End Commenting from the sidebar: asks first, in place, when something would be lost.</summary>
@@ -682,13 +704,17 @@ public sealed partial class MainViewModel
 
         string count = review.Count == 1 ? "1 comment" : $"{review.Count} comments";
 
+        // A resumed review was last shared whenever its page was, which may be days ago - so
+        // the date is given whenever it is not today.
         ReviewStatus = review.IsShared && review.SharedUtc is { } shared
-            ? $"{count} · Shared {shared.ToLocalTime().ToString("t", CultureInfo.CurrentCulture)}"
+            ? $"{count} · Shared {SharedWhen(shared)}"
             : review.SharedUtc is not null
                 ? $"{count} · Changed since the last share"
                 : $"{count} · Not shared yet";
 
-        string notice = HasSharedReviewFile && review.IsShared
+        string notice = HasSharedReviewFile && review.IsShared && _resumedThisSitting
+            ? $"Resumed from {Path.GetFileName(LastReviewPath)}. The text is the version that was reviewed, whatever the file says now."
+            : HasSharedReviewFile && review.IsShared
             ? $"Review saved: {Path.GetFileName(LastReviewPath)}"
             : document.External == ExternalState.Changed
                 ? $"{document.DisplayName} changed on disk. Your comments refer to the version you're reading."
@@ -698,6 +724,16 @@ public sealed partial class MainViewModel
 
         ReviewNotice = notice;
         SetReviewBarOpen(IsReviewPanelVisible && !_dismissedReviewNotices.Contains(notice));
+    }
+
+    /// <summary>"2:41 PM" today, "Sep 22, 2:41 PM" any other day.</summary>
+    private static string SharedWhen(DateTimeOffset shared)
+    {
+        DateTimeOffset local = shared.ToLocalTime();
+
+        return local.Date == DateTimeOffset.Now.Date
+            ? local.ToString("t", CultureInfo.CurrentCulture)
+            : local.ToString("MMM d", CultureInfo.CurrentCulture) + ", " + local.ToString("t", CultureInfo.CurrentCulture);
     }
 
     private void SetReviewBarOpen(bool open)
@@ -764,7 +800,32 @@ public sealed partial class MainViewModel
             return;
         }
 
-        string? path = await _fileDialogs.PickReviewFileAsync(ReviewPage.FileName(document.DisplayName)).ConfigureAwait(true);
+        // A comment the preview could not place has no highlight, so the page's margin cannot
+        // carry it. It is still in the source block and in what resuming restores.
+        if (ReviewComments.Count(c => c.IsMissing) is > 0 and int missing)
+        {
+            ConfirmResult share = await _dialogs.ConfirmAsync(
+                "Some comments aren't on the page",
+                missing == 1
+                    ? "1 comment's passage couldn't be found in the preview, so it would be left out of the page's margin. It stays in the page's source, and resuming the review brings it back."
+                    : $"{missing} comments' passages couldn't be found in the preview, so they would be left out of the page's margin. They stay in the page's source, and resuming the review brings them back.",
+                primaryText: "Share Anyway").ConfigureAwait(true);
+
+            if (share != ConfirmResult.Primary)
+            {
+                RestoreDocumentFocusAfterChrome();
+                return;
+            }
+        }
+
+        string fileName = ReviewedFileName(document);
+        _snapshots.TryGetValue(document.Id, out ReviewSnapshot? snapshot);
+
+        // A share writes through the temp folder, so its leftovers from a crash are cleared here
+        // too, not only at startup.
+        SweepScratchInBackground();
+
+        string? path = await PickSharePathAsync(review, snapshot, fileName).ConfigureAwait(true);
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -790,23 +851,51 @@ public sealed partial class MainViewModel
                 return;
             }
 
+            DateTimeOffset now = DateTimeOffset.Now;
             string markdown = ReviewMarkdown(review);
-            string reviewed = DateTimeOffset.Now.ToString("MMM d, yyyy h:mm tt", CultureInfo.GetCultureInfo("en-US"));
-            string stamp = ReviewPage.Stamp(document.DisplayName, reviewed, ReviewPage.ShortHash(review.SourceText), ordered.Count, ReviewPageWriter.LogoDataUri());
+            string reviewed = now.ToString("MMM d, yyyy h:mm tt", CultureInfo.GetCultureInfo("en-US"));
+            string stamp = ReviewPage.Stamp(fileName, reviewed, ReviewPage.ShortHash(review.SourceText), ordered.Count, ReviewPageWriter.LogoDataUri());
+
+            var writeId = Guid.NewGuid();
+            int shareCount = (snapshot?.ShareCount ?? 0) + 1;
+            ReviewState state = ReviewState.For(review, fileName, writeId, shareCount, now, AppVersion.Current);
 
             IReadOnlyList<string> skipped = await ReviewPageWriter.WriteAsync(
                 _packager,
                 path,
-                $"{Path.GetFileNameWithoutExtension(document.DisplayName)} — Review",
+                $"{Path.GetFileNameWithoutExtension(fileName)} — Review",
                 body,
-                document.Path,
+                ImagesFor(document),
                 _settings.Current.PreviewMaxWidth,
                 stamp,
                 ordered.Count,
-                markdown).ConfigureAwait(true);
+                markdown,
+                state,
+                _logger).ConfigureAwait(true);
 
-            review.MarkShared(DateTimeOffset.Now);
+            review.MarkShared(now);
 
+            // What this copy of the review knows about its pages from now on - kept past End,
+            // so that sharing again recognizes this page as its own.
+            if (snapshot is null)
+            {
+                snapshot = new ReviewSnapshot
+                {
+                    FileName = fileName,
+                    SessionId = review.SessionId,
+                    SourceSha256 = state.SourceSha256,
+                };
+
+                _snapshots[document.Id] = snapshot;
+            }
+
+            snapshot.SessionId = review.SessionId;
+            snapshot.SourceSha256 = state.SourceSha256;
+            snapshot.PagePath = path;
+            snapshot.ShareCount = shareCount;
+            snapshot.KnownWriteIds.Add(writeId);
+
+            _resumedThisSitting = false;
             LastReviewPath = path;
             HasSharedReviewFile = true;
             IsEndWarningVisible = false;
@@ -814,10 +903,17 @@ public sealed partial class MainViewModel
 
             _logger.LogInformation("Shared a review of {Document} with {Count} comments to {Path}.", document.DisplayPath, ordered.Count, path);
 
+            // Said once a run: the page can be taken back up. In the status rather than the
+            // banner, whose closed messages are remembered by their words - a banner reading
+            // differently the first time would come back after the reader had closed it.
+            string saved = _resumeHintShown
+                ? $"Review saved to {Path.GetFileName(path)}"
+                : $"Review saved to {Path.GetFileName(path)} — drop it into Marqora to resume later";
+
+            _resumeHintShown = true;
+
             ShowHighlightedStatus(
-                skipped.Count == 0
-                    ? $"Review saved to {Path.GetFileName(path)}"
-                    : $"Review saved to {Path.GetFileName(path)} — {skipped.Count} image(s) could not be included",
+                skipped.Count == 0 ? saved : $"{saved} — {skipped.Count} image(s) could not be included",
                 ReviewGlyph);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -830,6 +926,74 @@ public sealed partial class MainViewModel
         {
             IsBusy = false;
             RestoreDocumentFocusAfterChrome();
+        }
+    }
+
+    /// <summary>
+    /// Where Share writes, asked of the reader, and never a page another copy of this review wrote.
+    ///
+    /// A review resumed from a page suggests that page, in its own folder - unless the folder is
+    /// a temporary one, an Outlook attachment's copy or a zip's, which the reader would never
+    /// find again. The dialog confirms an ordinary overwrite itself. What it cannot know is that
+    /// the page there belongs to this same review and was shared again from somewhere else since
+    /// this copy last saw it; overwriting that would silently throw the other copy's comments
+    /// away, so only a new file is offered. The same goes for a page a later Marqora wrote,
+    /// which holds what this version would drop.
+    /// </summary>
+    private async Task<string?> PickSharePathAsync(ReviewSession review, ReviewSnapshot? snapshot, string fileName)
+    {
+        string suggestion = ReviewPage.FileName(fileName);
+        string? folder = null;
+
+        if (snapshot?.PagePath is { } page)
+        {
+            string? pageFolder = Path.GetDirectoryName(page);
+
+            if (IsLastingFolder(pageFolder) && (!File.Exists(page) || !File.GetAttributes(page).HasFlag(FileAttributes.ReadOnly)))
+            {
+                folder = pageFolder;
+                suggestion = Path.GetFileName(page);
+            }
+        }
+
+        for (int attempt = 0; ; attempt++)
+        {
+            string? path = await _fileDialogs.PickReviewFileAsync(suggestion, folder).ConfigureAwait(true);
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return null;
+            }
+
+            if (await Task.Run(() => ReadExistingState(path)).ConfigureAwait(true) is not { } existing
+                || existing.SessionId != review.SessionId)
+            {
+                return path;
+            }
+
+            bool elsewhere = snapshot is null || !snapshot.KnownWriteIds.Contains(existing.WriteId);
+
+            if (!elsewhere && !existing.IsNewerSchema)
+            {
+                return path;
+            }
+
+            ConfirmResult answer = await _dialogs.ConfirmAsync(
+                "Save as a new file?",
+                existing.IsNewerSchema
+                    ? $"{Path.GetFileName(path)} was shared by a newer Marqora, and saving over it would drop what that version added. Save this review as a new file instead."
+                    : $"{Path.GetFileName(path)} is this review, shared again from another copy since you opened it. Saving over it would lose that copy's comments. Save this review as a new file instead.",
+                primaryText: "Save as New File").ConfigureAwait(true);
+
+            if (answer != ConfirmResult.Primary)
+            {
+                return null;
+            }
+
+            folder = Path.GetDirectoryName(path);
+            suggestion = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{Path.GetFileNameWithoutExtension(path)} ({attempt + 2}){Path.GetExtension(path)}");
         }
     }
 

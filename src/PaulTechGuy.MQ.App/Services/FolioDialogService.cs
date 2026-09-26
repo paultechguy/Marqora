@@ -33,6 +33,7 @@ public sealed class FolioDialogService(
     public async Task<FolioChoice?> RequestFolioAsync(
         Func<IReadOnlyList<string>> documents,
         Func<IReadOnlyList<string>, int, FolioPlan> plan,
+        Func<string, string?>? describe = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(documents);
@@ -55,7 +56,8 @@ public sealed class FolioDialogService(
                 theme,
                 ui,
                 window.WindowHandle,
-                loggerFactory.CreateLogger<FolioWindow>());
+                loggerFactory.CreateLogger<FolioWindow>(),
+                describe);
 
             preflight.Present(MainWindowBounds());
 

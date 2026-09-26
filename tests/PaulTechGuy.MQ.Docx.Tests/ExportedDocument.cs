@@ -44,7 +44,8 @@ internal sealed class ExportedDocument : IDisposable
         HeadingNumbering headingNumbering = HeadingNumbering.Off,
         string? renderedPreviewHtml = null,
         string? sourceDocumentPath = null,
-        Func<string, Task<byte[]?>>? diagramPng = null)
+        Func<string, Task<byte[]?>>? diagramPng = null,
+        DocumentImages? images = null)
     {
         string root = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
@@ -63,7 +64,8 @@ internal sealed class ExportedDocument : IDisposable
             headingNumbering,
             sourceDocumentPath,
             renderedPreviewHtml,
-            diagramPng).ConfigureAwait(false);
+            diagramPng,
+            images).ConfigureAwait(false);
 
         return new ExportedDocument(root, path) { Issues = issues };
     }

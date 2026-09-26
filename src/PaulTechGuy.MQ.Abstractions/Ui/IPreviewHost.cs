@@ -231,6 +231,18 @@ public sealed class CommentHoveredEventArgs(Guid documentId, Guid? commentId) : 
     public Guid? CommentId { get; } = commentId;
 }
 
+/// <summary>
+/// The shell drew a document's comments, and these could not be found in the page: their
+/// passage is not where the anchor says, nor anywhere else on its line. Reported after every
+/// draw, an empty list included, so a comment that comes back is heard about too.
+/// </summary>
+public sealed class CommentsPlacedEventArgs(Guid documentId, IReadOnlyList<Guid> missing) : EventArgs
+{
+    public Guid DocumentId { get; } = documentId;
+
+    public IReadOnlyList<Guid> Missing { get; } = missing;
+}
+
 /// <summary>One comment as the preview draws it: where, what number, and whether it is still being written.</summary>
 public sealed record ReviewMark(Guid Id, int Number, ReviewAnchor Anchor, bool Draft);
 
@@ -303,6 +315,9 @@ public interface IPreviewHost
 
     /// <summary>The pointer moved onto a comment in the preview, or off it.</summary>
     event EventHandler<CommentHoveredEventArgs>? CommentHovered;
+
+    /// <summary>The shell drew a document's comments, and says which it could not place.</summary>
+    event EventHandler<CommentsPlacedEventArgs>? CommentsPlaced;
 
     /// <summary>Raised when a diagram named by <see cref="WatchDiagrams"/> re-rendered.</summary>
     event EventHandler<DiagramUpdatedEventArgs>? DiagramUpdated;
@@ -600,6 +615,13 @@ public interface IPreviewHost
 
     /// <summary>Scrolls a comment into view in the preview and flashes it.</summary>
     Task RevealCommentAsync(Guid documentId, Guid commentId);
+
+    /// <summary>
+    /// Pictures a document with no folder is to be shown with - a review resumed from its page,
+    /// whose images are the ones that page carried - keyed by
+    /// <see cref="ReviewAssets.NormalizeKey"/>. Null takes them away.
+    /// </summary>
+    void SetDocumentAssets(Guid documentId, IReadOnlyDictionary<string, ReviewAsset>? assets);
 
     /// <summary>Lights a comment in the preview while the pointer is over its card, or none (null).</summary>
     Task HoverCommentAsync(Guid documentId, Guid? commentId);

@@ -18,6 +18,16 @@ public sealed class ReviewSessionTests
 
     private static ReviewAnchor At(int line, int start, string quote = "x") => new(line, 0, start, start + quote.Length, quote);
 
+    [Fact]
+    public void A_session_keeps_the_id_it_continues_and_makes_one_otherwise()
+    {
+        Guid id = Guid.NewGuid();
+
+        new ReviewSession(Guid.NewGuid(), "Text.\n", Now, id).SessionId.ShouldBe(id);
+        NewSession().SessionId.ShouldNotBe(Guid.Empty);
+        NewSession().SessionId.ShouldNotBe(NewSession().SessionId);
+    }
+
     /// <summary>Numbers run down the page, whatever order the comments were written in.</summary>
     [Fact]
     public void Comments_are_numbered_in_reading_order()

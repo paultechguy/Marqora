@@ -102,6 +102,15 @@ public interface IWorkspaceService
     /// </summary>
     MarkdownDocument CreateUntitled(string? text = null);
 
+    /// <summary>
+    /// Adds an in-memory document holding a copy of text that is kept somewhere else - a review
+    /// resumed from its page - under <paramref name="name"/> rather than "Untitled N".
+    ///
+    /// Clean rather than unsaved: closing it loses nothing, because the text is still where it
+    /// came from, so there is nothing to be asked about. Editing it makes it unsaved as usual.
+    /// </summary>
+    MarkdownDocument CreateSnapshot(string text, string name);
+
     /// <summary>Reopens a saved session. Paths that no longer exist are skipped.</summary>
     Task RestoreAsync(
         IReadOnlyList<string> paths,

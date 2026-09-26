@@ -27,7 +27,11 @@ public interface IFileDialogService
     /// the machine, so the document's own folder - often the author's repository - is the wrong
     /// first guess.
     /// </summary>
-    Task<string?> PickReviewFileAsync(string suggestedFileName, CancellationToken cancellationToken = default);
+    /// <param name="folder">
+    /// A folder to open in whatever Windows remembers: the one a resumed review's page is in, so
+    /// that sharing again finds the page it came from. Null keeps the memory.
+    /// </param>
+    Task<string?> PickReviewFileAsync(string suggestedFileName, string? folder = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Open dialog for a file that is not a document: a preferences file to import.

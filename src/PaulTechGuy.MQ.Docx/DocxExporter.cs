@@ -46,6 +46,7 @@ public sealed class DocxExporter : IDocxExporter
         string? sourceDocumentPath,
         string? renderedPreviewHtml,
         Func<string, Task<byte[]?>>? diagramPng = null,
+        DocumentImages? images = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -128,7 +129,7 @@ public sealed class DocxExporter : IDocxExporter
                 new BookmarkTable(),
                 numbering,
                 Measure.UsableWidthTwips(setup),
-                sourceDocumentPath,
+                images ?? DocumentImages.FromDocument(sourceDocumentPath),
                 report,
                 preview,
                 diagrams,

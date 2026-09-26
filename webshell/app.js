@@ -2664,6 +2664,10 @@
     if (missing.length > 0) {
       report('info', 'Could not place ' + missing.length + ' comment(s) in the preview', missing.join(','));
     }
+
+    // Every draw, an empty list included: the host marks the cards that are not on the page,
+    // and a review resumed from a page is where an anchor is most likely to have moved.
+    post('commentsPlaced', { documentId: state.activeTabId, missing: missing });
   }
 
   // ------------------------------------------------------- the Comment button

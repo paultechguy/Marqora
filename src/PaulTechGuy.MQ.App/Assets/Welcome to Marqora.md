@@ -265,7 +265,9 @@ opened back in Marqora, that text shows its comments as comments.
 
 > [!NOTE]
 > Comments live for this sitting only. Nothing is written into the file, and **End Commenting**
-> throws them away — after asking, if you have not shared them yet.
+> throws them away — after asking, if you have not shared them yet. A page you shared is the
+> exception: drop it back into Marqora, or use **Review > Resume Shared Review...**, and the
+> review picks up where it was, on the version you reviewed.
 
 ---
 

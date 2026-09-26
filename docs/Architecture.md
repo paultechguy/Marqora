@@ -747,6 +747,12 @@ traffic arrives in between.
 
 Word is the exception, and the section on it below says why.
 
+Every export that embeds a picture - HTML, Copy as Rich Text, the review page and Word - asks
+**`DocumentImages`** (Domain) where it is: the document's folder, contained, or for a review
+resumed from its page, the pictures that page carried. One lookup, one containment rule, one
+set of reasons for a picture that is not there. The Folio keeps its own planner, and takes a
+resumed review through a stand-in; `docs/Folio.md` has that.
+
 **PDF** goes through `CoreWebView2.PrintToPdfAsync` with a print stylesheet. `@media print`
 hides the editor pane and the splitter and pins the light palette, which is why the PDF holds
 only the preview whatever the app is showing. The built-in header and footer are switched

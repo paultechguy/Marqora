@@ -1261,6 +1261,13 @@
                                         Command="{x:Bind ViewModel.CopyReviewMarkdownCommand}"
                                         IsEnabled="{x:Bind ViewModel.IsReviewing, Mode=OneWay}"
                                         ToolTipService.ToolTip="Copy the source with your comments written into it" />
+
+                        <MenuFlyoutSeparator />
+
+                        <!-- Also reached by dropping the page on the window. -->
+                        <MenuFlyoutItem Text="Resume Shared Review..."
+                                        Command="{x:Bind ViewModel.ResumeSharedReviewCommand}"
+                                        ToolTipService.ToolTip="Open a review page you shared and carry on commenting on the version it holds" />
                     </MenuBarItem>
 
                     <!--
@@ -2294,6 +2301,18 @@
                                                                TextTrimming="CharacterEllipsis"
                                                                MaxWidth="270" />
                                                 </StackPanel>
+
+                                                <!--
+                                                    The passage is not where the comment says, nor anywhere else on
+                                                    its line - most likely a review resumed after an update changed how
+                                                    something renders. The comment is still held and still shared in
+                                                    the page's source, but it has no highlight and no margin note.
+                                                -->
+                                                <TextBlock Text="Not on the page — its passage couldn't be found"
+                                                           Style="{StaticResource MqCaptionTextStyle}"
+                                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Visibility="{x:Bind IsMissing, Mode=OneWay}" />
 
                                                 <!-- Reading face. -->
                                                 <StackPanel Spacing="4" Visibility="{x:Bind IsViewing, Mode=OneWay}">

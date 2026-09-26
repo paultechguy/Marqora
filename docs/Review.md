@@ -8,7 +8,7 @@ way it is, and what was tried on paper and dropped.
 > page: the session (`ReviewSession`), the lock (`ReviewLockTests`), the CriticMarkup writer and
 > the review page's text parts. The sidebar, the page's selection handling and Share build and
 > were code-reviewed adversarially, but they have not yet been walked through by hand in the
-> running app.
+> running app. Resuming from a shared page is the same (see its section).
 
 ---
 
@@ -16,7 +16,7 @@ way it is, and what was tried on paper and dropped.
 
 | Question | Answer |
 |---|---|
-| Where do the comments live? | **In memory, for one sitting.** Start Commenting to End Commenting; nothing on disk until Share |
+| Where do the comments live? | **In memory until the first Share; after that, in the page.** Nothing on disk until Share, and a shared page can be resumed (see *Resuming from a shared page*) |
 | What does the author get? | **One read-only `.html` page**: the preview as reviewed, each comment highlighted and its note in the margin |
 | What does an AI get? | **The same file.** It carries the reviewed source with the comments written in as CriticMarkup |
 | Can the author reply? | **No.** One way: the reader comments and sends it back |
@@ -68,9 +68,12 @@ save lifecycle with a live data-loss bug, and this design has none of the three.
    attaches it.
 4. **Copy as Markdown** puts the reviewed source, with the comments written in, on the clipboard
    for pasting into an AI. It counts as sharing.
-5. **End.** Final, by decision: there is no restore. With comments nobody has seen, the
-   sidebar's footer turns into the question in place, with Discard and End or Keep Commenting.
-   Closing the tab or the app asks the same thing as its own prompt, before any save prompt.
+5. **End.** Final for anything never shared: there is no restore of comments that were only in
+   memory. With comments nobody has seen, the sidebar's footer turns into the question in place,
+   with Discard and End or Keep Commenting. Closing the tab or the app asks the same thing as its
+   own prompt, before any save prompt.
+6. **Resume.** A shared page dropped back in, or opened with Review > Resume Shared Review...,
+   takes the review up again on the text it holds - see *Resuming from a shared page*.
 
 ---
 
@@ -207,6 +210,138 @@ analyzer and scroll sync depend on stay where they were.
   as a block. The Comment button does not offer itself over them.
 - **The reviewer's name** on the page.
 - **A dark review page.** Every export is light.
-- **Restoring comments after End**, and **surviving a crash**. Both follow from "in memory, for
-  one sitting", which was chosen.
+- **Restoring comments that were never shared**, and **surviving a crash**. Nothing is written
+  before a share, which was chosen; a shared page is the only thing a review resumes from.
+- **Passing a review between reviewers**, and **the author resuming it** as anything other than
+  their own copy. Pages carry no names.
 - **A resizable sidebar.** Fixed at 340; a splitter would be the next thing.
+
+---
+
+## Resuming from a shared page
+
+> **Built 2026-09-25**, with tests for the state block, the pictures and the snapshot tab
+> (`ReviewStateTests`, `ReviewAssetsTests`, `ReviewLockTests`). The drop, the share guard and
+> the preview's pictures have not yet been walked through by hand in the running app.
+
+A shared page holds the text that was reviewed, and now the comments' anchors too, so dropping
+it back into Marqora puts the reviewer back in the same review: an hour later, days after End,
+or on another machine. The anchors stay correct, because the text they point into is frozen.
+
+**What it changed.** Two decisions above got narrower rather than overturned. "In memory, for
+one sitting" describes a review until its first share; after that, the shared page is the
+reviewer's save file. And End is final only for comments that were never shared.
+
+### Settled
+
+| Question | Answer |
+|---|---|
+| Who resumes? | Whoever drops the page in. It carries no names, so the author could too, on their own copy. No relays, no author view. |
+| From where? | A drop on the window or the preview, or Review > Resume Shared Review.... Not the command line or Recent: `OpenPathAsync` is untouched, so a page is resumed only when someone hands it over. |
+| What opens? | A tab with no file behind it (`Path` null), labeled `notes.md (review)` - `(review 2)` if that is open - clean, under review, its comments restored and counted as shared. Closing it straight away asks nothing. |
+| Pictures? | The ones the page carries, held in memory and served to the preview and every export from there. Written only where the reader sends them, and for a Folio briefly into its temporary folder (see *Where a resumed review's pictures live*). |
+| Sharing again? | The dialog opens on the page it came from, unless that is a temporary folder (an Outlook attachment, a zip) or read-only. |
+| Two copies? | A page of this same review that another copy wrote since is never overwritten: only Save as New File is offered. |
+| Pages from 1.0.10? | Refused, with an explanation. They carry the comments but not what resuming needs. |
+| How does anyone find out? | Once a run, in the status after a share. The menu item. |
+
+### The page
+
+The head gains `<meta name="marqora-review" content="1" />`, so a dropped file is recognized
+from its first 4 KB, the way a Folio is. The body ends with a second inert block, after the
+CriticMarkup one: `<script type="application/vnd.marqora.review+json" id="mq-review-state">`,
+base64 JSON for the reason a Folio's payload is base64. `ReviewState` holds it:
+
+- `format`, `schemaVersion`, `minimumReader`, `appVersion`;
+- `sessionId` - the review, across every page and sitting - and `writeId`, new on every share;
+- `shareCount`, `startedUtc`, `sharedUtc` (UTC, so a page does not say where its reviewer is);
+- `fileName` (the document's, never the tab's label), `sourceSha256` and `source`, exactly;
+- `comments`, each with its id, anchor and note.
+
+The CriticMarkup block cannot do this job. It is not reversible: comments that could not be
+placed inline become standalone notes, and its escaping of `<script` loses text.
+
+**The last block wins.** A document can hold raw HTML, so its own text could carry a block with
+the same id, which would land in the article, before the real one. The reader takes the last:
+the CriticMarkup block between them escapes every `<script`, so nothing the document says can
+stand after the block Marqora wrote.
+
+**Refused whole, never half-restored.** The block is capped in size before decoding, the text
+must match its hash, and every anchor must point somewhere the text has - a line it has, a
+non-empty quote, a start before its end - with unique ids, at most 5,000 comments and no note
+longer than 100,000 characters. A file name from a page is stripped of folders, control and
+direction-override characters before it becomes a tab's label or a suggested name.
+
+**The version is not a gate**, as with a Folio. The generated reader skips fields it does not
+know, so a page from a later Marqora is resumed for what this build understands - but sharing
+it again never overwrites it, since that would drop what the later version added.
+`minimumReader` is the gate a future format sets on purpose, when an earlier build must not
+read it at all.
+
+**Pictures.** Each image the page embeds from the document's folder carries `data-mq-asset`
+naming the path the document wrote, as a Folio's do. `ReviewAssets` collects them from the
+article alone - the CriticMarkup block is the document's own text - recognizes each by its
+bytes rather than the type its data URI claims, and caps the count and total. One spelling of
+each path, `ReviewAssets.NormalizeKey`, is used by the writer, the reader and the preview,
+because each receives it written differently. A picture too large to embed was never in the
+page, and is missing when the review is resumed.
+
+### Two copies of one review
+
+Two instances can resume the same page, and so can two machines working from one synced folder.
+A share count cannot tell them apart - both copies count the same shares - so each share writes a
+new `writeId`, and each copy remembers every write id it made or read. Share reads the page it is
+about to write over. If that page is this review's and its write id is one this copy does not
+know, another copy wrote it since, and only a new file is offered. Sharing to X, then Y, then X
+again is not a conflict: all three are this copy's own.
+
+What a document knows about its pages lives beside the session rather than in it
+(`ReviewSnapshot` in `MainViewModel.Resume.cs`), because it is needed after End: the real file
+name for Save As, the pictures for the preview, and the session id - a review started again on
+the same text continues the same review, so its old pages are still recognized. It goes when the
+tab closes, or when Save As gives the document a file of its own.
+
+### Comments that cannot be placed
+
+An anchor is taken from the preview, and a later Marqora may render the same text slightly
+differently - emoji, or a change in Markdig. The shell's fallback of finding the quote elsewhere
+on its line catches most of it. What it does not catch, it now reports after every draw: the
+card says the comment is not on the page, the status says how many, and Share asks before
+writing a page whose margin would leave them out. They stay in the source block and in the
+state, so resuming again brings them back.
+
+### Exporting a resumed review
+
+Every export asks one lookup where a document's pictures are: `DocumentImages`, which answers
+from the document's folder or, for a resumed review, from the pictures its page carried - and
+never from a folder in that case, so a resumed review is not shown an unrelated file that
+happens to sit where its picture once did.
+
+| Export | How it gets a resumed review's pictures |
+|---|---|
+| Print, PDF | The live preview, which already serves them from memory |
+| HTML, Copy as Rich Text | `EmbedLocalImages` asks `DocumentImages`; the same 8 MB ceiling applies to a page's pictures as to files |
+| Word | `DocxImages` asks `DocumentImages`; WebP, SVG and AVIF are refused as they are from disk |
+| Folio | A stand-in in the share's temporary folder - see `docs/Folio.md`, *A review resumed from its page* |
+| Save As | The text only; the status says how many pictures stayed in the page |
+
+A reference the page did not carry is left as written in an HTML export - a relative link - and
+reported "Not found" by Word.
+
+### Where a resumed review's pictures live
+
+| Holder | Released |
+|---|---|
+| The tab's snapshot (`ReviewSnapshot.Assets`) | When the tab closes, or Save As gives it a file of its own. Kept after End, because the text still names them |
+| The preview's copy (`WebViewPreviewHost`) | With the snapshot, and when the tab closes |
+| The browser's cache | Never holds them: every `marqora.document` answer says `Cache-Control: no-store` |
+| A Folio's stand-in | When the share ends; at shutdown if a preflight was open; at the next share or start if Marqora was stopped mid-share |
+| The copy of a page being shared | `SafeFileWriter` writes the page whole elsewhere and swaps it in. On the temp folder's drive the copy is in a locked scratch folder, swept like a Folio's. On another drive it sits beside the page, hidden and locked while written, and a leftover is cleared the next time that page is shared or resumed |
+
+Not Marqora's to clear, and said here so nobody assumes otherwise: Windows clipboard history
+after Copy as Rich Text, Explorer's thumbnail cache, antivirus scanning, and the files the reader
+exports.
+
+### Left out
+
+- **Video** a page embedded is not collected; only images are recognized by their bytes.

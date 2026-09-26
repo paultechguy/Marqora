@@ -59,6 +59,13 @@ public sealed partial class ReviewCommentViewModel : ObservableObject
     /// <summary>The other half of <see cref="IsEditing"/>, for the card's reading face.</summary>
     public bool IsViewing => !IsEditing;
 
+    /// <summary>
+    /// Whether the preview could not find this comment's passage when it last drew the review.
+    /// The comment is kept; it only has nowhere on the page to show.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsMissing { get; set; }
+
     /// <summary>Whether the pointer is over this comment in the preview, or over its card.</summary>
     [ObservableProperty]
     public partial bool IsHighlighted { get; set; }

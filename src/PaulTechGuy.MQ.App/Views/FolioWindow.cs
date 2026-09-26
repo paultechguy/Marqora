@@ -187,6 +187,12 @@ internal sealed class FolioWindow : PaletteWindow
 
     private readonly Func<IReadOnlyList<string>> _documents;
     private readonly Func<IReadOnlyList<string>, int, FolioPlan> _plan;
+
+    /// <summary>
+    /// A name for a document whose path is not its own - a review resumed from its page, offered
+    /// from a temporary stand-in - or null to show the file name as usual.
+    /// </summary>
+    private readonly Func<string, string?> _describe;
     private readonly IWorkspaceService _workspace;
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
@@ -251,11 +257,13 @@ internal sealed class FolioWindow : PaletteWindow
         IThemeService theme,
         IUiDispatcher ui,
         IntPtr ownerHandle,
-        ILogger<FolioWindow> logger)
+        ILogger<FolioWindow> logger,
+        Func<string, string?>? describe = null)
         : base("Folio", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
     {
         _documents = documents ?? throw new ArgumentNullException(nameof(documents));
         _plan = plan ?? throw new ArgumentNullException(nameof(plan));
+        _describe = describe ?? (_ => null);
         _workspace = workspace;
         _settings = settings;
         _theme = theme;
@@ -471,20 +479,25 @@ internal sealed class FolioWindow : PaletteWindow
 
         _rows.Clear();
 
+        // A described document - a resumed review - lives in a temporary folder that means nothing
+        // to the author, so it neither counts toward the folders nor shows one.
         bool manyFolders = paths
+            .Where(p => _describe(p) is null)
             .Select(p => Path.GetDirectoryName(p) ?? string.Empty)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count() > 1;
 
         foreach (string path in paths)
         {
+            string? described = _describe(path);
+
             var row = new FolioDocumentRow
             {
-                Name = Path.GetFileName(path),
+                Name = described ?? Path.GetFileName(path),
 
                 // Carried only when the set spans more than one folder: repeating the same path
                 // down twelve rows says nothing and takes the width the names want.
-                Folder = manyFolders ? Path.GetDirectoryName(path) ?? string.Empty : string.Empty,
+                Folder = manyFolders && described is null ? Path.GetDirectoryName(path) ?? string.Empty : string.Empty,
                 FullPath = path,
             };
 
@@ -782,7 +795,7 @@ internal sealed class FolioWindow : PaletteWindow
         {
             _warnings.Children.Add(new TextBlock
             {
-                Text = $"{Path.GetFileName(warning.DocumentPath)}:{warning.Line + 1}  {warning.Message}",
+                Text = $"{_describe(warning.DocumentPath) ?? Path.GetFileName(warning.DocumentPath)}:{warning.Line + 1}  {warning.Message}",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12,
                 Opacity = 0.85,

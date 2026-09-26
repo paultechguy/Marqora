@@ -206,10 +206,27 @@ public static partial class FolioPlanner
                     continue;
                 }
 
-                string? resolved = Resolve(folder, WebUtility.UrlDecode(target));
+                string? resolved = ResolveLocal(folder, target, source.ContainedOnly);
 
                 if (resolved is null)
                 {
+                    continue;
+                }
+
+                // A review resumed from its page: only what the page carried, which is all that
+                // sits in its folder. Refused before anything is looked at, so no file outside
+                // is so much as tested for.
+                if (link.IsImage && source.ContainedOnly && !PathContainment.Contains(folder, resolved))
+                {
+                    warnings.Add(new FolioWarning
+                    {
+                        Kind = FolioWarningKind.MissingImage,
+                        DocumentPath = documentFull,
+                        Line = link.SourceLine,
+                        Url = url,
+                        Message = $"\"{url}\" is not in the review page this document came from, so it was left out.",
+                    });
+
                     continue;
                 }
 
@@ -529,6 +546,46 @@ public static partial class FolioPlanner
     /// An absolute reference wins over the folder, which is exactly what is wanted: that is how
     /// an image pasted from somewhere else on the disk is recognized as needing to travel.
     /// </summary>
+    /// <summary>
+    /// A local reference resolved against the document's folder, decoded as a URL decodes -
+    /// '+' kept - and, only when that names nothing and there is a '+' to reconsider, again with
+    /// '+' as a space, which is how this used to read every reference. A file named "a+b.png" is
+    /// found as written, and a document that relied on the old reading keeps working.
+    /// </summary>
+    /// <param name="containedOnly">
+    /// Nothing outside <paramref name="folder"/> is tested for, not even whether it exists: the
+    /// caller refuses such a path, and the question alone would be a look at the reader's disk.
+    /// </param>
+    private static string? ResolveLocal(string folder, string target, bool containedOnly)
+    {
+        string literal;
+
+        try
+        {
+            literal = Uri.UnescapeDataString(target);
+        }
+        catch (UriFormatException)
+        {
+            literal = target;
+        }
+
+        string? resolved = Resolve(folder, literal);
+
+        if (resolved is null
+            || (containedOnly && !PathContainment.Contains(folder, resolved))
+            || File.Exists(resolved)
+            || !target.Contains('+', StringComparison.Ordinal))
+        {
+            return resolved;
+        }
+
+        return Resolve(folder, WebUtility.UrlDecode(target)) is { } spaced
+            && (!containedOnly || PathContainment.Contains(folder, spaced))
+            && File.Exists(spaced)
+                ? spaced
+                : resolved;
+    }
+
     private static string? Resolve(string folder, string relative)
     {
         try

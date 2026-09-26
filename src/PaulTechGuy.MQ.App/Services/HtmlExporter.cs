@@ -28,7 +28,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         string outputPath,
         string title,
         string renderedHtml,
-        string? sourceDocumentPath,
+        DocumentImages images,
         int measurePixels = 0,
         CancellationToken cancellationToken = default)
     {
@@ -38,7 +38,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         // on, and any browser opening the file understands them.
         string styles = packager.ReadStyles(renderedHtml);
         string body = packager.EmbedLocalImages(
-            renderedHtml, sourceDocumentPath, out IReadOnlyList<string> skipped);
+            renderedHtml, images, out IReadOnlyList<string> skipped);
 
         // Diagrams become click-to-enlarge. Nothing in the file runs; the fragment in the
         // address bar is the state, and the browser is what keeps it.
