@@ -101,8 +101,10 @@ $allowed = @(
     @{ Path = 'tests/PaulTechGuy.MQ.Docx.Tests/ImageTests.cs'; Phrase = 'needs no network call' }
 )
 
-# Written by the tests and by this file itself; scanning either is noise.
-$skipDirectories = @('.git', 'bin', 'obj', 'node_modules', 'vendor', 'artifacts', 'releases')
+# Written by the tests and by this file itself; scanning either is noise. '.claude' holds the
+# worktrees agent sessions work in - whole stale copies of the tree, gitignored and never shipped -
+# and one left behind blocked a release by failing on its own copies of allowed comments.
+$skipDirectories = @('.git', '.claude', 'bin', 'obj', 'node_modules', 'vendor', 'artifacts', 'releases')
 $skipFiles = @('Test-NetworkClaim.ps1', 'UltimateMarkdownContent.md')
 
 function Test-Allowed {
