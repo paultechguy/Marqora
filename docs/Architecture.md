@@ -258,55 +258,62 @@ document mixes prose with tall content: one diagram is a screenful in the previe
 lines in the source. Line mapping is immune to that.
 
 A `syncOwner` flag, cleared after two animation frames, stops the two panes from echoing
-each other into a feedback loop.
+each other into a feedback loop. The editor's scroll handler ignores everything while the
+preview owns the sync, so a real source scroll landing in those two frames is told apart from
+the echo by the position `placeSourceFromPreview` sent the editor to, remembered in
+`missedSourceScroll`, and synced once ownership clears.
 
-### Which line the preview follows
+### What the panes are lined up on
 
-The editor's top line, wherever the editor has room to scroll. That is what keeps the two panes
-showing the same thing while either one is moved, and for a document taller than its pane it is
-the whole story.
+A source line and how far down its pane it sits - not the top line. Lining up the tops
+guarantees only the top row of each pane, and every row below it drifts by the difference in
+height between the panes over that stretch. The source wraps where the preview does not, and
+the preview grows a table where the source has a few lines of pipes. A file hard-wrapped a
+little wider than the source pane runs nearly twice as tall in the source as in the preview, so
+with the tops aligned the line being edited three-quarters of the way down the source sat well
+above its block in the preview, or off the top of it.
 
-A document *shorter* than its pane never scrolls at all, so its top line is permanently zero -
-while its preview can still run to many screens, because eleven images are eleven lines of
-markdown. There the caret is the only thing that carries a position, so the caret is what the
-preview follows, and the caret event becomes the trigger the scroll event cannot be.
+So the anchor is where the reader is looking:
 
-`sourceAnchorLine` weights the two rather than switching between them, so a document a little
-taller than its pane is not perched on a cliff: the top line earns its say in proportion to the
-scroll range it actually has, and by a pane and a half of scroll it has all of it. Weighting
-also keeps this a single expression evaluated by both triggers - a separate caret rule and
-scroll rule would spend a long document taking turns undoing each other.
+- **The caret, while it is on screen.** Its line goes at the same fraction of the preview's
+  height as it has in the source's. That is the row that has to agree while typing, and every
+  caret move - a click, an arrow, Find Next from the find widget - places the preview.
+- **A reading line otherwise**, a third of the way down both panes, for wheeling with the caret
+  scrolled away. Near the start of the document it rises to meet the top, reaching it at
+  `scrollTop` 0, so a document read from its beginning shows its beginning in both panes.
 
-### The last screenful
+The two disagree by exactly the drift the anchor hides, so switching the moment the caret left
+the pane would jump the preview. `caretWeight` hands one over to the other across a band a
+quarter of a pane *outside* the edge, where the blend is between the two preview positions they
+produce rather than between two lines. Outside and not inside, because arrowing down a long
+document keeps the caret on the bottom row, and that row is still the one being edited.
 
-Top-to-top line mapping has nothing to anchor against in the final viewport, because there is
-no line below the last one. Both panes have empty space past the end - `scrollBeyondLastLine`
-in the editor, 60vh of bottom padding in the preview - and a wheel can reach it, but a caret
-cannot: arrowing down to the last line leaves the editor with that line on the bottom edge and
-roughly a viewport of scroll unspent. Anchor the preview to the editor's top line there and the
-tail of the document sits below the fold, and because the preview renders taller than the source
-- around a third for prose, several times across a heading, table or diagram - that tail is more
-than one screen of unread content.
+A document *shorter* than its pane never scrolls, while its preview can still run to many
+screens, because eleven images are eleven lines of markdown. The caret is always on screen
+there, so it is always the anchor, and no separate rule is needed.
 
-So over the last screenful the target is eased from the line-mapped position across to the end
-of the document: `endBlend` returns 0 through 1, and both directions of the sync apply it. The
-end of the document means the bottom of the last rendered block resting on the bottom edge of
-the pane, which is the mirror of where the caret leaves the editor - not the scroller's maximum,
-which is padding. The ramp keeps it continuous instead of a jump at the end, and everything
-above the last screenful is untouched.
+The preview's side of the sync reads the same rule from the preview: the caret's block found in
+the preview, and the source scrolled to put the caret at the same height. Wherever the caret
+alone decides, that is the exact inverse, so wheeling one pane and then touching the other snaps
+nothing back.
 
-Which pane's progress is read is weighted the same way the anchor is, and for the same reason.
-Taken from the editor's scroll alone it saturates the moment a barely scrollable document
-reaches its stop, collapsing everything the caret does afterwards onto the end of the preview;
-taken from the preview alone it gives up the accuracy the editor has in the documents that do
-scroll.
+### The end of the document
+
+Nothing special. The preview's 60vh of bottom padding lets its last block rise to wherever the
+caret is, so arrowing down to the last line leaves the last block level with it, and the panes
+stay aligned until the source actually runs out.
+
+An earlier design eased the preview toward its own end over the editor's last screenful. With a
+source much taller than its preview that screenful covered the last fifty lines of the document,
+and the easing pulled the block being edited off the top of the preview.
 
 ### Past the end
 
 Both panes go on scrolling after the document has run out, and by different amounts: a five-line
 cushion in the editor against 60vh of padding in the preview. There is no line and no pixel to
 map between two blank regions of different sizes, so `carryOverscroll` maps the proportion of
-the way through instead, picking up from wherever the easing left off so the join is continuous.
+the way through instead, picking up from wherever the anchor put the other pane so the join is
+continuous.
 It spends the shorter of the two blanks, so a nudge into a small cushion can never fling the
 other pane through a large one, and it is weighted - wheeling the blank below a document that
 never scrolled in the first place must not drag the other pane along, because there the caret is
@@ -381,8 +388,8 @@ Which pane is read is what the mode answers.
 
 Going *into* preview view, the source is what the reader was steering with, so the preview lands
 where split view's own rule would have put it at the full width. Not an approximation of that
-rule - the same expression, evaluated against the new layout: the top line weighted against the
-caret, eased onto the end of the document over the last screenful, carrying any overscroll. That
+rule - the same expression, evaluated against the new layout: the caret or the reading line at
+the fraction of the pane it had, blended across the handover band, carrying any overscroll. That
 is what makes the switch invisible in the case that matters, where the two panes were already
 showing the same thing and one of them is now the only one.
 
@@ -441,11 +448,11 @@ Set the position, switch, and look at both panes before touching anything else.
 
 | From | To | Sync on | Sync off |
 |---|---|---|---|
-| Split | Preview | The preview lands where split view's own rule puts it under the editor's top line, so if the panes already agreed nothing visibly moves. | The preview keeps the block at its fold, reflowed wider. |
+| Split | Preview | The preview lands where split view's own rule puts it under the editor's anchor line, so if the panes already agreed nothing visibly moves. | The preview keeps the block at its fold, reflowed wider. |
 | Preview | Split | The preview keeps the block it was showing, reflowed narrower, and the editor scrolls to meet it. Nothing read in preview view is lost. | The preview keeps its block; the editor stays where it was. |
 | Split | Source | The editor keeps its top line at the wider width. | The same. |
-| Source | Split | The preview reappears under the editor's top line. | The preview reappears on the block it showed before it was hidden. |
-| Source | Preview | The preview lands under the editor's top line. | The preview reappears on its own block. |
+| Source | Split | The preview reappears under the editor's anchor line. | The preview reappears on the block it showed before it was hidden. |
+| Source | Preview | The preview lands under the editor's anchor line. | The preview reappears on its own block. |
 | Preview | Source | The editor scrolls to meet the preview. | The editor stays where it was. |
 
 Run the table from each of these starting positions, because they exercise different halves of
@@ -457,8 +464,8 @@ the placement:
   the preview and never the other way round.
 - **The wheel, stopped part-way through a paragraph.** A fractional offset the reflow has to
   scale.
-- **Ctrl+End in either pane.** The last screenful, where the eased target and the overscroll
-  carry are in play and the two panes' idea of the end differs.
+- **Ctrl+End in either pane.** The end of the document, where the last block has to rise to the
+  caret and the overscroll carry is in play.
 - **A Find All result.** The editor is centered on a match, and in split view the preview has
   followed it.
 
