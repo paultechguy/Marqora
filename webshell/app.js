@@ -172,6 +172,20 @@
   var syncOwner = null;
   var syncClearHandle = 0;
 
+  /*
+    A scroll of the source that arrived while the preview owned the sync, and was not the echo
+    of the preview placing it.
+
+    The editor's scroll handler has to ignore everything while the preview owns the sync,
+    because it cannot otherwise tell the echo of placeSourceFromPreview from a wheel. But a
+    wheel does sometimes land in those two frames, and nothing came back for it afterwards: the
+    preview stayed wherever the preview had put itself, under a source that had since moved on.
+    So the echo is recognized by the position it was sent to, anything else is remembered, and
+    the source gets its turn once ownership clears.
+  */
+  var missedSourceScroll = false;
+  var placedEditorScrollTop = null;
+
   function beginSync(owner) {
     syncOwner = owner;
     if (syncClearHandle) { cancelAnimationFrame(syncClearHandle); }
@@ -179,6 +193,12 @@
       syncClearHandle = requestAnimationFrame(function () {
         syncOwner = null;
         syncClearHandle = 0;
+
+        if (!missedSourceScroll) { return; }
+        missedSourceScroll = false;
+
+        // A view mode change settling has its own placement, and outranks a scroll it caused.
+        if (pendingModeSwitch === null) { syncEditorToPreview(); }
       });
     });
   }
@@ -803,29 +823,39 @@
 
   // ------------------------------------------------------------ scroll sync
 
-  // Fractional zero-based line currently at the top of the editor viewport.
-  function editorTopLine() {
+  // Fractional zero-based line at a vertical offset into the editor's content.
+  function editorLineAt(offset) {
     var editor = state.editor;
     if (!editor) { return 0; }
 
     var model = editor.getModel();
     if (!model) { return 0; }
 
-    var scrollTop = editor.getScrollTop();
     var lineCount = model.getLineCount();
     var lo = 1;
     var hi = lineCount;
 
     while (lo < hi) {
       var mid = (lo + hi + 1) >> 1;
-      if (editor.getTopForLineNumber(mid) <= scrollTop) { lo = mid; } else { hi = mid - 1; }
+      if (editor.getTopForLineNumber(mid) <= offset) { lo = mid; } else { hi = mid - 1; }
     }
 
     var top = editor.getTopForLineNumber(lo);
     var nextTop = lo < lineCount ? editor.getTopForLineNumber(lo + 1) : top + 1;
-    var fraction = nextTop > top ? (scrollTop - top) / (nextTop - top) : 0;
+    var fraction = nextTop > top ? (offset - top) / (nextTop - top) : 0;
 
     return (lo - 1) + clamp(fraction, 0, 1);
+  }
+
+  // The inverse: the vertical offset of a fractional zero-based line.
+  function editorOffsetOf(line) {
+    var editor = state.editor;
+    var lineCount = editor.getModel().getLineCount();
+    var lineNumber = clamp(Math.floor(line) + 1, 1, lineCount);
+    var top = editor.getTopForLineNumber(lineNumber);
+    var next = editor.getTopForLineNumber(Math.min(lineNumber + 1, lineCount));
+
+    return top + (next - top) * (line - Math.floor(line));
   }
 
   /*
@@ -884,10 +914,10 @@
     small cushion at one end must not fling the other pane through a large one. Whatever is left
     over on the longer side is blank, and still reachable by scrolling that pane directly.
 
-    Starts from wherever the easing left off rather than from the far side's own end, so the
-    join is continuous whatever the easing had reached. Weighted like everything else here, so
-    that wheeling the blank below a document that never scrolled in the first place does not
-    drag the other pane along - there the caret is the anchor, and it has not moved.
+    Starts from wherever the anchor put the far side rather than from its own end, so the join
+    is continuous. Weighted by how much scroll the source has, so that wheeling the blank below
+    a document that never scrolled in the first place does not drag the other pane along -
+    there the caret is the anchor, and it has not moved.
 
     Null when the position is not past the end, or when there is nothing to carry it into.
   */
@@ -900,44 +930,14 @@
     return toStart + to * weight * clamp((scrollTop - fromEnd) / from, 0, 1);
   }
 
-  /*
-    How far a pane has come into its last screenful, 0 through 1. Called in either pane's own
-    coordinates: a position, the position that counts as the end of the document, and the
-    height of the viewport.
-
-    Line mapping is exact everywhere it has two entries to interpolate between, and in the final
-    viewport it has none: there is no line below the last one. Anchoring the top of one pane to
-    the top of the other is what leaves the tail of the document below the fold of the passive
-    pane, and the preview renders around a third taller than the source for prose and several
-    times taller across a heading, a table or a diagram - so that tail runs to more than one
-    screen of unread content, which is what the end of a document looks like when it will not
-    keep up.
-
-    Over the last screenful the target is eased across to the end of the document instead. Both
-    panes land on the last line together, the ramp keeps that continuous rather than a jump at
-    the end, and everything above the last screenful is left exactly as it was.
-
-    Zero whenever there is no last screenful to be in: a pane with nothing to scroll is already
-    showing its end.
-  */
-  function endBlend(scrollTop, endScrollTop, viewport) {
-    if (endScrollTop <= 0 || viewport <= 0) { return 0; }
-
-    var start = Math.max(0, endScrollTop - viewport);
-    if (scrollTop <= start) { return 0; }
-    if (scrollTop >= endScrollTop) { return 1; }
-
-    return (scrollTop - start) / (endScrollTop - start);
-  }
-
   function setPreviewScrollTop(target) {
     els.previewPane.scrollTop = clamp(target, 0, previewMaxScrollTop());
   }
 
   /*
-    A source line to the top of the preview, with no easing at all. What the callers that are
-    not following the source pane want: the outline puts a heading at the top wherever in the
-    document it is, and a re-render restores the line the preview was already showing.
+    A source line to the very top of the preview, whatever the caret is doing. What the callers
+    that are not following the source pane want: the outline puts a heading at the top wherever
+    in the document it is, and a re-render restores the line the preview was already showing.
   */
   function scrollPreviewToLine(line) {
     var map = lineMap();
@@ -1077,31 +1077,62 @@
   }
 
   /*
-    The source line the preview is anchored to.
+    What the two panes are lined up on: a source line, and how far down its pane it sits.
 
-    The editor's top line, wherever the editor has room to scroll. That is what keeps the two
-    panes showing the same thing while either one is moved, and for a document taller than its
-    pane it is the whole story.
+    Not the top line. Lining up the tops guarantees only the top row of each pane, and every row
+    below it drifts by the difference in height between the two panes over that stretch. The
+    source wraps where the preview does not, the preview grows a table where the source has a
+    few lines of pipes, and a file hard-wrapped a little wider than the source pane runs nearly
+    twice as tall in the source as in the preview - so the line being edited three-quarters of
+    the way down the source can sit a quarter of a pane higher in the preview, or off the top of
+    it altogether.
 
-    A document shorter than its pane never scrolls, so its top line is always zero and carries
-    nothing - while its preview can still run to many screens, because eleven images are eleven
-    lines of markdown. There the caret is the only thing that moves, so the caret is what the
-    preview follows.
+    So the anchor is the place the reader is looking. The caret, wherever it is on screen: its
+    line goes at the same height in the preview as it has in the source, which is the one row
+    that has to agree while typing. With the caret scrolled away, a reading line a third of the
+    way down both panes, which keeps the drift smallest where the reading is actually done.
 
-    Weighted rather than switched, so a document a little taller than its pane is not on a cliff
-    between the two rules: the top line earns its say in proportion to the scroll range it
-    actually has, and by a pane and a half of scroll it has all of it. One expression, read by
-    both triggers - a separate caret rule and scroll rule would spend a long document taking
-    turns undoing each other.
+    A document shorter than its pane never scrolls, and its preview can still run to many
+    screens, because eleven images are eleven lines of markdown. The caret is always on screen
+    there, so it is always the anchor, and the preview follows it with no rule of its own.
   */
-  function sourceAnchorLine(editor, weight) {
-    var topLine = editorTopLine();
-    if (weight >= 1) { return topLine; }
+  var READING_FRACTION = 1 / 3;
 
-    var position = editor.getPosition();
-    var caretLine = position ? position.lineNumber - 1 : 0;
+  /*
+    How far past the edge of its pane the caret goes before the reading line has fully taken
+    over, as a fraction of the pane.
 
-    return caretLine + (topLine - caretLine) * weight;
+    The caret and the reading line disagree by exactly the drift the anchor exists to hide, so
+    switching from one to the other the moment the caret left the pane would move the preview
+    by that much in a single frame. Over this band the one hands over to the other. It lies
+    outside the pane and not inside it, because inside is where the caret spends its time:
+    arrowing down a long document leaves the caret on the bottom row, and that row is still the
+    one being edited.
+  */
+  var CARET_HANDOFF = 0.25;
+
+  /*
+    Where the reading line sits in a pane scrolled this far.
+
+    A third of the way down, except near the start of the document: there it rises to meet the
+    top, reaching it at the top, so that a document read from its beginning shows its beginning
+    in both panes. A third of the way down at the top would leave everything above the third
+    line of a preview taller than its source hanging above the fold.
+  */
+  function readingFraction(scrollTop, height) {
+    return height > 0 ? clamp(scrollTop / height, 0, READING_FRACTION) : 0;
+  }
+
+  // How much say the caret has, from its line's height as a fraction of its pane.
+  function caretWeight(fraction) {
+    if (fraction < 0) { return clamp(1 + fraction / CARET_HANDOFF, 0, 1); }
+    if (fraction > 1) { return clamp(1 - (fraction - 1) / CARET_HANDOFF, 0, 1); }
+    return 1;
+  }
+
+  function caretLine() {
+    var position = state.editor ? state.editor.getPosition() : null;
+    return position ? position.lineNumber - 1 : 0;
   }
 
   /*
@@ -1111,6 +1142,10 @@
     moment. A view mode change measures this while the old layout is still standing and applies
     it a frame later against the new one, by which time the editor may be hidden and measuring
     zero for everything. See captureModeSwitch.
+
+    Both anchors are carried, with the caret's weight, rather than one line already chosen:
+    they are two different lines, and what blends continuously between them is where each one
+    puts the other pane.
   */
   function sourcePlacement() {
     var editor = state.editor;
@@ -1120,14 +1155,22 @@
     if (!model) { return null; }
 
     var height = editor.getLayoutInfo().height;
-    var editorEnd = editorEndScrollTop();
-    var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
     var scrollTop = editor.getScrollTop();
+    var editorEnd = editorEndScrollTop();
+    var caret = caretLine();
+    var caretFraction = height > 0 ? (editor.getTopForLineNumber(caret + 1) - scrollTop) / height : 0;
+    var reading = readingFraction(scrollTop, height);
 
     return {
-      line: sourceAnchorLine(editor, weight),
-      weight: weight,
-      blend: endBlend(scrollTop, editorEnd, height),
+      caretLine: caret,
+      caretFraction: caretFraction,
+      readingLine: editorLineAt(scrollTop + reading * height),
+      readingFraction: reading,
+      weight: caretWeight(caretFraction),
+
+      // How much scroll the editor has, for carryOverscroll: a document that never scrolled
+      // has none to carry.
+      scrollWeight: height > 0 ? clamp(editorEnd / height, 0, 1) : 1,
       scrollTop: scrollTop,
       end: editorEnd,
       max: editorMaxScrollTop()
@@ -1141,7 +1184,12 @@
     Everything the editor contributes arrives in the placement; everything the preview
     contributes is measured here. That is what makes this safe to run a frame after the
     measurement, and idempotent across a reflow: run against two different layouts it gives the
-    right answer for each, because a line does not change when a pane does.
+    right answer for each, because a line does not change when a pane does, and neither does a
+    fraction of the pane.
+
+    Nothing special happens at the end of the document. The preview's 60vh of bottom padding
+    lets its last block rise to wherever the caret is, so the two stay level until the source
+    runs out, and only then does carryOverscroll take over.
   */
   function placePreviewFromSource(placement) {
     if (placement === null) { scrollPreviewToLine(0); return; }
@@ -1149,25 +1197,13 @@
     var map = lineMap();
     if (map.length === 0) { return; }
 
-    var target = interpolate(map, placement.line, 'line', 'top');
-    var previewEnd = previewEndScrollTop();
-
-    /*
-      Progress into the last screenful, weighted exactly as the anchor is and for the same
-      reason. Read off the editor's own scroll alone it saturates the moment a barely
-      scrollable document reaches its stop, and everything the caret does after that collapses
-      onto the end of the preview; read off the preview alone it gives up the accuracy the
-      editor has in the documents that do scroll. Each pane is asked in the proportion it is
-      carrying the position.
-    */
-    var blend = endBlend(target, previewEnd, els.previewPane.clientHeight);
-
-    blend += (placement.blend - blend) * placement.weight;
-
-    if (blend > 0) { target += (previewEnd - target) * blend; }
+    var height = els.previewPane.clientHeight;
+    var atCaret = interpolate(map, placement.caretLine, 'line', 'top') - placement.caretFraction * height;
+    var atReading = interpolate(map, placement.readingLine, 'line', 'top') - placement.readingFraction * height;
+    var target = atReading + (atCaret - atReading) * placement.weight;
 
     var carried = carryOverscroll(
-      placement.scrollTop, placement.end, placement.max, target, previewMaxScrollTop(), placement.weight);
+      placement.scrollTop, placement.end, placement.max, target, previewMaxScrollTop(), placement.scrollWeight);
 
     setPreviewScrollTop(carried === null ? target : carried);
   }
@@ -1179,23 +1215,37 @@
     placePreviewFromSource(sourcePlacement());
   }
 
-  // The preview's half of the same division, for the same reason.
+  /*
+    The preview's half of the same division, measured by the same rule from the preview's side.
+
+    The caret still counts when it is the preview being moved. Its line is found in the
+    preview, and the source is scrolled to put the caret at the same height; wherever the caret
+    alone decides, that is the exact inverse of what the source does, so wheeling the preview
+    and then touching the source does not snap anything back. The reading line is the same third of the way down, read off
+    the preview.
+  */
   function previewPlacement() {
     // A pane the view mode has hidden measures zero for everything, and there is no position
     // to be read out of it.
-    if (els.previewPane.clientHeight === 0) { return null; }
+    var height = els.previewPane.clientHeight;
+    if (height === 0) { return null; }
 
     var map = lineMap();
     if (map.length === 0) { return null; }
 
     var scrollTop = els.previewPane.scrollTop;
-    var previewEnd = previewEndScrollTop();
+    var caret = caretLine();
+    var caretFraction = (interpolate(map, caret, 'line', 'top') - scrollTop) / height;
+    var reading = readingFraction(scrollTop, height);
 
     return {
-      line: interpolate(map, scrollTop, 'top', 'line'),
-      blend: endBlend(scrollTop, previewEnd, els.previewPane.clientHeight),
+      caretLine: caret,
+      caretFraction: caretFraction,
+      readingLine: interpolate(map, scrollTop + reading * height, 'top', 'line'),
+      readingFraction: reading,
+      weight: caretWeight(caretFraction),
       scrollTop: scrollTop,
-      end: previewEnd,
+      end: previewEndScrollTop(),
       max: previewMaxScrollTop()
     };
   }
@@ -1206,28 +1256,23 @@
 
     if (placement === null || !model) { return; }
 
-    var lineCount = model.getLineCount();
-    var lineNumber = clamp(Math.floor(placement.line) + 1, 1, lineCount);
-    var top = editor.getTopForLineNumber(lineNumber);
-    var next = editor.getTopForLineNumber(Math.min(lineNumber + 1, lineCount));
-    var fraction = placement.line - Math.floor(placement.line);
-    var target = top + (next - top) * fraction;
-
     var height = editor.getLayoutInfo().height;
+    var atCaret = editorOffsetOf(placement.caretLine) - placement.caretFraction * height;
+    var atReading = editorOffsetOf(placement.readingLine) - placement.readingFraction * height;
+    var target = atReading + (atCaret - atReading) * placement.weight;
+
     var editorEnd = editorEndScrollTop();
     var weight = height > 0 ? clamp(editorEnd / height, 0, 1) : 1;
 
-    // The mirror of the easing above. Without it the two sides disagree about where the end
-    // is: reading the preview to the last block would leave the editor a screenful short, and
-    // the next arrow key would haul the preview back up to meet it.
-    if (placement.blend > 0) { target += (editorEnd - target) * placement.blend; }
-
-    // And the mirror of the overscroll carry, so wheeling the preview down through its own
-    // padding walks the editor through scrollBeyondLastLine rather than parking it.
+    // The mirror of the overscroll carry, so wheeling the preview down through its own
+    // padding walks the editor through its cushion rather than parking it.
     var carried = carryOverscroll(
       placement.scrollTop, placement.end, placement.max, target, editorMaxScrollTop(), weight);
 
-    editor.setScrollTop(carried === null ? target : carried);
+    // Where the editor was sent, clamped as Monaco will clamp it, so its scroll handler can
+    // tell the echo from a wheel. See missedSourceScroll.
+    placedEditorScrollTop = clamp(carried === null ? target : carried, 0, editorMaxScrollTop());
+    editor.setScrollTop(placedEditorScrollTop);
   }
 
   function syncPreviewToEditor() {
@@ -4042,7 +4087,16 @@
     state.editor.onDidScrollChange(function (e) {
       updateWrapGlyphs();
 
-      if (syncOwner === 'preview') { return; }
+      // Anything but the echo of the preview placing the editor is the reader, and is owed a
+      // sync once the preview lets go. A view mode change settling is neither, and has its own
+      // placement. See missedSourceScroll.
+      if (syncOwner === 'preview') {
+        if (e.scrollTopChanged && !layingOutForModeSwitch && pendingModeSwitch === null
+          && (placedEditorScrollTop === null || Math.abs(e.scrollTop - placedEditorScrollTop) > 1)) {
+          missedSourceScroll = true;
+        }
+        return;
+      }
 
       // The pane changing shape under a view mode change, not the reader moving. See
       // layingOutForModeSwitch.
@@ -4066,16 +4120,18 @@
       highlightActiveBlock(e.position.lineNumber - 1);
 
       /*
-        The caret is half of what sourceAnchorLine reads, and in a document that fits its pane
-        it is the only half that ever changes - no scroll event is coming, because nothing
-        scrolls. In a document taller than its pane this recomputes the same answer the scroll
-        handler would and assigns the position the preview is already at.
+        The caret is what the preview is anchored on while it is on screen, and a caret moved
+        without scrolling - a click, an arrow within the pane, and every caret in a document
+        that fits its pane - raises no scroll event. See sourcePlacement.
 
-        Focus is the test for the user having moved somewhere, rather than the caret having been
-        put back: restoring a tab's view state sets a position too.
+        Restoring a tab's view state sets a position too, and that is the caret being put back
+        rather than moved, so it is left out by its source; focus is the test for everything
+        else. Focus on the editor's widgets and not only its text, because Find Next with the
+        find widget focused moves the caret from there, and the preview should follow it.
       */
       if (state.suppressEditorEvents || syncOwner === 'preview') { return; }
-      if (!state.editor.hasTextFocus()) { return; }
+      if (e.source === 'restoreState') { return; }
+      if (!state.editor.hasWidgetFocus()) { return; }
 
       syncEditorToPreview();
     });
