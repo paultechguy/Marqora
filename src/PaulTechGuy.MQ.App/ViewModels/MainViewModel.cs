@@ -192,6 +192,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(CanUndo))]
     [NotifyPropertyChangedFor(nameof(CanRedo))]
     [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
+    [NotifyPropertyChangedFor(nameof(IsOutlineRailVisible))]
     public partial bool HasDocument { get; set; }
 
     [ObservableProperty]
@@ -9142,6 +9143,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
+    [NotifyPropertyChangedFor(nameof(IsOutlineRailVisible))]
     public partial bool ShowOutline { get; set; }
 
     /// <summary>
@@ -9152,6 +9154,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// beside a drop target would be listing nothing on purpose.
     /// </summary>
     public bool IsOutlineVisible => ShowOutline && HasDocument;
+
+    /// <summary>
+    /// Whether the collapsed rail stands in for the panel - the strip that carries the button
+    /// to bring it back.
+    ///
+    /// The same document condition as the panel, for the same reason: with no tabs open there
+    /// is nothing to outline, and a button offering to show nothing would be a puzzle.
+    /// </summary>
+    public bool IsOutlineRailVisible => !ShowOutline && HasDocument;
 
     /// <summary>
     /// How wide the panel is, in device-independent pixels.
@@ -9238,9 +9249,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnOutlineMaxDepthChanged(int value) => RebuildOutlineRows();
 
     /// <summary>
-    /// Shows or hides the panel: View, Outline, and Alt+4.
+    /// Shows or hides the panel: View, Outline, Alt+4, the hide button in the panel's filter
+    /// row and the show button on the collapsed rail.
     ///
-    /// One command behind both, which is what lets the menu item advertise the key honestly.
+    /// One command behind all four, which is what lets the menu item advertise the key honestly.
     /// Showing takes the keyboard into the panel as well, on the grounds that asking for the
     /// outline is asking to use it; Escape is the way back to the document.
     /// </summary>

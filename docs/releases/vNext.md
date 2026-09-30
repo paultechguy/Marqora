@@ -10,6 +10,13 @@ offers to save back to the page it came from. A resumed review exports whole too
 Copy as Rich Text and a Folio all carry its pictures. Pages shared by 1.0.10 cannot be resumed;
 they were written before the page carried what resuming needs.
 
+## Hide and show the outline where it is
+
+The outline no longer needs the View menu or Alt+4 to put away. A button at the end of the
+**Filter outline** row hides it, and a narrow strip stays behind at the edge of the window with
+a button that brings it back. Double-clicking works too: in the empty space below the headings
+to hide the outline, and anywhere on the strip to show it again.
+
 ## Fixes
 
 **Side-by-side view keeps the line you are editing in view.** The preview used to line up only

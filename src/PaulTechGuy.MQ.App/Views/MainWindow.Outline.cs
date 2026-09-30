@@ -54,6 +54,14 @@ public sealed partial class MainWindow
         OutlineList.AddHandler(
             UIElement.TappedEvent, new TappedEventHandler(OnOutlineTapped), handledEventsToo: true);
 
+        // handledEventsToo for the same reason: the ScrollViewer inside the list is free to
+        // claim a pointer gesture on its way past, and the empty space it covers is exactly
+        // where this one is aimed.
+        OutlineList.AddHandler(
+            UIElement.DoubleTappedEvent, new DoubleTappedEventHandler(OnOutlineDoubleTapped), handledEventsToo: true);
+
+        OutlineRail.DoubleTapped += OnOutlineRailDoubleTapped;
+
         OutlineFilterBox.GotFocus += OnOutlineGotFocus;
         OutlineFilterBox.KeyDown += OnOutlineFilterKeyDown;
 
@@ -162,8 +170,9 @@ public sealed partial class MainWindow
     /// repeat of a move that is already where it is going, which is nothing on screen.
     ///
     /// The second click of a double-click arrives here too, on the row the first one went
-    /// to, and does that same harmless nothing - which is why there is no DoubleTapped
-    /// handler beside this one any more. One gesture, one answer.
+    /// to, and does that same harmless nothing - which is why a double-click on a row has
+    /// no handler of its own. One gesture, one answer. The DoubleTapped handler below is
+    /// for the space beneath the rows, and leaves the rows alone.
     /// </summary>
     private async void OnOutlineTapped(object sender, TappedRoutedEventArgs e)
     {
@@ -177,6 +186,58 @@ public sealed partial class MainWindow
         }
 
         await ViewModel.GoToOutlineRowAsync(OutlineList.SelectedIndex, focusEditor: true);
+    }
+
+    /// <summary>
+    /// A double-click in the empty space below the headings hides the panel.
+    ///
+    /// Undiscoverable on purpose: it is a shortcut for the hand already on the mouse, and the
+    /// filter row's button and Alt+4 are the ways that say so. A double-click on a row is the
+    /// row's business (see OnOutlineTapped), and one on the scroll bar is someone paging
+    /// the list quickly - neither should close anything.
+    ///
+    /// Asked whether the panel is still showing rather than toggled blindly, so a gesture that
+    /// arrives after something else has already closed it cannot open it again.
+    /// </summary>
+    private void OnOutlineDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (!ViewModel.ShowOutline || IsOutlineRow(e.OriginalSource) || IsInScrollBar(e.OriginalSource))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ViewModel.ToggleOutlineCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// A double-click anywhere on the collapsed rail brings the panel back.
+    ///
+    /// The rail's own button is inside it, and a quick double-click there is the one case
+    /// that needs care: the first click has already opened the panel, and a blind toggle on
+    /// the second would shut it again. Hence the same check as above, the other way round.
+    /// </summary>
+    private void OnOutlineRailDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (ViewModel.ShowOutline)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ViewModel.ToggleOutlineCommand.Execute(null);
+    }
+
+    private static bool IsInScrollBar(object? source)
+    {
+        DependencyObject? node = source as DependencyObject;
+
+        while (node is not null and not Microsoft.UI.Xaml.Controls.Primitives.ScrollBar)
+        {
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return node is not null;
     }
 
     /// <summary>

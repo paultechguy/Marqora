@@ -2132,13 +2132,48 @@
                         not HasOutlineRows, because a real outline merely filtered down to
                         nothing must keep the box on screen so the filter can be cleared.
                     -->
-                    <TextBox x:Name="OutlineFilterBox"
-                             Grid.Row="0"
-                             Margin="8,8,8,8"
-                             PlaceholderText="Filter outline"
-                             Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Filter the outline"
-                             Visibility="{x:Bind VisibleWhen(ViewModel.HasOutlineHeadings), Mode=OneWay}" />
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="OutlineFilterBox"
+                                 Grid.Column="0"
+                                 Margin="8,8,0,8"
+                                 PlaceholderText="Filter outline"
+                                 Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Filter the outline"
+                                 Visibility="{x:Bind VisibleWhen(ViewModel.HasOutlineHeadings), Mode=OneWay}" />
+
+                        <!--
+                            Hides the panel: the same command as View, Outline and Alt+4.
+
+                            A column of its own rather than something laid over the box, because
+                            the box goes when the document has no headings and this must not go
+                            with it - a panel reading "No headings" still needs a way to close.
+
+                            The glyph is dimmed to secondary text so it recedes until it is
+                            wanted; the Icon tier's own hover fill says it is a button. Its twin
+                            on the collapsed rail below sits at the same height, so the glyph
+                            does not jump as the panel closes and opens.
+
+                            E8A0 is Segoe Fluent's "OpenPane", used here to close. The names
+                            assume a pane on the right, so the arrows point the wrong way for
+                            one on the left: this glyph's arrow points left, toward where the
+                            panel goes, and the rail's E89F ("ClosePane") points back out.
+                        -->
+                        <Button Grid.Column="1"
+                                Margin="4,7,6,7"
+                                Style="{StaticResource MqIconButtonStyle}"
+                                Command="{x:Bind ViewModel.ToggleOutlineCommand}"
+                                ToolTipService.ToolTip="Hide outline (Alt+4)"
+                                AutomationProperties.Name="Hide outline">
+                            <FontIcon Glyph="&#xE8A0;"
+                                      Style="{StaticResource MqIconStyle}"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Button>
+                    </Grid>
 
                     <!--
                         The hint sits behind the list and shows through when it is empty,
@@ -2188,6 +2223,40 @@
                         </ListView>
                     </Grid>
                 </Grid>
+            </Border>
+
+            <!--
+                The collapsed rail: what stands in the outline's column while it is hidden.
+
+                A strip rather than a button parked somewhere else, so the way back is where the
+                panel was - the pattern Word's Navigation pane and Outlook use. It costs one
+                icon's width, which is the price of never having to hunt for it.
+
+                The same column as the panel and the opposite condition, so exactly one of the
+                two is ever there. Wearing the panel's right-hand rule keeps the edge of the
+                document where the eye left it.
+
+                A double-click anywhere on it shows the panel too - see OnOutlineRailDoubleTapped.
+                The Transparent background is what makes that work: a Border with no brush is
+                not hit-tested, and a click on its empty length would fall straight through.
+            -->
+            <Border x:Name="OutlineRail"
+                    Grid.Column="0"
+                    Background="Transparent"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{ThemeResource MqChromeRuleBrush}"
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineRailVisible), Mode=OneWay}">
+
+                <Button Margin="2,7,2,0"
+                        VerticalAlignment="Top"
+                        Style="{StaticResource MqIconButtonStyle}"
+                        Command="{x:Bind ViewModel.ToggleOutlineCommand}"
+                        ToolTipService.ToolTip="Show outline (Alt+4)"
+                        AutomationProperties.Name="Show outline">
+                    <FontIcon Glyph="&#xE89F;"
+                              Style="{StaticResource MqIconStyle}"
+                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Button>
             </Border>
 
             <!--
