@@ -26,8 +26,12 @@ namespace PaulTechGuy.MQ.Formatting;
 ///   <item>Which level the document counts from falls out of the same pass, rather than being a
 ///   second guess — it is the candidate that agreed.</item>
 ///   <item>A heading is judged one at a time against that answer, so "2026 Budget" sitting inside
-///   a properly numbered document keeps its year while its neighbours lose their numbers.</item>
+///   a properly numbered document keeps its year while its neighbors lose their numbers.</item>
 /// </list>
+///
+/// One shape no counter explains: sub-sections numbered within a parent that names its number
+/// in words, "### 1.1" under "## Phase 1". When no start level agrees, the detector checks that
+/// run by run instead; see <see cref="SiblingAgreements"/>.
 ///
 /// Strictly a reading of the source. Nothing here rewrites anything; <see cref="Scan"/> is what
 /// a rewriter, a report and the open-time check all act on, so the three cannot disagree about
@@ -171,7 +175,105 @@ public static class HeadingNumberDetector
             }
         }
 
+        // Only when no count agreed. A document the counter explains is never re-read as one
+        // numbered a run at a time, for the same reason the straight reading goes first.
+        if (best == HeadingNumbering.Off)
+        {
+            bool[] agreements = SiblingAgreements(headings, out int matched, out HeadingNumbering start);
+
+            if (matched >= MinimumMatches && matched * 2 >= wearingNumbers)
+            {
+                best = start;
+                bestAgreements = agreements;
+            }
+        }
+
         return new Scan(best, headings, bestAgreements);
+    }
+
+    /// <summary>
+    /// Which headings are numbered within their parent rather than within the document.
+    ///
+    /// The shape this reads is "## Phase 1 — Prep" over "### 1.1", "### 1.2", "### 1.3", then
+    /// "## Phase 2 — Cutover" over "### 2.1", "### 2.2". The front of each number is the
+    /// parent's own name, written in its words rather than counted, so no start level agrees:
+    /// from "##" the counter says 4.1, from "###" it says 1. What still holds is that siblings
+    /// under one parent share the front and count the last part up from one, and that is the
+    /// test.
+    ///
+    /// A number needs at least two parts, because a single part counting from one under each
+    /// parent is a plain count and already the counter's business. Starting at one is still
+    /// required, so a run of "## 1.1.0", "## 1.2.0" release numbers stays a version history.
+    /// Unnumbered siblings are stepped over, as <see cref="Reading.NumberedOnly"/> does, so
+    /// "### Prep exit criteria" after "### 1.6" costs nothing.
+    /// </summary>
+    /// <param name="start">
+    /// The level the numbers imply: a two-part number on a "###" is counting from "##". Taken
+    /// from the first heading that agreed, and held to the levels a count can start from.
+    /// </param>
+    private static bool[] SiblingAgreements(
+        IReadOnlyList<HeadingScanner.ScannedHeading> headings,
+        out int matched,
+        out HeadingNumbering start)
+    {
+        bool[] agreements = new bool[headings.Count];
+        matched = 0;
+        start = HeadingNumbering.Off;
+
+        // Each open run of siblings, by parent and level: the front its numbers share, and the
+        // last part the next one should carry. A parent of -1 is a run with no heading above it.
+        Dictionary<(int Parent, int Level), (string Front, int Next)> runs = [];
+        Stack<int> open = new();
+
+        for (int i = 0; i < headings.Count; i++)
+        {
+            int level = headings[i].Level;
+
+            while (open.Count > 0 && headings[open.Peek()].Level >= level)
+            {
+                open.Pop();
+            }
+
+            int parent = open.Count > 0 ? open.Peek() : -1;
+            open.Push(i);
+
+            if (headings[i].Prefix is not { Components.Count: >= 2 } prefix)
+            {
+                continue;
+            }
+
+            // A "# 1.1" has nothing above it for the front to belong to.
+            int implied = level - (prefix.Components.Count - 1);
+
+            if (implied < 1)
+            {
+                continue;
+            }
+
+            string front = string.Join('.', prefix.Components.Take(prefix.Components.Count - 1));
+            int last = prefix.Components[^1];
+            var key = (parent, level);
+
+            bool agrees = runs.TryGetValue(key, out var run)
+                ? run.Front == front && last == run.Next
+                : last == 1;
+
+            if (!agrees)
+            {
+                continue;
+            }
+
+            runs[key] = (front, last + 1);
+            agreements[i] = true;
+            matched++;
+
+            if (start == HeadingNumbering.Off)
+            {
+                start = (HeadingNumbering)Math.Min(implied, (int)HeadingNumbering.FromHeading3);
+            }
+        }
+
+        return agreements;
     }
 
     /// <summary>

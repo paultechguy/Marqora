@@ -4494,7 +4494,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ];
 
         int numbered = scan.NumberedCount;
-        int untouched = scan.Headings.Count - numbered;
+
+        // Only the headings that open with a number and keep it. One with no number at all
+        // keeps what it has too, but saying it was a year would be describing a number it
+        // never had.
+        int untouched = scan.Headings.Where((h, i) => h.Prefix is not null && !scan.Numbered[i]).Count();
 
         string headline = numbered == scan.Headings.Count
             ? $"All {numbered} headings will change:"

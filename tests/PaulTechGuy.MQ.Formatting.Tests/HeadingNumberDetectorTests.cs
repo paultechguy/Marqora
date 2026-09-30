@@ -154,7 +154,71 @@ public class HeadingNumberDetectorTests
         scan.NumberedCount.ShouldBe(6);
     }
 
+    [Fact]
+    public void Sub_sections_numbered_within_a_named_parent_are_recognized()
+    {
+        // The front of each number is the parent's name, written in words, so no count agrees:
+        // from "##" these are 3.1 and 4.1, from "###" they are 1, 2, 3. The unnumbered sibling
+        // after "1.2" is stepped over rather than breaking the run.
+        HeadingNumberDetector.Scan scan = Read(
+            """
+            # Migration
+            ## Where we are
+            ## The strategy
+            ### Why switch
+            ## Phase 1 — Prep
+            ### 1.1 Pipeline routing
+            ### 1.2 Cut Release workflow
+            ### Prep exit criteria
+            ## Phase 2 — Cutover
+            ### 2.1 Freeze dev
+            ### 2.2 Final sync
+            ### 2.3 Smoke test
+            """);
+
+        scan.IsNumbered.ShouldBeTrue();
+        scan.StartLevel.ShouldBe(HeadingNumbering.FromHeading2);
+        scan.NumberedCount.ShouldBe(5);
+        scan.Numbered.ShouldBe([false, false, false, false, false, true, true, false, false, true, true, true]);
+    }
+
+    [Fact]
+    public void A_count_that_agrees_is_preferred_to_runs_within_parents()
+    {
+        // These also share a front and count from one under each parent, but the document's own
+        // counter explains them, and that reading is the one that sets the start level.
+        HeadingNumberDetector.Scan scan = Read("# 1 Alpha\n## 1.1 One\n## 1.2 Two\n# 2 Beta\n## 2.1 Three");
+
+        scan.StartLevel.ShouldBe(HeadingNumbering.FromHeading1);
+        scan.NumberedCount.ShouldBe(5);
+    }
+
     // -------------------------------------------------------------- rejecting
+
+    [Fact]
+    public void A_run_within_a_parent_must_start_at_one()
+    {
+        Read(
+            """
+            ## Releases
+            ### 2.4 Spring
+            ### 2.5 Summer
+            ### 2.6 Autumn
+            """).IsNumbered.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_run_within_a_parent_keeps_one_front()
+    {
+        // 1.1 then 2.2 under the same parent is not one parent's sections.
+        Read(
+            """
+            ## Notes
+            ### 1.1 First
+            ### 2.2 Second
+            ### 3.3 Third
+            """).IsNumbered.ShouldBeFalse();
+    }
 
     [Fact]
     public void A_year_heading_on_its_own_is_not_numbering()

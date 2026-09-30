@@ -156,6 +156,30 @@ public class HeadingNumberRewriterTests
             """);
     }
 
+    [Fact]
+    public void Sub_section_numbers_within_a_named_parent_are_removed()
+    {
+        // The parent's own number is its words, so it stays; the sub-sections lose theirs. The
+        // "Background" section puts the phases second and third, so no count explains them.
+        Strip(
+            """
+            ## Background
+            ## Phase 1 — Prep
+            ### 1.1 Pipeline routing
+            ### 1.2 Cut Release workflow
+            ## Phase 2 — Cutover
+            ### 2.1 Freeze dev
+            """).ShouldBe(
+            """
+            ## Background
+            ## Phase 1 — Prep
+            ### Pipeline routing
+            ### Cut Release workflow
+            ## Phase 2 — Cutover
+            ### Freeze dev
+            """);
+    }
+
     // ------------------------------------------------------------ round trip
 
     [Fact]
