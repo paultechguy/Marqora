@@ -1,5 +1,7 @@
 <!--
-    Scaffolded by build\New-ReleaseNotes.ps1 into docs\releases\v<version>.md.
+    The shape of a release's notes when written from nothing. build\New-ReleaseNotes.ps1 now
+    builds docs\releases\v<version>.md from docs\releases\vNext.md instead; this file remains
+    what Publish-Release.ps1 compares the notes against to catch a release nobody wrote up.
 
     Write for someone deciding whether to download this, not for someone reading the diff.
     Delete any heading that has nothing under it - an empty section reads worse than no

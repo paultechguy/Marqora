@@ -3,8 +3,8 @@
 A release is two commands with your own judgement in between, and a click at the end.
 
 ```powershell
-pwsh .\build\New-ReleaseNotes.ps1 -Version 0.3.0   # bump + scaffold the notes
-#   ... write the notes, commit them to dev ...
+pwsh .\build\New-ReleaseNotes.ps1 -Version 0.3.0   # bump + move vNext.md into the notes
+#   ... read the notes over, commit them to dev ...
 pwsh .\build\Publish-Release.ps1 -Version 0.3.0    # promote, build, tag, draft
 #   ... smoke-test the draft, click Publish release ...
 pwsh .\build\Publish-Release.ps1 -Version 0.3.0 -Verify
@@ -35,39 +35,50 @@ question entirely.
 
 ---
 
-## Step 1 — Scaffold the notes and bump the version
+## Before a release — keep `vNext.md` as you go
+
+`docs/releases/vNext.md` is where a release's notes are written, a section at a time, as each
+change lands on `dev`: a `##` section per feature, and a paragraph with a bold lead per fix
+under `## Fixes`. Write for someone deciding whether to download the release, not for someone
+reading the diff. By the time you release, the notes already exist.
+
+## Step 1 — Bump the version and move the notes
 
 ```powershell
 pwsh .\build\New-ReleaseNotes.ps1 -Version 0.3.0
 ```
 
-Changes exactly two things in your working tree and stops:
+Changes exactly three things in your working tree and stops:
 
 ```
 Directory.Build.props        <Version> set to 0.3.0
-docs/releases/v0.3.0.md      scaffolded from build/release-notes-template.md
+docs/releases/v0.3.0.md      the notes from vNext.md, titled "Marqora v0.3.0 - What's New"
+docs/releases/vNext.md       reset to the stub in build/release-notes-vnext.md
 ```
 
-Nothing is committed. Nothing is pushed. If you change your mind, the script tells you the
-two commands that undo it.
+On the way it drops any heading with nothing under it — the stub's `## Fixes`, in a release
+with no fixes — and the stub's guidance comment. Nothing else in the text changes.
 
-The gates here are the cheap ones — branch, tree, ancestry, and whether the version is still
-free. Scaffolding a markdown file has no business running the test suite.
+Nothing is committed. Nothing is pushed. If you change your mind, the script tells you the
+three commands that undo it.
+
+The gates here are the cheap ones — branch, tree, ancestry, whether the version is still
+free, and whether `vNext.md` has anything in it beyond headings. Moving a markdown file has
+no business running the test suite.
 
 `-Check` runs those gates and stops, which answers "could I release from here?" without
-starting anything. `-Force` overwrites notes you have already started.
+starting anything. `-Force` overwrites the notes file, throwing away edits made to it since
+the first run. Because that run already reset `vNext.md` without committing, the script then
+reads `vNext.md` as committed in `HEAD`, so a re-run produces the same file the first did.
 
-## Step 2 — Write the notes and commit them
+## Step 2 — Read the notes over and commit them
 
-Fill in the placeholders. Delete any heading with nothing under it: an empty **Fixed**
-section reads worse than no **Fixed** section.
-
-Write for someone deciding whether to download this, not for someone reading the diff. The
-install steps, the download link and the checksum are added automatically when the release is
-published, so do not repeat them.
+Read `v0.3.0.md` as someone deciding whether to download it. The install steps, the download
+link and the checksum are added automatically when the release is published, so do not repeat
+them.
 
 ```powershell
-git add Directory.Build.props docs/releases/v0.3.0.md
+git add Directory.Build.props docs/releases/v0.3.0.md docs/releases/vNext.md
 git commit -m "Release notes for 0.3.0"
 git push origin dev
 ```
@@ -154,7 +165,10 @@ archive's root holds the five entries it should.
 
 ## The gates
 
-All ten run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`.
+All ten run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`, which
+adds one of its own: `vNext.md` must say something beyond headings, in the working tree or in
+`HEAD`.
+
 Every one is read-only, which is what makes it safe to run them before deciding whether a
 release should happen at all.
 

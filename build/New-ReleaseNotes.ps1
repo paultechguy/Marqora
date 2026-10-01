@@ -2,16 +2,22 @@
 
 <#
 .SYNOPSIS
-    Starts a release: bumps the version and scaffolds the release notes for you to write.
+    Starts a release: bumps the version and moves the vNext notes into this version's file.
 
 .DESCRIPTION
     The first of the two release steps, and the only one that produces something you have to
-    think about. It changes two files in the working tree and stops:
+    think about. It changes three files in the working tree and stops:
 
         Directory.Build.props        <Version> set to the number you passed
-        docs\releases\v<version>.md  scaffolded from build\release-notes-template.md
+        docs\releases\v<version>.md  the notes from docs\releases\vNext.md, titled for this version
+        docs\releases\vNext.md       reset to the stub in build\release-notes-vnext.md
 
-    Nothing is committed and nothing is pushed. You fill in the placeholders, then commit both
+    vNext.md is where the notes are written as each change lands, so by now the release's notes
+    already exist; this moves them rather than leaving you to copy them. Any heading with nothing
+    under it is dropped on the way, as is the stub's guidance comment. A vNext with nothing in it
+    beyond headings stops the preflight - there would be nothing to release.
+
+    Nothing is committed and nothing is pushed. You read the notes over, then commit all three
     files to dev as an ordinary change - reviewed the way any other change is reviewed. By the
     time Publish-Release.ps1 runs, "dev is ready to release" is a plain fact about dev rather
     than a state this script left behind.
@@ -21,8 +27,9 @@
     release waiting on it.
 
     The gates here are the cheap ones - branch, tree, ancestry, and whether the version is
-    still free. Scaffolding a markdown file has no business running the test suite; the full
-    set runs in Publish-Release.ps1 where they actually gate something irreversible.
+    still free, and whether vNext.md has anything to move. Moving a markdown file has no
+    business running the test suite; the full set runs in Publish-Release.ps1 where they
+    actually gate something irreversible.
 
 .PARAMETER Version
     The version to release, as three numbers: 0.3.0. Drives Directory.Build.props, the notes
@@ -30,7 +37,9 @@
 
 .PARAMETER Force
     Overwrite an existing notes file for this version. The version bump is idempotent, so this
-    is about throwing away notes you have already started.
+    is about throwing away edits made to the notes since the first run. When that run has
+    already reset vNext.md, the notes are taken from vNext.md as committed in HEAD, so a re-run
+    produces the same file the first run did.
 
 .PARAMETER Check
     Run the gates and report, then stop. Nothing is written.
@@ -71,7 +80,9 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildProps = Join-Path $repoRoot 'Directory.Build.props'
-$notesTemplate = Join-Path $PSScriptRoot 'release-notes-template.md'
+$vNextStub = Join-Path $PSScriptRoot 'release-notes-vnext.md'
+$vNextRelative = 'docs/releases/vNext.md'
+$vNextPath = Join-Path $repoRoot ($vNextRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
 $notesRelative = "docs/releases/v$Version.md"
 $notesPath = Join-Path $repoRoot ($notesRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
 
@@ -85,12 +96,20 @@ try {
     # ---- gates
     Write-Host '  preflight' -ForegroundColor DarkGray
 
-    # The two files this script is about to touch are allowed to be dirty already, so that a
-    # second run with -Force works without making you revert the first one by hand.
-    Test-GateTree -RepoRoot $repoRoot -Branch 'dev' -AllowDirty @('Directory.Build.props', $notesRelative)
+    # The three files this script is about to touch are allowed to be dirty already, so that a
+    # second run with -Force works without making you revert the first one by hand, and so that
+    # notes added to vNext since the last commit are not a reason to refuse.
+    Test-GateTree -RepoRoot $repoRoot -Branch 'dev' -AllowDirty @('Directory.Build.props', $notesRelative, $vNextRelative)
     Test-GateAncestor -RepoRoot $repoRoot
     Test-GateTagFree -RepoRoot $repoRoot -Version $Version -Republish:$Republish
     Test-GateNotesAbsent -NotesPath $notesPath -Force:$Force
+    $vNext = Test-GateVNext -RepoRoot $repoRoot -VNextRelative $vNextRelative
+
+    # Read before anything is written, so a missing stub fails the preflight, not halfway through.
+    if (-not (Test-Path -LiteralPath $vNextStub -PathType Leaf)) {
+        throw "The vNext stub is missing: '$vNextStub'."
+    }
+    $stub = [System.IO.File]::ReadAllText($vNextStub)
 
     Write-Host ''
 
@@ -102,7 +121,7 @@ try {
         exit 0
     }
 
-    Initialize-TaskList -Total 2
+    Initialize-TaskList -Total 3
 
     # ---- version
     Write-Task 'version'
@@ -127,23 +146,37 @@ try {
 
     # ---- notes
     Write-Task 'release notes'
-    $scaffold = Expand-Template -Path $notesTemplate -Token @{ VERSION = $Version }
+    $notes = ConvertTo-ReleaseNotes -Text $vNext.Text -Version $Version
 
-    if ($PSCmdlet.ShouldProcess($notesPath, 'Scaffold release notes')) {
-        Save-Text -Path $notesPath -Text $scaffold
+    if ($PSCmdlet.ShouldProcess($notesPath, "Write release notes from $vNextRelative ($($vNext.Source))")) {
+        Save-Text -Path $notesPath -Text $notes
     }
 
     Write-Done $notesRelative
 
+    # ---- vNext
+    # Only after the notes are written: a failure above leaves vNext as it was.
+    Write-Task 'vNext reset'
+
+    if ($PSCmdlet.ShouldProcess($vNextPath, 'Reset to the stub')) {
+        Save-Text -Path $vNextPath -Text $stub
+    }
+
+    Write-Done $vNextRelative
+
     # ---- what to do next
-    $placeholders = ($scaffold -split '\r?\n' | Where-Object { $_ -match 'TODO' }).Count
+    # Publish-Release.ps1 refuses notes that still say TODO; better to hear it now.
+    $todos = @($notes -split '\r?\n' | Where-Object { $_ -match 'TODO' }).Count
 
     Write-Host ''
     Write-Host '  Next' -ForegroundColor White
-    Write-Host "    Fill in the $placeholders placeholders in $notesRelative, deleting any heading" -ForegroundColor DarkGray
-    Write-Host '    that has nothing under it. Then commit both files to dev:' -ForegroundColor DarkGray
+    Write-Host "    Read $notesRelative over as someone deciding whether to download it." -ForegroundColor DarkGray
+    if ($todos) {
+        Write-Host "    It has $todos line(s) saying TODO, which Publish-Release.ps1 will refuse." -ForegroundColor Yellow
+    }
+    Write-Host '    Then commit all three files to dev:' -ForegroundColor DarkGray
     Write-Host ''
-    Write-Host "      git add Directory.Build.props $notesRelative" -ForegroundColor Gray
+    Write-Host "      git add Directory.Build.props $notesRelative $vNextRelative" -ForegroundColor Gray
     Write-Host "      git commit -m ""Release notes for $Version""" -ForegroundColor Gray
     Write-Host '      git push origin dev' -ForegroundColor Gray
     Write-Host ''
@@ -154,6 +187,7 @@ try {
     Write-Host '  Changed your mind' -ForegroundColor White
     Write-Host ''
     Write-Host '      git checkout -- Directory.Build.props' -ForegroundColor Gray
+    Write-Host "      git checkout -- $vNextRelative" -ForegroundColor Gray
     Write-Host "      Remove-Item $notesRelative" -ForegroundColor Gray
     Write-Host ''
 

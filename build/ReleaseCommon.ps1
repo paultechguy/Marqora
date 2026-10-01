@@ -672,6 +672,162 @@ function Test-GateNotesAbsent {
     Write-Done 'ready to scaffold'
 }
 
+# Whether a vNext file says anything yet. Headings, blank lines and HTML comments are the stub's
+# whole content, so a file made only of those has nothing to release.
+function Test-NotesHaveContent {
+    param([Parameter(Mandatory)][AllowEmptyString()][string] $Text)
+
+    $withoutComments = [regex]::Replace($Text, '(?s)<!--.*?-->', '')
+
+    $content = $withoutComments -split '\r?\n' |
+        Where-Object { $_.Trim() -and $_ -notmatch '^\s{0,3}#{1,6}(\s|$)' }
+
+    return [bool] $content
+}
+
+# The committed copy of a file, read as UTF-8 whatever the console's code page is - the notes
+# are full of dashes that a default decode turns into mojibake. $null when HEAD has no such file.
+function Get-CommittedText {
+    param(
+        [Parameter(Mandatory)][string] $RepoRoot,
+        [Parameter(Mandatory)][string] $RelativePath
+    )
+
+    $previous = [Console]::OutputEncoding
+
+    try {
+        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $lines = & git -C $RepoRoot show "HEAD:$RelativePath" 2>$null
+        $code = $LASTEXITCODE
+    }
+    finally {
+        [Console]::OutputEncoding = $previous
+    }
+
+    if ($code -ne 0) {
+        return $null
+    }
+
+    return (@($lines) -join "`n") + "`n"
+}
+
+# Where this release's notes come from: vNext as it stands in the working tree, or, when that
+# is already back to the stub, vNext as it was last committed. The second is what makes a
+# re-run with -Force produce the same notes as the first run rather than an empty file - the
+# first run reset vNext, but did not commit, so HEAD still has the notes it moved.
+function Test-GateVNext {
+    param(
+        [Parameter(Mandatory)][string] $RepoRoot,
+        [Parameter(Mandatory)][string] $VNextRelative
+    )
+
+    Write-Check 'vNext notes'
+
+    $path = Join-Path $RepoRoot ($VNextRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        $text = [System.IO.File]::ReadAllText($path)
+
+        if (Test-NotesHaveContent $text) {
+            Write-Done 'working tree'
+            return [pscustomobject]@{ Text = $text; Source = 'working tree' }
+        }
+    }
+
+    $committed = Get-CommittedText -RepoRoot $RepoRoot -RelativePath $VNextRelative
+
+    if ($null -ne $committed -and (Test-NotesHaveContent $committed)) {
+        Write-Done 'HEAD; working tree is the stub'
+        return [pscustomobject]@{ Text = $committed; Source = 'HEAD' }
+    }
+
+    Write-Failed
+    throw "'$VNextRelative' has nothing in it beyond headings, here or in HEAD. Write the release's notes there first."
+}
+
+# vNext's text as this version's notes: the title names the version, the stub's guidance
+# comment is gone, and a heading with nothing under it - the stub's empty Fixes, most often -
+# is dropped, because an empty section reads worse than no section.
+function ConvertTo-ReleaseNotes {
+    param(
+        [Parameter(Mandatory)][string] $Text,
+        [Parameter(Mandatory)][string] $Version
+    )
+
+    $newline = if ($Text -match '\r\n') { "`r`n" } else { "`n" }
+
+    # Only the stub's own comment, recognized by naming this script. Any other comment someone
+    # wrote into vNext was put there on purpose and travels with the notes.
+    $body = [regex]::Replace($Text.TrimStart([char] 0xFEFF), '(?s)<!--(?:(?!-->).)*?New-ReleaseNotes\.ps1.*?-->[ \t]*\r?\n?', '')
+
+    $lines = [System.Collections.Generic.List[string]]::new([string[]] ($body -split '\r?\n'))
+
+    # A heading is empty when the next thing under it is a heading of the same or a higher
+    # level, or the end of the file. Removing one can empty its parent, so go until nothing moves.
+    do {
+        $removed = $false
+        $inFence = $false
+        $headings = @()
+
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '^\s{0,3}(```|~~~)') {
+                $inFence = -not $inFence
+            }
+            elseif (-not $inFence -and $lines[$i] -match '^\s{0,3}(#{1,6})(\s|$)') {
+                $headings += [pscustomobject]@{ Index = $i; Level = $Matches[1].Length }
+            }
+        }
+
+        for ($h = $headings.Count - 1; $h -ge 0 -and -not $removed; $h--) {
+            $heading = $headings[$h]
+
+            if ($heading.Level -eq 1) {
+                continue
+            }
+
+            $next = $heading.Index + 1
+            while ($next -lt $lines.Count -and -not $lines[$next].Trim()) {
+                $next++
+            }
+
+            $following = if ($h + 1 -lt $headings.Count) { $headings[$h + 1] } else { $null }
+            $atEnd = $next -ge $lines.Count
+            $atSibling = $following -and $following.Index -eq $next -and $following.Level -le $heading.Level
+
+            if ($atEnd -or $atSibling) {
+                $lines.RemoveRange($heading.Index, $next - $heading.Index)
+                $removed = $true
+            }
+        }
+    } while ($removed)
+
+    $title = "# Marqora v$Version - What's New"
+    $h1 = -1
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^#\s') {
+            $h1 = $i
+            break
+        }
+    }
+
+    if ($h1 -lt 0) {
+        $lines.InsertRange(0, [string[]] @($title, ''))
+    }
+    elseif ($lines[$h1] -match '\bvNext\b') {
+        $lines[$h1] = $lines[$h1] -replace '\bvNext\b', "v$Version"
+    }
+    else {
+        $lines[$h1] = $title
+    }
+
+    # Collapse the blank runs a removed comment or section leaves behind, and end on one newline.
+    $joined = ($lines -join $newline).Trim()
+    $joined = [regex]::Replace($joined, '(\r?\n){3,}', $newline + $newline)
+
+    return $joined + $newline
+}
+
 # What a notes file actually says, with the scaffolding stripped out: no HTML comments, no
 # placeholder lines, no blank runs. Comparing two files this way asks whether they differ in
 # substance rather than in whitespace.
