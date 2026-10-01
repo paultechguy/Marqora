@@ -665,6 +665,13 @@ public interface IPreviewHost
     Task CaptureCommentAsync(bool quiet = false);
 
     /// <summary>
+    /// Asks the shell to start a comment on the whole of the diagram at
+    /// <paramref name="diagramIndex"/> (its <see cref="DiagramHit.Index"/>), answered by
+    /// <see cref="CommentRequested"/> like a selection. For the diagram menu's Comment on Diagram.
+    /// </summary>
+    Task CommentOnDiagramAsync(int diagramIndex);
+
+    /// <summary>
     /// The preview as the reviewer sees it, made into a review page's body: each comment's
     /// number a link to its note, each note placed in the margin, drafts left out. Empty when
     /// the document is not the one on screen or the shell did not answer, which the caller must

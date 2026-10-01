@@ -153,6 +153,27 @@ public sealed class CriticMarkupWriterTests
             .ShouldBe("Text.\n\n```\nfor x in y:\n    go()\n```\n\n{>>On \"go()\": Retry?<<}\n\nMore.\n");
 
     /// <summary>
+    /// A comment on a whole diagram goes after its closing fence, naming the diagram by its type
+    /// and the line it starts on, one-based. The definition is never touched, even where it holds
+    /// the words a passage search would have found.
+    /// </summary>
+    [Fact]
+    public void A_diagram_comment_goes_after_the_fence_and_names_the_diagram() =>
+        Write(
+            "Intro.\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\nMore.\n",
+            new Note(2, 0, "flowchart", "B should branch to D.", IsDiagram: true))
+            .ShouldBe("Intro.\n\n```mermaid\nflowchart TD\n  A --> B\n```\n\n{>>On diagram (flowchart, line 3): B should branch to D.<<}\n\nMore.\n");
+
+    /// <summary>Two comments on one diagram both follow it, in the order they were given.</summary>
+    [Fact]
+    public void Two_diagram_comments_follow_the_fence_in_order() =>
+        Write(
+            "```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n",
+            new Note(0, 0, "sequenceDiagram", "First.", IsDiagram: true),
+            new Note(0, 0, "sequenceDiagram", "Second.", IsDiagram: true))
+            .ShouldBe("```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n\n{>>On diagram (sequenceDiagram, line 1): First.<<}\n\n{>>On diagram (sequenceDiagram, line 1): Second.<<}\n");
+
+    /// <summary>
     /// Text the preview changed on the way to the screen - an emoji shortcode here - cannot be
     /// found again, so the note is kept beside its block with the passage quoted.
     /// </summary>

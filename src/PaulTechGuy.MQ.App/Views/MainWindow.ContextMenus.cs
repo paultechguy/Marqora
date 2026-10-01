@@ -50,6 +50,7 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _openDiagramMaximizedItem;
     private MenuFlyoutItem? _copyDiagramPngItem;
     private MenuFlyoutItem? _copyDiagramSvgItem;
+    private MenuFlyoutItem? _commentDiagramItem;
     private MenuFlyoutSeparator? _diagramSeparator;
 
     // Items that need a selection to mean anything. The two Copy items are separate
@@ -186,6 +187,10 @@ public sealed partial class MainWindow
             Show(_copyDiagramPngItem, e.Diagram is not null);
             Show(_copyDiagramSvgItem, e.Diagram is not null);
             Show(_diagramSeparator, e.Diagram is not null);
+
+            // Only while the document in front is under review: anywhere else the item could
+            // only answer that commenting has not started.
+            Show(_commentDiagramItem, e.Diagram is not null && ViewModel.IsActiveDocumentUnderReview);
 
             if (_previewCopyItem is not null) { _previewCopyItem.IsEnabled = e.HasSelection; }
         }
@@ -708,8 +713,15 @@ public sealed partial class MainWindow
         _copyDiagramSvgItem = new MenuFlyoutItem { Text = "Copy as SVG" };
         _copyDiagramSvgItem.Click += (_, _) => CopyClickedDiagramSvg();
 
+        // First while a review is on, because then commenting is what the reader is doing. A
+        // diagram has no text to select, so this item - and the Comment button over a hovered
+        // diagram - is how a comment on one starts.
+        _commentDiagramItem = new MenuFlyoutItem { Text = "Comment on Diagram..." };
+        _commentDiagramItem.Click += (_, _) => CommentOnClickedDiagram();
+
         _diagramSeparator = new MenuFlyoutSeparator();
 
+        menu.Items.Add(_commentDiagramItem);
         menu.Items.Add(_openDiagramItem);
         menu.Items.Add(_openDiagramMaximizedItem);
         menu.Items.Add(_copyDiagramPngItem);
@@ -748,6 +760,14 @@ public sealed partial class MainWindow
         if (_clickedDiagram is { } hit)
         {
             _ = ViewModel.OpenDiagramWindowAsync(hit, maximize);
+        }
+    }
+
+    private void CommentOnClickedDiagram()
+    {
+        if (_clickedDiagram is { } hit)
+        {
+            _ = ViewModel.CommentOnDiagramAsync(hit);
         }
     }
 

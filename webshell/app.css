@@ -1117,6 +1117,56 @@ a.mq-blocked-media {
 .mq-preview mark.mq-comment-flash { transition: background 600ms ease-out; }
 
 /*
+  A comment on a whole diagram (placeDiagramComment in app.js): the diagram outlined in the
+  comments' teal, and each comment a numbered badge in its top-left corner - the top right
+  carries the "Double-click to open" hint. The badge is an empty mark, so it is hovered, clicked
+  and lit as every other comment is; its number is the same generated content, set upright.
+*/
+.mq-preview pre.mermaid[data-mq-diagram].mq-commented {
+  outline: 2px solid var(--mq-accent);
+}
+
+.mq-preview .mq-diagram-comments {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.mq-preview mark.mq-comment.mq-diagram-comment {
+  display: inline-block;
+  min-width: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--mq-accent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mq-accent) 22%, var(--mq-bg));
+  font-family: var(--mq-font-ui);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.mq-preview mark.mq-comment.mq-diagram-comment[data-n]::after {
+  margin-left: 0;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+  color: var(--mq-text);
+}
+
+.mq-preview mark.mq-comment.mq-diagram-comment.mq-comment-draft {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--mq-accent) 12%, var(--mq-bg));
+}
+
+.mq-preview mark.mq-comment.mq-diagram-comment.mq-comment-hot,
+.mq-preview mark.mq-comment.mq-diagram-comment.mq-comment-flash {
+  background: color-mix(in srgb, var(--mq-accent) 40%, var(--mq-bg));
+}
+
+/*
   The Comment button that appears over a selection. Compact chrome, the tier the diagram
   window's zoom strip uses and the only other button in the web layer; the metrics are the
   tokens at the top of this file, which build/Test-ButtonStandards.ps1 holds to App.xaml.
@@ -1430,6 +1480,9 @@ a.mq-blocked-media {
 
   /* With the [data-n] of the rule that draws the number, or that rule outranks this one. */
   .mq-preview mark.mq-comment[data-n]::after { content: none; }
+
+  .mq-preview .mq-diagram-comments { display: none; }
+  .mq-preview pre.mermaid[data-mq-diagram].mq-commented { outline: none; }
 
   .mq-comment-button { display: none; }
 }

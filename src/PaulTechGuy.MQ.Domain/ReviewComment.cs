@@ -19,13 +19,37 @@ namespace PaulTechGuy.MQ.Domain;
 /// and a loose list item shares its line with the paragraph inside it, so the anchor also says
 /// which of the elements carrying that line it was: without it, a comment on the third "Yes" in
 /// a row would come back on the first.
+///
+/// A comment on a diagram is about the whole block rather than a passage in it: mermaid's
+/// drawing has no text a reader selects, and the comment belongs to what the diagram shows.
+/// Its anchor names the diagram's fence line and index as any other, with no range - both
+/// offsets are zero - and its quote is the diagram's type as its definition names it
+/// ("flowchart", "sequenceDiagram"), which is what the card and the CriticMarkup note call it.
 /// </summary>
 /// <param name="Line">Zero-based source line of the innermost block holding the selection.</param>
 /// <param name="Index">Which of the elements carrying that line, counting from zero in document order.</param>
 /// <param name="Start">Offset of the first selected character in that block's text.</param>
 /// <param name="End">Offset one past the last selected character.</param>
-/// <param name="Quote">The selected text exactly as the preview showed it.</param>
-public sealed record ReviewAnchor(int Line, int Index, int Start, int End, string Quote);
+/// <param name="Quote">The selected text exactly as the preview showed it, or a diagram's type.</param>
+/// <param name="Kind">A passage of text, or a whole diagram.</param>
+public sealed record ReviewAnchor(int Line, int Index, int Start, int End, string Quote, ReviewAnchorKind Kind = ReviewAnchorKind.Text)
+{
+    /// <summary>A comment on a whole diagram, at its fence line.</summary>
+    public static ReviewAnchor ForDiagram(int line, int index, string type) =>
+        new(line, index, 0, 0, type, ReviewAnchorKind.Diagram);
+
+    public bool IsDiagram => Kind == ReviewAnchorKind.Diagram;
+}
+
+/// <summary>What a review comment is anchored to.</summary>
+public enum ReviewAnchorKind
+{
+    /// <summary>A range of characters in one block's text.</summary>
+    Text,
+
+    /// <summary>A whole mermaid diagram.</summary>
+    Diagram,
+}
 
 /// <summary>
 /// One comment a reviewer attached to a passage.

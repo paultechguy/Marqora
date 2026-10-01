@@ -70,6 +70,36 @@ public sealed class ReviewStateTests
         read.Comments[1].ShouldBe(new ReviewStateComment { Id = read.Comments[1].Id, Line = 2, Index = 0, Start = 4, End = 10, Quote = "server", Note = "Which one?" });
     }
 
+    private const string DiagramSource = "# Flow\n\n```mermaid\nflowchart TD\n  A --> B\n```\n";
+
+    [Fact]
+    public void A_diagram_comment_comes_back_as_one_and_asks_for_a_reader_that_knows_it()
+    {
+        var session = new ReviewSession(Guid.NewGuid(), DiagramSource, Now);
+        session.Add(ReviewAnchor.ForDiagram(2, 0, "flowchart"), "B should branch.");
+
+        ReviewState state = StateOf(session);
+        ReviewState? read = ReviewState.TryDecode(Page(state));
+
+        state.MinimumReader.ShouldBe(ReviewState.DiagramReaderVersion);
+        read.ShouldNotBeNull();
+        read.Comments.ShouldHaveSingleItem().IsDiagram.ShouldBeTrue();
+
+        ReviewComment restored = ReviewSession.Restore(Guid.NewGuid(), read).Ordered.ShouldHaveSingleItem();
+        restored.Anchor.ShouldBe(ReviewAnchor.ForDiagram(2, 0, "flowchart"));
+    }
+
+    /// <summary>A page an earlier Marqora can resume still says so: only a diagram comment raises the bar.</summary>
+    [Fact]
+    public void A_page_with_only_text_comments_still_asks_for_the_first_reader()
+    {
+        ReviewState state = StateOf(SessionWith());
+
+        state.MinimumReader.ShouldBe(1);
+        Encoding.UTF8.GetString(Convert.FromBase64String(ReviewState.Encode(state).Split('>')[1].Split('<')[0]))
+            .ShouldNotContain("\"kind\"");
+    }
+
     /// <summary>The CriticMarkup copy is lossy about these; the state must not be.</summary>
     [Fact]
     public void Text_the_source_block_would_escape_comes_back_exactly()
@@ -169,7 +199,7 @@ public sealed class ReviewStateTests
     public void A_newer_schema_with_unknown_fields_is_read()
     {
         string page = WithJson(StateOf(SessionWith()), j => j
-            .Replace("\"schemaVersion\":1", "\"schemaVersion\":3", StringComparison.Ordinal)
+            .Replace("\"schemaVersion\":2", "\"schemaVersion\":3", StringComparison.Ordinal)
             .Replace("{\"format\"", "{\"reviewerColor\":\"teal\",\"format\"", StringComparison.Ordinal));
 
         ReviewState? read = ReviewState.TryDecode(page);
@@ -183,7 +213,7 @@ public sealed class ReviewStateTests
     [Fact]
     public void A_page_that_asks_for_a_later_reader_is_refused()
     {
-        ReviewState.TryDecode(WithJson(StateOf(SessionWith()), j => j.Replace("\"minimumReader\":1", "\"minimumReader\":2", StringComparison.Ordinal)), out ReviewStateProblem problem)
+        ReviewState.TryDecode(WithJson(StateOf(SessionWith()), j => j.Replace("\"minimumReader\":1", "\"minimumReader\":3", StringComparison.Ordinal)), out ReviewStateProblem problem)
             .ShouldBeNull();
         problem.ShouldBe(ReviewStateProblem.TooNew);
     }
@@ -206,6 +236,11 @@ public sealed class ReviewStateTests
         new ReviewStateComment { Id = Guid.NewGuid(), Line = 0, Start = 0, End = 3, Quote = string.Empty },
         new ReviewStateComment { Id = Guid.Empty, Line = 0, Start = 0, End = 3, Quote = "abc" },
         new ReviewStateComment { Id = Guid.NewGuid(), Line = 0, Start = 0, End = 3, Quote = "abc", Note = new string('x', ReviewState.MaximumTextLength + 1) },
+
+        // A diagram has no range, and a kind this build does not know is not one it can place.
+        new ReviewStateComment { Id = Guid.NewGuid(), Line = 0, Start = 0, End = 3, Quote = "flowchart", Kind = ReviewStateComment.DiagramKind },
+        new ReviewStateComment { Id = Guid.NewGuid(), Line = 0, Start = 0, End = 0, Quote = string.Empty, Kind = ReviewStateComment.DiagramKind },
+        new ReviewStateComment { Id = Guid.NewGuid(), Line = 0, Start = 0, End = 0, Quote = "photo", Kind = "image" },
     };
 
     [Theory]

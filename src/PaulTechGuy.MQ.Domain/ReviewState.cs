@@ -24,6 +24,19 @@ public sealed record ReviewStateComment
     public string Quote { get; set; } = string.Empty;
 
     public string Note { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <see cref="ReviewStateComment.DiagramKind"/> for a comment on a whole diagram; absent for a
+    /// passage of text, which is every comment a page written before diagrams could be commented
+    /// on carries.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Kind { get; set; }
+
+    public const string DiagramKind = "diagram";
+
+    [JsonIgnore]
+    public bool IsDiagram => string.Equals(Kind, DiagramKind, StringComparison.Ordinal);
 }
 
 /// <summary>Why a page could not be resumed, for the one sentence the reader is told.</summary>
@@ -68,10 +81,19 @@ public sealed record ReviewState
 {
     public const string FormatName = "marqora-review";
 
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>2 added <see cref="ReviewStateComment.Kind"/>, for comments on a whole diagram.</summary>
+    public const int CurrentSchemaVersion = 2;
 
     /// <summary>The reader version this build is; a page whose <see cref="MinimumReader"/> is higher is refused.</summary>
-    public const int ReaderVersion = 1;
+    public const int ReaderVersion = 2;
+
+    /// <summary>
+    /// What a page with a diagram comment asks of its reader. An earlier build would not know the
+    /// comment has no range and would refuse the page as inconsistent, which tells the reader the
+    /// page is damaged; asking for this reader has it say instead that a later Marqora wrote it.
+    /// A page with only text comments still asks for 1, so it resumes everywhere it did before.
+    /// </summary>
+    public const int DiagramReaderVersion = 2;
 
     /// <summary>Inert, like a Folio's payload: an unknown script type is neither run nor shown.</summary>
     public const string ScriptType = "application/vnd.marqora.review+json";
@@ -147,8 +169,11 @@ public sealed record ReviewState
     {
         ArgumentNullException.ThrowIfNull(session);
 
+        IReadOnlyList<ReviewComment> ordered = session.Ordered;
+
         return new ReviewState
         {
+            MinimumReader = ordered.Any(c => c.Anchor.IsDiagram) ? DiagramReaderVersion : 1,
             AppVersion = appVersion,
             SessionId = session.SessionId,
             WriteId = writeId,
@@ -158,7 +183,7 @@ public sealed record ReviewState
             FileName = SanitizeFileName(fileName),
             SourceSha256 = Sha256(session.SourceText),
             Source = session.SourceText,
-            Comments = [.. session.Ordered.Select(c => new ReviewStateComment
+            Comments = [.. ordered.Select(c => new ReviewStateComment
             {
                 Id = c.Id,
                 Line = c.Anchor.Line,
@@ -167,6 +192,7 @@ public sealed record ReviewState
                 End = c.Anchor.End,
                 Quote = c.Anchor.Quote,
                 Note = c.Note,
+                Kind = c.Anchor.IsDiagram ? ReviewStateComment.DiagramKind : null,
             })],
         };
     }
@@ -297,8 +323,7 @@ public sealed record ReviewState
                 || comment.Line < 0
                 || comment.Line >= lines
                 || comment.Index < 0
-                || comment.Start < 0
-                || comment.Start >= comment.End
+                || !HasRange(comment)
                 || string.IsNullOrEmpty(comment.Quote)
                 || comment.Quote.Length > MaximumTextLength
                 || comment.Note is null
@@ -310,6 +335,18 @@ public sealed record ReviewState
 
         return true;
     }
+
+    /// <summary>
+    /// Whether a comment's range is the one its kind has: a passage starts before it ends, and a
+    /// diagram has no range at all. A kind this build does not know is not a comment it can place.
+    /// </summary>
+    private static bool HasRange(ReviewStateComment comment) =>
+        comment.Kind switch
+        {
+            null => comment.Start >= 0 && comment.Start < comment.End,
+            ReviewStateComment.DiagramKind => comment.Start == 0 && comment.End == 0,
+            _ => false,
+        };
 
     /// <summary>Whether the head announces a review page that can be resumed. Cheap: the head alone.</summary>
     public static bool IsReviewPage(string head)

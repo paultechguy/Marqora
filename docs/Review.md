@@ -54,6 +54,10 @@ save lifecycle with a live data-loss bug, and this design has none of the three.
    until there is a saved comment to send.
    Double-clicking a comment in the preview opens its card for editing.
 
+   A diagram has no text to select, so a comment on one is about the whole diagram: **Comment on
+   Diagram...** in its right-click menu, or the **Comment on diagram** button in its corner while
+   the pointer is over it. See *Comments on a diagram*.
+
    A comment may carry five styles, written the way the preview reads them: `**bold**`,
    `*italic*`, `++underline++`, `==highlight==` and `` `code` ``, or put on the selected words with
    Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Shift+H and Ctrl+Backtick (`CommentMarkup.Toggle`). One parser,
@@ -144,6 +148,50 @@ everything first, so running twice draws each comment once. It waits for KaTeX: 
 before the auto-render can split a `\( … \)` across text nodes. If a block's text no longer
 matches at the stored offsets, the quote is searched for on the same line.
 
+### Comments on a diagram
+
+> **Built 2026-09-30**, with tests for the anchor's round trip through a page
+> (`ReviewStateTests`), the type (`DiagramTypeTests`) and the CriticMarkup note
+> (`CriticMarkupWriterTests`). The preview, the menu, the button and the page have not yet been
+> walked through by hand in the running app.
+
+Mermaid draws over its definition, and what it draws has no text a reader selects in any useful
+way, so a diagram is commented on whole. Four decisions, settled 2026-09-30:
+
+| Question | Answer |
+|---|---|
+| What does it attach to? | **The whole diagram**, not a node or a pinned point. A node's id differs between diagram types, and a point means nothing in the copy an AI reads; the note can still name a node in words |
+| How is one started? | **The diagram's right-click menu** (Comment on Diagram..., shown only while the document in front is under review) **and the Comment button**, which offers itself in the diagram's bottom-right corner while the pointer is over it and no text is selected |
+| Which blocks? | **Diagrams only.** The anchor is a kind rather than a special case, so images and display equations can follow without another format change |
+| What does the copy say? | **A note after the closing fence**, naming the diagram: `{>>On diagram (flowchart, line 42): ...<<}`. The fence is never changed |
+
+**The anchor** is `ReviewAnchor.ForDiagram`: the fence's line and index as any block's, no range
+(both offsets zero), and `Kind = Diagram`. Its quote is the diagram's type - the first word of
+its definition, past any front matter and `%%` lines - read from the reviewed source by
+`DiagramType`, because by the time a reader points at a diagram the preview no longer holds the
+definition. The card shows it as "Diagram (flowchart)".
+
+**In the preview** the comment is an empty `mark.mq-comment` - a numbered badge - in a holder at
+the diagram's top-left corner, with the diagram outlined in the comments' teal. The top right
+already carries "Double-click to open". Being a mark, the badge is hovered, lit, clicked,
+double-clicked to edit, revealed and unwrapped by the code that handles every other comment; a
+double-click on it edits the comment rather than opening the diagram's window. It has no text,
+so it is never counted in a block's text, and a selection is never "inside" it. Unwrapping
+removes a holder left empty and the outline with it, so every export and copy sees the diagram
+as mermaid drew it.
+
+**In the page** the badge cannot stay inside the diagram. `DiagramViewer` wraps every diagram in
+a link that opens it on its own, and a link inside a link is not markup a browser keeps: the
+inner one closes the outer early. So each badge moves to a row just above the diagram, reading
+"Comment 2" and linking to its note, and the note is hosted before that row, as one in a table
+is. The diagram keeps its outline.
+
+**In the resume block** a diagram comment carries `"kind": "diagram"`; a text comment carries no
+kind at all, which is what every earlier page has. The schema is 2. A page with a diagram comment
+asks for reader 2, because an earlier build would see a comment with no range and refuse the
+page as damaged; asking for the later reader has it say instead that a later Marqora wrote it.
+A page with only text comments still asks for reader 1 and resumes wherever it did before.
+
 **Marks never leave the page by the ordinary routes.** Print and PDF paint the live page, so
 `@media print` neutralizes them. The HTML export, Word and Copy as Rich Text take a copy with the
 marks unwrapped (`withoutCommentMarks`). The Comment button is fixed to the page, outside
@@ -206,8 +254,9 @@ analyzer and scroll sync depend on stay where they were.
 
 - **Threads, replies and a round trip.** The flow is one way. The shelved design had them; they
   were most of its cost.
-- **Comments on things that are not text**: an image, a diagram, an equation, a whole heading
-  as a block. The Comment button does not offer itself over them.
+- **Comments on things that are not text**, other than a diagram: an image, an equation, a whole
+  heading as a block. The Comment button does not offer itself over them. A diagram can be
+  commented on whole (see *Comments on a diagram*), and its anchor kind leaves room for these.
 - **The reviewer's name** on the page.
 - **A dark review page.** Every export is light.
 - **Restoring comments that were never shared**, and **surviving a crash**. Nothing is written
@@ -268,7 +317,8 @@ stand after the block Marqora wrote.
 
 **Refused whole, never half-restored.** The block is capped in size before decoding, the text
 must match its hash, and every anchor must point somewhere the text has - a line it has, a
-non-empty quote, a start before its end - with unique ids, at most 5,000 comments and no note
+non-empty quote, a start before its end (a diagram's: no range at all, and a kind this build
+knows) - with unique ids, at most 5,000 comments and no note
 longer than 100,000 characters. A file name from a page is stripped of folders, control and
 direction-override characters before it becomes a tab's label or a suggested name.
 

@@ -419,6 +419,28 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// The diagram menu's Comment on Diagram: a comment on the whole of the diagram that was
+    /// right-clicked. The shell takes the anchor, as it does for a selection, and answers through
+    /// the same <see cref="IPreviewHost.CommentRequested"/>.
+    /// </summary>
+    public async Task CommentOnDiagramAsync(DiagramHit diagram)
+    {
+        if (_review is null)
+        {
+            ShowHighlightedStatus("Start commenting first (Ctrl+Shift+R)", ReviewGlyph);
+            return;
+        }
+
+        if (_host is not null)
+        {
+            await _host.CommentOnDiagramAsync(diagram.Index).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Whether the document in front is the one under review, which is when a diagram can be commented on.</summary>
+    public bool IsActiveDocumentUnderReview => _review is not null && _workspace.Active?.Id == _review.DocumentId;
+
     private void OnCommentRequested(object? sender, CommentRequestedEventArgs e) => _ui.Post(() =>
     {
         if (_review is null || e.DocumentId != _review.DocumentId)
@@ -433,10 +455,16 @@ public sealed partial class MainViewModel
             {
                 "multiBlock" => "Select text within one paragraph, list item or cell to comment on it",
                 "overlap" => "That runs into another comment — select around it",
-                "unsupported" => "Pictures, diagrams and equations can't be commented on",
+                "unsupported" => "Pictures and equations can't be commented on. For a diagram, right-click it and choose Comment on Diagram",
                 _ => "Select text in the preview to comment on it",
             };
             return;
+        }
+
+        // Named from the source: the preview no longer holds the definition the type is in.
+        if (anchor.IsDiagram)
+        {
+            anchor = anchor with { Quote = DiagramType.At(_review.SourceText, anchor.Line) };
         }
 
         // One comment in the writing at a time. A draft with words in it is not thrown away for
@@ -760,7 +788,7 @@ public sealed partial class MainViewModel
     private static string ReviewMarkdown(ReviewSession review) =>
         CriticMarkupWriter.Write(
             review.SourceText,
-            [.. review.Ordered.Select(c => new CriticMarkupWriter.Note(c.Anchor.Line, c.Anchor.Start, c.Anchor.Quote, c.Note))]);
+            [.. review.Ordered.Select(c => new CriticMarkupWriter.Note(c.Anchor.Line, c.Anchor.Start, c.Anchor.Quote, c.Note, c.Anchor.IsDiagram))]);
 
     /// <summary>
     /// Whether there is a saved comment to send. Share and Copy stand grayed until there is -

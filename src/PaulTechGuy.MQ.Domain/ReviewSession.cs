@@ -54,7 +54,13 @@ public sealed class ReviewSession
         foreach (ReviewStateComment comment in state.Comments)
         {
             session.Add(
-                new ReviewAnchor(comment.Line, comment.Index, comment.Start, comment.End, comment.Quote),
+                new ReviewAnchor(
+                    comment.Line,
+                    comment.Index,
+                    comment.Start,
+                    comment.End,
+                    comment.Quote,
+                    comment.IsDiagram ? ReviewAnchorKind.Diagram : ReviewAnchorKind.Text),
                 comment.Note,
                 comment.Id);
         }

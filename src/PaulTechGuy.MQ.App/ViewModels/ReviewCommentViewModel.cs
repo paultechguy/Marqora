@@ -29,8 +29,10 @@ public sealed partial class ReviewCommentViewModel : ObservableObject
 
     public ReviewAnchor Anchor { get; }
 
-    /// <summary>The passage, on one line, as the card quotes it.</summary>
-    public string Quote => string.Join(' ', Anchor.Quote.Split((char[])['\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries));
+    /// <summary>The passage, on one line, as the card quotes it; a diagram is named by its type instead.</summary>
+    public string Quote => Anchor.IsDiagram
+        ? $"Diagram ({Anchor.Quote})"
+        : string.Join(' ', Anchor.Quote.Split((char[])['\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries));
 
     [ObservableProperty]
     public partial int Number { get; set; }

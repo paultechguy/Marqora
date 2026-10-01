@@ -37,7 +37,12 @@ public static class CriticMarkupWriter
     /// <param name="Start">Where the passage starts in the block's rendered text; picks between repeats.</param>
     /// <param name="Quote">The passage as the preview showed it.</param>
     /// <param name="Text">The comment.</param>
-    public readonly record struct Note(int Line, int Start, string Quote, string Text);
+    /// <param name="IsDiagram">
+    /// A comment on the whole diagram whose fence opens on <paramref name="Line"/>, with its type
+    /// as <paramref name="Quote"/>. Never placed inline: it goes after the closing fence, naming
+    /// the diagram by its type and the line it starts on, and the fence is left as it was.
+    /// </param>
+    public readonly record struct Note(int Line, int Start, string Quote, string Text, bool IsDiagram = false);
 
     /// <summary>
     /// Characters that mark text up rather than being part of it: emphasis, strikethrough and
@@ -79,7 +84,8 @@ public static class CriticMarkupWriter
 
             int blockEnd = BlockEnd(lines, protectedLines, line);
 
-            if (!protectedLines[line]
+            if (!note.IsDiagram
+                && !protectedLines[line]
                 && Locate(source, lineStarts, lines, line, blockEnd, note) is { } found
                 && !inline.Any(r => found.Start < r.End && r.Start < found.End))
             {
@@ -90,8 +96,14 @@ public static class CriticMarkupWriter
             int position = lineStarts[blockEnd] + lines[blockEnd].Length;
             bool followedByText = blockEnd + 1 < lines.Length && lines[blockEnd + 1].Trim().Length > 0;
 
+            // A diagram is named rather than quoted: its type and the line its fence opens on, one-
+            // based as an editor counts, so an AI reading the copy can tell two flowcharts apart.
+            string subject = note.IsDiagram
+                ? "diagram (" + Flatten(note.Quote) + ", line " + (line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ")"
+                : "\"" + Flatten(note.Quote) + "\"";
+
             string text = newline + newline
-                + "{>>On \"" + Flatten(note.Quote) + "\": " + Standalone(note.Text, newline) + "<<}"
+                + "{>>On " + subject + ": " + Standalone(note.Text, newline) + "<<}"
                 + (followedByText ? newline : string.Empty);
 
             standalone.Add((position, order, text));

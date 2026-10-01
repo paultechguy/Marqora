@@ -133,6 +133,35 @@ public static partial class ReviewPage
 
             .mq-review .mq-note-host { height: 0; }
 
+            /*
+              A comment on a whole diagram: the diagram outlined, and its numbers in a row above it
+              rather than inside it, because the diagram is a link that opens it on its own and a
+              link cannot hold another.
+            */
+            .mq-review .mq-preview pre.mermaid.mq-commented { outline: 2px solid var(--mq-review-accent); }
+            .mq-review .mq-diagram-refs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.4rem; }
+
+            .mq-review .mq-preview .mq-diagram-refs mark.mq-comment {
+              padding: 0 0.55rem;
+              border: 1px solid var(--mq-review-accent);
+              border-radius: 999px;
+              font-size: 0.8125rem;
+              line-height: 1.6;
+            }
+
+            /* The pill is the link's shape, so the preview's link underline (a bottom border) is left off. */
+            .mq-review .mq-preview .mq-diagram-refs a.mq-comment-ref,
+            .mq-review .mq-preview .mq-diagram-refs a.mq-comment-ref:hover {
+              border-bottom: none;
+            }
+
+            .mq-review .mq-diagram-refs a.mq-comment-ref {
+              margin-left: 0;
+              font-size: inherit;
+              line-height: inherit;
+              vertical-align: baseline;
+            }
+
             .mq-review .mq-preview mark.mq-comment:target { background: var(--mq-review-mark-hot); }
             .mq-review .mq-sidenote:target,
             .mq-review .mq-sidenote:hover { background: var(--mq-review-note-hot); }

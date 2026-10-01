@@ -10,6 +10,15 @@ offers to save back to the page it came from. A resumed review exports whole too
 Copy as Rich Text and a Folio all carry its pictures. Pages shared by 1.0.10 cannot be resumed;
 they were written before the page carried what resuming needs.
 
+## Comment on a diagram
+
+A review can now comment on a diagram. While you are commenting, right-click a diagram and
+choose **Comment on Diagram...**, or point at it and click **Comment on diagram** in its corner.
+The comment is about the whole diagram: it shows as a numbered badge on the diagram, with the
+note in the margin of the shared page, and in **Copy as Markdown** it follows the diagram as
+`{>>On diagram (flowchart, line 42): ...<<}`, leaving the diagram itself as it was. A shared
+page that has a diagram comment needs this version of Marqora or later to resume.
+
 ## Hide and show the outline where it is
 
 The outline no longer needs the View menu or Alt+4 to put away. A button at the end of the

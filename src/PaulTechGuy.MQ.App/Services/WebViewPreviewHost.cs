@@ -791,6 +791,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 start = c.Anchor.Start,
                 end = c.Anchor.End,
                 quote = c.Anchor.Quote,
+                kind = c.Anchor.IsDiagram ? "diagram" : "text",
                 draft = c.Draft,
             }).ToArray(),
         });
@@ -802,6 +803,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         SendAsync("hoverComment", new { documentId, id = commentId?.ToString() ?? string.Empty });
 
     public Task CaptureCommentAsync(bool quiet = false) => SendAsync("captureComment", new { quiet });
+
+    public Task CommentOnDiagramAsync(int diagramIndex) => SendAsync("commentOnDiagram", new { index = diagramIndex });
 
     /// <summary>Outstanding review-page requests, matched by id like the HTML ones above.</summary>
     private readonly Dictionary<Guid, TaskCompletionSource<string>> _reviewRequests = [];
@@ -1448,8 +1451,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 {
                     string problem = ReadString(payload, "problem");
 
+                    // A diagram's type is not in the preview any more - mermaid drew over its
+                    // definition - so its quote stays empty here and the view model reads the
+                    // type from the reviewed source.
                     ReviewAnchor? anchor = problem.Length > 0
                         ? null
+                        : ReadString(payload, "kind") == "diagram"
+                        ? ReviewAnchor.ForDiagram(
+                            ReadInt(payload, "line", 0),
+                            ReadInt(payload, "index", 0),
+                            string.Empty)
                         : new ReviewAnchor(
                             ReadInt(payload, "line", 0),
                             ReadInt(payload, "index", 0),

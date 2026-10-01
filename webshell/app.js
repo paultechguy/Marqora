@@ -2240,6 +2240,9 @@
     var diagram = e.target.closest ? e.target.closest('pre.mermaid[data-mq-diagram]') : null;
     if (!diagram) { return; }
 
+    // A comment's number in the diagram's corner opens the comment, not the diagram.
+    if (e.target.closest('mark.mq-comment')) { return; }
+
     var svg = diagram.querySelector('svg');
     if (!svg) { return; }
 
@@ -2355,6 +2358,12 @@
 
     A comment's number is generated content (see app.css), never a text node, for the same
     reason: text in a mark would be text in the block.
+
+    A diagram is the exception to "a character range". Mermaid's drawing has no text to select,
+    so a comment on one is about the whole diagram: its anchor is the fence's line and index with
+    no range, and it is drawn as an empty mark - a numbered badge - in the diagram's corner rather
+    than around any words. Being a mark, it is hovered, clicked, revealed and unwrapped by
+    everything below that handles the others.
   */
 
   var COMMENT_SKIP = '.mq-heading-number, .katex-mathml';
@@ -2464,8 +2473,9 @@
     var start = commentOffset(block, range.startContainer, range.startOffset);
     var end = commentOffset(block, endContainer, endOffset);
 
-    // Inside a comment already: that comment is what the reader is pointing at.
-    var marks = block.querySelectorAll('mark.mq-comment');
+    // Inside a comment already: that comment is what the reader is pointing at. A diagram's
+    // badge has no text and no place in the block's, so it is never what a selection is in.
+    var marks = block.querySelectorAll('mark.mq-comment:not(.mq-diagram-comment)');
     for (var i = 0; i < marks.length; i++) {
       var markStart = commentOffset(block, marks[i], 0);
       var markEnd = markStart + marks[i].textContent.length;
@@ -2534,6 +2544,45 @@
     }
   }
 
+  /// A diagram a comment can be put on - drawn, so not one mermaid could not parse - or null.
+  function commentableDiagram(node) {
+    var element = node && (node.nodeType === 1 ? node : node.parentElement);
+    var diagram = element && element.closest ? element.closest('pre.mermaid[data-mq-diagram]') : null;
+
+    return diagram && els.preview.contains(diagram) && diagram.querySelector('svg') ? diagram : null;
+  }
+
+  /// The anchor for a comment on the whole of a diagram. Its type is read from the source by the host.
+  function readDiagramAnchor(diagram) {
+    if (!diagram) { return { problem: 'none' }; }
+
+    var line = Number(diagram.getAttribute('data-src-line'));
+    var siblings = els.preview.querySelectorAll('[data-src-line="' + line + '"]');
+
+    return {
+      kind: 'diagram',
+      line: line,
+      index: Array.prototype.indexOf.call(siblings, diagram),
+      start: 0,
+      end: 0,
+      quote: ''
+    };
+  }
+
+  /// Asks the host to start a comment on a diagram. The diagram's Comment button, and its menu.
+  function requestDiagramComment(diagram) {
+    hideCommentButton();
+
+    if (!activeReview()) {
+      post('commentRequested', { documentId: state.activeTabId, problem: 'inactive' });
+      return;
+    }
+
+    var read = readDiagramAnchor(commentableDiagram(diagram));
+    read.documentId = state.activeTabId;
+    post('commentRequested', read);
+  }
+
   // Takes a comment's marks out, putting its text back as it was.
   function unwrapCommentMarks(root, selector) {
     var marks = root.querySelectorAll(selector || 'mark.mq-comment');
@@ -2551,6 +2600,16 @@
 
     // Rejoins the text nodes a mark split, so the next pass walks what a fresh render would.
     parents.forEach(function (parent) { parent.normalize(); });
+
+    // A diagram whose badges have all gone is put back as mermaid drew it.
+    var holders = root.querySelectorAll('.mq-diagram-comments');
+
+    for (var h = 0; h < holders.length; h++) {
+      if (holders[h].querySelector('mark')) { continue; }
+
+      holders[h].parentNode.classList.remove('mq-commented');
+      holders[h].parentNode.removeChild(holders[h]);
+    }
 
     return root;
   }
@@ -2618,6 +2677,8 @@
     mid-review, which moves every offset in the heading.
   */
   function placeComment(comment) {
+    if (comment.kind === 'diagram') { return placeDiagramComment(comment); }
+
     var candidates = Array.prototype.slice.call(
       els.preview.querySelectorAll('[data-src-line="' + comment.line + '"]'));
 
@@ -2638,6 +2699,38 @@
     }
 
     return false;
+  }
+
+  /*
+    Puts a comment on a whole diagram back: the element it was taken from if that is still a
+    drawn diagram, else the first drawn diagram on its line. Its badge joins any others in the
+    diagram's corner, in the order the comments arrive, which is reading order.
+  */
+  function placeDiagramComment(comment) {
+    var all = els.preview.querySelectorAll('[data-src-line="' + comment.line + '"]');
+    var diagram = commentableDiagram(all[comment.index]);
+
+    for (var i = 0; !diagram && i < all.length; i++) { diagram = commentableDiagram(all[i]); }
+    if (!diagram) { return false; }
+
+    var holder = diagram.querySelector(':scope > .mq-diagram-comments');
+
+    if (!holder) {
+      holder = document.createElement('span');
+      holder.className = 'mq-diagram-comments';
+      diagram.insertBefore(holder, diagram.firstChild);
+    }
+
+    diagram.classList.add('mq-commented');
+
+    var mark = document.createElement('mark');
+    mark.className = 'mq-comment mq-diagram-comment' + (comment.draft ? ' mq-comment-draft' : '');
+    mark.setAttribute('data-comment', comment.id);
+    mark.title = 'Comment on this diagram';
+    if (comment.number) { mark.setAttribute('data-n', String(comment.number)); }
+    holder.appendChild(mark);
+
+    return true;
   }
 
   /*
@@ -2684,11 +2777,20 @@
   commentButton.addEventListener('mousedown', function (e) { e.preventDefault(); });
   commentButton.addEventListener('click', function (e) {
     e.preventDefault();
-    requestComment();
+
+    if (buttonDiagram) {
+      requestDiagramComment(buttonDiagram);
+    } else {
+      requestComment();
+    }
   });
+
+  /// The diagram the button is offering a comment on, or null when it is about a selection.
+  var buttonDiagram = null;
 
   function hideCommentButton() {
     commentButton.hidden = true;
+    buttonDiagram = null;
   }
 
   /// Shows the button above a selection that could become a comment, and hides it otherwise.
@@ -2696,7 +2798,16 @@
     if (!activeReview()) { hideCommentButton(); return; }
 
     var read = readCommentSelection();
-    if (read.problem || read.activate) { hideCommentButton(); return; }
+
+    // No selection to offer: a diagram's button, if the pointer is on one, stays.
+    if (read.problem || read.activate) {
+      if (!buttonDiagram) { hideCommentButton(); }
+      return;
+    }
+
+    buttonDiagram = null;
+    commentButton.textContent = 'Add comment';
+    commentButton.title = 'Comment on the selection (Ctrl+Shift+M)';
 
     var selection = window.getSelection();
     var rects = selection.getRangeAt(0).getClientRects();
@@ -2728,10 +2839,63 @@
 
   document.addEventListener('selectionchange', function () {
     var selection = window.getSelection();
-    if (!selection || selection.isCollapsed) { hideCommentButton(); }
+    if (!buttonDiagram && (!selection || selection.isCollapsed)) { hideCommentButton(); }
   });
 
   els.previewPane.addEventListener('scroll', hideCommentButton, { passive: true });
+
+  /*
+    Over a diagram, the same button offers a comment on the whole of it, in the diagram's
+    bottom-right corner - clear of the "Double-click to open" hint at the top right and of the
+    comment badges at the top left. Not while text is selected: that button is about the
+    selection, and the pointer passing over a diagram on the way to it must not take it away.
+
+    On mousemove rather than mouseover, so a pointer still over a diagram after a scroll (which
+    hides the button) brings it back with the next movement.
+  */
+  function showDiagramCommentButton(diagram) {
+    if (buttonDiagram === diagram && !commentButton.hidden) { return; }
+
+    buttonDiagram = diagram;
+    commentButton.textContent = 'Comment on diagram';
+    commentButton.title = 'Comment on the whole diagram';
+    commentButton.hidden = false;
+
+    var box = diagram.getBoundingClientRect();
+    var pane = els.previewPane.getBoundingClientRect();
+    var width = commentButton.offsetWidth;
+    var height = commentButton.offsetHeight;
+
+    // Kept on screen when the diagram's corner is not: a tall diagram scrolled half out of view.
+    var left = Math.min(box.right, pane.right) - width - 10;
+    var top = Math.min(box.bottom, pane.bottom) - height - 10;
+
+    commentButton.style.left = Math.max(left, pane.left + 4) + 'px';
+    commentButton.style.top = Math.max(top, Math.max(box.top, pane.top) + 4) + 'px';
+  }
+
+  els.preview.addEventListener('mousemove', function (e) {
+    if (!activeReview()) { return; }
+
+    var selection = window.getSelection();
+    if (selection && !selection.isCollapsed && !buttonDiagram) { return; }
+
+    var diagram = commentableDiagram(e.target);
+
+    if (diagram) {
+      showDiagramCommentButton(diagram);
+    } else if (buttonDiagram) {
+      hideCommentButton();
+    }
+  });
+
+  els.preview.addEventListener('mouseleave', function (e) {
+    if (buttonDiagram && e.relatedTarget !== commentButton) { hideCommentButton(); }
+  });
+
+  commentButton.addEventListener('mouseleave', function (e) {
+    if (buttonDiagram && !(e.relatedTarget && buttonDiagram.contains(e.relatedTarget))) { hideCommentButton(); }
+  });
 
   /*
     Hover pairs a comment in the page with its card in the sidebar, both ways, as the shared
@@ -2872,6 +3036,12 @@
 
       var number = entry.number;
 
+      var diagram = marks[0].closest('pre.mermaid');
+      if (diagram) {
+        pageDiagramComment(diagram, marks[0], number, entry.html);
+        return;
+      }
+
       Array.prototype.forEach.call(marks, function (mark) {
         mark.removeAttribute('data-n');
         mark.removeAttribute('data-comment');
@@ -2893,7 +3063,48 @@
     // Anything still carrying a comment id was not in the list the host sent: not a comment.
     unwrapCommentMarks(clone, 'mark.mq-comment[data-comment]');
 
+    // That took the outline off every diagram whose badges moved out; the ones with numbers
+    // above them are the ones with comments.
+    Array.prototype.forEach.call(clone.querySelectorAll('.mq-diagram-refs'), function (refs) {
+      if (refs.nextElementSibling) { refs.nextElementSibling.classList.add('mq-commented'); }
+    });
+
     return clone.innerHTML;
+  }
+
+  /*
+    A comment on a whole diagram, in the page. Its number moves out of the diagram to a row just
+    above it, because the page wraps each diagram in a link that opens it on its own (see
+    DiagramViewer), and a link inside a link is not markup a browser keeps - it would close the
+    outer one early. The note floats into the margin from just before that row, as one hosted
+    before a table does.
+  */
+  function pageDiagramComment(diagram, mark, number, html) {
+    var refs = diagram.previousElementSibling;
+
+    if (!refs || !refs.classList.contains('mq-diagram-refs')) {
+      refs = document.createElement('div');
+      refs.className = 'mq-diagram-refs';
+      diagram.parentNode.insertBefore(refs, diagram);
+    }
+
+    mark.removeAttribute('data-n');
+    mark.removeAttribute('data-comment');
+    mark.removeAttribute('title');
+    mark.setAttribute('data-note', String(number));
+    mark.id = 'mq-mark-' + number;
+
+    var reference = document.createElement('a');
+    reference.className = 'mq-comment-ref';
+    reference.href = '#mq-note-' + number;
+    reference.textContent = 'Comment ' + number;
+    mark.appendChild(reference);
+    refs.appendChild(mark);
+
+    var holder = document.createElement('div');
+    holder.className = 'mq-note-host';
+    holder.appendChild(buildNote(number, html));
+    refs.parentNode.insertBefore(holder, refs);
   }
 
   // ------------------------------------------------------ active block cue
@@ -5682,6 +5893,11 @@
     /// Ctrl+Shift+M pressed while the window rather than this page had the keyboard.
     captureComment: function (p) {
       requestComment(!!(p && p.quiet));
+    },
+
+    /// The diagram menu's Comment on Diagram, for the diagram numbered as the menu was told.
+    commentOnDiagram: function (p) {
+      requestDiagramComment(els.preview.querySelector('pre.mermaid[data-mq-index="' + Number(p && p.index) + '"]'));
     },
 
     requestReviewHtml: function (p) {
