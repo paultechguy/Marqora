@@ -11,3 +11,8 @@
 -->
 
 ## Fixes
+
+**Commands that would change a read-only document are grayed out.** The Tools menu's format and
+section-number commands, Undo, Redo, Replace, and the editor's right-click edits used to stay
+lit on a read-only document. The confirmation for **Format All Open Documents** now counts
+only the documents it can change, and says how many read-only ones it will skip.
