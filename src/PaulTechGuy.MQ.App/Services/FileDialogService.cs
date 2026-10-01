@@ -28,7 +28,8 @@ public sealed class FileDialogService(WindowContext window, ILogger<FileDialogSe
             IReadOnlyList<string> paths = Win32Dialogs.OpenFiles(
                 RequireOwner(),
                 "Open markdown files",
-                MarkdownFileTypes.Extensions);
+                MarkdownFileTypes.Extensions,
+                extraFilters: [("Folios and review pages", [".html", ".htm"])]);
 
             logger.LogInformation(
                 "Open dialog returned {Result}.",

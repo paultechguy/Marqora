@@ -58,11 +58,16 @@ internal static class Win32Dialogs
     /// Shows the Open dialog with several files allowed. Returns an empty list when the user
     /// cancels. The order is the dialog's, which is not the order they were clicked in.
     /// </summary>
+    /// <param name="extraFilters">
+    /// Further entries in the type list, after the first and before "All files". The first stays
+    /// the one the dialog opens on.
+    /// </param>
     public static IReadOnlyList<string> OpenFiles(
         IntPtr owner,
         string title,
         IReadOnlyList<string> extensions,
-        string filterLabel = "Markdown")
+        string filterLabel = "Markdown",
+        IReadOnlyList<(string Label, IReadOnlyList<string> Extensions)>? extraFilters = null)
     {
         var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
 
@@ -70,7 +75,7 @@ internal static class Win32Dialogs
         {
             dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST | FOS_ALLOWMULTISELECT);
             dialog.SetTitle(title);
-            SetFilters(dialog, extensions, includeAllFiles: true, filterLabel);
+            SetFilters(dialog, extensions, includeAllFiles: true, filterLabel, extraFilters);
 
             if (!ShowModal(dialog, owner))
             {
@@ -222,19 +227,26 @@ internal static class Win32Dialogs
         IFileDialog dialog,
         IReadOnlyList<string> extensions,
         bool includeAllFiles,
-        string filterLabel = "Markdown")
+        string filterLabel = "Markdown",
+        IReadOnlyList<(string Label, IReadOnlyList<string> Extensions)>? extraFilters = null)
     {
         if (extensions.Count == 0)
         {
             return;
         }
 
-        string pattern = string.Join(";", extensions.Select(e => "*" + e));
+        static string PatternOf(IReadOnlyList<string> extensions) =>
+            string.Join(";", extensions.Select(e => "*" + e));
 
         List<COMDLG_FILTERSPEC> filters =
         [
-            new COMDLG_FILTERSPEC { pszName = filterLabel, pszSpec = pattern },
+            new COMDLG_FILTERSPEC { pszName = filterLabel, pszSpec = PatternOf(extensions) },
         ];
+
+        foreach ((string label, IReadOnlyList<string> more) in extraFilters ?? [])
+        {
+            filters.Add(new COMDLG_FILTERSPEC { pszName = label, pszSpec = PatternOf(more) });
+        }
 
         if (includeAllFiles)
         {

@@ -2,13 +2,18 @@
 
 ## Pick a shared review up again
 
-A review page you shared can now be dropped back into Marqora, or opened with
-**Review > Resume Shared Review...**, and the review starts again where it was: the text as you
+A review page you shared can now be dropped back into Marqora, chosen in **File > Open**, or
+opened with **Review > Resume Shared Review...**, and the review starts again where it was: the text as you
 reviewed it, its pictures, and every comment in place, in a tab of its own labeled like
 `notes.md (review)`. Hours later, days after you ended it, or on another computer. Share then
 offers to save back to the page it came from. A resumed review exports whole too - Word, HTML,
 Copy as Rich Text and a Folio all carry its pictures. Pages shared by 1.0.10 cannot be resumed;
 they were written before the page carried what resuming needs.
+
+**File > Open** lists review pages and Folios under **Folios and review pages** in its file-type
+list, so you no longer need **All files** to find one. A review page you choose there resumes,
+and a Folio unpacks, just as they do when dropped. Any other web page is turned away with a
+message rather than opened as raw HTML.
 
 ## Comment on a diagram
 

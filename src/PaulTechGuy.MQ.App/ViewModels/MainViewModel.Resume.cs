@@ -112,11 +112,15 @@ public sealed partial class MainViewModel
 
     // ---------------------------------------------------------------- recognizing a page
 
+    /// <summary>Whether a path names a web page, judged from its extension alone.</summary>
+    private static bool IsHtml(string path) =>
+        ".html".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)
+        || ".htm".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The first few kilobytes of an .html file, or null for anything else or a file that cannot be read.</summary>
     private string? ReadHtmlHead(string path)
     {
-        if (!".html".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)
-            && !".htm".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase))
+        if (!IsHtml(path))
         {
             return null;
         }

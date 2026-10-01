@@ -1173,9 +1173,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // ------------------------------------------------------------------ opening
 
     /// <summary>
-    /// File, Open. One file takes the route it always has; several are sorted by name, so the
-    /// first by name is the tab that ends active as it is for Open Folder, and then opened the
-    /// way a drop of the same files would be.
+    /// File, Open. One file takes the route it always has, unless it is a web page; several
+    /// are sorted by name, so the first by name is the tab that ends active as it is for Open
+    /// Folder, and then opened the way a drop of the same files would be.
     /// </summary>
     [RelayCommand]
     private async Task OpenAsync()
@@ -1184,7 +1184,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (paths.Count == 1)
         {
-            await OpenPathAsync(paths[0]).ConfigureAwait(true);
+            await OpenPickedAsync(paths[0]).ConfigureAwait(true);
         }
         else if (paths.Count > 1)
         {
@@ -1196,6 +1196,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // On a cancelled picker too: nothing opened, but the menu that was walked to get
         // here still has the keyboard and will not give it back on its own.
         RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// One file chosen in File, Open. A review page is resumed, as a drop resumes it, so a page
+    /// picked alone and a page picked beside another document agree. Checked here rather than
+    /// in <see cref="OpenPathAsync"/>, which the command line and Recent share: a page is
+    /// resumed only when someone hands it over, and choosing it in the dialog is that.
+    ///
+    /// Any other web page is refused rather than opened as text. The dialog offers .html for
+    /// Folios and review pages, and a page that is neither is not a document Marqora edits.
+    /// </summary>
+    private async Task OpenPickedAsync(string path)
+    {
+        if (LooksLikeReviewPage(path))
+        {
+            await ResumeReviewAsync(path).ConfigureAwait(true);
+        }
+        else if (LooksLikeLegacyReviewPage(path))
+        {
+            await ExplainLegacyReviewPageAsync(path).ConfigureAwait(true);
+        }
+        else if (IsHtml(path) && File.Exists(path) && !LooksLikeFolio(path))
+        {
+            await _dialogs.ShowMessageAsync(
+                "Not a Marqora page",
+                $"{Path.GetFileName(path)} is a web page, but not a Folio or a shared review. "
+                + "Marqora opens markdown files: " + string.Join(", ", MarkdownFileTypes.Extensions))
+                .ConfigureAwait(true);
+        }
+        else
+        {
+            await OpenPathAsync(path).ConfigureAwait(true);
+        }
     }
 
     [RelayCommand]
@@ -7782,8 +7815,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private bool LooksLikeFolio(string path)
     {
-        if (!".html".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase)
-            && !".htm".Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase))
+        if (!IsHtml(path))
         {
             return false;
         }

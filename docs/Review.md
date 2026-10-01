@@ -76,8 +76,8 @@ save lifecycle with a live data-loss bug, and this design has none of the three.
    memory. With comments nobody has seen, the sidebar's footer turns into the question in place,
    with Discard and End or Keep Commenting. Closing the tab or the app asks the same thing as its
    own prompt, before any save prompt.
-6. **Resume.** A shared page dropped back in, or opened with Review > Resume Shared Review...,
-   takes the review up again on the text it holds - see *Resuming from a shared page*.
+6. **Resume.** A shared page dropped back in, chosen in File > Open, or opened with Review >
+   Resume Shared Review..., takes the review up again on the text it holds - see *Resuming from a shared page*.
 
 ---
 
@@ -286,7 +286,7 @@ reviewer's save file. And End is final only for comments that were never shared.
 | Question | Answer |
 |---|---|
 | Who resumes? | Whoever drops the page in. It carries no names, so the author could too, on their own copy. No relays, no author view. |
-| From where? | A drop on the window or the preview, or Review > Resume Shared Review.... Not the command line or Recent: `OpenPathAsync` is untouched, so a page is resumed only when someone hands it over. |
+| From where? | A drop on the window or the preview, File > Open (one page or several files - its type list has *Folios and review pages*), or Review > Resume Shared Review.... Not the command line or Recent: `OpenPathAsync` is untouched, so a page is resumed only when someone hands it over. File > Open checks before it calls `OpenPathAsync`, and refuses any other web page rather than opening it as text. |
 | What opens? | A tab with no file behind it (`Path` null), labeled `notes.md (review)` - `(review 2)` if that is open - clean, under review, its comments restored and counted as shared. Closing it straight away asks nothing. |
 | Pictures? | The ones the page carries, held in memory and served to the preview and every export from there. Written only where the reader sends them, and for a Folio briefly into its temporary folder (see *Where a resumed review's pictures live*). |
 | Sharing again? | The dialog opens on the page it came from, unless that is a temporary folder (an Outlook attachment, a zip) or read-only. |
