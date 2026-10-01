@@ -125,3 +125,23 @@ public enum ImageFolderMode
     /// <summary>Directly beside the document, with no folder at all.</summary>
     BesideDocument = 2,
 }
+
+/// <summary>
+/// What clicking a link to a local file that is not markdown does.
+///
+/// Markdown is not covered: a link to another document always opens it in Marqora, which is
+/// what the app is for. This is only about the spreadsheet, the PDF or the picture a document
+/// points at.
+///
+/// <see cref="OpenWithDefaultApp"/> is member zero because it is what the reader asked for by
+/// clicking. A file type that can run code still asks first either way; see
+/// <see cref="LocalLinks.IsRunnable"/>.
+/// </summary>
+public enum LocalLinkAction
+{
+    /// <summary>Open the file in whatever Windows opens it with.</summary>
+    OpenWithDefaultApp = 0,
+
+    /// <summary>Launch nothing; show the file selected in Explorer.</summary>
+    ShowInFolder = 1,
+}

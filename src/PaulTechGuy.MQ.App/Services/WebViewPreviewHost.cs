@@ -131,6 +131,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler<Uri>? ExternalLinkActivated;
 
+    public event EventHandler<LocalLinkActivatedEventArgs>? LocalLinkActivated;
+
     public event EventHandler<ZoomChangedEventArgs>? ZoomChanged;
 
     public event EventHandler<double>? SplitterMoved;
@@ -1354,7 +1356,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 break;
 
             case "linkActivated":
-                RaiseLinkActivated(ReadString(payload, "url"));
+                RaiseLinkActivated(ReadString(payload, "url"), clicked: true);
                 break;
 
             case "command":
@@ -1703,15 +1705,89 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    private void RaiseLinkActivated(string url)
+    /// <param name="clicked">
+    /// True for a link the reader clicked, false for a navigation the page began - which for a
+    /// file address is a file dropped onto the preview. Only a click opens a file that is not
+    /// markdown in its own app; a drop keeps meaning "open this in Marqora".
+    /// </param>
+    private void RaiseLinkActivated(string url, bool clicked)
     {
+        // A relative link, which the shell has put in front of the document's virtual host.
+        // Nothing outside this WebView can use that address - handed on as it was, it opened a
+        // browser on a page that does not exist - so it goes back to being a file here.
+        if (url.StartsWith(DocumentBaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            LocalLinkActivated?.Invoke(this, ResolveLocalLink(url[DocumentBaseUrl.Length..]));
+            return;
+        }
+
         if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
         {
+            // Written in the document as an absolute file address, so there is nothing to
+            // resolve, only the anchor to take off.
+            if (clicked && uri.IsFile)
+            {
+                LocalLinkActivated?.Invoke(this, new LocalLinkActivatedEventArgs(
+                    uri.LocalPath,
+                    uri.LocalPath,
+                    Uri.UnescapeDataString(uri.Fragment.TrimStart('#'))));
+                return;
+            }
+
             ExternalLinkActivated?.Invoke(this, uri);
         }
         else
         {
             _logger.LogDebug("Ignoring link with an unusable target: {Url}", url);
+        }
+    }
+
+    /// <summary>
+    /// The file a relative link names, resolved against the document's folder.
+    ///
+    /// Read from the string the shell sent rather than from a parsed URL. Parsing collapses
+    /// "../" against the root of the virtual host, so a link to a sibling folder's document
+    /// would have arrived pointing inside this one. Unlike a picture, which
+    /// <see cref="ResolveDocumentFile"/> serves only from inside the folder, a link may go
+    /// anywhere: following it is something the reader chose.
+    /// </summary>
+    private LocalLinkActivatedEventArgs ResolveLocalLink(string relative)
+    {
+        string fragment = string.Empty;
+
+        int hash = relative.IndexOf('#', StringComparison.Ordinal);
+        if (hash >= 0)
+        {
+            fragment = Uri.UnescapeDataString(relative[(hash + 1)..]);
+            relative = relative[..hash];
+        }
+
+        int query = relative.IndexOf('?', StringComparison.Ordinal);
+        if (query >= 0)
+        {
+            relative = relative[..query];
+        }
+
+        string target = Uri.UnescapeDataString(relative);
+
+        if (_documentDirectory is not { } directory)
+        {
+            return new LocalLinkActivatedEventArgs(target, null, fragment);
+        }
+
+        try
+        {
+            string path = Path.GetFullPath(Path.Combine(
+                directory,
+                target.Replace('/', Path.DirectorySeparatorChar)));
+
+            return new LocalLinkActivatedEventArgs(target, path, fragment);
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "Could not resolve the link {Target} to a path.", target);
+
+            return new LocalLinkActivatedEventArgs(target, null, fragment);
         }
     }
 
@@ -1729,13 +1805,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         _logger.LogInformation("Blocked in-place navigation to {Uri}.", e.Uri);
         e.Cancel = true;
 
-        RaiseLinkActivated(e.Uri);
+        RaiseLinkActivated(e.Uri, clicked: false);
     }
 
     private void OnNewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
         e.Handled = true;
-        RaiseLinkActivated(e.Uri);
+        RaiseLinkActivated(e.Uri, clicked: true);
     }
 
     // ----------------------------------------------------------------- recovery

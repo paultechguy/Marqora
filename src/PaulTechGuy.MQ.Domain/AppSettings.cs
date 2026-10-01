@@ -489,6 +489,12 @@ public sealed record AppSettings
     /// </summary>
     public bool MaximizeDiagramWindows { get; set; }
 
+    /// <summary>
+    /// What clicking a link to a local file that is not markdown does. A link to markdown
+    /// always opens in Marqora and is not governed by this.
+    /// </summary>
+    public LocalLinkAction LocalLinks { get; set; }
+
     // ---------------------------------------------------------------------- files
 
     /// <summary>What a launch with no file named on the command line opens.</summary>

@@ -22,6 +22,29 @@ public sealed class ZoomChangedEventArgs(EditorPane pane, int percent) : EventAr
 }
 
 /// <summary>
+/// A relative link clicked in the preview, resolved against the document's folder.
+///
+/// Kept apart from <see cref="IPreviewHost.ExternalLinkActivated"/> because a file dropped onto
+/// the preview arrives there as a file address too, and the two must not be answered alike: a
+/// click on a link to a spreadsheet opens the spreadsheet, while a spreadsheet dropped on the
+/// preview is a file Marqora cannot open.
+/// </summary>
+public sealed class LocalLinkActivatedEventArgs(string target, string? path, string fragment) : EventArgs
+{
+    /// <summary>The link as written, for a message that has no path to show.</summary>
+    public string Target { get; } = target;
+
+    /// <summary>
+    /// The full path the link names, or null when the document has not been saved and so
+    /// has no folder to resolve against. It may name something that is not there.
+    /// </summary>
+    public string? Path { get; } = path;
+
+    /// <summary>The anchor after the '#', decoded, or empty when there is none.</summary>
+    public string Fragment { get; } = fragment;
+}
+
+/// <summary>
 /// A right-click inside one of the panes, and everything the host needs to put a menu up
 /// for it.
 ///
@@ -271,6 +294,9 @@ public interface IPreviewHost
 
     /// <summary>Raised when the user activates a link that points outside the document.</summary>
     event EventHandler<Uri>? ExternalLinkActivated;
+
+    /// <summary>Raised when the user clicks a relative link to a file or a folder.</summary>
+    event EventHandler<LocalLinkActivatedEventArgs>? LocalLinkActivated;
 
     /// <summary>Raised when the user zooms with Ctrl and the mouse wheel inside a pane.</summary>
     event EventHandler<ZoomChangedEventArgs>? ZoomChanged;

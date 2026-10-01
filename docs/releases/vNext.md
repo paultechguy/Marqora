@@ -17,6 +17,17 @@ The outline no longer needs the View menu or Alt+4 to put away. A button at the 
 a button that brings it back. Double-clicking works too: in the empty space below the headings
 to hide the outline, and anywhere on the strip to show it again.
 
+## Links to files on your computer
+
+Clicking a link in the preview to a file beside your document - `[Merge strategy](MERGE-STRATEGY.md#incident-history)`,
+`../specs/plan.md`, `budget.xlsx` - no longer opens a browser on an address that goes nowhere.
+A markdown document opens in Marqora, or comes forward if it is already open, at the heading
+the link names. Anything else opens in the app Windows uses for it, a link to a folder opens it
+in Explorer, and a link to a file that is not there says so, with the path it was looking for.
+A file Windows would run as a program - an `.exe`, a script, a shortcut - always asks first.
+To have links to other files shown in their folder instead of opened, use **Preferences >
+Preview > Links**.
+
 ## Fixes
 
 **Side-by-side view keeps the line you are editing in view.** The preview used to line up only

@@ -197,6 +197,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _blockedImages;
     private readonly CheckBox _spellCheck;
     private readonly CheckBox _maximizeDiagrams;
+    private readonly ComboBox _localLinks;
     private readonly ComboBox _headingNumbers;
 
     private readonly CheckBox _deferToDocumentNumbering;
@@ -415,6 +416,13 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _maximizeDiagrams = BuildCheck("Maximize opened diagrams");
         Bind(_maximizeDiagrams, v => _vm.UpdateAsync(s => s with { MaximizeDiagramWindows = v }));
+
+        _localLinks = BuildCombo(["Open with its default app", "Show it in its folder"]);
+        _localLinks.SelectionChanged += (_, _) => ApplyAsync(() =>
+            _vm.UpdateAsync(s => s with
+            {
+                LocalLinks = (LocalLinkAction)Math.Max(0, _localLinks.SelectedIndex),
+            }));
 
         _showOutline = BuildCheck("Show the outline panel");
         Bind(_showOutline, v => _vm.SetShowOutlineAsync(v));
@@ -1144,6 +1152,19 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "Maximized. Those items ignore this setting: each one does what it says."));
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("LINKS"));
+        panel.Children.Add(Field("Links to other files", _localLinks));
+
+        panel.Children.Add(Note(
+            "A link to another markdown document always opens it here, in a tab of its own, at "
+            + "the heading the link names. This setting is for everything else a document "
+            + "links to on your machine: a PDF, a spreadsheet, a picture.\n\n"
+            + "A file Windows would run as a program - an .exe, a script, a shortcut - asks "
+            + "first whichever way this is set, because a link's words can say anything.\n\n"
+            + "A link to a folder opens it in Explorer. A link to a file that is not there "
+            + "says so, with the path it was looking for."));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("OUTLINE"));
         panel.Children.Add(_showOutline);
         panel.Children.Add(Field("List headings", _outlineDepth));
@@ -1770,6 +1791,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _blockedImages.IsChecked = s.ShowBlockedImages;
             _spellCheck.IsChecked = s.SpellCheckEnabled;
             _maximizeDiagrams.IsChecked = s.MaximizeDiagramWindows;
+            _localLinks.SelectedIndex = (int)s.LocalLinks;
 
             // Grayed out, with the reason, when Windows has no dictionary for this language.
             // A switch that stays on and does nothing is worse than one that says why it cannot.

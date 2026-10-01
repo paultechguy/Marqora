@@ -916,6 +916,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         host.CommandInvoked += OnHostCommand;
         host.ImagePasteRequested += OnImagePasteRequested;
         host.ExternalLinkActivated += OnExternalLinkActivated;
+        host.LocalLinkActivated += OnLocalLinkActivated;
         host.SelectionCopied += OnSelectionCopied;
 
         AttachReviewHost(host);
@@ -10160,6 +10161,182 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not follow link {Uri}.", uri);
+        }
+    }
+
+    /// <summary>
+    /// A link to a file or a folder on this machine, clicked in the preview.
+    ///
+    /// Markdown opens here, at the heading the anchor names. Anything else opens the way
+    /// Explorer would open it, or is shown in Explorer, as the preference says - and a file
+    /// that would run as a program asks first either way.
+    /// </summary>
+    private async void OnLocalLinkActivated(object? sender, LocalLinkActivatedEventArgs e)
+    {
+        try
+        {
+            if (e.Path is not { } path)
+            {
+                await _dialogs.ShowMessageAsync(
+                    "Link cannot be followed",
+                    $"\"{e.Target}\" is relative to the document's folder, and this document is "
+                    + "not saved in one yet. Save it first, then follow the link.")
+                    .ConfigureAwait(true);
+                return;
+            }
+
+            if (Directory.Exists(path))
+            {
+                LaunchPath(path);
+                return;
+            }
+
+            if (!File.Exists(path))
+            {
+                await _dialogs.ShowMessageAsync(
+                    "File not found",
+                    $"The link points to a file that is not there:\n\n{path}")
+                    .ConfigureAwait(true);
+                return;
+            }
+
+            if (LooksLikeReviewPage(path))
+            {
+                await ResumeReviewAsync(path).ConfigureAwait(true);
+            }
+            else if (LooksLikeLegacyReviewPage(path))
+            {
+                await ExplainLegacyReviewPageAsync(path).ConfigureAwait(true);
+            }
+            else if (LooksLikeFolio(path))
+            {
+                await OpenPathAsync(path).ConfigureAwait(true);
+            }
+            else if (MarkdownFileTypes.IsSupported(path))
+            {
+                await OpenLinkedDocumentAsync(path, e.Fragment).ConfigureAwait(true);
+            }
+            else
+            {
+                await OpenLinkedFileAsync(path).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not follow the local link {Target}.", e.Target);
+        }
+    }
+
+    /// <summary>
+    /// Opens a linked markdown document, or goes to its tab when it is already open, and then
+    /// to the heading the link's anchor names.
+    /// </summary>
+    private async Task OpenLinkedDocumentAsync(string path, string fragment)
+    {
+        await OpenPathAsync(path).ConfigureAwait(true);
+
+        if (string.IsNullOrEmpty(fragment)
+            || _workspace.Active is not { } document
+            || !string.Equals(document.Path, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Behind the workspace chain, for the reason GoToExportedLine gives: a newly opened
+        // tab is rendered there, and its headings are not known until that render has run.
+        Guid documentId = document.Id;
+        _ui.Post(() => _workspaceChain = RevealAnchorAfterAsync(_workspaceChain, documentId, fragment));
+    }
+
+    /// <summary>Swallows its own failures, so the workspace chain can never fault.</summary>
+    private async Task RevealAnchorAfterAsync(Task previous, Guid documentId, string fragment)
+    {
+        await previous.ConfigureAwait(true);
+
+        if (_host is null || _workspace.Active?.Id != documentId)
+        {
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<OutlineHeading> outline =
+                _outlines.TryGetValue(documentId, out IReadOnlyList<OutlineHeading>? cached) ? cached : [];
+
+            if (LocalLinks.FindHeading(outline, fragment) is not { } heading)
+            {
+                StatusText = $"No heading here matches #{fragment}";
+                return;
+            }
+
+            // Recorded before the jump, as the outline does, so the caret moving is not read
+            // back as the reader having scrolled somewhere of their own.
+            _followedLine = heading.SourceLine;
+
+            await _host.ScrollToLineAsync(heading.SourceLine).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not go to #{Fragment} in a linked document.", fragment);
+        }
+    }
+
+    /// <summary>
+    /// A linked file Marqora does not open itself: handed to its own app, or shown in Explorer,
+    /// as the preference says. A file that would run as a program is never started without
+    /// asking.
+    /// </summary>
+    private async Task OpenLinkedFileAsync(string path)
+    {
+        if (_settings.Current.LocalLinks == LocalLinkAction.ShowInFolder)
+        {
+            RevealInExplorer(path);
+            return;
+        }
+
+        if (LocalLinks.IsRunnable(path))
+        {
+            ConfirmResult answer = await _dialogs.ConfirmAsync(
+                "Run this file?",
+                $"The link opens {Path.GetFileName(path)}, which Windows will run as a program "
+                + "rather than open as a document. Run it only if you trust where this document "
+                + $"came from.\n\n{path}",
+                primaryText: "Run",
+                secondaryText: "Show in folder",
+                destructivePrimary: true).ConfigureAwait(true);
+
+            if (answer == ConfirmResult.Secondary)
+            {
+                RevealInExplorer(path);
+            }
+
+            if (answer != ConfirmResult.Primary)
+            {
+                return;
+            }
+        }
+
+        LaunchPath(path);
+    }
+
+    /// <summary>Opens a file or a folder the way double-clicking it in Explorer would.</summary>
+    private void LaunchPath(string path)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true,
+            })?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            // Most often a file type with nothing registered to open it. Windows would offer
+            // "Open with" from Explorer; from here it throws, so Explorer is the fallback.
+            _logger.LogWarning(ex, "Could not open {Path} with its default app.", path);
+            RevealInExplorer(path);
+            StatusText = $"Nothing is set to open {Path.GetFileName(path)}";
         }
     }
 
