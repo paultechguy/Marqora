@@ -212,8 +212,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAlterText))]
     [NotifyPropertyChangedFor(nameof(CanFormat))]
+    [NotifyPropertyChangedFor(nameof(CanUndo))]
+    [NotifyPropertyChangedFor(nameof(CanRedo))]
+    [NotifyPropertyChangedFor(nameof(CanReplace))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     [NotifyCanExecuteChangedFor(nameof(ToggleReadOnlyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NumberHeadingsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveHeadingNumbersCommand))]
     public partial bool ActiveTabIsReadOnly { get; set; }
 
     /// <summary>
@@ -814,11 +820,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// twin. Reported by the shell as the document changes, and gated on a document being
     /// open at all: closing the last tab disposes the model and its history with it, which
     /// leaves the shell with no caret to report from and would otherwise strand this true.
+    ///
+    /// Read-only too. The history survives marking a document read-only - unmarking it hands
+    /// the history straight back - but Monaco will not undo in a read-only editor, so a lit
+    /// button there would do nothing at all.
     /// </summary>
-    public bool CanUndo => _shellCanUndo && HasDocument;
+    public bool CanUndo => _shellCanUndo && HasDocument && !ActiveTabIsReadOnly;
 
     /// <summary>The same, for Redo. See <see cref="CanUndo"/>.</summary>
-    public bool CanRedo => _shellCanRedo && HasDocument;
+    public bool CanRedo => _shellCanRedo && HasDocument && !ActiveTabIsReadOnly;
+
+    /// <summary>
+    /// Whether Replace is worth offering: the Find family's <see cref="HasContent"/>, and not on
+    /// a read-only document, where the editor opens its find widget without the replace row.
+    ///
+    /// Replace All is deliberately not gated on this. It opens the Find All window across every
+    /// open document, which leaves read-only ones alone by itself, so a read-only tab in front
+    /// says nothing about whether the others can be changed.
+    /// </summary>
+    public bool CanReplace => HasContent && !ActiveTabIsReadOnly;
 
     public bool IsSystemTheme => Theme == AppTheme.System;
 
@@ -2256,6 +2276,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private bool CanActOnContent() => HasContent;
 
+    /// <summary>
+    /// Whether a command that rewrites the active document's text is worth offering: there is
+    /// something to rewrite, and the document is not marked read-only.
+    ///
+    /// The write path refuses a read-only document anyway, and says so in the status bar - but
+    /// a grayed item says it before the click rather than after, which is the same reasoning
+    /// <see cref="CanFormat"/> applies to the Format menu.
+    /// </summary>
+    private bool CanRewriteContent() => HasContent && !ActiveTabIsReadOnly;
+
+    /// <summary>
+    /// Whether Format All has any open document it could change. Every tab rather than the
+    /// active one: a read-only tab in front does not stop the others being tidied, and a
+    /// writable tab in front does not mean there is more than it to reach.
+    /// </summary>
+    private bool CanFormatAll() =>
+        _workspace.Documents.Any(d => !d.IsReadOnly && !string.IsNullOrWhiteSpace(d.Text));
+
     /// <summary>Whether the active document holds anything but whitespace.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportHtmlCommand))]
@@ -2264,9 +2302,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(PrintCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatAllDocumentsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NumberHeadingsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveHeadingNumbersCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScrollToTopCommand))]
     [NotifyCanExecuteChangedFor(nameof(ScrollToBottomCommand))]
     [NotifyPropertyChangedFor(nameof(CanEditText))]
+    [NotifyPropertyChangedFor(nameof(CanReplace))]
     public partial bool HasContent { get; set; }
 
     // ------------------------------------------------------------------ closing
@@ -3808,7 +3849,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveTabIsLocked = document?.IsLocked ?? false;
         ActiveTabIsPinned = document?.IsPinned ?? false;
-        ActiveTabIsReadOnly = document?.IsReadOnly ?? false;
         ActiveExternalState = document?.External ?? ExternalState.InSync;
 
         // Every tab, not just this one: Save All writes the whole workspace, and a document
@@ -3828,6 +3868,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshOutlineForActiveDocument();
 
         FocusOutlineCommand.NotifyCanExecuteChanged();
+
+        // Asked of every tab, like HasDirtyTabs above: a background tab marked or unmarked
+        // read-only moves the answer without anything about the active one changing.
+        FormatAllDocumentsCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -4391,7 +4435,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Writes this document's section numbers into its markdown, replacing any it already has.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    [RelayCommand(CanExecute = nameof(CanRewriteContent))]
     private async Task NumberHeadingsAsync()
     {
         if (_workspace.Active is not { } document || _host is null)
@@ -4466,7 +4510,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Takes the author's hard-coded section numbers out of the heading text.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    [RelayCommand(CanExecute = nameof(CanRewriteContent))]
     private async Task RemoveHeadingNumbersAsync()
     {
         if (_workspace.Active is not { } document || _host is null)
@@ -8603,7 +8647,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Tidies the active document, or just the selected lines when there is a selection.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    [RelayCommand(CanExecute = nameof(CanRewriteContent))]
     private async Task FormatDocumentAsync()
     {
         _logger.LogInformation("Format Document invoked. host={Host} content={Content}", _host is not null, HasContent);
@@ -8673,7 +8717,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Tidies every open document in one go.</summary>
-    [RelayCommand(CanExecute = nameof(CanActOnContent))]
+    [RelayCommand(CanExecute = nameof(CanFormatAll))]
     private async Task FormatAllDocumentsAsync()
     {
         if (_host is null || _workspace.Documents.Count == 0)
@@ -8681,10 +8725,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // The count the dialog quotes is the documents it can reach. ApplyFormatAsync turns a
+        // read-only one away, so naming it here would promise a change that will not happen.
+        int writable = _workspace.Documents.Count(d => !d.IsReadOnly);
+        int skipped = _workspace.Documents.Count - writable;
+
+        string message = (writable == 1 ? "1 document" : $"{writable} documents")
+            + " will be reformatted. Each becomes unsaved, and each can be undone separately with Ctrl+Z.";
+
+        if (skipped > 0)
+        {
+            message += skipped == 1
+                ? " 1 read-only document will be left alone."
+                : $" {skipped} read-only documents will be left alone.";
+        }
+
         ConfirmResult answer = await _dialogs.ConfirmAsync(
             "Format every open document?",
-            $"{_workspace.Documents.Count} documents will be reformatted. Each becomes unsaved, "
-                + "and each can be undone separately with Ctrl+Z.",
+            message,
             "Format all").ConfigureAwait(true);
 
         if (answer != ConfirmResult.Primary)
@@ -8705,7 +8763,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         StatusText = touched == 0
             ? "Every open document was already tidy"
-            : $"Formatted {touched} of {_workspace.Documents.Count} documents";
+            : $"Formatted {touched} of {writable} documents";
     }
 
     /// <summary>"1 line" or "4 lines", for status text that reads as a sentence.</summary>

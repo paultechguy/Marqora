@@ -56,11 +56,20 @@ public sealed partial class MainWindow
     // Items that need a selection to mean anything. The two Copy items are separate
     // because they copy from different places: the editor's selection and the preview's.
     private MenuFlyoutItem? _cutItem;
+
+    // Undo and Redo follow the toolbar's answer, which already folds in read-only.
+    private MenuFlyoutItem? _undoItem;
+    private MenuFlyoutItem? _redoItem;
     private MenuFlyoutItem? _sourceCopyItem;
     private MenuFlyoutItem? _previewCopyItem;
 
     // Items that need a document with something in it.
     private readonly List<MenuFlyoutItem> _contentItems = [];
+
+    // Items that change the document, grayed on a read-only one. The write would be turned
+    // away there anyway; graying says so before the click rather than after it. An item can be
+    // in both lists, and then it needs both answers.
+    private readonly List<MenuFlyoutItem> _writingItems = [];
 
     /// <summary>
     /// The spelling suggestions, built once and relabelled per click.
@@ -152,14 +161,25 @@ public sealed partial class MainWindow
             ? BuildSourceMenu()
             : BuildPreviewMenu();
 
+        bool writable = !ViewModel.ActiveTabIsReadOnly;
+
+        foreach (MenuFlyoutItem item in _writingItems)
+        {
+            item.IsEnabled = writable;
+        }
+
         foreach (MenuFlyoutItem item in _contentItems)
         {
-            item.IsEnabled = ViewModel.HasContent;
+            item.IsEnabled = ViewModel.HasContent && (writable || !_writingItems.Contains(item));
         }
 
         if (e.Pane == EditorPane.Source)
         {
-            if (_cutItem is not null) { _cutItem.IsEnabled = e.HasSelection; }
+            // Grayed on a read-only document as the Edit menu's Cut is, though the command
+            // itself would degrade to a copy. Copy is right beside it for that.
+            if (_cutItem is not null) { _cutItem.IsEnabled = e.HasSelection && writable; }
+            if (_undoItem is not null) { _undoItem.IsEnabled = ViewModel.CanUndo; }
+            if (_redoItem is not null) { _redoItem.IsEnabled = ViewModel.CanRedo; }
             if (_sourceCopyItem is not null) { _sourceCopyItem.IsEnabled = e.HasSelection; }
 
             FitSpellingItems(e.Spelling);
@@ -481,7 +501,7 @@ public sealed partial class MainWindow
             // would be answering for whatever the slot held when the menu was built.
             suggestion.Click += OnSuggestionClick;
 
-            _suggestionItems[i] = suggestion;
+            _suggestionItems[i] = Writes(suggestion);
             menu.Items.Add(suggestion);
         }
 
@@ -499,6 +519,7 @@ public sealed partial class MainWindow
         };
 
         _deleteRepeatedItem.Click += (_, _) => DeleteRepeatedWord();
+        Writes(_deleteRepeatedItem);
 
         _addToDictionaryItem = new MenuFlyoutItem
         {
@@ -531,24 +552,24 @@ public sealed partial class MainWindow
 
             suggestion.Click += OnLinkSuggestionClick;
 
-            _linkSuggestionItems[i] = suggestion;
+            _linkSuggestionItems[i] = Writes(suggestion);
             menu.Items.Add(suggestion);
         }
 
         // What is offered for a picture that will not appear. None of these is a guess at what the
         // author meant - the address is exactly what they meant - so they are actions rather than
         // suggestions, and they are built once and shown as the kind under the pointer warrants.
-        _copyImageInItem = LinkAction("Copy it in", () => ViewModel.CopyBlockedImageInAsync(_clickedLink!.Value));
+        _copyImageInItem = Writes(LinkAction("Copy it in", () => ViewModel.CopyBlockedImageInAsync(_clickedLink!.Value)));
         _openImageItem = LinkAction("Open in browser", () => ViewModel.OpenBlockedImageAsync(_clickedLink!.Value));
-        _demoteImageItem = LinkAction(
+        _demoteImageItem = Writes(LinkAction(
             "Make this a link instead",
-            () => ViewModel.DemoteBlockedImageToLinkAsync(_clickedLink!.Value));
-        _replaceImageItem = LinkAction(
+            () => ViewModel.DemoteBlockedImageToLinkAsync(_clickedLink!.Value)));
+        _replaceImageItem = Writes(LinkAction(
             "Replace with a file...",
-            () => ViewModel.ReplaceBlockedImageAsync(_clickedLink!.Value));
-        _pasteOverImageItem = LinkAction(
+            () => ViewModel.ReplaceBlockedImageAsync(_clickedLink!.Value)));
+        _pasteOverImageItem = Writes(LinkAction(
             "Paste image over it",
-            () => ViewModel.PasteOverBlockedImageAsync(_clickedLink!.Value));
+            () => ViewModel.PasteOverBlockedImageAsync(_clickedLink!.Value)));
 
         _copyImageAddressItem = new MenuFlyoutItem
         {
@@ -578,14 +599,18 @@ public sealed partial class MainWindow
         };
 
         _removeLinkItem.Click += (_, _) => RemoveClickedLink();
+        Writes(_removeLinkItem);
 
         _linkSeparator = new MenuFlyoutSeparator { Visibility = Visibility.Collapsed };
 
         menu.Items.Add(_removeLinkItem);
         menu.Items.Add(_linkSeparator);
 
-        menu.Items.Add(Edit("Undo", "undo", "Ctrl+Z"));
-        menu.Items.Add(Edit("Redo", "redo", "Ctrl+Y"));
+        _undoItem = Edit("Undo", "undo", "Ctrl+Z");
+        _redoItem = Edit("Redo", "redo", "Ctrl+Y");
+
+        menu.Items.Add(_undoItem);
+        menu.Items.Add(_redoItem);
         menu.Items.Add(new MenuFlyoutSeparator());
 
         _cutItem = Edit("Cut", "cut", "Ctrl+X");
@@ -593,19 +618,19 @@ public sealed partial class MainWindow
 
         menu.Items.Add(_cutItem);
         menu.Items.Add(_sourceCopyItem);
-        menu.Items.Add(Edit("Paste", "paste", "Ctrl+V"));
+        menu.Items.Add(Writes(Edit("Paste", "paste", "Ctrl+V")));
 
         // Paste already takes an image when there is one, so this is the same command under a
         // name that says so. It exists because "Paste" alone gives no hint that a screenshot is
         // something the app will do anything sensible with, and it is shown only when there
         // really is one - an item that does nothing is worse than no item.
-        _pasteImageItem = Edit("Paste Image", "paste", string.Empty);
+        _pasteImageItem = Writes(Edit("Paste Image", "paste", string.Empty));
         menu.Items.Add(_pasteImageItem);
         menu.Items.Add(NeedsContent(Edit("Select All", "selectAll", "Ctrl+A")));
         menu.Items.Add(new MenuFlyoutSeparator());
 
         menu.Items.Add(NeedsContent(Edit("Find...", "find", "Ctrl+F")));
-        menu.Items.Add(NeedsContent(Edit("Replace...", "replace", "Ctrl+H")));
+        menu.Items.Add(Writes(NeedsContent(Edit("Replace...", "replace", "Ctrl+H"))));
         menu.Items.Add(NeedsContent(Edit("Go to Line...", "gotoLine", "Ctrl+G")));
         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -629,7 +654,7 @@ public sealed partial class MainWindow
         };
 
         format.Click += (_, _) => ViewModel.FormatDocumentCommand.Execute(null);
-        menu.Items.Add(NeedsContent(format));
+        menu.Items.Add(Writes(NeedsContent(format)));
 
         _renumberListItem = new MenuFlyoutItem
         {
@@ -638,7 +663,7 @@ public sealed partial class MainWindow
         };
 
         _renumberListItem.Click += (_, _) => ViewModel.RenumberListCommand.Execute(null);
-        menu.Items.Add(_renumberListItem);
+        menu.Items.Add(Writes(_renumberListItem));
 
         _sourceMenu = menu;
         return menu;
@@ -814,6 +839,12 @@ public sealed partial class MainWindow
     private MenuFlyoutItem NeedsContent(MenuFlyoutItem item)
     {
         _contentItems.Add(item);
+        return item;
+    }
+
+    private MenuFlyoutItem Writes(MenuFlyoutItem item)
+    {
+        _writingItems.Add(item);
         return item;
     }
 
