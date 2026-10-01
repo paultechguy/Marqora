@@ -1492,8 +1492,8 @@
                 <StackPanel x:Name="FileActionsGroup" Orientation="Horizontal" Spacing="2">
                     <Button Style="{StaticResource MqToolButtonStyle}"
                             Command="{x:Bind ViewModel.OpenCommand}"
-                            ToolTipService.ToolTip="Open a file (Ctrl+O)"
-                            AutomationProperties.Name="Open file">
+                            ToolTipService.ToolTip="Open files (Ctrl+O)"
+                            AutomationProperties.Name="Open files">
                         <FontIcon Glyph="&#xE8E5;" Style="{StaticResource MqIconStyle}" />
                     </Button>
 

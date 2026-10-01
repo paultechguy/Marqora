@@ -1172,14 +1172,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // ------------------------------------------------------------------ opening
 
+    /// <summary>
+    /// File, Open. One file takes the route it always has; several are sorted by name, so the
+    /// first by name is the tab that ends active as it is for Open Folder, and then opened the
+    /// way a drop of the same files would be.
+    /// </summary>
     [RelayCommand]
     private async Task OpenAsync()
     {
-        string? path = await _fileDialogs.PickOpenFileAsync().ConfigureAwait(true);
+        IReadOnlyList<string> paths = await _fileDialogs.PickOpenFilesAsync().ConfigureAwait(true);
 
-        if (!string.IsNullOrWhiteSpace(path))
+        if (paths.Count == 1)
         {
-            await OpenPathAsync(path).ConfigureAwait(true);
+            await OpenPathAsync(paths[0]).ConfigureAwait(true);
+        }
+        else if (paths.Count > 1)
+        {
+            await OpenSeveralAsync(
+                [.. paths.OrderBy(Path.GetFileName, StringComparer.CurrentCultureIgnoreCase)],
+                picked: true).ConfigureAwait(true);
         }
 
         // On a cancelled picker too: nothing opened, but the menu that was walked to get
@@ -1264,9 +1275,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Opens a batch of files, keeping the first one active. Without that the last file
     /// opened would win, which is not what a folder full of documents should land on.
     /// </summary>
-    private async Task OpenManyAsync(IReadOnlyList<string> paths, string status)
+    /// <returns>The paths that could not be read, which the batch went on without.</returns>
+    private async Task<IReadOnlyList<string>> OpenManyAsync(IReadOnlyList<string> paths, string status)
     {
         Guid firstId = Guid.Empty;
+        List<string> skipped = [];
 
         try
         {
@@ -1289,6 +1302,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 {
                     // One unreadable file should not abandon the rest of the batch.
                     _logger.LogWarning(ex, "Skipped {Path} while opening a batch.", path);
+                    skipped.Add(path);
                 }
             }
         }
@@ -1308,6 +1322,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // above, and the whole point of that activation is that the first file is the one
         // the keyboard should land in. See OpenPathAsync for why this is needed at all.
         RestoreDocumentFocusAfterChrome();
+
+        return skipped;
     }
 
     /// <summary>
@@ -1499,10 +1515,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Opens everything supported in a drop, each in its own tab. A dropped folder is
     /// expanded the same way File, Open Folder expands one, so both gestures agree.
     /// </summary>
-    public async Task OpenDroppedAsync(IReadOnlyList<string> paths)
+    public Task OpenDroppedAsync(IReadOnlyList<string> paths)
     {
         IsDragOver = false;
 
+        return OpenSeveralAsync(paths, picked: false);
+    }
+
+    /// <summary>
+    /// What a drop and a several-file Open have in common: each path is sorted into what it
+    /// is - a folder, a Folio, a review page, a document - and what is left is opened as one
+    /// batch, asking first above <see cref="ManyFilesThreshold"/>.
+    ///
+    /// The two differ only in what they say. A drop skips an unreadable file quietly, while a
+    /// picked one is named afterwards, because a person who chose each file by hand would
+    /// otherwise be left looking for a tab that never opened.
+    /// </summary>
+    private async Task OpenSeveralAsync(IReadOnlyList<string> paths, bool picked)
+    {
         List<string> supported = [];
         string? legacyReview = null;
 
@@ -1558,8 +1588,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             await _dialogs.ShowMessageAsync(
                 "Nothing to open",
                 "Marqora opens markdown files: " + string.Join(", ", MarkdownFileTypes.Extensions)
-                + "\n\nA dropped folder is searched for "
-                + string.Join(", ", MarkdownFileTypes.FolderExtensions) + " files.")
+                + (picked
+                    ? string.Empty
+                    : "\n\nA dropped folder is searched for "
+                      + string.Join(", ", MarkdownFileTypes.FolderExtensions) + " files."))
                 .ConfigureAwait(true);
             return;
         }
@@ -1568,7 +1600,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             ConfirmResult confirm = await _dialogs.ConfirmAsync(
                 "Open every file?",
-                $"That drop contains {supported.Count} markdown files. "
+                $"That {(picked ? "selection" : "drop")} contains {supported.Count} markdown files. "
                 + "Opening them all will create that many tabs.",
                 primaryText: $"Open all {supported.Count}").ConfigureAwait(true);
 
@@ -1582,7 +1614,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ? $"Opened {Path.GetFileName(supported[0])}"
             : $"Opened {supported.Count} files";
 
-        await OpenManyAsync(supported, status).ConfigureAwait(true);
+        IReadOnlyList<string> skipped = await OpenManyAsync(supported, status).ConfigureAwait(true);
+
+        if (picked && skipped.Count > 0)
+        {
+            StatusText = $"Opened {supported.Count - skipped.Count} of {supported.Count} files";
+
+            // One message for the lot, after the batch, so a locked file does not stop the
+            // rest opening while its dialog waits.
+            await _dialogs.ShowMessageAsync(
+                skipped.Count == 1 ? "Could not open a file" : $"Could not open {skipped.Count} files",
+                "These could not be read, so they were not opened:\n\n"
+                + string.Join("\n", skipped.Select(Path.GetFileName)))
+                .ConfigureAwait(true);
+        }
 
         if (legacyReview is not null)
         {

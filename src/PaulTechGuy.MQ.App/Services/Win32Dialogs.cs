@@ -22,6 +22,7 @@ internal static class Win32Dialogs
     private const uint FOS_STRICTFILETYPES = 0x00000004;
     private const uint FOS_PICKFOLDERS = 0x00000020;
     private const uint FOS_FORCEFILESYSTEM = 0x00000040;
+    private const uint FOS_ALLOWMULTISELECT = 0x00000200;
     private const uint FOS_PATHMUSTEXIST = 0x00000800;
     private const uint FOS_FILEMUSTEXIST = 0x00001000;
 
@@ -46,6 +47,65 @@ internal static class Win32Dialogs
             SetFilters(dialog, extensions, includeAllFiles: true, filterLabel);
 
             return Show(dialog, owner);
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(dialog);
+        }
+    }
+
+    /// <summary>
+    /// Shows the Open dialog with several files allowed. Returns an empty list when the user
+    /// cancels. The order is the dialog's, which is not the order they were clicked in.
+    /// </summary>
+    public static IReadOnlyList<string> OpenFiles(
+        IntPtr owner,
+        string title,
+        IReadOnlyList<string> extensions,
+        string filterLabel = "Markdown")
+    {
+        var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
+
+        try
+        {
+            dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST | FOS_ALLOWMULTISELECT);
+            dialog.SetTitle(title);
+            SetFilters(dialog, extensions, includeAllFiles: true, filterLabel);
+
+            if (!ShowModal(dialog, owner))
+            {
+                return [];
+            }
+
+            // GetResult answers only for a single selection and fails on several; GetResults
+            // answers for both.
+            dialog.GetResults(out IShellItemArray items);
+
+            try
+            {
+                items.GetCount(out uint count);
+                List<string> paths = new((int)count);
+
+                for (uint i = 0; i < count; i++)
+                {
+                    items.GetItemAt(i, out IShellItem item);
+
+                    try
+                    {
+                        paths.Add(PathOf(item));
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(item);
+                    }
+                }
+
+                return paths;
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(items);
+            }
         }
         finally
         {
@@ -188,11 +248,31 @@ internal static class Win32Dialogs
     /// <summary>Runs the dialog modally and reads the chosen path back.</summary>
     private static string? Show(IFileDialog dialog, IntPtr owner)
     {
+        if (!ShowModal(dialog, owner))
+        {
+            return null;
+        }
+
+        dialog.GetResult(out IShellItem item);
+
+        try
+        {
+            return PathOf(item);
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(item);
+        }
+    }
+
+    /// <summary>Runs the dialog modally. False when the user cancels.</summary>
+    private static bool ShowModal(IFileDialog dialog, IntPtr owner)
+    {
         int hr = dialog.Show(owner);
 
         if (hr == ERROR_CANCELLED)
         {
-            return null;
+            return false;
         }
 
         if (hr < 0)
@@ -200,24 +280,20 @@ internal static class Win32Dialogs
             Marshal.ThrowExceptionForHR(hr);
         }
 
-        dialog.GetResult(out IShellItem item);
+        return true;
+    }
+
+    private static string PathOf(IShellItem item)
+    {
+        item.GetDisplayName(SIGDN_FILESYSPATH, out IntPtr buffer);
 
         try
         {
-            item.GetDisplayName(SIGDN_FILESYSPATH, out IntPtr buffer);
-
-            try
-            {
-                return Marshal.PtrToStringUni(buffer);
-            }
-            finally
-            {
-                Marshal.FreeCoTaskMem(buffer);
-            }
+            return Marshal.PtrToStringUni(buffer) ?? string.Empty;
         }
         finally
         {
-            Marshal.ReleaseComObject(item);
+            Marshal.FreeCoTaskMem(buffer);
         }
     }
 
@@ -310,7 +386,7 @@ internal static class Win32Dialogs
         new void SetFilter(IntPtr pFilter);
 
         // IFileOpenDialog
-        void GetResults(out IntPtr ppenum);
+        void GetResults(out IShellItemArray ppenum);
         void GetSelectedItems(out IntPtr ppsai);
     }
 
@@ -364,5 +440,18 @@ internal static class Win32Dialogs
 
         void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
         void Compare(IShellItem psi, uint hint, out int piOrder);
+    }
+
+    [ComImport, Guid("b63ea76d-1f85-456f-a19c-48159efa858b"),
+     InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemArray
+    {
+        void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppvOut);
+        void GetPropertyStore(int flags, ref Guid riid, out IntPtr ppv);
+        void GetPropertyDescriptionList(IntPtr keyType, ref Guid riid, out IntPtr ppv);
+        void GetAttributes(int attribFlags, uint sfgaoMask, out uint psfgaoAttribs);
+        void GetCount(out uint pdwNumItems);
+        void GetItemAt(uint dwIndex, out IShellItem ppsi);
+        void EnumItems(out IntPtr ppenumShellItems);
     }
 }

@@ -46,3 +46,11 @@ routing` becomes `Pipeline routing`, and `Phase 1 — Prep` keeps its name. A do
 ordinary count already explains is read exactly as before, and a run like `### 2.4 Spring`,
 `### 2.5 Summer` still stays a list of versions. The confirmation also stopped counting headings
 with no number at all among the ones it calls years or quantities.
+
+**File > Open takes several files at once.** The Open dialog used to accept only one file, so
+opening a handful meant going back to it for each, or dragging them in from Explorer instead. It
+now takes as many as you select with Ctrl+click or Shift+click. They open in tabs sorted by name,
+with the first one active, and more than 25 asks first, as Open Folder and a drop already do. If
+some of them cannot be read, the rest still open, and one message afterwards names the ones
+that did not. A Folio is still unpacked on its own - picked together with other files, the
+Folio is unpacked and the others are ignored, so open them separately.

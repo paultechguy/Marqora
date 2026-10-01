@@ -221,6 +221,10 @@ this window unpacks it into the documents it was made from.
 > A Folio is the only export that takes more than the document in front of you — and the only
 > one you can drop back on this window to get those documents back.
 
+> [!NOTE]
+> A Folio is unpacked on its own. Drop or open it together with other files and only the Folio
+> is unpacked — the other files are ignored, so open them separately.
+
 One kind of leaving is not an export at all: Markdown pasted into a pull request, a wiki or an
 issue, where nothing will number your headings on the way. The numbers Marqora draws from
 `View > Heading Numbers` are never written to your file, so `Tools > Number Sections...` is the

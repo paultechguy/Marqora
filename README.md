@@ -222,7 +222,12 @@ The rest of this section covers each of these in detail.
 
 **Opening documents**
 
-- File menu, `Ctrl+O`, or drag files onto the window — each opens in its own tab
+- File menu, `Ctrl+O`, or drag files onto the window — each opens in its own tab. The Open
+  dialog takes several files at once (Ctrl+click or Shift+click); they open sorted by name,
+  leaving the first one active, and any that cannot be read are named afterwards
+- A Folio among the files you pick or drop is unpacked, and **everything else in that pick or
+  drop is ignored** — the Folio is taken as the whole of what you meant. Open the other files
+  separately, before or after. Only one Folio is unpacked at a time
 - **`File > Open Folder...` (`Ctrl+Shift+O`)** opens every markdown file in a folder, one per
   tab, sorted by name and leaving the first one active. Dropping a folder does the same
 - Dropping onto the preview works too, by a different route (see Architecture)
@@ -695,6 +700,8 @@ smaller, which is off by default and names every picture it would touch before t
 display, so a reader sees an ordinary web page — but `Tools > Open Folio...`, or dropping that
 same file onto the window, unpacks it back into the documents and images it was made from. One
 artifact for both audiences: it does not matter which of the people you send it to have Marqora.
+A Folio is unpacked on its own: picked or dropped together with other files, the Folio is
+unpacked and the other files are ignored.
 
 None of this goes near the network. A Folio is a file, and sharing it is whatever you already
 do with files.

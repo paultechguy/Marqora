@@ -6,7 +6,11 @@ namespace PaulTechGuy.MQ.Abstractions.Ui;
 /// <summary>Wraps the WinUI file pickers so view models stay free of window handles.</summary>
 public interface IFileDialogService
 {
-    Task<string?> PickOpenFileAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Open dialog for documents, with several files allowed. Empty when the user cancels.
+    /// The order is the dialog's own, so a caller that cares about order sorts.
+    /// </summary>
+    Task<IReadOnlyList<string>> PickOpenFilesAsync(CancellationToken cancellationToken = default);
 
     Task<string?> PickSaveFileAsync(string? suggestedFileName = null, CancellationToken cancellationToken = default);
 
@@ -36,7 +40,7 @@ public interface IFileDialogService
     /// <summary>
     /// Open dialog for a file that is not a document: a preferences file to import.
     ///
-    /// Separate from <see cref="PickOpenFileAsync"/> rather than a parameter on it, because
+    /// Separate from <see cref="PickOpenFilesAsync"/> rather than a parameter on it, because
     /// that one carries the markdown types and the recent-file behavior that go with opening
     /// a document, and neither applies to a file the app reads once and forgets.
     /// </summary>

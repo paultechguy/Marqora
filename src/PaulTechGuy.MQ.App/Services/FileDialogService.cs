@@ -21,22 +21,24 @@ namespace PaulTechGuy.MQ.App.Services;
 /// </summary>
 public sealed class FileDialogService(WindowContext window, ILogger<FileDialogService> logger) : IFileDialogService
 {
-    public Task<string?> PickOpenFileAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> PickOpenFilesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            string? path = Win32Dialogs.OpenFile(
+            IReadOnlyList<string> paths = Win32Dialogs.OpenFiles(
                 RequireOwner(),
-                "Open a markdown file",
+                "Open markdown files",
                 MarkdownFileTypes.Extensions);
 
-            logger.LogInformation("Open dialog returned {Result}.", path ?? "(cancelled)");
-            return Task.FromResult(path);
+            logger.LogInformation(
+                "Open dialog returned {Result}.",
+                paths.Count == 0 ? "(cancelled)" : string.Join("; ", paths));
+            return Task.FromResult(paths);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "The open dialog failed.");
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<IReadOnlyList<string>>([]);
         }
     }
 
