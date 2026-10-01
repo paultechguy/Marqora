@@ -9070,10 +9070,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// releases page, and it is written on a fresh install and after an update as well as
     /// when a reminder appears. What it can say honestly is when the next one is due.
     ///
+    /// Every form ends by saying where the interval is changed. The status bar reminder has no
+    /// room for that, so this is the place it is said beside the reminder itself.
+    ///
     /// A plain property rather than an observable one - the About box reads it once, as it
     /// reads the runtime and the folder paths beside it.
     /// </summary>
-    public string UpdateSummary
+    public string UpdateSummary => $"{UpdateSchedule} (set in Preferences, Advanced)";
+
+    /// <summary>The interval and when the next reminder is due, for <see cref="UpdateSummary"/>.</summary>
+    private string UpdateSchedule
     {
         get
         {
