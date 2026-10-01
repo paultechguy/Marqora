@@ -42,6 +42,17 @@ A file Windows would run as a program - an `.exe`, a script, a shortcut - always
 To have links to other files shown in their folder instead of opened, use **Preferences >
 Preview > Links**.
 
+## Link to a heading without typing its anchor
+
+Press `Ctrl+R`, choose **Insert > Reference to Heading...**, or right-click in the source pane and
+choose **Insert Reference...** to link to one of the document's own headings. Type to filter the headings, then click one or press Enter. Choose
+**Name** to write the heading's words, `[Installing the app](#installing-the-app)`, or
+**Number** to write its section number, `[2.3](#installing-the-app)`. If text is selected, it
+stays and becomes the link: `[the setup steps](#installing-the-app)`. A number is written as it
+reads when you insert it and does not follow the heading if sections are added above it later;
+the link itself still goes to the right heading, and a link whose heading has been renamed or
+removed is flagged like any other dead link.
+
 ## Fixes
 
 **Side-by-side view keeps the line you are editing in view.** The preview used to line up only

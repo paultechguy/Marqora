@@ -688,6 +688,36 @@
     Silent when the caret is on neither. There is nothing to offer, and a menu saying so is the
     sort of box that has to be dismissed for no reason.
   */
+  /*
+    Insert Reference from the keyboard (Ctrl+R) or the Insert menu: the host's heading picker
+    goes up just below the caret, the way the fix menu above does on Ctrl+. - a right-click
+    brings its own point, these two do not. Whether text is selected travels with it, since that
+    decides whether the picker offers Name and Number or says the selection becomes the link.
+
+    Silent in Preview view, where there is no caret on screen to put anything at. The host makes
+    the rest of the decision - a read-only tab, a document with no headings - because it owns
+    those facts.
+  */
+  function requestReferenceAtCaret() {
+    var editor = state.editor;
+    var model = editor && editor.getModel();
+
+    if (!model || state.viewMode === 'Preview') { return; }
+
+    var position = editor.getPosition();
+    var visible = position && editor.getScrolledVisiblePosition(position);
+
+    if (!visible) { return; }
+
+    var host = els.monacoHost.getBoundingClientRect();
+
+    post('referenceRequested', {
+      x: Math.round(host.left + visible.left),
+      y: Math.round(host.top + visible.top + visible.height),
+      hasSelection: paneHasSelection('Source')
+    });
+  }
+
   function openFixMenuAtCaret() {
     var editor = state.editor;
     var model = editor && editor.getModel();
@@ -3805,6 +3835,10 @@
     // this side knows where the caret is or what is underlined beneath it.
     { ctrl: true, code: 'Period', run: openFixMenuAtCaret },
 
+    // Insert > Reference to Heading. Answered here for the same reason as Ctrl+. above: the
+    // picker opens at the caret, and only this side knows where that is.
+    { ctrl: true, code: 'KeyR', run: requestReferenceAtCaret },
+
     /*
       Zoom, answered here rather than by the host: the panes are this file's to scale, and
       the host is told afterwards so the size is remembered. Both the main row and the
@@ -6368,6 +6402,34 @@
       if (state.viewMode === 'Preview') { post('command', { name: 'showSource' }); }
 
       insertAtCursor(p.text || '');
+    },
+
+    /*
+      Insert Reference from the source pane's menu. The host sends the finished link for the
+      caret case; with a selection, the selected words are kept as the link's text and only the
+      anchor comes from the host. Decided here, at the edit, because this is where the selection
+      actually is - the host only heard about it at the right-click.
+
+      The selection goes in as written rather than escaped: it is already markdown, the author's
+      own, and escaping it would change what it says.
+    */
+    // The Insert menu's route to the picker. Answered with referenceRequested, as Ctrl+R is.
+    requestReference: function () {
+      requestReferenceAtCaret();
+    },
+
+    insertReference: function (p) {
+      var editor = state.editor;
+      var model = editor && editor.getModel();
+      var selection = editor && editor.getSelection();
+
+      if (!model || !selection || !p.slug) { return; }
+
+      var text = selection.isEmpty()
+        ? (p.link || '')
+        : '[' + model.getValueInRange(selection) + '](#' + p.slug + ')';
+
+      insertAtCursor(text);
     },
 
     resetSplitter: function () {

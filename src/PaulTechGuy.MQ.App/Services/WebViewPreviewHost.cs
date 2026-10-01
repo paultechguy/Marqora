@@ -143,6 +143,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler<PaneContextMenuEventArgs>? ContextMenuRequested;
 
+    public event EventHandler<ReferenceRequestedEventArgs>? ReferenceRequested;
+
     /// <summary>
     /// Ctrl+V arrived with an image on the clipboard and the shell stood down for it.
     ///
@@ -1187,6 +1189,11 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public Task InsertTextAsync(string text) => SendAsync("insertText", new { text });
 
+    public Task InsertReferenceAsync(string link, string slug) =>
+        SendAsync("insertReference", new { link, slug });
+
+    public Task RequestReferenceAsync() => SendAsync("requestReference", new { });
+
     public Task SetSplitterPositionAsync(double position) =>
         SendAsync("setSplitterPosition", new { position });
 
@@ -1639,6 +1646,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             // which is the whole reason the message carries nothing.
             case "imagePaste":
                 ImagePasteRequested?.Invoke(this, EventArgs.Empty);
+                break;
+
+            case "referenceRequested":
+                ReferenceRequested?.Invoke(this, new ReferenceRequestedEventArgs(
+                    ReadDouble(payload, "x", 0),
+                    ReadDouble(payload, "y", 0),
+                    ReadBool(payload, "hasSelection", false)));
                 break;
 
             case "paneFocused":

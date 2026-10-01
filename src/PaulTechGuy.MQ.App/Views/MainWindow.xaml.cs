@@ -620,6 +620,17 @@ public sealed partial class MainWindow : Window
         Add((VirtualKey)221, ctrlShift, () => RunMarkdown("HeadingIncrease"));
         Add((VirtualKey)219, ctrlShift, () => RunMarkdown("HeadingDecrease"));
 
+        // Insert > Reference to Heading, for when the chrome holds focus; the webshell answers
+        // Ctrl+R itself while the caret is in the editor. R for reference, beside Ctrl+Shift+R.
+        // Stands down in a text box, like the Format keys: the picker's own filter box is one.
+        Add(VirtualKey.R, ctrl, () =>
+        {
+            if (!IsTextInputFocused())
+            {
+                ViewModel.RequestReferenceCommand.Execute(null);
+            }
+        });
+
         // List depth. 221 is VK_OEM_6 and 219 VK_OEM_4, which are ] and [ on a US layout and
         // whatever those keys carry elsewhere - the same pair the heading levels above use with
         // Shift. Tab and Shift+Tab do this as well, but only inside the editor: Tab is the focus
@@ -753,6 +764,7 @@ public sealed partial class MainWindow : Window
             _previewHost.PaneFocused += OnPaneFocused;
             _previewHost.ViewportLineChanged += OnViewportLineChanged;
             _previewHost.ContextMenuRequested += OnContextMenuRequested;
+            _previewHost.ReferenceRequested += OnReferenceRequested;
             _previewHost.DiagramActivated += OnDiagramActivated;
             _previewHost.DiagramUpdated += OnDiagramUpdated;
             _previewHost.DiagramRemoved += OnDiagramRemoved;

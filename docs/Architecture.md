@@ -120,12 +120,13 @@ host -> shell   openTab, activateTab, closeTab, updatePreview, setTabText, clear
                 setViewMode, setTheme, setZoom, setScrollSync, setWordWrap,
                 setLineNumbers, setShowWhitespace, setWrapGlyph, setSplitterPosition,
                 scrollToLine, focusPane, editorCommand, requestSelection, insertText,
-                replaceText, requestEditContext, applyEdits,
+                insertReference, requestReference, replaceText, requestEditContext, applyEdits,
                 setDiagnostics, clearDiagnostics, setSpelling, clearSpelling,
                 setLinkFindings, clearLinkFindings, setLinkTargets,
                 setReview, revealComment, captureComment, requestReviewHtml
 shell -> host   ready, editorTextChanged, zoomChanged, splitterMoved, linkActivated,
-                command, paneFocused, stats, selectionCopied, contextMenu, imagePaste,
+                command, paneFocused, stats, selectionCopied, contextMenu, referenceRequested,
+                imagePaste,
                 editContext, caretState, log, commentRequested, commentActivated,
                 reviewHtml
 ```

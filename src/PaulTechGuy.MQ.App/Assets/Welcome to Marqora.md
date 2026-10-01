@@ -119,6 +119,11 @@ jump to it. The color says what kind of mark it is:
 Those four are Marqora's own. The editor adds ticks of its own too — for find matches while
 `Ctrl+F` is open, and for the other places the word at the cursor appears.
 
+**Links go where they point.** Click a link in the preview to a file beside your document and
+it opens: a Markdown document in a tab of its own, at the heading the link names, and anything
+else in the app Windows uses for it. A link to a file that is not there says so, and one to a
+program asks before anything runs.
+
 **Find All.** `Ctrl+Shift+F` answers "where does this appear?" in one window: every match at
 once, across every open document, grouped by the file it came from. Select a row and the
 source pane switches tabs, scrolls to the line and selects the text. `F3` and `Shift+F3` walk
@@ -135,9 +140,15 @@ highlights whichever section you are reading — the caret's in the source pane,
 page in preview. Click one, or walk them with the arrow keys, and both panes move together.
 Type in the box at the top to narrow a long document down to the headings you meant.
 
-`Alt+4` shows and hides it. Once it is open, `Alt+Shift+4` is the way to it and back again,
-and `Escape` returns you to the text without closing it. This page is long enough to be worth
-trying it on.
+`Alt+4` shows and hides it, and so does the button at the end of its filter row; hidden, it
+leaves a narrow strip at the edge of the window that brings it back. Once it is open,
+`Alt+Shift+4` is the way to it and back again, and `Escape` returns you to the text without
+closing it. This page is long enough to be worth trying it on.
+
+The same headings are a keystroke away while you write. Press `Ctrl+R` in the source pane — or
+use **Insert > Reference to Heading...**, or right-click and choose **Insert Reference...** — pick
+a heading, and Marqora writes the link to it, by its words or by its section number. Select some
+text first and that text becomes the link instead.
 
 ---
 
@@ -250,6 +261,10 @@ it go. The passage is highlighted in teal and numbered, the numbers run down the
 order, and pointing at a comment lights its card, and the other way round. **Double-click** a
 comment in the page to edit it.
 
+A diagram has no text to select, so it takes a comment another way: right-click it and choose
+**Comment on Diagram...**, or point at it and click the button in its corner. The comment is
+about the whole diagram.
+
 A comment can carry a little formatting, written the way the preview reads it or put on the
 selected words with a key:
 
@@ -335,7 +350,7 @@ page whenever you want it.
 | Command                   | Keys                             | Command                        | Keys                            |
 | ------------------------- | -------------------------------- | ------------------------------ | ------------------------------- |
 | Open                      | `Ctrl+O`                         | Bold / italic                  | `Ctrl+B` / `Ctrl+I`             |
-| Open folder               | `Ctrl+Shift+O`                   | Link                           | `Ctrl+K`                        |
+| Open folder               | `Ctrl+Shift+O`                   | Link / link to a heading       | `Ctrl+K` / `Ctrl+R`             |
 | Save / Save all           | `Ctrl+S` / `Ctrl+Shift+S`        | Format document                | `Shift+Alt+F`                   |
 | New / close / reopen tab  | `Ctrl+N` `Ctrl+W` `Ctrl+Shift+T` | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
 | Source / split / preview  | `Alt+1` `Alt+2` `Alt+3`          | Cheatsheet                     | `Ctrl+F1`                       |

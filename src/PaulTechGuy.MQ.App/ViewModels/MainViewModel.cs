@@ -9703,6 +9703,87 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             : "Could not copy the heading";
     }
 
+    /// <summary>
+    /// Every heading in the active document, for Insert Reference to choose from.
+    ///
+    /// The whole outline rather than <see cref="OutlineRows"/>: those are what the panel's own
+    /// filter and depth limit left standing, and a heading hidden in a panel that may not even
+    /// be open is still a heading somebody can refer to.
+    /// </summary>
+    public IReadOnlyList<OutlineHeading> ActiveOutline =>
+        _workspace.Active is { } document
+        && _outlines.TryGetValue(document.Id, out IReadOnlyList<OutlineHeading>? cached)
+            ? cached
+            : [];
+
+    /// <summary>
+    /// Whether Insert Reference can do anything: the markdown commands apply - a source pane on
+    /// screen, a writable tab, the keyboard not in the outline - and there is a heading to point
+    /// at. The right-click item, the Insert menu item and Ctrl+R all ask this.
+    /// </summary>
+    public bool CanInsertReference => CanFormat && HasOutlineHeadings;
+
+    /// <summary>
+    /// Insert > Reference to Heading: asks the source pane where its caret is, and the picker
+    /// goes up there when the answer arrives as <see cref="IPreviewHost.ReferenceRequested"/>.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanInsertReference))]
+    private Task RequestReferenceAsync() =>
+        _host is not null && CanInsertReference ? _host.RequestReferenceAsync() : Task.CompletedTask;
+
+    /// <summary>
+    /// Keeps <see cref="RequestReferenceCommand"/> in step with the two things it depends on.
+    ///
+    /// Here, once, rather than as an attribute on each of the four properties behind
+    /// <see cref="CanFormat"/> and a call beside the one place that raises
+    /// <see cref="HasOutlineHeadings"/>: CanFormat is also raised by hand when the view mode
+    /// changes, and an attribute list would miss that one.
+    /// </summary>
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+
+        if (e.PropertyName is nameof(CanFormat) or nameof(HasOutlineHeadings))
+        {
+            RequestReferenceCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>
+    /// Puts a link to <paramref name="heading"/> into the source - at the caret, or around the
+    /// selection when there is one, which the editor decides. See
+    /// <see cref="IPreviewHost.InsertReferenceAsync"/>.
+    ///
+    /// <paramref name="byNumber"/> asks for the heading's section number as the link's text. A
+    /// heading with no number is never offered that way, but if one arrives here regardless the
+    /// words are written rather than an empty link - the picker is where that choice is refused,
+    /// not here.
+    /// </summary>
+    public async Task InsertReferenceAsync(OutlineHeading heading, bool byNumber)
+    {
+        ArgumentNullException.ThrowIfNull(heading);
+
+        if (_host is null)
+        {
+            return;
+        }
+
+        string label = byNumber && heading.Number.Length > 0 ? heading.Number : heading.Text;
+
+        await _host.InsertReferenceAsync(HeadingReference.Link(label, heading.Slug), heading.Slug)
+            .ConfigureAwait(true);
+
+        StatusText = $"Inserted a reference to “{heading.Text}”";
+    }
+
+    /// <summary>
+    /// Hands the keyboard back to the source pane after the Insert Reference picker closes,
+    /// whether it inserted or was dismissed: the flyout took focus, and the editor is where the
+    /// right-click came from and where typing should carry on.
+    /// </summary>
+    public Task ReturnToSourceAsync() =>
+        _host?.FocusEditorAsync() ?? Task.CompletedTask;
+
     // ---------------------------------------------------------------- plumbing
 
     /// <summary>

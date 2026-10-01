@@ -99,6 +99,21 @@ public sealed class PaneContextMenuEventArgs(
 }
 
 /// <summary>
+/// Where to put Insert Reference's heading picker when it was asked for from the keyboard or
+/// the Insert menu rather than a right-click: just below the caret, in the WebView's own
+/// coordinates like <see cref="PaneContextMenuEventArgs"/>.
+/// </summary>
+public sealed class ReferenceRequestedEventArgs(double x, double y, bool hasSelection) : EventArgs
+{
+    public double X { get; } = x;
+
+    public double Y { get; } = y;
+
+    /// <summary>Whether text is selected, which is what decides that it becomes the link.</summary>
+    public bool HasSelection { get; } = hasSelection;
+}
+
+/// <summary>
 /// A rendered diagram the pointer was over.
 ///
 /// The markup travels with the click rather than being fetched when an item is chosen, for
@@ -316,6 +331,12 @@ public interface IPreviewHost
 
     /// <summary>Raised when the user right-clicks in either pane.</summary>
     event EventHandler<PaneContextMenuEventArgs>? ContextMenuRequested;
+
+    /// <summary>
+    /// The source pane wants the heading picker for Insert Reference, at the caret: Ctrl+R in
+    /// the editor, or the shell's answer to <see cref="RequestReferenceAsync"/>.
+    /// </summary>
+    event EventHandler<ReferenceRequestedEventArgs>? ReferenceRequested;
 
     /// <summary>
     /// Ctrl+V arrived with an image on the clipboard, and the editor stood down so the host
@@ -620,6 +641,23 @@ public interface IPreviewHost
 
     /// <summary>Inserts text at the caret, replacing any selection.</summary>
     Task InsertTextAsync(string text);
+
+    /// <summary>
+    /// Inserts a reference to a heading in the source pane.
+    ///
+    /// With nothing selected, <paramref name="link"/> goes in at the caret. With a selection,
+    /// the selected text stays and becomes the link's text, pointing at <paramref name="slug"/>
+    /// - so the editor decides which, at the moment of the edit, rather than the host deciding
+    /// from a selection it last heard about at the right-click.
+    /// </summary>
+    Task InsertReferenceAsync(string link, string slug);
+
+    /// <summary>
+    /// Asks the source pane where its caret is and whether anything is selected, for Insert >
+    /// Reference to Heading. The answer comes back through <see cref="ReferenceRequested"/>:
+    /// only the shell knows where the caret is on screen.
+    /// </summary>
+    Task RequestReferenceAsync();
 
     // ------------------------------------------------------------------ export
 

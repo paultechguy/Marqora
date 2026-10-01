@@ -44,6 +44,7 @@ public sealed class OutlineRowViewModel
     {
         ArgumentNullException.ThrowIfNull(heading);
 
+        Heading = heading;
         Level = heading.Level;
         Text = heading.Text;
         Number = heading.Number;
@@ -58,6 +59,12 @@ public sealed class OutlineRowViewModel
         // first when the panel is scanned rather than read.
         Weight = heading.Level == 1 ? FontWeights.SemiBold : FontWeights.Normal;
     }
+
+    /// <summary>
+    /// The heading the row was made from. Insert Reference hands it back to the view model,
+    /// which wants the slug and the number together rather than the row's display strings.
+    /// </summary>
+    public OutlineHeading Heading { get; }
 
     public int Level { get; }
 

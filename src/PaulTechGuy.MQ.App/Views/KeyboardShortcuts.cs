@@ -98,6 +98,7 @@ internal static class KeyboardShortcuts
             new("Strikethrough", "Ctrl+Shift+X"),
             new("Inline code", "Ctrl+`"),
             new("Link", "Ctrl+K"),
+            new("Link to a heading in this document", "Ctrl+R"),
             new("Code block", "Ctrl+Shift+K"),
             new("Blockquote", "Ctrl+Shift+."),
             new("Bullet list", "Ctrl+Shift+8"),

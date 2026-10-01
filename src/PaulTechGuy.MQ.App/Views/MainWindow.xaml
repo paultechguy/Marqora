@@ -923,7 +923,8 @@
                         at the caret. They had grown together into one menu of fourteen items
                         answering two different questions, and the split is along the line the
                         commands themselves already fell on: everything here needs no selection
-                        to mean something, and everything left in Format does.
+                        to mean something, and everything left in Format does. A few will use
+                        one if it is there - Link, Reference to Heading and the callouts.
 
                         Gated once on the MenuBarItem, exactly as Format is, and for the reason
                         given above it - CanExecute owns the items, this owns the menu.
@@ -965,6 +966,17 @@
                                 <FontIcon Glyph="&#xE71B;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+
+                        <!--
+                            The same picker as the source pane's Insert Reference, opened at the
+                            caret. Beside Link because it is one: a link whose target is chosen
+                            from the outline rather than typed. Like the callouts, it uses a
+                            selection when there is one - the selected text becomes the link.
+                        -->
+                        <MenuFlyoutItem Text="Reference to Heading..."
+                                        Command="{x:Bind ViewModel.RequestReferenceCommand}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+R"
+                                        ToolTipService.ToolTip="Link to one of this document's headings, by its name or its number" />
 
                         <MenuFlyoutSeparator />
 
@@ -2279,7 +2291,114 @@
             -->
             <Grid x:Name="PreviewSurface"
                   Grid.Column="2"
-                  Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}" />
+                  Visibility="{x:Bind VisibleWhen(ViewModel.HasDocument), Mode=OneWay}">
+                <!--
+                    Insert Reference's heading picker, raised from the source pane's right-click
+                    menu at the point the menu was. See MainWindow.InsertReference.cs.
+
+                    Declared here rather than built in code with the context menus, because it
+                    wants a row template, and a template is far plainer in XAML. Attached rather
+                    than kept in a resource dictionary so x:Name reaches it - the dictionary is
+                    what MainWindow.ContextMenus.cs could not name into.
+
+                    Not modal, like everything else: a light-dismiss flyout, gone on Escape or a
+                    click anywhere outside it. The presenter restates the tab list's padding and
+                    radius for the reason that one gives - Themes/Menus.xaml styles menus, and
+                    this is not one.
+                -->
+                <FlyoutBase.AttachedFlyout>
+                    <Flyout x:Name="InsertReferenceFlyout"
+                            Placement="BottomEdgeAlignedLeft"
+                            Opened="OnInsertReferenceOpened"
+                            Closed="OnInsertReferenceClosed">
+                        <Flyout.FlyoutPresenterStyle>
+                            <Style TargetType="FlyoutPresenter">
+                                <Setter Property="Padding" Value="8" />
+                                <Setter Property="MinWidth" Value="0" />
+                                <Setter Property="MaxWidth" Value="420" />
+                                <Setter Property="CornerRadius" Value="8" />
+                                <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Disabled" />
+                                <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                                <Setter Property="ScrollViewer.VerticalScrollMode" Value="Disabled" />
+                                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+                            </Style>
+                        </Flyout.FlyoutPresenterStyle>
+
+                        <StackPanel Width="340" Spacing="8">
+                            <TextBox x:Name="ReferenceFilterBox"
+                                     PlaceholderText="Filter headings"
+                                     TextChanged="OnReferenceFilterChanged"
+                                     KeyDown="OnReferenceFilterKeyDown"
+                                     AutomationProperties.Name="Filter headings" />
+
+                            <!--
+                                Whether the link reads as the heading's words or its number. The
+                                same segmented pair as the view switcher, in miniature. Hidden
+                                while text is selected: then the selection is the link's text, and
+                                there is nothing to choose.
+                            -->
+                            <Border x:Name="ReferenceModeSwitcher"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="7"
+                                    Padding="2"
+                                    Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <ToggleButton x:Name="ReferenceByNameSegment"
+                                                  Style="{StaticResource MqSegmentStyle}"
+                                                  Content="Name"
+                                                  Click="OnReferenceModeClick"
+                                                  ToolTipService.ToolTip="Link text is the heading's words" />
+                                    <ToggleButton x:Name="ReferenceByNumberSegment"
+                                                  Style="{StaticResource MqSegmentStyle}"
+                                                  Content="Number"
+                                                  Click="OnReferenceModeClick"
+                                                  ToolTipService.ToolTip="Link text is the heading's section number, as it reads now" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock x:Name="ReferenceSelectionNote"
+                                       Text="The selected text becomes the link."
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <!--
+                                Capped in height so a long document's outline scrolls inside the
+                                flyout rather than running off the window. The row is the outline
+                                panel's, number dimmed, so the two lists read alike.
+                            -->
+                            <ListView x:Name="ReferenceList"
+                                      MaxHeight="360"
+                                      SelectionMode="Single"
+                                      IsItemClickEnabled="True"
+                                      ItemClick="OnReferenceItemClick"
+                                      KeyDown="OnReferenceListKeyDown"
+                                      ContainerContentChanging="OnReferenceContainerChanging"
+                                      ItemContainerStyle="{StaticResource MqListRowStyle}"
+                                      AutomationProperties.Name="Headings">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OutlineRowViewModel">
+                                        <!-- Two runs jammed together, as in the outline panel; see the note there. -->
+                                        <TextBlock Margin="{x:Bind Indent}"
+                                                   FontWeight="{x:Bind Weight}"
+                                                   FontSize="12.5"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTipService.ToolTip="{x:Bind Tooltip}"><Run Text="{x:Bind NumberLabel}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><Run Text="{x:Bind Text}" /></TextBlock>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <TextBlock x:Name="ReferenceEmptyText"
+                                       Text="No headings match."
+                                       FontSize="12"
+                                       Margin="10,4"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Flyout>
+                </FlyoutBase.AttachedFlyout>
+            </Grid>
 
             <!--
                 The comments sidebar, while the document in front is under review.

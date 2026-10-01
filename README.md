@@ -209,7 +209,7 @@ would rather not reach for the mouse.
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
-| 💬  | **Review comments**                      | Comment on a document without changing it, then share one read-only page with your notes in the margin. Drop that page back in later to pick the review up again, pictures and all                                                         |
+| 💬  | **Review comments**                      | Comment on a document without changing it, diagrams included, then share one read-only page with your notes in the margin. Drop that page back in later to pick the review up again, pictures and all                                                         |
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
 | 🌗  | **Light, dark or system**                | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included                                                                                                                                             |
@@ -244,6 +244,24 @@ The rest of this section covers each of these in detail.
 Opening a folder is deliberately **not recursive** — subfolders are ignored, so pointing it
 at a repository does not produce hundreds of tabs. It also skips `.txt`, which is fine to
 open by name but would sweep up unrelated files from a folder. Past 25 files it asks first.
+
+**Links in the preview**
+
+A link in the preview to something on your own disk — `[Merge strategy](MERGE-STRATEGY.md#incident-history)`,
+`../specs/plan.md`, `budget.xlsx` — is opened, not handed to a browser as an address that goes
+nowhere.
+
+| A link to                                       | What happens                                                          |
+| ----------------------------------------------- | --------------------------------------------------------------------- |
+| A markdown document                             | It opens in a tab, or comes forward if already open, at the heading the link names |
+| Any other file — a PDF, a spreadsheet, a picture | It opens in the app Windows uses for it                               |
+| A folder                                        | It opens in Explorer                                                  |
+| A file that is not there                        | A message says so, with the path it was looking for                   |
+| A program — an `.exe`, a script, a shortcut     | Always asks first, because a link's words can say anything            |
+
+`View > Preferences > Preview > Links` can show other files in their folder rather than opening
+them. Markdown documents always open in Marqora, whichever way that is set. Links to the web open
+in your browser as before.
 
 **Tabs**
 
@@ -321,7 +339,7 @@ by level. It is off until you ask for it, and remembered after that.
 
 | Action                                    | How                             |
 | ----------------------------------------- | ------------------------------- |
-| Show or hide the panel                    | `Alt+4`, or `View > Outline`    |
+| Show or hide the panel                    | `Alt+4`, or `View > Outline`. Also the button at the end of the filter row to hide it, and the strip left at the window's edge to bring it back; double-clicking the empty space below the headings, or anywhere on the strip, does the same |
 | Go to the panel, and back again           | `Alt+Shift+4`                   |
 | Jump to a heading, staying in the panel   | ↑ / ↓, or a single click        |
 | Jump to a heading and start editing there | `Enter`, or a double-click      |
@@ -457,6 +475,7 @@ The `Format` menu applies markdown constructs so you do not have to type the pun
 | Command                                        | Shortcut                        |
 | ---------------------------------------------- | ------------------------------- |
 | Bold / italic / link                           | `Ctrl+B` / `Ctrl+I` / `Ctrl+K`  |
+| Link to a heading in this document             | `Ctrl+R`                        |
 | Inline code                                    | ``Ctrl+` ``                     |
 | Strikethrough                                  | `Ctrl+Shift+X`                  |
 | Code block                                     | `Ctrl+Shift+K`                  |
@@ -476,6 +495,17 @@ numbers and headings replaces the marker rather than stacking a second one in fr
 `Ctrl+K` uses whatever is selected for the half it can work out: selected text becomes the
 label and leaves `url` selected to type over; a selected URL becomes the destination and puts
 the cursor between the brackets.
+
+A link to a heading in the same document needs no anchor typed by hand. Press `Ctrl+R`, choose
+**Insert > Reference to Heading...**, or right-click in the source pane and choose **Insert
+Reference...**: a list of the document's headings opens at the caret, or where you clicked,
+narrowed as you type, and picking one writes the link at the caret — **Name** gives
+`[Installing the app](#installing-the-app)`, **Number** gives `[2.3](#installing-the-app)`. With
+text selected, that text stays and becomes the link, `[the setup steps](#installing-the-app)`.
+A number is written as it reads at that moment: section numbers belong to the preview rather
+than the file, so it does not follow the heading if sections are added above it later. The link
+itself still lands on the right heading, and one whose heading is renamed or removed is
+underlined like any other dead anchor.
 
 Pressing Enter inside a list carries the list on to the next line, numbering as it goes.
 Pressing it on an item you have not written anything in ends the list instead.
@@ -522,10 +552,11 @@ because Open and Save don't belong under "More formatting", but the File menu an
 
 The menu bar splits the same commands a different way, along a line the bar does not draw:
 **Format** marks up text that is already there, and **Insert** (`Alt+I`) puts something new in
-at the caret — an image, a link, a table, a code block, a rule, a diagram or a snippet. Nothing
-in Insert *needs* a selection to mean something and everything in Format does, which is the
-difference the two menus are named for; the five callouts are the one place in Insert that will
-*use* one if it is there, and the section below says what they take. Within each, the order is a
+at the caret — an image, a link, a link to a heading, a table, a code block, a rule, a diagram or
+a snippet. Nothing in Insert *needs* a selection to mean something and everything in Format does,
+which is the difference the two menus are named for. Two places in Insert will *use* one if it is
+there: **Reference to Heading...** makes the selected text the link, and the five callouts take
+what the section below describes. Within each, the order is a
 flat inventory rather than the bar's grouping: that is what you want from the surface you go to
 when you cannot find something on the bar.
 

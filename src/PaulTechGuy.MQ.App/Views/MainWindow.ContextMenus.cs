@@ -119,6 +119,9 @@ public sealed partial class MainWindow
     /// <summary>Shown only when the caret is on a numbered list item.</summary>
     private MenuFlyoutItem? _renumberListItem;
 
+    /// <summary>Enabled only when the document has a heading to refer to.</summary>
+    private MenuFlyoutItem? _insertReferenceItem;
+
     /// <summary>The dead link that was right-clicked, captured for the item handlers.</summary>
     private LinkFindingHit? _clickedLink;
 
@@ -171,6 +174,13 @@ public sealed partial class MainWindow
             // It only sees item lines, so a caret on a continuation line hides the item; the Format
             // menu and Ctrl+Shift+9 still reach the list from there.
             Show(_renumberListItem, ViewModel.IsNumberedListActive);
+
+            // Disabled rather than collapsed: it belongs on every source menu, and a document
+            // with no headings yet is one that will have some. CanInsertReference rather than the
+            // headings alone, so a read-only tab refuses it here as it does on the Insert menu.
+            if (_insertReferenceItem is not null) { _insertReferenceItem.IsEnabled = ViewModel.CanInsertReference; }
+
+            NoteReferenceContext(e);
         }
         else
         {
@@ -598,6 +608,19 @@ public sealed partial class MainWindow
         menu.Items.Add(NeedsContent(Edit("Replace...", "replace", "Ctrl+H")));
         menu.Items.Add(NeedsContent(Edit("Go to Line...", "gotoLine", "Ctrl+G")));
         menu.Items.Add(new MenuFlyoutSeparator());
+
+        // A link to one of the document's own headings, at the caret or around the selection.
+        // Not in _contentItems: a document with headings has content, so the heading test set
+        // per click is the stricter of the two and the only one needed. See
+        // MainWindow.InsertReference.cs.
+        _insertReferenceItem = new MenuFlyoutItem
+        {
+            Text = "Insert Reference...",
+            KeyboardAcceleratorTextOverride = "Ctrl+R",
+        };
+
+        _insertReferenceItem.Click += (_, _) => OpenInsertReference();
+        menu.Items.Add(_insertReferenceItem);
 
         var format = new MenuFlyoutItem
         {
