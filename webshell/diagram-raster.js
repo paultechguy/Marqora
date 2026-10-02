@@ -108,8 +108,8 @@
 
           // Nothing is painted behind the diagram: what mermaid drew is all this carries,
           // which is what "Copy as SVG" copies too. The canvas starts transparent, and the
-          // host decides what a paste target that cannot do alpha sees instead - see
-          // ClipboardImage.SetAsync, which flattens a second copy onto white for it.
+          // host decides what goes behind it - see ClipboardImage.SetAsync, which puts the
+          // clipboard's one picture onto white.
           var ctx = canvas.getContext('2d');
 
           // Drawing an SVG-backed image at a larger target size re-rasterizes the vector at

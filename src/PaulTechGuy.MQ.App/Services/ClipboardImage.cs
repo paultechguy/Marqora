@@ -231,24 +231,26 @@ internal static class ClipboardImage
         EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger);
 
     /// <summary>
-    /// Writes PNG bytes to the clipboard under two flavors that deliberately differ.
+    /// Puts a diagram on the clipboard as one picture: a bitmap, composited onto white.
     ///
-    /// <see cref="PngFormat"/> - the one <see cref="ReadPngAsync"/> looks for first, and the
-    /// one browsers and most modern applications take - gets the bytes untouched, alpha and
-    /// all, so a diagram pastes with nothing behind it. It is written through Win32 rather than
-    /// the DataPackage: see <see cref="AddPngFlavorAsync"/>.
+    /// One picture, because two were pasted as two. The copy used to carry the PNG as well,
+    /// transparent, beside the white bitmap - and Teams pasted both, the transparent one
+    /// reading as a dark diagram on its dark background. Before that, the PNG was written
+    /// through the DataPackage under a format it does not know, which advertised the format to
+    /// Win32 readers and gave them nothing; Word and Outlook take a PNG over a bitmap whenever
+    /// one is offered, so they asked, got nothing and pasted nothing. With no PNG offered at
+    /// all, every one of them takes the bitmap.
     ///
-    /// The standard bitmap flavor gets a copy composited onto white. A DIB carries no alpha
-    /// its consumers can be relied on to honor, and the transparent pixels in a canvas are
-    /// stored as black, so handing that flavor the same bytes pasted the diagram onto a
-    /// black field in everything that reads it - Paint among them.
+    /// On white, because a copy is output and output is light: a transparent picture shows
+    /// whatever is behind it, and in a dark app that is dark. A DIB carries no alpha its
+    /// readers honor anyway - the transparent pixels of a canvas are stored as black, which is
+    /// what an uncomposited copy pasted onto in Paint.
     ///
-    /// Which flavor an application asks for is its own decision, so the same copy can land
-    /// transparent in one and white-backed in another. That is the clipboard's design; what
-    /// is avoidable is only the black.
+    /// Marqora's own Paste Image reads the bitmap tier and re-encodes it as PNG, so a diagram
+    /// copied and pasted back still lands as a PNG file.
     ///
-    /// Flushed rather than left lazy: the source streams do not outlive this call, and a
-    /// deferred read would find them already disposed.
+    /// Flushed rather than left lazy: the source stream does not outlive this call, and a
+    /// deferred read would find it already disposed.
     /// </summary>
     public static async Task<bool> SetAsync(byte[]? png, ILogger logger)
     {
@@ -261,8 +263,7 @@ internal static class ClipboardImage
 
         try
         {
-            // Falls back to the original bytes, which is the old behavior for that one
-            // flavor: a diagram on black beats no diagram at all.
+            // Falls back to the original bytes: a diagram on black beats no diagram at all.
             byte[] opaque = await FlattenOntoWhiteAsync(png, logger).ConfigureAwait(true) ?? png;
 
             using var flattened = new InMemoryRandomAccessStream();
@@ -278,13 +279,6 @@ internal static class ClipboardImage
             Clipboard.SetContent(package);
             Clipboard.Flush();
 
-            // The bitmap is already there, so a PNG that cannot be added still leaves a copy
-            // that pastes - white-backed, in everything.
-            if (!await AddPngFlavorAsync(png).ConfigureAwait(true))
-            {
-                logger.LogWarning("Could not add the PNG flavor to the clipboard; only the bitmap was copied.");
-            }
-
             return true;
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException or NotSupportedException)
@@ -296,117 +290,8 @@ internal static class ClipboardImage
     }
 
     /// <summary>
-    /// Adds the PNG bytes to what is already on the clipboard, as a block of global memory.
-    ///
-    /// Not through the DataPackage, because that does not work. Given a stream reference under
-    /// a format it does not know, a DataPackage advertises the format to Win32 applications and
-    /// then hands them an empty medium when they ask for it. Word and Outlook take a PNG over a
-    /// bitmap whenever one is offered, so they asked, got nothing, and pasted nothing - while
-    /// Teams, which reads the bitmap, pasted fine. Marqora's own paste never noticed, because
-    /// reading through a DataPackageView unwraps the reference on the same side that made it.
-    ///
-    /// Global memory is the medium every reader of this format accepts. No EmptyClipboard: the
-    /// bitmap the DataPackage just flushed stays, and this only adds beside it.
-    ///
-    /// A few short retries, because the clipboard is a lock other processes hold too - clipboard
-    /// history among them, which reads it the moment the flush above lands.
-    /// </summary>
-    private static async Task<bool> AddPngFlavorAsync(byte[] png)
-    {
-        uint format = RegisterClipboardFormat(PngFormat);
-
-        if (format == 0)
-        {
-            return false;
-        }
-
-        for (int attempt = 0; attempt < 5; attempt++)
-        {
-            if (OpenClipboard(IntPtr.Zero))
-            {
-                try
-                {
-                    return SetGlobal(format, png);
-                }
-                finally
-                {
-                    CloseClipboard();
-                }
-            }
-
-            await Task.Delay(20).ConfigureAwait(true);
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Copies the bytes into movable global memory and hands it to the open clipboard, which
-    /// owns it from then on. Freed here only when the hand-over fails.
-    /// </summary>
-    private static bool SetGlobal(uint format, byte[] bytes)
-    {
-        IntPtr handle = GlobalAlloc(GmemMoveable, (UIntPtr)bytes.Length);
-
-        if (handle == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        IntPtr target = GlobalLock(handle);
-
-        if (target == IntPtr.Zero)
-        {
-            GlobalFree(handle);
-            return false;
-        }
-
-        Marshal.Copy(bytes, 0, target, bytes.Length);
-        GlobalUnlock(handle);
-
-        if (SetClipboardData(format, handle) == IntPtr.Zero)
-        {
-            GlobalFree(handle);
-            return false;
-        }
-
-        return true;
-    }
-
-    private const uint GmemMoveable = 0x0002;
-
-    // DllImport rather than LibraryImport, matching the rest of the app's interop: the
-    // generator's unsafe marshalling would mean AllowUnsafeBlocks across the project.
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern uint RegisterClipboardFormat(string lpszFormat);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseClipboard();
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GlobalLock(IntPtr hMem);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GlobalUnlock(IntPtr hMem);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr GlobalFree(IntPtr hMem);
-
-    /// <summary>
     /// The same picture with everything the diagram did not paint turned white, for the
-    /// clipboard flavor that cannot carry alpha.
+    /// clipboard, where a copy is light and a bitmap cannot carry alpha anyway.
     ///
     /// Composited rather than simply drawn on a white ground, so an antialiased edge keeps
     /// its shape: those pixels are partly transparent, and taking their color alone would

@@ -31,8 +31,8 @@ used to run past both edges of its box when the text was long. It now wraps to f
 preview, the cheatsheet and exports.
 
 **Diagrams copied as PNG paste into Word and Outlook.** **Copy as PNG** pasted nothing in Word
-or Outlook, though it worked in Teams. It now pastes everywhere, still with a transparent
-background where the destination supports one.
+or Outlook, though it worked in Teams. It now pastes everywhere as a single picture on a white
+background, which stays readable in apps with a dark theme.
 
 **Tall diagrams fit on one printed page.** A diagram taller than a page used to be cut off at
 the bottom in a print or a PDF. A diagram now prints at its normal size when it fits, and
