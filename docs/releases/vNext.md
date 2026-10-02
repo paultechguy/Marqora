@@ -16,3 +16,7 @@
 section-number commands, Undo, Redo, Replace, and the editor's right-click edits used to stay
 lit on a read-only document. The confirmation for **Format All Open Documents** now counts
 only the documents it can change, and says how many read-only ones it will skip.
+
+**Long notes in sequence diagrams stay inside their box.** A note spanning two participants
+used to run past both edges of its box when the text was long. It now wraps to fit, in the
+preview, the cheatsheet and exports.

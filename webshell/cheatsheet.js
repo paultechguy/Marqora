@@ -83,7 +83,9 @@
       theme: theme === 'Dark' ? 'dark' : 'default',
       securityLevel: 'strict',
       suppressErrorRendering: true,
-      fontFamily: getComputedStyle(els.root).getPropertyValue('--mq-font-ui').trim()
+      fontFamily: getComputedStyle(els.root).getPropertyValue('--mq-font-ui').trim(),
+      // Matches the preview: long sequence notes wrap rather than spill out of their box.
+      sequence: { wrap: true }
     };
   }
 

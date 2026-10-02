@@ -1555,7 +1555,11 @@
       // arbitrary HTML and click handlers inside diagram labels.
       securityLevel: 'strict',
       suppressErrorRendering: true,
-      fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mq-font-ui').trim()
+      fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mq-font-ui').trim(),
+      // A note over two participants is as wide as the gap between them, whatever its text,
+      // so a long one spills out of its box. Wrapping keeps the text inside. A document can
+      // still opt out with %%{init: {"sequence": {"wrap": false}}}%%.
+      sequence: { wrap: true }
     };
   }
 
