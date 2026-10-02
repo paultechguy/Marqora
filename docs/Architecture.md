@@ -552,7 +552,10 @@ wrapper (`attachOutputCopy` in `app.js`). Then:
   `prepareForPrint`; Letter with one-inch margins otherwise), and the limit is that ratio
   times the column's laid-out width in container units. Not inches: Chromium lays a printed
   page out wider than the paper and scales it down, by a third at least, so an inch in print
-  layout is not an inch on paper - a 9in limit printed under six. The block
+  layout is not an inch on paper - a 9in limit printed under six. A diagram straight after a
+  heading leaves room for the heading too (`--mq-print-diagram-room`): headings are kept with
+  what follows, so a full-page diagram dragged its heading onto a new page and then moved on
+  without it, leaving a page with only the heading on it. The block
   is a plain block on paper, not the screen's flex row, and the light drawing's wrapper is a
   plain block too - a first version stepped it out of the layout with `display: contents`,
   and a tall diagram printed an inch wide below a page and a half of empty gray. The pop-out

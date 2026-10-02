@@ -159,6 +159,68 @@ public class PreviewHarvestTests
     }
 
     /// <summary>
+    /// A diagram taller than the page is shrunk to fit it, proportions kept.
+    ///
+    /// It used to go in at its natural height - eleven inches on a page with nine to give - so
+    /// Word moved it to a page of its own and it still ran off the bottom. Letter with one-inch
+    /// margins leaves nine inches; the diagram's half inch of spacing comes out of that.
+    /// </summary>
+    [Fact]
+    public async Task A_diagram_taller_than_the_page_is_shrunk_to_fit_it()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "```mermaid\ngraph TD; A-->B;\n```\n",
+            renderedPreviewHtml:
+                "<pre class=\"mermaid\" data-src-line=\"0\" data-mq-diagram=\"abc123\">"
+                + "<svg></svg></pre>",
+            diagramPng: _ => Task.FromResult<byte[]?>(Png(400, 4000)));
+
+        // 8.5 inches tall: 7772400 EMU. Width shrinks with it, from 200 pixels to 85.
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("cy=\"7772400\"");
+        xml.ShouldContain("cx=\"777240\"");
+    }
+
+    /// <summary>
+    /// A diagram straight after a heading leaves room for the heading as well.
+    ///
+    /// Headings keep with the next paragraph, so a page-tall diagram took its heading onto a
+    /// fresh page, found no room there for both, and went on alone - a page holding only the
+    /// heading. With an inch and a quarter left for it, the two share a page.
+    /// </summary>
+    [Fact]
+    public async Task A_diagram_after_a_heading_leaves_room_for_the_heading()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "## Steps\n\n```mermaid\ngraph TD; A-->B;\n```\n",
+            renderedPreviewHtml:
+                "<h2 data-src-line=\"0\">Steps</h2>"
+                + "<pre class=\"mermaid\" data-src-line=\"2\" data-mq-diagram=\"abc123\">"
+                + "<svg></svg></pre>",
+            diagramPng: _ => Task.FromResult<byte[]?>(Png(400, 4000)));
+
+        // Nine inches, less the half inch of spacing and an inch and a quarter for the
+        // heading: 7.25 inches, 6629400 EMU.
+        exported.DocumentXml().ShouldContain("cy=\"6629400\"");
+    }
+
+    /// <summary>A diagram that fits is left at the size it was authored, heading or not.</summary>
+    [Fact]
+    public async Task A_diagram_that_fits_keeps_its_size_after_a_heading()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "## Steps\n\n```mermaid\ngraph TD; A-->B;\n```\n",
+            renderedPreviewHtml:
+                "<h2 data-src-line=\"0\">Steps</h2>"
+                + "<pre class=\"mermaid\" data-src-line=\"2\" data-mq-diagram=\"abc123\">"
+                + "<svg></svg></pre>",
+            diagramPng: _ => Task.FromResult<byte[]?>(Png(192, 96)));
+
+        exported.DocumentXml().ShouldContain("cx=\"914400\"");
+    }
+
+    /// <summary>
     /// <summary>
     /// A diagram is set apart from the text around it.
     ///

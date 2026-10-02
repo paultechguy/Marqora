@@ -129,6 +129,7 @@ public sealed class DocxExporter : IDocxExporter
                 new BookmarkTable(),
                 numbering,
                 Measure.UsableWidthTwips(setup),
+                Measure.UsableHeightTwips(setup),
                 images ?? DocumentImages.FromDocument(sourceDocumentPath),
                 report,
                 preview,

@@ -1526,11 +1526,25 @@ a.mq-blocked-media {
   .mq-preview pre.mermaid > .mq-diagram-output { display: block; }
 
   .mq-preview pre.mermaid svg {
+    /* What the page keeps for things that are not the diagram: the gray box's padding. */
+    --mq-print-diagram-room: 4em;
+
     display: block;
     width: 100%;
     height: auto;
     margin: 0 auto;
-    max-height: calc(var(--mq-print-page-ratio, 1.3846) * 100cqw - 4em);
+    max-height: calc(var(--mq-print-page-ratio, 1.3846) * 100cqw - var(--mq-print-diagram-room));
+  }
+
+  /*
+    A diagram straight after a heading leaves room for the heading as well. Headings are kept
+    with what follows them, so a diagram the full height of a page moved its heading onto a
+    fresh page with it, found no room there beside it, and went on to the next one - a page
+    holding nothing but the heading. The room is a heading of two lines at h1 size with its
+    margins, so the two always share a page.
+  */
+  .mq-preview :is(h1, h2, h3, h4, h5, h6) + pre.mermaid svg {
+    --mq-print-diagram-room: 13em;
   }
 
   /* The hover badge is a screen affordance. A print taken with the pointer over a diagram

@@ -60,12 +60,24 @@ internal sealed class BlockRenderer
     /// <summary>Fence languages the preview draws as pictures rather than as code.</summary>
     private static readonly string[] DiagramLanguages = ["mermaid"];
 
+    /// <summary>A diagram's spacing above and below, 360 twips each; see WriteDiagram.</summary>
+    private const int DiagramSpacingTwips = 720;
+
+    /// <summary>
+    /// Page height a diagram leaves for the heading straight above it: two lines of Heading 1,
+    /// 20pt with its space before and after, and a little over. Headings keep with the next
+    /// paragraph, so a diagram as tall as the page moved its heading onto a fresh page with it,
+    /// found no room there for both, and went on alone - a page holding only the heading.
+    /// </summary>
+    private const int HeadingRoomTwips = 1800;
+
     public BlockRenderer(
         Body body,
         MainDocumentPart main,
         BookmarkTable bookmarks,
         NumberingPlan numbering,
         int usableWidthTwips,
+        int usableHeightTwips,
         DocumentImages images,
         ExportReport report,
         PreviewHarvest preview,
@@ -80,7 +92,7 @@ internal sealed class BlockRenderer
         _diagrams = diagrams;
         _report = report;
         _logger = logger;
-        _images = new DocxImages(main, images, report, logger);
+        _images = new DocxImages(main, images, report, usableHeightTwips, logger);
         _footnotes = new DocxFootnotes(main);
         _inlines = new InlineRenderer(
             main, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, logger);
@@ -721,6 +733,12 @@ internal sealed class BlockRenderer
         block.Info is { Length: > 0 } info
         && DiagramLanguages.Contains(info, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Whether the block straight before this one is a heading.</summary>
+    private static bool FollowsHeading(Block block) =>
+        block.Parent is { } parent
+        && parent.IndexOf(block) is > 0 and var at
+        && parent[at - 1] is HeadingBlock;
+
     /// <summary>
     /// A mermaid diagram, as the picture the shell drew.
     ///
@@ -737,7 +755,12 @@ internal sealed class BlockRenderer
     {
         if (_preview.TryDiagram(block.Line, out string hash)
             && _diagrams.TryGetValue(hash, out byte[]? png)
-            && _images.TryBuildFromBytes(png, "Diagram", _usableWidthTwips, scale: 2) is { } run)
+            && _images.TryBuildFromBytes(
+                png,
+                "Diagram",
+                _usableWidthTwips,
+                scale: 2,
+                reservedHeightTwips: DiagramSpacingTwips + (FollowsHeading(block) ? HeadingRoomTwips : 0)) is { } run)
         {
             // Room to breathe, the same amount on each side. The preview sets a diagram
             // apart with a padded panel in a different color; Word gets the picture on its

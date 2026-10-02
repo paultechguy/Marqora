@@ -31,6 +31,9 @@ internal sealed class DocxImages
     private readonly ExportReport _report;
     private readonly ILogger _logger;
 
+    /// <summary>The text column's height: no picture is drawn taller than one page.</summary>
+    private readonly int _maximumHeightTwips;
+
     /// <summary>Resolved path to relationship id, so a picture used twice is stored once.</summary>
     private readonly Dictionary<string, string> _parts =
         new(StringComparer.OrdinalIgnoreCase);
@@ -45,11 +48,13 @@ internal sealed class DocxImages
         MainDocumentPart main,
         DocumentImages images,
         ExportReport report,
+        int maximumHeightTwips,
         ILogger logger)
     {
         _main = main;
         _images = images;
         _report = report;
+        _maximumHeightTwips = maximumHeightTwips;
         _logger = logger;
     }
 
@@ -133,11 +138,16 @@ internal sealed class DocxImages
     /// somebody zooms or prints it, and drawing those pixels one-for-one would put a diagram
     /// on the page at double the size its author saw.
     /// </summary>
+    /// <param name="reservedHeightTwips">
+    /// Page height the picture must leave to something else - a diagram's spacing, and the
+    /// heading it is kept with - so that the two fit on one page together.
+    /// </param>
     public Run? TryBuildFromBytes(
         byte[] png,
         string altText,
         int maximumWidthTwips,
-        int scale = 1)
+        int scale = 1,
+        int reservedHeightTwips = 0)
     {
         ArgumentNullException.ThrowIfNull(png);
 
@@ -153,21 +163,11 @@ internal sealed class DocxImages
             part.FeedData(source);
         }
 
-        long maximumWidth = Measure.TwipsToEmu(maximumWidthTwips);
-        long width = maximumWidth;
-        long height = maximumWidth / 2;
-
-        if (ImageDimensions.Read(png) is { } size && size.Width > 0 && size.Height > 0)
-        {
-            width = Measure.PixelsToEmu(size.Width) / Math.Max(1, scale);
-            height = Measure.PixelsToEmu(size.Height) / Math.Max(1, scale);
-
-            if (width > maximumWidth)
-            {
-                height = (long)Math.Round(height * (maximumWidth / (double)width));
-                width = maximumWidth;
-            }
-        }
+        (long width, long height) = Scale(
+            ImageDimensions.Read(png),
+            maximumWidthTwips,
+            _maximumHeightTwips - reservedHeightTwips,
+            scale);
 
         return BuildRun(
             _main.GetIdOfPart(part),
@@ -279,7 +279,7 @@ internal sealed class DocxImages
             _parts[key] = relationshipId;
         }
 
-        (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips);
+        (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips, _maximumHeightTwips);
 
         return BuildRun(relationshipId, altText, name, width, height);
     }
@@ -305,7 +305,7 @@ internal sealed class DocxImages
             _parts[path] = relationshipId;
         }
 
-        (long width, long height) = SizeOf(path, maximumWidthTwips);
+        (long width, long height) = Scale(ReadPixelSize(path), maximumWidthTwips, _maximumHeightTwips);
 
         return BuildRun(relationshipId, altText, path, width, height);
     }
@@ -317,20 +317,27 @@ internal sealed class DocxImages
     /// means by "this image is 800 wide". Anything wider than the text column is scaled down
     /// with its proportions kept, and anything taller than the page after that is scaled again
     /// - a tall narrow screenshot otherwise takes three pages to itself.
+    ///
+    /// One rule for a picture read from a file, one decoded out of the markdown and a rendered
+    /// diagram, in one place rather than three: a second copy of a scaling rule is a second
+    /// answer to "how big is this" waiting to disagree with the first.
+    ///
+    /// The height cap is the one the summary always promised and the code never applied, so a
+    /// tall diagram went into Word eleven inches high on a page with nine to give: Word moved
+    /// it to a page of its own, still too tall, and left its heading behind.
     /// </summary>
-    private static (long Width, long Height) SizeOf(string path, int maximumWidthTwips) =>
-        Scale(ReadPixelSize(path), maximumWidthTwips);
-
-    /// <summary>
-    /// The same arithmetic for a picture read from a file and one decoded out of the markdown,
-    /// in one place rather than two: a second copy of a scaling rule is a second answer to
-    /// "how big is this" waiting to disagree with the first.
-    /// </summary>
+    /// <param name="scale">
+    /// How much bigger the bitmap is than the size it should be drawn at; see
+    /// <see cref="TryBuildFromBytes"/>.
+    /// </param>
     private static (long Width, long Height) Scale(
         (uint Width, uint Height)? pixels,
-        int maximumWidthTwips)
+        int maximumWidthTwips,
+        int maximumHeightTwips,
+        int scale = 1)
     {
         long maximumWidth = Measure.TwipsToEmu(maximumWidthTwips);
+        long maximumHeight = Measure.TwipsToEmu(Math.Max(maximumHeightTwips, 1));
 
         if (pixels is not { } size || size.Width == 0 || size.Height == 0)
         {
@@ -339,13 +346,19 @@ internal sealed class DocxImages
             return (maximumWidth, maximumWidth / 2);
         }
 
-        long width = Measure.PixelsToEmu(size.Width);
-        long height = Measure.PixelsToEmu(size.Height);
+        long width = Measure.PixelsToEmu(size.Width) / Math.Max(1, scale);
+        long height = Measure.PixelsToEmu(size.Height) / Math.Max(1, scale);
 
         if (width > maximumWidth)
         {
             height = (long)Math.Round(height * (maximumWidth / (double)width));
             width = maximumWidth;
+        }
+
+        if (height > maximumHeight)
+        {
+            width = (long)Math.Round(width * (maximumHeight / (double)height));
+            height = maximumHeight;
         }
 
         return (Math.Max(width, 1), Math.Max(height, 1));
