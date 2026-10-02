@@ -8279,9 +8279,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         the rasterizing, which has to happen back in the shell.
     */
 
-    /// <summary>Copies one diagram's markup, as the menu's Copy as SVG.</summary>
-    public void CopyDiagramSvg(string svg)
+    /// <summary>
+    /// Copies one diagram's markup, as the menu's Copy as SVG.
+    ///
+    /// Asked of the shell rather than taken from what the preview shows, because a copy is
+    /// drawn light whatever the window is wearing - see <see cref="IPreviewHost.RequestDiagramSvgAsync"/>.
+    /// </summary>
+    public async Task CopyDiagramSvgAsync(string hash)
     {
+        if (_host is null)
+        {
+            return;
+        }
+
+        string? svg = await _host.RequestDiagramSvgAsync(hash).ConfigureAwait(true);
+
+        if (svg is null)
+        {
+            StatusText = "That diagram could not be copied";
+            return;
+        }
+
         if (ClipboardText.Set(svg, _logger))
         {
             StatusText = "Diagram copied";
@@ -8933,7 +8951,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // what gets an ordinary window back, and neither direction costs a trip in here.
         bool maximize = _settings.Current.MaximizeDiagramWindows ^ activated.ShiftHeld;
 
-        return OpenDiagramAsync(activated.DocumentId, activated.Index, activated.Hash, activated.Svg, maximize);
+        return OpenDiagramAsync(
+            activated.DocumentId, activated.Index, activated.Hash, activated.Svg, activated.OutputSvg, maximize);
     }
 
     /// <summary>
@@ -8945,7 +8964,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public Task OpenDiagramWindowAsync(DiagramHit hit, bool maximize) =>
         ActiveTab is { } tab
-            ? OpenDiagramAsync(tab.Id, hit.Index, hit.Hash, hit.Svg, maximize)
+            ? OpenDiagramAsync(tab.Id, hit.Index, hit.Hash, hit.Svg, hit.OutputSvg, maximize)
             : Task.CompletedTask;
 
     /// <summary>
@@ -8955,7 +8974,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// and the modifier meet in <see cref="ShowDiagramAsync"/>, and the menu items are already
     /// explicit. Everything left here is about naming the window.
     /// </summary>
-    private async Task OpenDiagramAsync(Guid documentId, int index, string hash, string svg, bool maximize)
+    private async Task OpenDiagramAsync(
+        Guid documentId, int index, string hash, string svg, string outputSvg, bool maximize)
     {
         // Read now rather than on demand: the window has to keep naming its document after
         // that tab has closed, which is the case where the name matters most. The full path
@@ -8968,7 +8988,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _logger.LogInformation("Opening a diagram from {Document} in its own window.", document);
 
         await _diagramWindows
-            .ShowAsync(documentId, index, hash, svg, document, path, maximize)
+            .ShowAsync(documentId, index, hash, svg, outputSvg, document, path, maximize)
             .ConfigureAwait(true);
     }
 

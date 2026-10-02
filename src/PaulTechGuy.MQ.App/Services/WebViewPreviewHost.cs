@@ -902,12 +902,46 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    /// <summary>Outstanding diagram-PNG requests, keyed the same way as the HTML ones.</summary>
-    private readonly Dictionary<Guid, TaskCompletionSource<string>> _diagramPngRequests = [];
+    /// <summary>Outstanding diagram PNG and SVG requests, keyed the same way as the HTML ones.</summary>
+    private readonly Dictionary<Guid, TaskCompletionSource<string>> _diagramRequests = [];
 
     public async Task<byte[]?> RequestDiagramPngAsync(string hash)
     {
-        if (!IsReady || string.IsNullOrEmpty(hash))
+        if (await RequestDiagramAsync("requestDiagramPng", hash).ConfigureAwait(true) is not { } data)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(data);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "The shell's diagram image was not readable base64.");
+            return null;
+        }
+    }
+
+    public Task<string?> RequestDiagramSvgAsync(string hash) =>
+        RequestDiagramAsync("requestDiagramSvg", hash);
+
+    /// <summary>
+    /// Asks the shell for one diagram in some form and waits for the answer: null when it had
+    /// none to give, or did not answer in time.
+    /// </summary>
+    private Task<string?> RequestDiagramAsync(string message, string hash) =>
+        string.IsNullOrEmpty(hash)
+            ? Task.FromResult<string?>(null)
+            : AskShellAsync(message, id => new { requestId = id, hash });
+
+    /// <summary>
+    /// Sends a message carrying a request id and waits for the shell's answer to it: null when
+    /// the answer was empty, or did not come in time.
+    /// </summary>
+    private async Task<string?> AskShellAsync(string message, Func<Guid, object> payload)
+    {
+        if (!IsReady)
         {
             return null;
         }
@@ -915,18 +949,18 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         var id = Guid.NewGuid();
         var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        _diagramPngRequests[id] = completion;
+        _diagramRequests[id] = completion;
 
         try
         {
-            await SendAsync("requestDiagramPng", new { requestId = id, hash }).ConfigureAwait(true);
+            await SendAsync(message, payload(id)).ConfigureAwait(true);
 
             Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(20)))
                 .ConfigureAwait(true);
 
             if (finished != completion.Task)
             {
-                _logger.LogWarning("The shell did not answer with a diagram image.");
+                _logger.LogWarning("The shell did not answer {Message}.", message);
                 return null;
             }
 
@@ -934,16 +968,11 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
             // An empty reply is the shell saying it could not produce one, which it reports
             // on its own side; there is nothing to add to that here.
-            return data.Length == 0 ? null : Convert.FromBase64String(data);
-        }
-        catch (FormatException ex)
-        {
-            _logger.LogWarning(ex, "The shell's diagram image was not readable base64.");
-            return null;
+            return data.Length == 0 ? null : data;
         }
         finally
         {
-            _diagramPngRequests.Remove(id);
+            _diagramRequests.Remove(id);
         }
     }
 
@@ -1129,6 +1158,23 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         public void Dispose() => view.DefaultBackgroundColor = previous;
     }
 
+    /// <summary>
+    /// Gets the page ready for a print or a PDF on this paper.
+    ///
+    /// The print stylesheet holds every diagram to one page, because the browser cannot split
+    /// an SVG across pages and a taller one was cut off. It is told the printable area's shape
+    /// - height over width, between the margins - rather than its height, because Chromium lays
+    /// a printed page out wider than the paper and scales it down, so an inch in print layout
+    /// is not an inch on paper. The shape survives the scaling. It also shows each diagram's
+    /// light drawing in place of the screen's, so a print from a dark window is light without
+    /// anything on screen changing - but a light drawing is made a moment after the dark one,
+    /// so this waits for the last of them. Bounded by the shell request's own timeout: a print
+    /// in the wrong colors beats a print that never happens.
+    /// </summary>
+    private async Task PrepareForPrintAsync(double pageRatio) =>
+        await AskShellAsync("prepareForPrint", id => new { requestId = id, pageRatio })
+            .ConfigureAwait(true);
+
     public async Task ExportPdfAsync(string path, PdfPageSetup setup)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -1148,6 +1194,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             setup.HorizontalMarginInches);
 
         using var _ = ForceLightCanvas();
+        await PrepareForPrintAsync(PrintArea.Ratio(
+            setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches))
+            .ConfigureAwait(true);
 
         await WebViewPrinting.ExportPdfAsync(core, path, setup).ConfigureAwait(true);
     }
@@ -1183,6 +1232,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             job.HeightInches);
 
         using var _ = ForceLightCanvas();
+        await PrepareForPrintAsync(PrintArea.Ratio(
+            job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches))
+            .ConfigureAwait(true);
 
         await WebViewPrinting.PrintAsync(core, job);
     }
@@ -1392,6 +1444,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                             ReadInt(payload, "index", 0),
                             hash,
                             svg,
+                            NonEmpty(ReadString(payload, "outputSvg"), svg),
                             ReadBool(payload, "shift", false)));
                 }
 
@@ -1409,7 +1462,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                             updated,
                             ReadString(payload, "hash"),
                             ReadInt(payload, "index", 0),
-                            redrawn));
+                            redrawn,
+                            NonEmpty(ReadString(payload, "outputSvg"), redrawn)));
                 }
 
                 break;
@@ -1537,10 +1591,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 break;
 
             case "diagramPng":
-                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid pngId)
-                    && _diagramPngRequests.TryGetValue(pngId, out TaskCompletionSource<string>? rasterizing))
+            case "diagramSvg":
+            case "outputReady":
+                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid drawingId)
+                    && _diagramRequests.TryGetValue(drawingId, out TaskCompletionSource<string>? drawing))
                 {
-                    rasterizing.TrySetResult(ReadString(payload, "data"));
+                    drawing.TrySetResult(ReadString(payload, "data"));
                 }
                 break;
 
@@ -1621,12 +1677,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     // diagram, or was on one that never rendered.
                     string diagramHash = ReadString(payload, "diagramHash") ?? string.Empty;
 
+                    string diagramSvg = ReadString(payload, "diagramSvg");
+
                     DiagramHit? diagram = diagramHash.Length == 0
                         ? null
                         : new DiagramHit(
                             diagramHash,
-                            ReadString(payload, "diagramSvg") ?? string.Empty,
-                            ReadInt(payload, "diagramIndex", 0));
+                            diagramSvg,
+                            ReadInt(payload, "diagramIndex", 0),
+                            NonEmpty(ReadString(payload, "diagramOutputSvg"), diagramSvg));
 
                     ContextMenuRequested?.Invoke(this, new PaneContextMenuEventArgs(
                         clicked,
@@ -2130,6 +2189,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             && value.ValueKind == JsonValueKind.String
                 ? value.GetString() ?? string.Empty
                 : string.Empty;
+
+    /// <summary>
+    /// The value, or the fallback when it is empty. For a diagram's light drawing, so a
+    /// message without one still opens a window - on the screen's drawing, as it always did.
+    /// </summary>
+    private static string NonEmpty(string value, string fallback) =>
+        value.Length > 0 ? value : fallback;
 
     private static int ReadInt(JsonElement payload, string name, int fallback) =>
         payload.ValueKind == JsonValueKind.Object

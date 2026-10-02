@@ -60,6 +60,7 @@ public sealed class DiagramWindowService(
         int index,
         string hash,
         string svg,
+        string outputSvg,
         string documentName,
         string documentPath,
         bool maximize)
@@ -70,7 +71,7 @@ public sealed class DiagramWindowService(
         if (Existing(documentId, hash) is { } already)
         {
             logger.LogDebug("Raising the window already following diagram {Id}.", already.Id);
-            already.Update(hash, index, svg);
+            already.Update(hash, index, svg, outputSvg);
 
             // Before the raise, so the window comes forward in the shape it is going to keep
             // rather than growing into it once it is in front of you.
@@ -111,6 +112,7 @@ public sealed class DiagramWindowService(
                 documentName,
                 documentPath,
                 svg,
+                outputSvg,
                 loggerFactory.CreateLogger<DiagramWindow>());
 
             opened.Dismissed += OnDismissed;
@@ -147,7 +149,7 @@ public sealed class DiagramWindowService(
     /// Reports only arrive for diagrams being watched, but a window can close between the
     /// preview deciding to send one and it arriving here, so an unknown id is dropped.
     /// </summary>
-    public void Update(Guid diagramId, string hash, int index, string svg)
+    public void Update(Guid diagramId, string hash, int index, string svg, string outputSvg)
     {
         if (_windows.TryGetValue(diagramId, out DiagramWindow? open))
         {
@@ -155,7 +157,7 @@ public sealed class DiagramWindowService(
             // preview would resume tracking from a definition that no longer exists.
             bool wasFollowing = string.Equals(open.Hash, hash, StringComparison.Ordinal);
 
-            open.Update(hash, index, svg);
+            open.Update(hash, index, svg, outputSvg);
 
             if (!wasFollowing)
             {

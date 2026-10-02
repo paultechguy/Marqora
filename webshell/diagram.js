@@ -32,6 +32,9 @@
   };
 
   var svg = null;
+
+  // The same diagram drawn light, for everything that leaves this window. See setDiagram.
+  var output = null;
   var natural = { width: 0, height: 0 };
   var zoom = 1;
 
@@ -171,7 +174,13 @@
     return { width: rect.width || 800, height: rect.height || 600 };
   }
 
-  function setDiagram(markup) {
+  /*
+    `outputMarkup` is the light drawing of the same diagram. Dark mode is a screen setting, so
+    while the window is dark it carries both: the dark one to look at, and the light one held
+    beside it for diagram.css to print in its place and for Copy as PNG to rasterize. While
+    the window is light the two are the same markup, and only one is kept.
+  */
+  function setDiagram(markup, outputMarkup) {
     // The first diagram is fitted to the window; later ones are edits of the one on screen,
     // and refitting those would yank the zoom out from under someone mid-read.
     var isFirst = svg === null;
@@ -184,6 +193,16 @@
     if (!svg) {
       els.canvas.innerHTML = '<p class="mq-error">This diagram could not be displayed.</p>';
       return;
+    }
+
+    output = outputMarkup || markup;
+
+    if (output !== markup) {
+      var copy = document.createElement('div');
+      copy.className = 'mq-output-copy';
+      copy.setAttribute('aria-hidden', 'true');
+      copy.innerHTML = output;
+      els.canvas.appendChild(copy);
     }
 
     natural = measure(svg);
@@ -236,15 +255,15 @@
   }
 
   /*
-    Rasterizes the diagram and hands the PNG to the host, which owns the clipboard.
+    Rasterizes the light drawing and hands the PNG to the host, which owns the clipboard.
 
     The rasterizer is shared with the preview shell - see diagram-raster.js, which carries
     the two traps worth knowing about - so both Copy as PNG items produce the same picture.
   */
   function copyPng() {
-    if (!svg) { return; }
+    if (!output) { return; }
 
-    window.mqDiagramRaster.toPngBase64(svg, 2).then(function (data) {
+    window.mqDiagramRaster.markupToPngBase64(output, 2).then(function (data) {
       post('diagramPng', { data: data });
     }).catch(function (err) {
       post('diagramPngError', { message: err.message });
@@ -413,7 +432,7 @@
 
       if (!message || !message.type) { return; }
 
-      if (message.type === 'setDiagram') { setDiagram(message.payload.svg); }
+      if (message.type === 'setDiagram') { setDiagram(message.payload.svg, message.payload.outputSvg); }
       else if (message.type === 'setTheme') { setTheme(message.payload.theme); }
       else if (message.type === 'setRemoved') { setRemoved(message.payload.removed); }
       else if (message.type === 'setInvalid') { setInvalid(message.payload.message); }

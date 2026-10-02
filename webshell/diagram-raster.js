@@ -154,5 +154,29 @@
     });
   }
 
-  window.mqDiagramRaster = { toPngBase64: toPngBase64 };
+  /*
+    The same, from markup rather than an element on screen.
+
+    The light drawing of a diagram is hidden on screen, and a hidden element has no layout
+    for drawnBounds to measure. So it is set down off-screen for as long as the rasterizing
+    takes and taken away again. Mermaid scopes its styles by the SVG's own id, so the copy
+    restyles nothing else on the page while it is there.
+  */
+  function markupToPngBase64(markup, scale) {
+    var stage = document.createElement('div');
+    stage.setAttribute('aria-hidden', 'true');
+    stage.style.cssText = 'position:absolute;left:-99999px;top:0;';
+    stage.innerHTML = markup;
+    document.body.appendChild(stage);
+
+    var svg = stage.querySelector('svg');
+
+    var done = svg
+      ? toPngBase64(svg, scale)
+      : Promise.reject(new Error('The diagram markup carried no SVG.'));
+
+    return done.finally(function () { stage.remove(); });
+  }
+
+  window.mqDiagramRaster = { toPngBase64: toPngBase64, markupToPngBase64: markupToPngBase64 };
 }());

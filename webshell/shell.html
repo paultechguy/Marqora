@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="vendor/katex/katex.min.css" />
   <!-- One highlight.js theme is active at a time; the script below picks the pair. -->
   <link id="hljs-light" rel="stylesheet" href="vendor/highlight/github.min.css" />
-  <link id="hljs-dark" rel="stylesheet" href="vendor/highlight/github-dark.min.css" disabled />
+  <link id="hljs-dark" rel="stylesheet" href="vendor/highlight/github-dark.min.css" media="screen" disabled />
   <link rel="stylesheet" href="app.css" />
 
   <!--
@@ -83,10 +83,10 @@
         document.documentElement.style.setProperty('--mq-accent-print', '#' + accentPrint[1]);
       }
 
-      var light = document.getElementById('hljs-light');
+      // The light theme is never switched off: the dark one is layered over it for the
+      // screen alone (media="screen"), so a print is always light. See applyHighlightTheme.
       var dark = document.getElementById('hljs-dark');
 
-      if (light) { light.disabled = theme === 'dark'; }
       if (dark) { dark.disabled = theme !== 'dark'; }
     }());
   </script>
@@ -124,6 +124,7 @@
 
   <script src="vendor/monaco/vs/loader.js"></script>
   <script src="diagram-raster.js"></script>
+  <script src="diagram-output.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -519,6 +519,7 @@
           // the link kind below use for their own blocks.
           diagramHash: diagramSvg ? diagram.getAttribute('data-mq-diagram') : '',
           diagramSvg: diagramSvg ? diagramSvg.outerHTML : '',
+          diagramOutputSvg: diagramSvg ? outputSvgOf(diagram).outerHTML : '',
           // Where it sits in the document, which is what names the window it opens in. Only
           // the two Open items need it; the copies work from the markup alone.
           diagramIndex: diagramSvg ? Number(diagram.getAttribute('data-mq-index')) : 0,
@@ -1563,6 +1564,108 @@
     };
   }
 
+  // The light drawings take the same options, so a diagram's two drawings differ only in color.
+  window.mqDiagramOutput.configure(mermaidOptions);
+
+  /*
+    Where a diagram's light drawing lives while the app is dark.
+
+    In dark mode each rendered diagram carries two drawings: mermaid's dark one, which is what
+    the screen shows, and the light one beside it in a hidden wrapper. The print stylesheet
+    swaps which of the two is shown, so a print or a PDF of this very page is light without
+    anything being moved around for it - the same way the text goes light. Everything else
+    that leaves the app takes the light drawing out with outputMarkup or outputSvgOf.
+
+    In light mode there is one drawing and it is already the light one, so there is no
+    wrapper at all.
+  */
+  var OUTPUT_COPY = 'mq-diagram-output';
+
+  /// Every light drawing still on its way, so an output can wait for the page to be complete.
+  var outputWork = Promise.resolve();
+
+  /// Resolves once every diagram on the page carries its light drawing.
+  function whenOutputReady() {
+    return outputWork;
+  }
+
+  /*
+    Gives a rendered block its light drawing, when the app is dark.
+
+    From the cache when it is there, which is every keystroke that does not touch the diagram,
+    so nothing flickers and nothing waits. Otherwise drawn, and placed only if the block still
+    shows the same definition: an edit may have redrawn it in the meantime, and that newer
+    block has asked for its own.
+  */
+  function attachOutputCopy(node, source, key) {
+    if (mermaidTheme() !== 'dark') { return; }
+
+    var cached = window.mqDiagramOutput.cached(source);
+
+    if (cached !== null) {
+      placeOutputCopy(node, cached);
+      return;
+    }
+
+    var job = window.mqDiagramOutput.render(source).then(function (svg) {
+      if (node.isConnected
+          && node.getAttribute('data-mq-diagram') === key
+          && mermaidTheme() === 'dark') {
+        placeOutputCopy(node, svg);
+
+        // A pop-out following this diagram is owed its light drawing too.
+        if (els.preview.contains(node)) { reportDiagrams(); }
+      }
+    }).catch(function (err) {
+      // The screen drawing parsed, so this should too. If it does not, outputs carry the
+      // screen drawing rather than nothing.
+      report('warning', 'A diagram could not be drawn for output', err && err.message);
+    });
+
+    outputWork = Promise.all([outputWork, job]);
+  }
+
+  function placeOutputCopy(node, svg) {
+    var screen = node.querySelector(':scope > svg');
+    if (!screen) { return; }
+
+    var old = node.querySelector(':scope > .' + OUTPUT_COPY);
+    if (old) { old.remove(); }
+
+    var holder = document.createElement('div');
+    holder.className = OUTPUT_COPY;
+    holder.setAttribute('aria-hidden', 'true');
+    holder.innerHTML = svg;
+
+    screen.after(holder);
+  }
+
+  /// The drawing of a rendered block that is fit to leave the app.
+  function outputSvgOf(block) {
+    return block.querySelector(':scope > .' + OUTPUT_COPY + ' > svg')
+      || block.querySelector(':scope > svg');
+  }
+
+  /*
+    Some preview markup - always a clone - with each diagram's light drawing in place of its
+    screen one. Only the svg element is exchanged, so whatever else hangs on the block, a
+    review's comment numbers among it, comes through untouched.
+  */
+  function outputMarkup(root) {
+    var copies = root.querySelectorAll('.' + OUTPUT_COPY);
+
+    Array.prototype.forEach.call(copies, function (copy) {
+      var light = copy.querySelector('svg');
+      var screen = copy.parentNode ? copy.parentNode.querySelector(':scope > svg') : null;
+
+      if (light && screen) { screen.replaceWith(light); }
+
+      copy.remove();
+    });
+
+    return root;
+  }
+
   /*
     Mermaid lives in an off-screen same-origin frame with no module loader in it. See the
     comment at the top of mermaid-frame.html for why. The frame is created on first use, so
@@ -1715,9 +1818,13 @@
       // that message is worth passing on rather than reducing to "something is wrong".
       var failure = rendered ? null : block.querySelector('.mq-mermaid-error');
 
+      var output = rendered ? outputSvgOf(block) : null;
+
       list.push({
         hash: block.getAttribute('data-mq-diagram'),
         svg: rendered ? rendered.outerHTML : null,
+        // The drawing a pop-out prints and copies, which is light even when this window is not.
+        output: output ? output.outerHTML : null,
         error: failure ? failure.textContent : null
       });
     }
@@ -1814,12 +1921,22 @@
       watched.invalid = null;
       watched.index = at;
 
-      if (watched.sent === found.svg) { continue; }
+      // Both drawings count: the light one arrives a moment after the screen one, and the
+      // window is owed it even though what it shows has not changed.
+      var sent = found.svg + found.output;
+
+      if (watched.sent === sent) { continue; }
 
       watched.hash = found.hash;
-      watched.sent = found.svg;
+      watched.sent = sent;
 
-      post('diagramUpdated', { id: watched.id, hash: found.hash, index: at, svg: found.svg });
+      post('diagramUpdated', {
+        id: watched.id,
+        hash: found.hash,
+        index: at,
+        svg: found.svg,
+        outputSvg: found.output
+      });
     }
 
     diagramCounts[state.activeTabId] = diagrams.length;
@@ -1849,6 +1966,10 @@
     window - and a document being rendered off-screen for a Folio is not what anyone is
     looking at. Reporting from there would renumber the diagrams under the reader's pointer
     and hand the pop-out windows a document nobody opened.
+
+    It also means the markup is leaving the app, so its diagrams are drawn light and only
+    light - see diagram-output.js. The off-screen pass draws them with the output mermaid,
+    which has a frame of its own, so it no longer shares the preview's working area.
   */
   function renderDiagrams(root, silent) {
     var nodes = (root || els.preview).querySelectorAll('pre.mermaid:not([data-processed])');
@@ -1864,13 +1985,12 @@
     }
 
     // Rendered one at a time: mermaid keeps a single working area per document, so
-    // concurrent renders in the same frame interfere with each other. That holds across an
-    // export too - the off-screen pass shares the one frame with the preview.
+    // concurrent renders in the same frame interfere with each other.
     return ensureMermaid().then(function (mermaid) {
       var chain = Promise.resolve();
 
       for (var i = 0; i < nodes.length; i++) {
-        chain = chain.then(renderOneDiagramLater(mermaid, nodes[i]));
+        chain = chain.then(renderOneDiagramLater(mermaid, nodes[i], !!silent));
       }
 
       return chain;
@@ -1884,8 +2004,8 @@
     });
   }
 
-  function renderOneDiagramLater(mermaid, node) {
-    return function () { return renderOneDiagram(mermaid, node); };
+  function renderOneDiagramLater(mermaid, node, output) {
+    return function () { return renderOneDiagram(mermaid, node, output); };
   }
 
   /*
@@ -1908,28 +2028,41 @@
     return (hash >>> 0).toString(36);
   }
 
-  function renderOneDiagram(mermaid, node) {
+  /*
+    `output` is what the off-screen export pass passes: the markup is leaving the app, so it
+    gets the light drawing alone, from the output mermaid, and never the screen's.
+  */
+  function renderOneDiagram(mermaid, node, output) {
     var source = node.textContent;
     var cached = mermaidCache[source];
     var key = diagramKey(source);
 
-    // Re-rendering an unchanged diagram on every keystroke is the single biggest
-    // cost in a document full of diagrams, so cache the SVG by its definition.
-    if (cached) {
-      node.innerHTML = cached;
+    function place(svg) {
+      node.innerHTML = svg;
       node.setAttribute('data-processed', 'true');
       node.setAttribute('data-mq-diagram', key);
       state.lineMapDirty = true;
-      return Promise.resolve();
     }
 
-    return mermaid.render('mq-diagram-' + (++mermaidSeq), source).then(function (result) {
-      mermaidCache[source] = result.svg;
-      node.innerHTML = result.svg;
-      node.setAttribute('data-processed', 'true');
-      node.setAttribute('data-mq-diagram', key);
-      state.lineMapDirty = true;
-    }).catch(function (err) {
+    var rendering;
+
+    if (output) {
+      rendering = window.mqDiagramOutput.render(source).then(place);
+    } else if (cached) {
+      // Re-rendering an unchanged diagram on every keystroke is the single biggest
+      // cost in a document full of diagrams, so cache the SVG by its definition.
+      place(cached);
+      attachOutputCopy(node, source, key);
+      return Promise.resolve();
+    } else {
+      rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), source).then(function (result) {
+        mermaidCache[source] = result.svg;
+        place(result.svg);
+        attachOutputCopy(node, source, key);
+      });
+    }
+
+    return rendering.catch(function (err) {
       var message = document.createElement('span');
       message.className = 'mq-mermaid-error';
       message.textContent = 'Diagram error: ' + ((err && err.message) || 'could not be parsed');
@@ -1989,14 +2122,16 @@
 
   var highlightReady = null;
 
-  /// highlight.js ships a stylesheet per theme, so the pair is swapped rather than restyled.
+  /*
+    highlight.js ships a stylesheet per theme. The light one is always on; the dark one is
+    switched on over it in dark mode, and carries media="screen" in shell.html, so a print or
+    a PDF never sees it. The two style exactly the same token classes, so on screen the dark
+    one covers the light one completely.
+  */
   function applyHighlightTheme() {
-    var dark = state.theme === 'Dark';
-    var light = document.getElementById('hljs-light');
     var night = document.getElementById('hljs-dark');
 
-    if (light) { light.disabled = dark; }
-    if (night) { night.disabled = !dark; }
+    if (night) { night.disabled = state.theme !== 'Dark'; }
   }
 
   function ensureHighlighter() {
@@ -2291,6 +2426,7 @@
       index: Number(diagram.getAttribute('data-mq-index')),
       hash: diagram.getAttribute('data-mq-diagram'),
       svg: svg.outerHTML,
+      outputSvg: outputSvgOf(diagram).outerHTML,
       shift: e.shiftKey
     });
   });
@@ -3060,7 +3196,7 @@
   function buildReviewHtml(documentId, notes) {
     if (documentId !== state.activeTabId || !activeReview()) { return ''; }
 
-    var clone = withoutBlockedChips(els.preview);
+    var clone = outputMarkup(withoutBlockedChips(els.preview));
 
     unwrapCommentMarks(clone, 'mark.mq-comment-draft');
 
@@ -5065,11 +5201,19 @@
       applied to the clipboard, which now takes its colors from the page rather than from
       a stylesheet that could be pinned on the host side.
 
+      The code colors are the same rule in a different place. highlight.js keeps each theme
+      in a stylesheet of its own, and the dark one is switched on over the light one, so it
+      is switched off for the measuring too - otherwise the tokens are inlined in the dark
+      theme's pale colors.
+
       Restored before returning, and no paint happens in between, so nothing flickers.
     */
     var root = document.documentElement;
     var theme = root.getAttribute('data-theme');
     root.setAttribute('data-theme', 'light');
+    var night = document.getElementById('hljs-dark');
+    var nightWasOn = night ? !night.disabled : false;
+    if (night) { night.disabled = true; }
 
     document.body.appendChild(stage);
 
@@ -5091,6 +5235,8 @@
 
       if (theme === null) { root.removeAttribute('data-theme'); }
       else { root.setAttribute('data-theme', theme); }
+
+      if (night) { night.disabled = !nightWasOn; }
     }
   }
 
@@ -5895,10 +6041,13 @@
     */
     requestRenderedHtml: function (p) {
       // Without comment marks: the HTML export, Word and the diagram artifacts are the
-      // document, not a review of it. Only requestReviewHtml keeps them.
-      post('renderedHtml', {
-        requestId: p.requestId,
-        html: withoutCommentMarks(withoutBlockedChips(els.preview)).innerHTML
+      // document, not a review of it. Only requestReviewHtml keeps them. With the light
+      // drawings, once they are all in: this markup is leaving the app.
+      whenOutputReady().then(function () {
+        post('renderedHtml', {
+          requestId: p.requestId,
+          html: outputMarkup(withoutCommentMarks(withoutBlockedChips(els.preview))).innerHTML
+        });
       });
     },
 
@@ -5939,34 +6088,66 @@
     },
 
     requestReviewHtml: function (p) {
-      post('reviewHtml', {
-        requestId: p.requestId,
-        html: buildReviewHtml(p.documentId, p.notes || [])
+      // The shared page is read away from the app, so its diagrams are the light drawings.
+      whenOutputReady().then(function () {
+        post('reviewHtml', {
+          requestId: p.requestId,
+          html: buildReviewHtml(p.documentId, p.notes || [])
+        });
       });
     },
 
     /*
-      One diagram as a PNG, for the preview menu's Copy as PNG.
+      One diagram as a PNG: the preview menu's Copy as PNG, and the pictures the Word export
+      and Copy as Rich Text put where a diagram was.
 
-      The same rasterizer the pop-out window uses - see diagram-raster.js - so a diagram
-      copied from the page and the same diagram copied from its own window are one picture.
-      An empty reply is still a reply: the host is waiting on this id and would otherwise
-      sit there until its timeout.
+      The light drawing, rasterized from its markup by the same code the pop-out window uses
+      - see diagram-raster.js - so a diagram copied from the page and the same diagram copied
+      from its own window are one picture. An empty reply is still a reply: the host is
+      waiting on this id and would otherwise sit there until its timeout.
     */
     requestDiagramPng: function (p) {
-      var diagram = diagramByHash(p.hash);
-      var svg = diagram ? diagram.querySelector('svg') : null;
+      whenOutputReady().then(function () {
+        var diagram = diagramByHash(p.hash);
+        var svg = diagram ? outputSvgOf(diagram) : null;
 
-      if (!svg) {
-        post('diagramPng', { requestId: p.requestId, data: '' });
-        return;
-      }
+        if (!svg) { return ''; }
 
-      window.mqDiagramRaster.toPngBase64(svg, 2).then(function (data) {
+        return window.mqDiagramRaster.markupToPngBase64(svg.outerHTML, 2);
+      }).then(function (data) {
         post('diagramPng', { requestId: p.requestId, data: data });
       }).catch(function (err) {
         report('warning', 'A diagram could not be rasterized', err && err.message);
         post('diagramPng', { requestId: p.requestId, data: '' });
+      });
+    },
+
+    /// One diagram's light drawing as markup, for the preview menu's Copy as SVG.
+    requestDiagramSvg: function (p) {
+      whenOutputReady().then(function () {
+        var diagram = diagramByHash(p.hash);
+        var svg = diagram ? outputSvgOf(diagram) : null;
+
+        post('diagramSvg', { requestId: p.requestId, data: svg ? svg.outerHTML : '' });
+      });
+    },
+
+    /*
+      Gets this page ready for a print or a PDF, answering when it is.
+
+      Two things. The shape of the printable area the user chose goes on the root, where the
+      print stylesheet holds every diagram to one page with it. And the answer waits until
+      every diagram carries its light drawing, because one made a moment too late would print
+      dark. The print stylesheet does the rest.
+    */
+    prepareForPrint: function (p) {
+      // A shape, not a size: see the print block in app.css for why inches will not do.
+      if (p.pageRatio > 0) {
+        document.documentElement.style.setProperty('--mq-print-page-ratio', String(p.pageRatio));
+      }
+
+      whenOutputReady().then(function () {
+        post('outputReady', { requestId: p.requestId, data: 'ready' });
       });
     },
 
@@ -6382,7 +6563,7 @@
       // inlining a computed style onto spans that are about to be dropped.
       post('previewHtml', {
         requestId: p.requestId,
-        html: withInlineStyles(withMathmlOnly(withoutCommentMarks(withoutBlockedChips(source)))),
+        html: withInlineStyles(withMathmlOnly(withoutCommentMarks(outputMarkup(withoutBlockedChips(source))))),
         text: text
       });
     },

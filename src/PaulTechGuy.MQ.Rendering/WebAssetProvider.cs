@@ -52,6 +52,10 @@ public sealed class WebAssetProvider : IWebAssetProvider
         // Loaded by both the shell and the diagram page, so a missing copy breaks Copy as
         // PNG in two places rather than one.
         "diagram-raster.js",
+
+        // The light mermaid everything that leaves the app is drawn with, loaded by the shell
+        // and the cheatsheet. Missing, every output from a dark window keeps dark diagrams.
+        "diagram-output.js",
         Path.Combine("vendor", "monaco", "vs", "loader.js"),
         Path.Combine("vendor", "mermaid", "mermaid.esm.min.mjs"),
         Path.Combine("vendor", "katex", "katex.min.js"),

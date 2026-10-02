@@ -187,6 +187,9 @@ body {
 
 .mq-canvas svg { display: block; max-width: none; height: auto; }
 
+/* The light drawing, held for print and the copies; never on screen. See the print block. */
+.mq-canvas > .mq-output-copy { display: none; }
+
 /*
   While the middle button is held for a pan. The cursor is set from script, which knows which
   axes the diagram can actually travel in.
@@ -228,10 +231,31 @@ body.mq-panning * {
 
   .mq-canvas { margin: 0; padding: 0; }
 
+  /*
+    The light drawing in place of the dark one: dark mode is a screen setting, and paper is
+    white. See setDiagram in diagram.js. A plain block, not a wrapper stepped out of the
+    layout - in the preview that sized the SVG against the wrong box.
+  */
+  .mq-canvas > svg:has(+ .mq-output-copy) { display: none; }
+  .mq-canvas > .mq-output-copy { display: block; }
+
+  /*
+    The width of the page and no taller than one: the browser cannot split an SVG across
+    pages, so a tall diagram was cut off. With the height clamped and the width not, the
+    drawing keeps its proportions, centered.
+
+    The limit is the page area's shape times the laid-out width, never inches: Chromium lays
+    a printed page out wider than the paper and scales it down, so an inch in print layout
+    is not an inch on paper. The window sets --mq-print-page-ratio before each print; the
+    fallback is Letter with one-inch margins. See the print block in app.css.
+  */
+  .mq-surface { container-type: inline-size; }
+
   .mq-canvas svg {
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
     max-width: 100% !important;
+    max-height: calc(var(--mq-print-page-ratio, 1.3846) * 100cqw - 1em);
   }
 }
 

@@ -519,6 +519,88 @@ fetches back on the critical path of the problem above.
 
 ---
 
+## Screen and output
+
+**Dark mode is a screen setting.** Everything that leaves the app is light, whatever the
+window is showing: print, PDF, Export to HTML, a Folio, Export to Word, Copy as Rich Text,
+Copy as PNG, Copy as SVG, a shared review page, the cheatsheet's print, and a diagram
+pop-out's print, PDF, HTML file and copies. They land on white paper or in somebody else's
+white document, and a dark rendering there is pale text on white.
+
+For most of the page this needs nothing special, because colors come from the stylesheet and
+the stylesheet can be told. The print block in `app.css` pins the light palette; the HTML
+export, the review page and the Folio write `data-theme="light"`; `RenderedHtmlPackager`
+resolves the light `:root` for a clipboard fragment; and `withInlineStyles` flips the page
+to light while it measures what to inline. Two things are not reached that way.
+
+**Diagrams.** Mermaid bakes its colors into the SVG it draws, so no rule can recolor a dark
+diagram. A light one has to be *drawn* light. `webshell/diagram-output.js` is a second
+mermaid, in a sandbox frame of its own, configured light once and never re-themed. While the
+app is dark each rendered diagram in the preview carries two drawings: mermaid's dark one,
+which the screen shows, and the light one beside it in a hidden `.mq-diagram-output`
+wrapper (`attachOutputCopy` in `app.js`). Then:
+
+- **Print and PDF** print the live page, as they always have. The print block hides the dark
+  drawing and shows the light one, the same way it turns the text light, so nothing on screen
+  moves for a print. The host sends `prepareForPrint` first and waits for the answer: it
+  carries the printable page shape, and the answer waits for the last light drawing, which
+  is made a moment after its dark one.
+- **On paper a diagram is never taller than one page.** The browser cannot split an SVG
+  across pages, so the print block sizes it explicitly: page width at most, no wider than
+  mermaid drew it, and no taller than one page. The page is given as a *shape*,
+  `--mq-print-page-ratio` (printable height over width, from `PrintArea.Ratio`, sent by
+  `prepareForPrint`; Letter with one-inch margins otherwise), and the limit is that ratio
+  times the column's laid-out width in container units. Not inches: Chromium lays a printed
+  page out wider than the paper and scales it down, by a third at least, so an inch in print
+  layout is not an inch on paper - a 9in limit printed under six. The block
+  is a plain block on paper, not the screen's flex row, and the light drawing's wrapper is a
+  plain block too - a first version stepped it out of the layout with `display: contents`,
+  and a tall diagram printed an inch wide below a page and a half of empty gray. The pop-out
+  applies the same limit through `diagram.css`, with the height set by script before it
+  prints.
+- **Export to HTML, Copy as Rich Text and the review page** serialize a clone of the preview
+  through `outputMarkup`, which puts each light drawing where its dark one was. Only the `<svg>`
+  is exchanged, so a review's diagram comment numbers, which live in the same block, survive.
+- **Copy as PNG and Copy as SVG** (and the PNGs Word and Copy as Rich Text put where a diagram
+  was) take the light drawing by hash with `outputSvgOf`.
+- **A Folio** renders its documents off-screen with the light mermaid alone.
+- **A diagram pop-out** is handed both drawings, shows the dark one, prints the light one
+  through `diagram.css`, and exports and copies the light one.
+- **The cheatsheet** carries both drawings the same way, and `app.css` prints the light one.
+
+In light mode there is one drawing and it is already the light one, so no wrapper is added.
+
+**Code highlighting.** highlight.js keeps each theme in a stylesheet of its own. The light one
+is always on; the dark one is layered over it in dark mode and carries `media="screen"`, so
+paper never sees it. The two style exactly the same token classes, so on screen the dark one
+covers the light one completely. `withInlineStyles` switches it off while it measures.
+
+Three decisions worth keeping:
+
+1. **Two mermaid instances, not one switched back and forth.** The first attempt re-themed the
+   preview's mermaid for each light render and back again. Every other render then had to be
+   fenced off from that window, the print had to swap drawings in the live page and back, and
+   the pop-out had to do the same with an acknowledgement. Each piece worked; together they
+   were the rule spread over three tricks. A separate light instance makes the rule a fact
+   about one object.
+2. **The author's theme wins.** Light is the *default* for output, not an override. A
+   definition that names its own theme, by an init directive or frontmatter config, is drawn
+   that way in output too: it was a choice somebody made on purpose. Prepending a theme
+   directive to force light would also break any definition that opens with frontmatter,
+   which has to come first.
+3. **Print is the live page, not the HTML export printed in a hidden view.** That was weighed
+   and rejected. The export deliberately restores remote pictures for its reader's browser, so
+   a view loading it would fetch them, which breaks *offline by default*. It drops the "not
+   shown" chip print relies on, leaves pictures over the embedding limit as links nothing in a
+   hidden view can resolve, overflows `NavigateToString`'s size limit, and sets a 16px body
+   that would repaginate every PDF.
+
+What is not covered: the cheatsheet's Print does not wait for its light drawings, which it
+renders straight after the dark ones at load. Only a print in the moment after switching
+theme could catch one missing, and that diagram would print as shown.
+
+---
+
 ## File dialogs are Win32, not WinRT
 
 `FileDialogService` calls the Windows common dialogs through their COM interfaces

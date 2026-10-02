@@ -823,7 +823,7 @@ public sealed partial class MainWindow
     {
         if (_clickedDiagram is { } hit)
         {
-            ViewModel.CopyDiagramSvg(hit.Svg);
+            _ = ViewModel.CopyDiagramSvgAsync(hit.Hash);
         }
     }
 

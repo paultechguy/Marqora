@@ -89,6 +89,9 @@
     };
   }
 
+  // The light drawings a print shows in place of the dark ones; see diagram-output.js.
+  window.mqDiagramOutput.configure(mermaidOptions);
+
   function ensureMermaid() {
     if (mermaidReady) { return mermaidReady; }
 
@@ -164,6 +167,9 @@
       return mermaid.render('mq-cheatsheet-diagram-' + (++diagramSeq), source).then(function (result) {
         node.innerHTML = result.svg;
         node.setAttribute('data-processed', 'true');
+
+        // Not waited on: the next diagram need not sit behind this one's light drawing.
+        attachOutputCopy(node, source);
       }).catch(function (err) {
         var message = document.createElement('span');
         message.className = 'mq-mermaid-error';
@@ -173,6 +179,28 @@
         node.setAttribute('data-processed', 'true');
       });
     };
+  }
+
+  /*
+    While the page is dark, each diagram also carries its light drawing, which app.css prints
+    in place of the dark one: dark mode is a screen setting, and paper is white. The same
+    arrangement as the preview, built from the same shared light mermaid.
+  */
+  function attachOutputCopy(node, source) {
+    if (theme !== 'Dark') { return Promise.resolve(); }
+
+    return window.mqDiagramOutput.render(source).then(function (svg) {
+      var screen = node.querySelector(':scope > svg');
+      if (!screen || theme !== 'Dark') { return; }
+
+      var holder = document.createElement('div');
+      holder.className = 'mq-diagram-output';
+      holder.setAttribute('aria-hidden', 'true');
+      holder.innerHTML = svg;
+      screen.after(holder);
+    }).catch(function (err) {
+      report('warning', 'A diagram could not be drawn for printing', err && err.message);
+    });
   }
 
   /*
@@ -231,13 +259,11 @@
 
   var highlightReady = null;
 
+  /// The light theme always on, the dark one over it for the screen alone - see app.js.
   function applyHighlightTheme() {
-    var dark = theme === 'Dark';
-    var light = document.getElementById('hljs-light');
     var night = document.getElementById('hljs-dark');
 
-    if (light) { light.disabled = dark; }
-    if (night) { night.disabled = !dark; }
+    if (night) { night.disabled = theme !== 'Dark'; }
   }
 
   function ensureHighlighter() {

@@ -130,7 +130,11 @@ public sealed class ReferenceRequestedEventArgs(double x, double y, bool hasSele
 /// Where it sits in the document, which is the number the pop-out window puts in its title.
 /// Only the Open items need it.
 /// </param>
-public readonly record struct DiagramHit(string Hash, string Svg, int Index);
+/// <param name="OutputSvg">
+/// The same diagram drawn for leaving the app, which is light whatever the screen shows. The
+/// same markup as <paramref name="Svg"/> while the app is light.
+/// </param>
+public readonly record struct DiagramHit(string Hash, string Svg, int Index, string OutputSvg);
 
 /// <summary>
 /// A dead link the pointer was over, and the range the whole reference occupies.
@@ -179,6 +183,7 @@ public sealed class DiagramActivatedEventArgs(
     int index,
     string hash,
     string svg,
+    string outputSvg,
     bool shiftHeld) : EventArgs
 {
     public Guid DocumentId { get; } = documentId;
@@ -189,6 +194,12 @@ public sealed class DiagramActivatedEventArgs(
     public string Hash { get; } = hash;
 
     public string Svg { get; } = svg;
+
+    /// <summary>
+    /// The drawing the window prints, exports and copies: light, whatever the screen shows.
+    /// Dark mode is a screen setting, and nothing that leaves the app is dark.
+    /// </summary>
+    public string OutputSvg { get; } = outputSvg;
 
     /// <summary>
     /// Whether Shift was down for the double-click, as a fact about the click rather than a
@@ -209,7 +220,8 @@ public sealed class DiagramActivatedEventArgs(
 /// The hash is the definition the preview is now tracking, which the window keeps so that
 /// reopening the same diagram finds it rather than opening a second copy.
 /// </summary>
-public sealed class DiagramUpdatedEventArgs(Guid diagramId, string hash, int index, string svg) : EventArgs
+public sealed class DiagramUpdatedEventArgs(Guid diagramId, string hash, int index, string svg, string outputSvg)
+    : EventArgs
 {
     public Guid DiagramId { get; } = diagramId;
 
@@ -218,6 +230,9 @@ public sealed class DiagramUpdatedEventArgs(Guid diagramId, string hash, int ind
     public int Index { get; } = index;
 
     public string Svg { get; } = svg;
+
+    /// <summary>The light drawing; see <see cref="DiagramActivatedEventArgs.OutputSvg"/>.</summary>
+    public string OutputSvg { get; } = outputSvg;
 }
 
 /// <summary>
@@ -733,11 +748,19 @@ public interface IPreviewHost
     /// <summary>
     /// One rendered diagram as PNG bytes, or null when it could not be produced.
     ///
-    /// Rasterized in the shell because that is where the diagram is laid out, and by the
-    /// same code the pop-out window uses, so a diagram copied from the page and the same one
-    /// copied from its own window are the same picture.
+    /// Rasterized in the shell, by the same code the pop-out window uses for its own copy, so
+    /// a diagram copied from the page and the same one copied from its window are one picture.
+    ///
+    /// Always the diagram's light drawing, whatever the app is showing: dark mode is a screen
+    /// setting, and the picture is leaving for somebody's white page. See diagram-output.js.
     /// </summary>
     Task<byte[]?> RequestDiagramPngAsync(string hash);
+
+    /// <summary>
+    /// One rendered diagram as SVG markup, light like <see cref="RequestDiagramPngAsync"/>,
+    /// or null when it could not be produced.
+    /// </summary>
+    Task<string?> RequestDiagramSvgAsync(string hash);
 
     /// <summary>
     /// The preview's markup for whatever is selected there, or for the whole document when

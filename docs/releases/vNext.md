@@ -10,6 +10,15 @@
     build\release-notes-vnext.md.
 -->
 
+## Everything you print, export or copy is light
+
+Dark mode now stays on your screen. A print, a PDF, an HTML export, a Folio, a Word document,
+a shared review page, and a diagram copied as PNG, SVG or rich text all come out light, even
+when Marqora is dark. Diagrams used to come along in their dark colors, with pale text on
+dark boxes that all but disappeared on a white page, and code copied as rich text carried
+the dark theme's colors. A diagram opened in its own window prints, exports and copies light
+too, and so does the cheatsheet's Print. A diagram that sets its own theme still uses it.
+
 ## Fixes
 
 **Commands that would change a read-only document are grayed out.** The Tools menu's format and
@@ -20,3 +29,12 @@ only the documents it can change, and says how many read-only ones it will skip.
 **Long notes in sequence diagrams stay inside their box.** A note spanning two participants
 used to run past both edges of its box when the text was long. It now wraps to fit, in the
 preview, the cheatsheet and exports.
+
+**Diagrams copied as PNG paste into Word and Outlook.** **Copy as PNG** pasted nothing in Word
+or Outlook, though it worked in Teams. It now pastes everywhere, still with a transparent
+background where the destination supports one.
+
+**Tall diagrams fit on one printed page.** A diagram taller than a page used to be cut off at
+the bottom in a print or a PDF. A diagram now prints at its normal size when it fits, and
+otherwise shrinks evenly until it fits the page. The "Double-click to open" label no longer
+prints either.

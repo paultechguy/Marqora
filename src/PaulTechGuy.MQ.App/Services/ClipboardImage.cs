@@ -235,7 +235,8 @@ internal static class ClipboardImage
     ///
     /// <see cref="PngFormat"/> - the one <see cref="ReadPngAsync"/> looks for first, and the
     /// one browsers and most modern applications take - gets the bytes untouched, alpha and
-    /// all, so a diagram pastes with nothing behind it.
+    /// all, so a diagram pastes with nothing behind it. It is written through Win32 rather than
+    /// the DataPackage: see <see cref="AddPngFlavorAsync"/>.
     ///
     /// The standard bitmap flavor gets a copy composited onto white. A DIB carries no alpha
     /// its consumers can be relied on to honor, and the transparent pixels in a canvas are
@@ -264,22 +265,25 @@ internal static class ClipboardImage
             // flavor: a diagram on black beats no diagram at all.
             byte[] opaque = await FlattenOntoWhiteAsync(png, logger).ConfigureAwait(true) ?? png;
 
-            using var transparent = new InMemoryRandomAccessStream();
             using var flattened = new InMemoryRandomAccessStream();
 
-            await transparent.WriteAsync(png.AsBuffer()).AsTask().ConfigureAwait(true);
             await flattened.WriteAsync(opaque.AsBuffer()).AsTask().ConfigureAwait(true);
 
-            transparent.Seek(0);
             flattened.Seek(0);
 
             var package = new DataPackage();
 
-            package.SetData(PngFormat, RandomAccessStreamReference.CreateFromStream(transparent));
             package.SetBitmap(RandomAccessStreamReference.CreateFromStream(flattened));
 
             Clipboard.SetContent(package);
             Clipboard.Flush();
+
+            // The bitmap is already there, so a PNG that cannot be added still leaves a copy
+            // that pastes - white-backed, in everything.
+            if (!await AddPngFlavorAsync(png).ConfigureAwait(true))
+            {
+                logger.LogWarning("Could not add the PNG flavor to the clipboard; only the bitmap was copied.");
+            }
 
             return true;
         }
@@ -290,6 +294,115 @@ internal static class ClipboardImage
             return false;
         }
     }
+
+    /// <summary>
+    /// Adds the PNG bytes to what is already on the clipboard, as a block of global memory.
+    ///
+    /// Not through the DataPackage, because that does not work. Given a stream reference under
+    /// a format it does not know, a DataPackage advertises the format to Win32 applications and
+    /// then hands them an empty medium when they ask for it. Word and Outlook take a PNG over a
+    /// bitmap whenever one is offered, so they asked, got nothing, and pasted nothing - while
+    /// Teams, which reads the bitmap, pasted fine. Marqora's own paste never noticed, because
+    /// reading through a DataPackageView unwraps the reference on the same side that made it.
+    ///
+    /// Global memory is the medium every reader of this format accepts. No EmptyClipboard: the
+    /// bitmap the DataPackage just flushed stays, and this only adds beside it.
+    ///
+    /// A few short retries, because the clipboard is a lock other processes hold too - clipboard
+    /// history among them, which reads it the moment the flush above lands.
+    /// </summary>
+    private static async Task<bool> AddPngFlavorAsync(byte[] png)
+    {
+        uint format = RegisterClipboardFormat(PngFormat);
+
+        if (format == 0)
+        {
+            return false;
+        }
+
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                try
+                {
+                    return SetGlobal(format, png);
+                }
+                finally
+                {
+                    CloseClipboard();
+                }
+            }
+
+            await Task.Delay(20).ConfigureAwait(true);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Copies the bytes into movable global memory and hands it to the open clipboard, which
+    /// owns it from then on. Freed here only when the hand-over fails.
+    /// </summary>
+    private static bool SetGlobal(uint format, byte[] bytes)
+    {
+        IntPtr handle = GlobalAlloc(GmemMoveable, (UIntPtr)bytes.Length);
+
+        if (handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        IntPtr target = GlobalLock(handle);
+
+        if (target == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        Marshal.Copy(bytes, 0, target, bytes.Length);
+        GlobalUnlock(handle);
+
+        if (SetClipboardData(format, handle) == IntPtr.Zero)
+        {
+            GlobalFree(handle);
+            return false;
+        }
+
+        return true;
+    }
+
+    private const uint GmemMoveable = 0x0002;
+
+    // DllImport rather than LibraryImport, matching the rest of the app's interop: the
+    // generator's unsafe marshalling would mean AllowUnsafeBlocks across the project.
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint RegisterClipboardFormat(string lpszFormat);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalLock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalUnlock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalFree(IntPtr hMem);
 
     /// <summary>
     /// The same picture with everything the diagram did not paint turned white, for the

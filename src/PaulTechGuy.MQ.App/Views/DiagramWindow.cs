@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Windowing;
@@ -78,6 +79,13 @@ public sealed partial class DiagramWindow : Window
     private int _index;
 
     private string _svg;
+
+    /// <summary>
+    /// The same diagram drawn light, which is what leaves this window: its print, its PDF, its
+    /// HTML file and both copies. Dark mode is a screen setting. The page carries both drawings
+    /// and its print stylesheet shows this one, so a print needs nothing moved for it.
+    /// </summary>
+    private string _outputSvg;
     private bool _isReady;
     private bool _isRemoved;
     private bool _isInvalid;
@@ -94,6 +102,7 @@ public sealed partial class DiagramWindow : Window
         string documentName,
         string documentPath,
         string svg,
+        string outputSvg,
         ILogger<DiagramWindow> logger)
     {
         _assets = assets;
@@ -101,6 +110,7 @@ public sealed partial class DiagramWindow : Window
         _settings = settings;
         _logger = logger;
         _svg = svg;
+        _outputSvg = outputSvg;
         _index = index;
         _title = title;
         _documentName = documentName;
@@ -221,20 +231,23 @@ public sealed partial class DiagramWindow : Window
     /// An update also means the diagram is back, so undoing a deletion clears the notice
     /// rather than leaving the window claiming to be stale while showing something current.
     /// </summary>
-    public void Update(string hash, int index, string svg)
+    public void Update(string hash, int index, string svg, string outputSvg)
     {
         MarkPresent();
 
         Hash = hash;
         Retitle(index);
 
-        if (string.Equals(_svg, svg, StringComparison.Ordinal))
+        // Both count: the light drawing arrives a moment after the dark one it belongs to.
+        if (string.Equals(_svg, svg, StringComparison.Ordinal)
+            && string.Equals(_outputSvg, outputSvg, StringComparison.Ordinal))
         {
             return;
         }
 
         _svg = svg;
-        Send("setDiagram", new { svg });
+        _outputSvg = outputSvg;
+        Send("setDiagram", new { svg, outputSvg });
     }
 
     /// <summary>
@@ -518,7 +531,7 @@ public sealed partial class DiagramWindow : Window
 
         Send("setTheme", new { theme = _theme.Effective.ToString() });
         Send("setSource", new { path = _documentPath });
-        Send("setDiagram", new { svg = _svg });
+        Send("setDiagram", new { svg = _svg, outputSvg = _outputSvg });
 
         foreach (string queued in _pending)
         {
@@ -559,17 +572,16 @@ public sealed partial class DiagramWindow : Window
         menu.Items.Add(new MenuFlyoutSeparator());
 
         // Rasterized in the page rather than here: the SVG only exists as markup on this
-        // side, and the page already has it laid out at its natural size. The page answers
+        // side. The page rasterizes the light drawing, not the one on screen, and answers
         // with a "diagramPng" message, handled in OnWebMessageReceived.
         var copyPng = new MenuFlyoutItem { Text = "Copy as PNG" };
         copyPng.Click += (_, _) => Send("command", new { name = "copyPng" });
         menu.Items.Add(copyPng);
 
-        // The SVG this window is showing, as markup. It is what the preview rendered, so a
-        // paste lands the diagram exactly as it appears here rather than as mermaid source
-        // somebody else would have to render.
+        // The light drawing as markup - the preview's render rather than mermaid source
+        // somebody else would have to render, and light whatever this window shows.
         var copySvg = new MenuFlyoutItem { Text = "Copy as SVG" };
-        copySvg.Click += (_, _) => ClipboardText.Set(_svg, _logger);
+        copySvg.Click += (_, _) => ClipboardText.Set(_outputSvg, _logger);
         menu.Items.Add(copySvg);
 
         menu.Items.Add(new MenuFlyoutSeparator());
@@ -650,6 +662,8 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
+            await SetPrintPageRatioAsync(core, PrintArea.Ratio(
+                setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches));
             await WebViewPrinting.ExportPdfAsync(core, path, setup);
 
             _logger.LogInformation("Exported a diagram to {Path}.", path);
@@ -682,7 +696,7 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
-            await File.WriteAllTextAsync(path, DiagramHtmlDocument.Build(_svg, _title));
+            await File.WriteAllTextAsync(path, DiagramHtmlDocument.Build(_outputSvg, _title));
 
             _logger.LogInformation("Exported a diagram to {Path}.", path);
         }
@@ -730,6 +744,8 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
+            await SetPrintPageRatioAsync(core, PrintArea.Ratio(
+                job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches));
             await WebViewPrinting.PrintAsync(core, job);
         }
         catch (Exception ex)
@@ -737,6 +753,19 @@ public sealed partial class DiagramWindow : Window
             _logger.LogWarning(ex, "Could not print the diagram.");
         }
     }
+
+    /// <summary>
+    /// Tells the page the printable area's shape, which diagram.css holds the diagram to: the
+    /// browser cannot split an SVG across pages, so a taller one was cut off. A shape rather
+    /// than a height - see <see cref="PrintArea"/> for why inches print too small.
+    ///
+    /// A script rather than a message, because a message is not known to have landed when the
+    /// print starts, and this returns once it has run.
+    /// </summary>
+    private static async Task SetPrintPageRatioAsync(CoreWebView2 core, double ratio) =>
+        await core.ExecuteScriptAsync(string.Create(
+            CultureInfo.InvariantCulture,
+            $"document.documentElement.style.setProperty('--mq-print-page-ratio', '{ratio}');"));
 
     /// <summary>The page is local and static; nothing should ever navigate it elsewhere.</summary>
     private void OnNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs args)

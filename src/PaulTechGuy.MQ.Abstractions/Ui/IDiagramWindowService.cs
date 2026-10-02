@@ -44,12 +44,17 @@ public interface IDiagramWindowService
     /// the gesture means one thing whether or not the diagram happens to be open already.
     /// The caller has already weighed the preference against the modifier; by here it is
     /// simply what to do.
+    ///
+    /// <paramref name="outputSvg"/> is the same diagram drawn light, which is what the window
+    /// prints, exports and copies: dark mode is a screen setting, and nothing that leaves the
+    /// app is dark.
     /// </summary>
     Task ShowAsync(
         Guid documentId,
         int index,
         string hash,
         string svg,
+        string outputSvg,
         string documentName,
         string documentPath,
         bool maximize);
@@ -59,7 +64,7 @@ public interface IDiagramWindowService
     /// preview is now tracking for it. Does nothing otherwise, so a stale report costs
     /// nothing.
     /// </summary>
-    void Update(Guid diagramId, string hash, int index, string svg);
+    void Update(Guid diagramId, string hash, int index, string svg, string outputSvg);
 
     /// <summary>
     /// Tells the window with this id that its diagram has gone, so it stops presenting a

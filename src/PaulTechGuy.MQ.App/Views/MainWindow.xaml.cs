@@ -884,7 +884,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>A watched diagram was edited and re-rendered; its window redraws in place.</summary>
     private void OnDiagramUpdated(object? sender, DiagramUpdatedEventArgs e) =>
-        _diagramWindows.Update(e.DiagramId, e.Hash, e.Index, e.Svg);
+        _diagramWindows.Update(e.DiagramId, e.Hash, e.Index, e.Svg, e.OutputSvg);
 
     /// <summary>The diagram behind a window is gone; the window says so rather than lying.</summary>
     private void OnDiagramRemoved(object? sender, Guid e) =>
