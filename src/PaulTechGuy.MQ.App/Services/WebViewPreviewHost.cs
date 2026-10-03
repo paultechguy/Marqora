@@ -1696,7 +1696,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                         Localize(ReadString(payload, "imageUrl")),
                         spelling,
                         linkFinding,
-                        diagram));
+                        diagram,
+                        ReadInt(payload, "sourceLine", -1)));
                 }
                 break;
 

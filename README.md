@@ -796,6 +796,15 @@ diagrams and the rest of mermaid 11 are supported, and diagrams re-render on the
 Rendered SVG is cached by diagram source, so typing elsewhere in a diagram-heavy document
 does not re-render the diagrams.
 
+A diagram too wide for the page can be laid out the other way. With the cursor in its fence,
+choose **Format > Diagram Layout > Top to Bottom** or **Left to Right**, or right-click inside
+the fence in the source pane for the same submenu. Mermaid draws it again in that direction,
+text upright, and every print, PDF, Word export and copy follows. It rewrites the direction
+the diagram's definition gives — `flowchart LR` becomes `flowchart TB` — and nothing else, so
+`Ctrl+Z` takes it back. Flowcharts, state, class, ER and
+requirement diagrams, git graphs and timelines have a direction; on a sequence diagram, a Gantt
+chart or another type without one, the item is grayed.
+
 **Checking a document**
 
 `View > Show Problems` underlines things that are wrong, in the source pane. It is on by

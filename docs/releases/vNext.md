@@ -19,6 +19,23 @@ dark boxes that all but disappeared on a white page, and code copied as rich tex
 the dark theme's colors. A diagram opened in its own window prints, exports and copies light
 too, and so does the cheatsheet's Print. A diagram that sets its own theme still uses it.
 
+## Lay a wide diagram out the other way
+
+A diagram drawn left to right can be too wide for a page, and print shrinks it until its text
+is hard to read. Now you can redraw it top to bottom. Put the cursor in the diagram and choose
+**Format > Diagram Layout > Top to Bottom**, or right-click inside it in the source pane for
+the same choices. **Left to Right** turns a tall diagram the other way, and a check mark shows
+which way the diagram runs now.
+
+Mermaid lays the whole diagram out again in the new direction with its text upright, and
+prints, PDFs, Word exports and copies all follow. Marqora changes only the line that says which
+way the diagram runs, one diagram at a time, and `Ctrl+Z` undoes it in one step. Subgraphs keep
+any direction they set for themselves.
+
+Flowcharts, state, class, ER and requirement diagrams, git graphs and timelines can be turned.
+Diagrams with no direction to change, such as sequence diagrams and Gantt charts, show the
+item grayed out, and so does a read-only document.
+
 ## Fixes
 
 **Commands that would change a read-only document are grayed out.** The Tools menu's format and

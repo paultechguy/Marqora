@@ -71,7 +71,8 @@ public sealed class PaneContextMenuEventArgs(
     string? imageUrl,
     SpellingHit? spelling,
     LinkFindingHit? linkFinding,
-    DiagramHit? diagram) : EventArgs
+    DiagramHit? diagram,
+    int sourceLine = -1) : EventArgs
 {
     public EditorPane Pane { get; } = pane;
 
@@ -96,6 +97,13 @@ public sealed class PaneContextMenuEventArgs(
 
     /// <summary>The rendered diagram that was right-clicked, or null if there was none.</summary>
     public DiagramHit? Diagram { get; } = diagram;
+
+    /// <summary>
+    /// The zero-based source line under the pointer, or -1 off the text or in the preview. What
+    /// the Diagram Layout submenu reads to find the diagram it is about; the spelling and link
+    /// blocks carry their own lines because theirs come from a marker, not the pointer.
+    /// </summary>
+    public int SourceLine { get; } = sourceLine;
 }
 
 /// <summary>

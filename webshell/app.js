@@ -543,10 +543,28 @@
           linkTarget: deadLink ? deadLink.url : '',
           linkLine: deadLink ? deadLink.line : -1,
           linkStart: deadLink ? deadLink.start : -1,
-          linkEnd: deadLink ? deadLink.end : -1
+          linkEnd: deadLink ? deadLink.end : -1,
+
+          // The source line under the pointer, zero-based, or -1 off the text or in the
+          // preview. The host reads the diagram around it for the Diagram Layout submenu.
+          sourceLine: sourceLineAt(pane, e.clientX, e.clientY)
         });
       });
     }
+  }
+
+  /*
+    The zero-based source line under the pointer, or -1.
+
+    The pointer rather than the caret, as the spelling block below uses: a right-click on a
+    diagram the caret is not in is a question about that diagram.
+  */
+  function sourceLineAt(pane, clientX, clientY) {
+    if (pane !== 'Source' || !state.editor) { return -1; }
+
+    var target = state.editor.getTargetAtClientPoint(clientX, clientY);
+
+    return target && target.position ? target.position.lineNumber - 1 : -1;
   }
 
   /*

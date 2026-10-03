@@ -1166,6 +1166,38 @@
                                 <FontIcon Glyph="&#xE290;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+
+                        <MenuFlyoutSeparator />
+
+                        <!--
+                            The diagram the caret is in, laid out the other way. The same
+                            submenu the source pane's right-click offers for the diagram under
+                            the pointer, and the same edit behind it, so one Ctrl+Z takes it
+                            back. Never on the preview's menu: see "The preview never changes
+                            the source" in CLAUDE.md.
+
+                            Always here and grayed when it cannot act - caret outside a diagram,
+                            a diagram whose type has no direction, a read-only document - where
+                            the right-click hides it away from a diagram. A menu bar keeps its
+                            items in place; a right-click menu is fitted to what was clicked.
+
+                            IsEnabled on the submenu alone, which has no Command to race it.
+                            The checks are re-announced on every caret report for the reason
+                            RefreshCaretDiagram gives.
+                        -->
+                        <MenuFlyoutSubItem Text="Diagram Layout"
+                                           IsEnabled="{x:Bind ViewModel.CanSetDiagramLayout, Mode=OneWay}">
+                            <RadioMenuFlyoutItem Text="Top to Bottom"
+                                                 GroupName="FormatDiagramLayout"
+                                                 IsChecked="{x:Bind ViewModel.IsCaretDiagramTopToBottom, Mode=OneWay}"
+                                                 Command="{x:Bind ViewModel.SetDiagramLayoutCommand}"
+                                                 CommandParameter="TopToBottom" />
+                            <RadioMenuFlyoutItem Text="Left to Right"
+                                                 GroupName="FormatDiagramLayout"
+                                                 IsChecked="{x:Bind ViewModel.IsCaretDiagramLeftToRight, Mode=OneWay}"
+                                                 Command="{x:Bind ViewModel.SetDiagramLayoutCommand}"
+                                                 CommandParameter="LeftToRight" />
+                        </MenuFlyoutSubItem>
                     </MenuBarItem>
 
                     <!--

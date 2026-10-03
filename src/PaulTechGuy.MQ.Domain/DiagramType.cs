@@ -26,11 +26,25 @@ public static class DiagramType
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        string[] lines = source.Split('\n');
+        return HeaderOf(source.Split('\n'), fenceLine) is { Type.Length: > 0 } header
+            ? header.Type
+            : Fallback;
+    }
+
+    /// <summary>
+    /// The line that says what the diagram is, and the word it says it with.
+    ///
+    /// Shared with <see cref="DiagramLayout"/>, which needs the line as well as the word: the
+    /// direction a flowchart is drawn in is written on it. Null when the fence closes, or the
+    /// search gives out, before any such line. The type is empty when the line is there but does
+    /// not open with a word.
+    /// </summary>
+    internal static (int Line, string Type)? HeaderOf(IReadOnlyList<string> lines, int fenceLine)
+    {
         bool inFrontMatter = false;
         bool first = true;
 
-        for (int i = fenceLine + 1; i >= 1 && i < lines.Length && i <= fenceLine + MaxLines; i++)
+        for (int i = fenceLine + 1; i >= 1 && i < lines.Count && i <= fenceLine + MaxLines; i++)
         {
             string line = lines[i].Trim();
 
@@ -52,7 +66,7 @@ public static class DiagramType
 
             if (line.StartsWith("```", StringComparison.Ordinal) || line.StartsWith("~~~", StringComparison.Ordinal))
             {
-                return Fallback;
+                return null;
             }
 
             int end = 0;
@@ -62,9 +76,9 @@ public static class DiagramType
                 end++;
             }
 
-            return end > 0 ? line[..end] : Fallback;
+            return (i, line[..end]);
         }
 
-        return Fallback;
+        return null;
     }
 }

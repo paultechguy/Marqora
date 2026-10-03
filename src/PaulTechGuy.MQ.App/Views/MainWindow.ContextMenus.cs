@@ -128,6 +128,23 @@ public sealed partial class MainWindow
     /// <summary>Shown only when the caret is on a numbered list item.</summary>
     private MenuFlyoutItem? _renumberListItem;
 
+    /// <summary>
+    /// Which way the diagram under the pointer runs. Shown only inside a mermaid fence, and
+    /// grayed there when the diagram's type has no direction - see DiagramLayout - so it sits in
+    /// the same place on every diagram rather than coming and going with the type.
+    ///
+    /// Here and not on the preview's diagram menu: the preview's menu never changes the text,
+    /// and an edit made from it would leave Ctrl+Z with nowhere to go in Preview view.
+    /// </summary>
+    private MenuFlyoutSubItem? _diagramLayoutItem;
+
+    private RadioMenuFlyoutItem? _layoutDownItem;
+
+    private RadioMenuFlyoutItem? _layoutAcrossItem;
+
+    /// <summary>The source line that was right-clicked, captured for the layout items.</summary>
+    private int _clickedSourceLine = -1;
+
     /// <summary>Enabled only when the document has a heading to refer to.</summary>
     private MenuFlyoutItem? _insertReferenceItem;
 
@@ -199,6 +216,8 @@ public sealed partial class MainWindow
             // with no headings yet is one that will have some. CanInsertReference rather than the
             // headings alone, so a read-only tab refuses it here as it does on the Insert menu.
             if (_insertReferenceItem is not null) { _insertReferenceItem.IsEnabled = ViewModel.CanInsertReference; }
+
+            FitDiagramLayoutItems(e.SourceLine, writable);
 
             NoteReferenceContext(e);
         }
@@ -665,8 +684,30 @@ public sealed partial class MainWindow
         _renumberListItem.Click += (_, _) => ViewModel.RenumberListCommand.Execute(null);
         menu.Items.Add(Writes(_renumberListItem));
 
+        _layoutDownItem = Writes(LayoutItem("Top to Bottom", DiagramDirection.TopToBottom));
+        _layoutAcrossItem = Writes(LayoutItem("Left to Right", DiagramDirection.LeftToRight));
+
+        _diagramLayoutItem = new MenuFlyoutSubItem
+        {
+            Text = "Diagram Layout",
+            Visibility = Visibility.Collapsed,
+        };
+
+        _diagramLayoutItem.Items.Add(_layoutDownItem);
+        _diagramLayoutItem.Items.Add(_layoutAcrossItem);
+        menu.Items.Add(_diagramLayoutItem);
+
         _sourceMenu = menu;
         return menu;
+
+        RadioMenuFlyoutItem LayoutItem(string text, DiagramDirection direction)
+        {
+            var item = new RadioMenuFlyoutItem { Text = text, GroupName = "DiagramLayout" };
+
+            item.Click += (_, _) => _ = ViewModel.SetDiagramDirectionAsync(_clickedSourceLine, direction);
+
+            return item;
+        }
 
         MenuFlyoutItem Edit(string text, string command, string accelerator)
         {
@@ -688,6 +729,10 @@ public sealed partial class MainWindow
     /// <summary>
     /// The preview's menu: reading and getting the document out, which is what the pane is
     /// for. Nothing that edits, because nothing in the preview is editable.
+    ///
+    /// That is a project rule, not just how this menu happens to be today. Nothing here is
+    /// registered with Writes, and an item that would change the markdown belongs on the source
+    /// menu instead. See "The preview never changes the source" in CLAUDE.md.
     /// </summary>
     private MenuFlyout BuildPreviewMenu()
     {
@@ -835,6 +880,36 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Fits the Diagram Layout submenu to the line under the pointer: hidden away from a
+    /// diagram, grayed on one whose type has no direction or on a read-only document, and
+    /// otherwise checked at the way the diagram runs now. Bottom to top and right to left check
+    /// neither, and are left alone unless one of the two is chosen.
+    /// </summary>
+    private void FitDiagramLayoutItems(int line, bool writable)
+    {
+        _clickedSourceLine = line;
+
+        (bool inDiagram, DiagramDirection? current) = ViewModel.DiagramLayoutAt(line);
+
+        Show(_diagramLayoutItem, inDiagram);
+
+        if (_diagramLayoutItem is not null)
+        {
+            _diagramLayoutItem.IsEnabled = current is not null && writable;
+        }
+
+        if (_layoutDownItem is not null)
+        {
+            _layoutDownItem.IsChecked = current == DiagramDirection.TopToBottom;
+        }
+
+        if (_layoutAcrossItem is not null)
+        {
+            _layoutAcrossItem.IsChecked = current == DiagramDirection.LeftToRight;
+        }
+    }
+
     /// <summary>Registers an item as one that needs a document with something in it.</summary>
     private MenuFlyoutItem NeedsContent(MenuFlyoutItem item)
     {
@@ -842,7 +917,8 @@ public sealed partial class MainWindow
         return item;
     }
 
-    private MenuFlyoutItem Writes(MenuFlyoutItem item)
+    private T Writes<T>(T item)
+        where T : MenuFlyoutItem
     {
         _writingItems.Add(item);
         return item;

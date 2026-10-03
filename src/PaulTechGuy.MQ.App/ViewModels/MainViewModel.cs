@@ -219,6 +219,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ToggleReadOnlyCommand))]
     [NotifyCanExecuteChangedFor(nameof(FormatDocumentCommand))]
     [NotifyCanExecuteChangedFor(nameof(NumberHeadingsCommand))]
+    [NotifyPropertyChangedFor(nameof(CanSetDiagramLayout))]
+    [NotifyCanExecuteChangedFor(nameof(SetDiagramLayoutCommand))]
     [NotifyCanExecuteChangedFor(nameof(RemoveHeadingNumbersCommand))]
     public partial bool ActiveTabIsReadOnly { get; set; }
 
@@ -5467,6 +5469,139 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// The diagram around a source line, for the source pane's Diagram Layout submenu.
+    ///
+    /// InDiagram is false when the line is not in a mermaid fence, and the submenu is then not
+    /// shown at all. Current is null when it is, but the diagram's type has no direction - a
+    /// sequence diagram, a Gantt chart - and the submenu is then shown grayed, so it is in the
+    /// same place on every diagram. See <see cref="DiagramLayout"/>.
+    /// </summary>
+    public (bool InDiagram, DiagramDirection? Current) DiagramLayoutAt(int line)
+    {
+        if (line < 0 || _workspace.Active is not { Text: { } text })
+        {
+            return (false, null);
+        }
+
+        string[] lines = SourceLines(text);
+
+        return DiagramLayout.FenceAt(lines, line) is { } fence
+            ? (true, DiagramLayout.Current(lines, fence.Open, fence.Close))
+            : (false, null);
+    }
+
+    /// <summary>
+    /// Turns the diagram around a source line to run the way chosen, by rewriting the direction
+    /// its definition gives - the diagram's own, never a subgraph's.
+    ///
+    /// The text is read again here rather than trusted from when the menu opened, as the link
+    /// repairs above do. One edit, so one Ctrl+Z takes it back.
+    /// </summary>
+    public async Task SetDiagramDirectionAsync(int line, DiagramDirection want)
+    {
+        if (_host is null || _workspace.Active is not { Text: { } text })
+        {
+            return;
+        }
+
+        if (RefuseActiveIfReadOnly("changing the diagram's layout"))
+        {
+            return;
+        }
+
+        string[] lines = SourceLines(text);
+
+        if (DiagramLayout.FenceAt(lines, line) is not { } fence
+            || DiagramLayout.EditFor(lines, fence.Open, fence.Close, want) is not { } edit)
+        {
+            return;
+        }
+
+        // A new direction line goes in at the end of the header, carrying its own newline; the
+        // shell turns that into the document's own line ending.
+        TextEdit change = edit.InsertsLine
+            ? new TextEdit(
+                new TextRange(
+                    new TextPosition(edit.Line, lines[edit.Line].Length),
+                    new TextPosition(edit.Line, lines[edit.Line].Length)),
+                "\n" + edit.Text)
+            : new TextEdit(
+                new TextRange(new TextPosition(edit.Line, edit.Start), new TextPosition(edit.Line, edit.End)),
+                edit.Text);
+
+        await _host.ApplyEditsAsync(new EditResult([change], null)).ConfigureAwait(true);
+
+        StatusText = want == DiagramDirection.TopToBottom
+            ? "Diagram laid out top to bottom"
+            : "Diagram laid out left to right";
+    }
+
+    private static string[] SourceLines(string text) =>
+        text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+    /// <summary>
+    /// Which way the diagram at the caret runs, for Format > Diagram Layout: null when the caret
+    /// is not in a diagram, or is in one whose type has no direction. The right-click menu asks
+    /// <see cref="DiagramLayoutAt"/> about the pointer instead; both end at DiagramLayout.
+    /// </summary>
+    public DiagramDirection? CaretDiagramDirection { get; private set; }
+
+    /// <summary>Whether Format > Diagram Layout can act: a diagram with a direction, on a document that can be written.</summary>
+    public bool CanSetDiagramLayout => CaretDiagramDirection is not null && !ActiveTabIsReadOnly;
+
+    public bool IsCaretDiagramTopToBottom => CaretDiagramDirection == DiagramDirection.TopToBottom;
+
+    public bool IsCaretDiagramLeftToRight => CaretDiagramDirection == DiagramDirection.LeftToRight;
+
+    /// <summary>
+    /// The text the caret's diagram was last read from, and its lines. Moving the caret without
+    /// typing then costs a fence lookup rather than splitting the whole document again.
+    /// </summary>
+    private string? _caretDiagramSource;
+
+    private string[] _caretDiagramLines = [];
+
+    /// <summary>
+    /// Reads the diagram at the caret again and announces all four properties whether or not
+    /// they changed - the reason <see cref="UpdateMarkState"/> gives. A radio item flips itself
+    /// the moment it is clicked, and a binding that is only pushed on a real change would leave
+    /// it showing a choice the document never took.
+    /// </summary>
+    private void RefreshCaretDiagram()
+    {
+        DiagramDirection? current = null;
+
+        if (_workspace.Active is { Text: { } text })
+        {
+            if (!ReferenceEquals(text, _caretDiagramSource))
+            {
+                _caretDiagramSource = text;
+                _caretDiagramLines = SourceLines(text);
+            }
+
+            if (DiagramLayout.FenceAt(_caretDiagramLines, CursorLine - 1) is { } fence)
+            {
+                current = DiagramLayout.Current(_caretDiagramLines, fence.Open, fence.Close);
+            }
+        }
+
+        CaretDiagramDirection = current;
+
+        OnPropertyChanged(nameof(CaretDiagramDirection));
+        OnPropertyChanged(nameof(CanSetDiagramLayout));
+        OnPropertyChanged(nameof(IsCaretDiagramTopToBottom));
+        OnPropertyChanged(nameof(IsCaretDiagramLeftToRight));
+        SetDiagramLayoutCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Format > Diagram Layout: turns the diagram at the caret.</summary>
+    [RelayCommand(CanExecute = nameof(CanSetDiagramLayout))]
+    private Task SetDiagramLayoutAsync(string? direction) =>
+        Enum.TryParse(direction, out DiagramDirection want)
+            ? SetDiagramDirectionAsync(CursorLine - 1, want)
+            : Task.CompletedTask;
+
+    /// <summary>
     /// Which characters on the line are the address, for a repair that is about to replace them.
     ///
     /// Two shapes, and they are told apart by looking rather than by carrying a flag across the
@@ -10589,6 +10724,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CursorColumn = column;
         WordCount = words;
         CharacterCount = characters;
+
+        // Format > Diagram Layout follows the caret. Here rather than on the caret report
+        // because this one also arrives after an edit, which can change the diagram's type or
+        // direction without the caret moving at all.
+        RefreshCaretDiagram();
 
         // The caret is what the outline follows while the source pane is the one in use.
         // Monaco counts lines from one and every line inside this app is counted from zero.
