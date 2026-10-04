@@ -1627,14 +1627,16 @@
   function attachOutputCopy(node, source, key) {
     if (mermaidTheme() !== 'dark') { return; }
 
-    var cached = window.mqDiagramOutput.cached(source);
+    // In the color theme's light colors - the drawing that leaves the app is light.
+    var definition = themedDefinition(source, 'light');
+    var cached = window.mqDiagramOutput.cached(definition);
 
     if (cached !== null) {
       placeOutputCopy(node, cached);
       return;
     }
 
-    var job = window.mqDiagramOutput.render(source).then(function (svg) {
+    var job = window.mqDiagramOutput.render(definition).then(function (svg) {
       if (node.isConnected
           && node.getAttribute('data-mq-diagram') === key
           && mermaidTheme() === 'dark') {
@@ -2085,6 +2087,69 @@
     return !!front && /^\s*theme\s*:/m.test(front[1]);
   }
 
+  /*
+    The definition mermaid draws, in the color theme's diagram colors.
+
+    A theme with diagram colors has them put in front of the author's definition as an init
+    line naming mermaid's base theme - the one theme built to be recolored from a handful of
+    values, from which it works out the rest (cluster fills, sequence actors, edge labels).
+    Each diagram carries its own colors that way, so neither mermaid instance is ever
+    re-initialized for a theme: the screen's keeps following light and dark, and the output
+    one stays configured light once and never touched, which is the arrangement
+    diagram-output.js explains and depends on.
+
+    mermaid merges every init line it finds, later ones winning, so anything else the author
+    set - sequence wrapping, curves, fonts - still applies on top. A definition that names a
+    mermaid theme of its own is left exactly as written, and so is every definition under a
+    theme that keeps mermaid's stock look (Default), whose palettes carry no diagram colors.
+
+    Frontmatter is the one thing that has to stay first, so the line goes after it.
+
+    `mode` is the palette: 'dark' for the screen in dark mode, 'light' for the screen in light
+    mode and for every drawing that leaves the app, which is on white.
+  */
+  var DIAGRAM_VARIABLES = {
+    primaryColor: 'diagram-primary',
+    primaryBorderColor: 'diagram-primary-border',
+    primaryTextColor: 'diagram-primary-text',
+    secondaryColor: 'diagram-secondary',
+    tertiaryColor: 'diagram-tertiary',
+    lineColor: 'diagram-line',
+    noteBkgColor: 'diagram-note',
+    noteTextColor: 'diagram-note-text',
+    // mermaid draws text outside a node - edge labels, sequence messages - in textColor, which
+    // it would otherwise take from primaryTextColor anyway; named so the tests' rule that the
+    // node text reads on the page as well is visibly the rule that governs it.
+    textColor: 'diagram-primary-text'
+  };
+
+  function themedDefinition(source, mode) {
+    var theme = state.colorThemes[state.colorTheme];
+    var palette = theme ? (mode === 'dark' ? theme.dark : theme.light) : null;
+
+    if (!palette || !palette['diagram-primary'] || namesOwnTheme(source)) { return source; }
+
+    var variables = {
+      darkMode: mode === 'dark',
+      background: mode === 'dark'
+        ? (getComputedStyle(document.documentElement).getPropertyValue('--mq-bg').trim() || '#1f1f1f')
+        : '#ffffff'
+    };
+
+    for (var name in DIAGRAM_VARIABLES) {
+      if (Object.prototype.hasOwnProperty.call(DIAGRAM_VARIABLES, name)) {
+        variables[name] = palette[DIAGRAM_VARIABLES[name]];
+      }
+    }
+
+    var line = '%%{init: ' + JSON.stringify({ theme: 'base', themeVariables: variables }) + '}%%\n';
+    var front = /^\s*---\r?\n[\s\S]*?\r?\n\s*---[^\n]*(?:\n|$)/.exec(source);
+
+    return front
+      ? source.slice(0, front[0].length) + line + source.slice(front[0].length)
+      : line + source;
+  }
+
   function darkenLightBands(node, source) {
     if (mermaidTheme() !== 'dark' || namesOwnTheme(source)) { return; }
 
@@ -2132,8 +2197,14 @@
   */
   function renderOneDiagram(mermaid, node, output) {
     var source = node.textContent;
-    var cached = mermaidCache[source];
     var key = diagramKey(source);
+
+    // The definition mermaid is actually given: the author's, with the color theme's diagram
+    // colors in front of it. It is also the cache key - it carries the colors, so a drawing
+    // made under one theme is never handed out under another - while the pop-out windows
+    // keep identifying a diagram by what the author wrote (key, above).
+    var definition = themedDefinition(source, mermaidTheme() === 'dark' ? 'dark' : 'light');
+    var cached = mermaidCache[definition];
 
     function place(svg) {
       node.innerHTML = svg;
@@ -2145,7 +2216,7 @@
     var rendering;
 
     if (output) {
-      rendering = window.mqDiagramOutput.render(source).then(place);
+      rendering = window.mqDiagramOutput.render(themedDefinition(source, 'light')).then(place);
     } else if (cached) {
       // Re-rendering an unchanged diagram on every keystroke is the single biggest
       // cost in a document full of diagrams, so cache the SVG by its definition.
@@ -2154,8 +2225,8 @@
       attachOutputCopy(node, source, key);
       return Promise.resolve();
     } else {
-      rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), source).then(function (result) {
-        mermaidCache[source] = result.svg;
+      rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), definition).then(function (result) {
+        mermaidCache[definition] = result.svg;
         place(result.svg);
         darkenLightBands(node, source);
         attachOutputCopy(node, source, key);
@@ -5599,6 +5670,21 @@
   }
 
   /*
+    Draws every diagram on the page again, from the tab's HTML. For a change that alters how
+    a diagram is drawn rather than what it says: light and dark, and the color theme.
+  */
+  function redrawDiagrams() {
+    var processed = els.preview.querySelectorAll('pre.mermaid[data-processed]');
+    for (var i = 0; i < processed.length; i++) {
+      processed[i].removeAttribute('data-processed');
+    }
+
+    var html = state.lastHtml;
+    state.lastHtml = null;
+    if (html !== null) { applyPreviewHtml(html, false); }
+  }
+
+  /*
     Puts the color theme in force. An id the page does not know - which the host does not send,
     but a page is not the place to trust that - leaves the theme already showing alone.
     Asking for the theme already showing costs nothing; see color-theme.js.
@@ -5822,8 +5908,15 @@
 
     /// A different theme for every document: picked from the menu, or previewed from the gallery.
     setColorTheme: function (p) {
+      if (p.id === state.colorTheme) { return; }
+
       state.colorTheme = p.id;
       applyColorTheme();
+
+      // The text recolors from the stylesheet; diagrams carry their colors in the drawing, so
+      // they are drawn again. The cache is keyed by the themed definition, so a theme already
+      // seen comes back from it rather than from mermaid.
+      if (els.preview.querySelector('pre.mermaid')) { redrawDiagrams(); }
     },
 
     openTab: function (p) {
@@ -6009,15 +6102,7 @@
       // module stays loaded; only its theme configuration is replaced.
       mermaidCache = {};
       reinitializeMermaid();
-
-      var processed = els.preview.querySelectorAll('pre.mermaid[data-processed]');
-      for (var i = 0; i < processed.length; i++) {
-        processed[i].removeAttribute('data-processed');
-      }
-
-      var html = state.lastHtml;
-      state.lastHtml = null;
-      if (html !== null) { applyPreviewHtml(html, false); }
+      redrawDiagrams();
     },
 
     setZoom: function (p) {

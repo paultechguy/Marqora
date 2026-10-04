@@ -106,6 +106,27 @@ public sealed class ShippedThemeTests
         failures.ShouldBeEmpty($"{id} ({mode})");
     }
 
+    /// <summary>
+    /// mermaid draws the text outside a node - edge labels, sequence messages and their arrows -
+    /// in the same color as the text inside one, straight onto the page. So the diagram text
+    /// slot answers to the page as well as to its node fill, which its own rule cannot say.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ThemesAndModes))]
+    public void Diagram_text_reads_on_the_page_as_well_as_in_a_node(string id, PaletteMode mode)
+    {
+        ThemePalette palette = ThemeCatalog.Load().Find(id).PaletteFor(mode);
+
+        if (!palette.TryGet("diagram-primary-text", out string text))
+        {
+            return;
+        }
+
+        (string page, _) = Repository.Neutrals(mode);
+
+        Contrast.Ratio(text, page).ShouldBeGreaterThanOrEqualTo(Contrast.Text, $"{id} ({mode})");
+    }
+
     [Fact]
     public void The_catalog_reads_the_shipped_themes_without_a_problem() =>
         ThemeCatalog.Load().Problems.ShouldBeEmpty();
