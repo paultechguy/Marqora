@@ -31,6 +31,17 @@ public sealed record AppSettings
 {
     public AppTheme Theme { get; set; } = AppTheme.System;
 
+    /// <summary>
+    /// The color theme every document is drawn and exported in, by id. One for the whole app:
+    /// a theme is how Marqora shows and exports markdown, not something a document carries, and
+    /// the document's file is never touched.
+    ///
+    /// Null for Default. The ids belong to the Themes library, which this project does not
+    /// reference, so Default's is not written here a second time; an id that no longer names a
+    /// theme - one removed in a later version - falls back to Default there as well.
+    /// </summary>
+    public string? ColorTheme { get; set; }
+
     public ViewMode ViewMode { get; set; } = ViewMode.SideBySide;
 
     public int SourceZoomPercent { get; set; } = ZoomLevel.Default;

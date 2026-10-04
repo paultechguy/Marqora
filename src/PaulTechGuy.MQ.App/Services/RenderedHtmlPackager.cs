@@ -7,7 +7,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 using Windows.UI;
 
 namespace PaulTechGuy.MQ.App.Services;
@@ -27,7 +29,11 @@ namespace PaulTechGuy.MQ.App.Services;
 /// Output is always light. A dark background is rarely wanted in something printed or
 /// dropped into someone else's document.
 /// </summary>
-public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<RenderedHtmlPackager> logger)
+public sealed partial class RenderedHtmlPackager(
+    IAppPaths paths,
+    ThemeCatalog colorThemes,
+    ISettingsService settings,
+    ILogger<RenderedHtmlPackager> logger)
 {
     /// <summary>Images above this size stay as links; base64 would bloat the output absurdly.</summary>
     private const long MaxEmbeddedImageBytes = 8 * 1024 * 1024;
@@ -120,9 +126,15 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
         builder.AppendLine(ReadAsset("app.css"));
         builder.AppendLine(AccentDeclarations());
 
+        // app.css reads every document color as a theme slot and declares none, so a page with
+        // no host to post it a theme carries the light palette written out - the theme the app
+        // is showing, because an export looks like the preview.
+        builder.AppendLine(ColorThemePayloads.LightDeclarations(colorThemes.Find(settings.Current.ColorTheme)));
+
+        // The token colors are theme slots too, so the one sheet serves every theme.
         if (renderedHtml.Contains("hljs", StringComparison.Ordinal))
         {
-            builder.AppendLine(ReadAsset(Path.Combine("vendor", "highlight", "github.min.css")));
+            builder.AppendLine(ReadAsset("syntax.css"));
         }
 
         if (renderedHtml.Contains("katex", StringComparison.Ordinal))
@@ -151,28 +163,19 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
     ///
     /// app.css names no teal. It is chosen once, in <see cref="AccentColors"/>, because the
     /// window paints the same color with WinUI brushes, and the shell is posted it at
-    /// startup - but a file on somebody else's disk has no host to be told by, and every link,
-    /// note callout and table header in it would come out uncolored. So the value is stated
-    /// here instead, after the stylesheet, where a plain :root block wins.
+    /// startup - but a file on somebody else's disk has no host to be told by. So the value is
+    /// stated here instead, after the stylesheet, where a plain :root block wins.
+    ///
+    /// Less rides on it than used to. Links, note callouts and table headers are the color
+    /// theme's now and arrive in <see cref="ColorThemePayloads.LightDeclarations"/>; what still
+    /// reads the accent is the handful of preview marks that can be carried out in the markup,
+    /// which is why it is still written here.
     ///
     /// The light shade whichever theme the app is in: an exported page and a pasted fragment
     /// are white, as the data-theme="light" their writers put on the html tag says.
-    ///
-    /// The soft tint is spelled out as rgba rather than left to the color-mix app.css derives
-    /// it with. <see cref="FlattenCustomProperties"/> folds these values into a clipboard
-    /// fragment for Word and Outlook, which understand neither custom properties nor
-    /// color-mix, and this is the one place a tint of the accent is used as a background.
-    ///
-    /// Writing it as rgba was half the answer: those two do not read rgba either, and the
-    /// header this tints was arriving with no background at all. <see cref="BuildFragment"/>
-    /// runs <see cref="CssAlphaFlattening"/> over the result, which is what finally makes the
-    /// tint opaque. The rgba stays, because the export this also feeds goes to a browser that
-    /// blends it properly against whatever is behind it.
     /// </summary>
     private static string AccentDeclarations()
     {
-        Color accent = AccentColors.Light;
-
         // Two dollars, so a brace is a brace and an interpolation takes two of them: the block
         // below is CSS, which is mostly braces.
         return string.Create(
@@ -181,7 +184,6 @@ public sealed partial class RenderedHtmlPackager(IAppPaths paths, ILogger<Render
             :root {
               --mq-accent-screen: {{AccentColors.LightHex}};
               --mq-accent-print: {{AccentColors.LightHex}};
-              --mq-accent-soft: rgba({{accent.R}}, {{accent.G}}, {{accent.B}}, 0.14);
             }
             """);
     }

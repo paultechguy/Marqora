@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The document color themes: one JSON file per theme, the list of slots a theme colors, and
+    the catalog the app picks from.
+
+    A project of its own rather than a corner of Domain. The Word exporter has to read a theme
+    and cannot see the app - the reason DocumentAccent moved down to Domain - but a thousand
+    color values and a JSON reader are a library's worth of concern, and Domain would become
+    the theme library by accident. Zero package and project references: System.Text.Json is in
+    the box.
+
+    The theme files are embedded under a logical name of their own, themes/<id>.json, so the
+    file name is the theme's id and adding a theme is adding a file.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Themes</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Themes\*.json" LogicalName="themes/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

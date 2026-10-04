@@ -21,6 +21,7 @@ using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Spelling;
+using PaulTechGuy.MQ.Themes;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -140,6 +141,24 @@ public static class Program
         builder.Services.AddMarqoraSpelling();
         builder.Services.AddMarqoraFolio();
         builder.Services.AddMarqoraServices(AppVersion.Current, welcomeRequested);
+
+        // The color themes are read once, from the files embedded in the Themes library, which
+        // has no container of its own to register with. A theme file with a fault still loads -
+        // the catalog fills its gaps from Default - and the fault is logged here rather than lost.
+        builder.Services.AddSingleton(sp =>
+        {
+            ThemeCatalog catalog = ThemeCatalog.Load();
+            Microsoft.Extensions.Logging.ILogger<ThemeCatalog> log =
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ThemeCatalog>>();
+
+            foreach (string problem in catalog.Problems)
+            {
+                // Spelled out: this file imports Serilog, whose ILogger the short form would collide with.
+                Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, "Color theme: {Problem}", problem);
+            }
+
+            return catalog;
+        });
 
         // UI-layer implementations of the shared abstractions.
         builder.Services.AddSingleton<IFileDialogService, FileDialogService>();

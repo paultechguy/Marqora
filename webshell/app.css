@@ -640,12 +640,16 @@ a.mq-blocked-media {
   scroll-margin-top: 1em;
 }
 
-.mq-preview h1 { font-size: 2.05em; font-weight: 700; letter-spacing: -0.02em; }
-.mq-preview h2 { font-size: 1.55em; padding-bottom: 0.28em; border-bottom: 1px solid var(--mq-border); }
-.mq-preview h3 { font-size: 1.26em; }
-.mq-preview h4 { font-size: 1.08em; }
-.mq-preview h5 { font-size: 1em; color: var(--mq-text-secondary); }
-.mq-preview h6 { font-size: 0.92em; color: var(--mq-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+/*
+  Heading colors are the document's color theme - see color-theme.js. In Default the first
+  four are the body text and the last two step down in gray, as they always have.
+*/
+.mq-preview h1 { font-size: 2.05em; font-weight: 700; letter-spacing: -0.02em; color: var(--mq-theme-heading-1); }
+.mq-preview h2 { font-size: 1.55em; padding-bottom: 0.28em; border-bottom: 1px solid var(--mq-theme-heading-rule); color: var(--mq-theme-heading-2); }
+.mq-preview h3 { font-size: 1.26em; color: var(--mq-theme-heading-3); }
+.mq-preview h4 { font-size: 1.08em; color: var(--mq-theme-heading-4); }
+.mq-preview h5 { font-size: 1em; color: var(--mq-theme-heading-5); }
+.mq-preview h6 { font-size: 0.92em; color: var(--mq-theme-heading-6); text-transform: uppercase; letter-spacing: 0.06em; }
 
 /*
   ------------------------------------------------------------ heading numbering
@@ -674,22 +678,40 @@ a.mq-blocked-media {
 .mq-preview p { margin: 0 0 1.15em; }
 
 .mq-preview a {
-  color: var(--mq-accent);
+  color: var(--mq-theme-link);
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--mq-accent) 35%, transparent);
+  border-bottom: 1px solid var(--mq-theme-link-underline);
   transition: border-color 120ms ease;
 }
 
-.mq-preview a:hover { border-bottom-color: var(--mq-accent); }
+.mq-preview a:hover { border-bottom-color: var(--mq-theme-link); }
 
-.mq-preview strong { font-weight: 650; }
+.mq-preview a.footnote-ref { color: var(--mq-theme-footnote-ref); }
+
+.mq-preview strong { font-weight: 650; color: var(--mq-theme-strong); }
+.mq-preview em { color: var(--mq-theme-emphasis); }
+
+/*
+  Bold, italic and inline code take their theme colors in running text only. Inside a heading,
+  a link, a quote, a callout's title or a table header they keep the color of what holds them,
+  as they did before there were themes: a bold word in a link is still a link, and a code span
+  in an H5 is still the H5's gray.
+
+  The same goes for raw HTML that brings its own color - an element with a style attribute, or
+  a <font> tag. A document that draws itself a pale box with dark text in it meant the bold
+  words to be dark too; the theme's bold color is chosen for the page, and in dark mode it is
+  light, which put pale bold text on the pale box.
+*/
+.mq-preview :is(h1, h2, h3, h4, h5, h6, a, blockquote, .markdown-alert-title, th, [style], font) :is(strong, em, code) {
+  color: inherit;
+}
 
 .mq-preview ul,
 .mq-preview ol { margin: 0 0 1.15em; padding-left: 1.6em; }
 
 .mq-preview li { margin: 0.28em 0; }
 
-.mq-preview li::marker { color: var(--mq-text-tertiary); }
+.mq-preview li::marker { color: var(--mq-theme-list-marker); }
 
 .mq-preview ul.contains-task-list { list-style: none; padding-left: 0.2em; }
 
@@ -726,7 +748,7 @@ a.mq-blocked-media {
 .mq-preview li.task-list-item > ul.contains-task-list { padding-left: 0; }
 
 .mq-preview .task-list-item input[type="checkbox"] {
-  accent-color: var(--mq-accent);
+  accent-color: var(--mq-theme-task-check);
   width: 1em;
   height: 1em;
   translate: 0 0.12em;
@@ -735,9 +757,13 @@ a.mq-blocked-media {
 .mq-preview blockquote {
   margin: 0 0 1.15em;
   padding: 0.1em 0 0.1em 1.15em;
-  border-left: 3px solid var(--mq-quote-bar);
-  color: var(--mq-text-secondary);
+  border-left: 3px solid var(--mq-theme-quote-bar);
+  background: var(--mq-theme-quote-fill);
+  color: var(--mq-theme-quote-text);
 }
+
+/* A quote inside a callout sits on the callout's own fill rather than boxing itself in. */
+.mq-preview .markdown-alert blockquote { background: transparent; }
 
 .mq-preview blockquote > *:last-child { margin-bottom: 0; }
 
@@ -788,45 +814,45 @@ a.mq-blocked-media {
   into Word. Every var() below resolves from :root, so the colors survive the trip.
 */
 .mq-preview .markdown-alert-note {
-  border-left-color: var(--mq-accent);
-  background: var(--mq-accent-soft);
+  border-left-color: var(--mq-theme-callout-note-bar);
+  background: var(--mq-theme-callout-note-fill);
 }
 
-.mq-preview .markdown-alert-note .markdown-alert-title { color: var(--mq-accent); }
+.mq-preview .markdown-alert-note .markdown-alert-title { color: var(--mq-theme-callout-note-title); }
 
 .mq-preview .markdown-alert-tip {
-  border-left-color: var(--mq-tip);
-  background: var(--mq-tip-soft);
+  border-left-color: var(--mq-theme-callout-tip-bar);
+  background: var(--mq-theme-callout-tip-fill);
 }
 
-.mq-preview .markdown-alert-tip .markdown-alert-title { color: var(--mq-tip); }
+.mq-preview .markdown-alert-tip .markdown-alert-title { color: var(--mq-theme-callout-tip-title); }
 
 .mq-preview .markdown-alert-important {
-  border-left-color: var(--mq-important);
-  background: var(--mq-important-soft);
+  border-left-color: var(--mq-theme-callout-important-bar);
+  background: var(--mq-theme-callout-important-fill);
 }
 
-.mq-preview .markdown-alert-important .markdown-alert-title { color: var(--mq-important); }
+.mq-preview .markdown-alert-important .markdown-alert-title { color: var(--mq-theme-callout-important-title); }
 
 .mq-preview .markdown-alert-warning {
-  border-left-color: var(--mq-warning);
-  background: var(--mq-warning-soft);
+  border-left-color: var(--mq-theme-callout-warning-bar);
+  background: var(--mq-theme-callout-warning-fill);
 }
 
-.mq-preview .markdown-alert-warning .markdown-alert-title { color: var(--mq-warning); }
+.mq-preview .markdown-alert-warning .markdown-alert-title { color: var(--mq-theme-callout-warning-title); }
 
 .mq-preview .markdown-alert-caution {
-  border-left-color: var(--mq-danger);
-  background: var(--mq-danger-soft);
+  border-left-color: var(--mq-theme-callout-caution-bar);
+  background: var(--mq-theme-callout-caution-fill);
 }
 
-.mq-preview .markdown-alert-caution .markdown-alert-title { color: var(--mq-danger); }
+.mq-preview .markdown-alert-caution .markdown-alert-title { color: var(--mq-theme-callout-caution-title); }
 
 .mq-preview hr {
   height: 1px;
   margin: 2.2em 0;
   border: 0;
-  background: var(--mq-border);
+  background: var(--mq-theme-rule);
 }
 
 .mq-preview img,
@@ -851,7 +877,7 @@ a.mq-blocked-media {
 .mq-preview th,
 .mq-preview td {
   padding: 0.5em 0.85em;
-  border: 1px solid var(--mq-border);
+  border: 1px solid var(--mq-theme-table-border);
   text-align: left;
 }
 
@@ -881,13 +907,14 @@ a.mq-blocked-media {
   :root - without a fourth copy that could drift from the other three.
 */
 .mq-preview thead th {
-  background: var(--mq-accent-soft);
-  border-bottom: 2px solid var(--mq-accent);
+  background: var(--mq-theme-table-header-fill);
+  border-bottom: 2px solid var(--mq-theme-table-header-rule);
+  color: var(--mq-theme-table-header-text);
   font-weight: 620;
 }
 
 /* Deliberately still gray. See the note above the header rule. */
-.mq-preview tbody tr:nth-child(even) { background: color-mix(in srgb, var(--mq-bg-subtle) 55%, transparent); }
+.mq-preview tbody tr:nth-child(even) { background: var(--mq-theme-table-stripe); }
 
 /* ----------------------------------------------------------------- code */
 
@@ -899,8 +926,9 @@ a.mq-blocked-media {
 .mq-preview :not(pre) > code {
   padding: 0.16em 0.42em;
   border-radius: 4px;
-  background: var(--mq-bg-inset);
-  border: 1px solid var(--mq-border);
+  background: var(--mq-theme-code-inline-fill);
+  border: 1px solid var(--mq-theme-code-inline-border);
+  color: var(--mq-theme-code-inline-text);
   white-space: break-spaces;
 }
 
@@ -908,8 +936,9 @@ a.mq-blocked-media {
   margin: 0 0 1.3em;
   padding: 1em 1.15em;
   border-radius: 8px;
-  border: 1px solid var(--mq-border);
-  background: var(--mq-bg-inset);
+  border: 1px solid var(--mq-theme-code-block-border);
+  background: var(--mq-theme-code-block-fill);
+  color: var(--mq-theme-code-block-text);
   overflow-x: auto;
   line-height: 1.55;
 }
@@ -1045,7 +1074,7 @@ a.mq-blocked-media {
   display: none;
 }
 
-.mq-preview mark { background: var(--mq-mark); color: inherit; border-radius: 3px; padding: 0 0.15em; }
+.mq-preview mark { background: var(--mq-theme-mark-fill); color: inherit; border-radius: 3px; padding: 0 0.15em; }
 
 /*
   A reviewer's comment on a passage, while a review is on (see applyCommentMarks in app.js).
@@ -1364,14 +1393,18 @@ a.mq-blocked-media {
   never what anyone wants to print; the dark selector is re-stated so it loses to these
   rules regardless of the theme on screen.
 
-  The colors a callout or a link reads - the accent, the four other alert hues, and the soft
-  fill that goes with each - are the light :root values exactly. The grays are not: text,
-  borders and insets sit a shade darker here than they do on screen. That split is the point.
-  An alert reads two tokens, its line color and its fill, and a print block that re-stated
-  only the first drew a blue bar against a teal wash. Holding the hues to :root also keeps
-  the outputs in step, because HTML export never reaches this block - RenderedHtmlPackager
-  resolves the variables from the light :root itself - so a color invented here would show up
-  in the PDF and nowhere else.
+  The document's own colors - headings, links, callouts, tables, code - are not here at all.
+  They are the color theme's slots, and color-theme.js writes a print block of its own that
+  puts the theme's light palette in force, so paper, a PDF, the HTML export and the clipboard
+  all read the one set of values. That is the rule this block used to keep by hand for the
+  callouts: a color invented here would show up in the PDF and nowhere else, because HTML
+  export never reaches this block - RenderedHtmlPackager writes the light palette itself.
+
+  What is left is the page's furniture. The grays sit a shade darker here than on screen,
+  for paper. The accent, danger and warning are re-stated because the spelling marks, the
+  find and review marks and the error boxes read them. Tip, important and the mark no longer
+  color anything in the preview; they stay until the Word export reads the theme as well,
+  because build/Test-DocumentColors.ps1 still holds them against CalloutColors.
 */
 @media print {
   :root,
@@ -1479,7 +1512,7 @@ a.mq-blocked-media {
 
   /* A link's target is invisible on paper, so the color is all that is left of it. */
   .mq-preview a {
-    color: var(--mq-accent);
+    color: var(--mq-theme-link);
     border-bottom: none;
   }
 

@@ -8,6 +8,7 @@ using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Services;
+using PaulTechGuy.MQ.Themes;
 using Windows.System;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -152,6 +153,14 @@ public sealed class PreferencesViewModel(
 
     public void SetTheme(AppTheme theme) => main.ApplyTheme(theme);
 
+    /// <summary>Every color theme, in the order the dialog lists them: Default first.</summary>
+    public IReadOnlyList<ColorTheme> ColorThemes => main.ColorThemes;
+
+    /// <summary>The color theme in force - always one that exists.</summary>
+    public string ColorThemeId => main.ColorThemeId;
+
+    public Task SetColorThemeAsync(string themeId) => main.ApplyColorThemeAsync(themeId);
+
     // ------------------------------------------------------------------ everything else
 
     /// <summary>
@@ -219,6 +228,7 @@ public sealed class PreferencesViewModel(
         settings.Update(_ => restored);
 
         SetTheme(restored.Theme);
+        await main.ApplyColorThemeAsync(restored.ColorTheme).ConfigureAwait(true);
         SetReloadOnExternalChange(restored.ReloadOnExternalChange);
 
         await main.SetWordWrapAsync(restored.WordWrapEnabled).ConfigureAwait(true);

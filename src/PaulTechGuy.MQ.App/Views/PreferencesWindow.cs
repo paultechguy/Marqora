@@ -159,6 +159,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// different things one letter apart.
     /// </summary>
     private readonly RadioButtons _themeChoice;
+    private readonly ComboBox _colorTheme;
 
     private readonly ComboBox _sourceFont;
     private readonly NumberBox _sourceFontSize;
@@ -279,6 +280,13 @@ internal sealed class PreferencesWindow : PaletteWindow
                 _vm.SetTheme((AppTheme)_themeChoice.SelectedIndex);
             }
         });
+
+        // Listed by name in the catalog's order, Default first; the index is the theme.
+        _colorTheme = BuildCombo(_vm.ColorThemes.Select(t => t.Name).ToArray());
+        _colorTheme.SelectionChanged += (_, _) => ApplyAsync(() =>
+            _colorTheme.SelectedIndex >= 0
+                ? _vm.SetColorThemeAsync(_vm.ColorThemes[_colorTheme.SelectedIndex].Id)
+                : Task.CompletedTask);
 
         _sourceFont = BuildFontBox(MonospaceFonts);
         _sourceFont.TextSubmitted += (_, _) => ApplyAsync(() =>
@@ -1036,6 +1044,13 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(_themeChoice);
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("COLOR THEME"));
+        panel.Children.Add(Field("Theme", _colorTheme));
+        panel.Children.Add(Note(
+            "How headings, links, callouts, tables and code are colored in every document, on "
+            + "screen and in everything you print, export or copy. Your files are not changed."));
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("SOURCE PANE"));
         panel.Children.Add(Field("Font", _sourceFont));
         panel.Children.Add(_sourceHint);
@@ -1753,6 +1768,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             AppSettings s = _vm.Current;
 
             _themeChoice.SelectedIndex = (int)s.Theme;
+            _colorTheme.SelectedIndex = IndexOfColorTheme(_vm.ColorThemeId);
 
             WriteFont(_sourceFont, s.SourceFontFamily);
             _sourceFontSize.Value = s.SourceFontSize;
@@ -1999,6 +2015,20 @@ internal sealed class PreferencesWindow : PaletteWindow
         }
 
         return box;
+    }
+
+    /// <summary>Where a color theme sits in the list; Default, at the top, for one that is not there.</summary>
+    private int IndexOfColorTheme(string themeId)
+    {
+        for (int i = 0; i < _vm.ColorThemes.Count; i++)
+        {
+            if (string.Equals(_vm.ColorThemes[i].Id, themeId, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return 0;
     }
 
     private static ComboBox BuildCombo(IReadOnlyList<string> labels)

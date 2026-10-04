@@ -257,14 +257,8 @@
 
   // ------------------------------------------------------------ highlighting
 
+  // Token colors are the color theme's syntax slots - see syntax.css and app.js.
   var highlightReady = null;
-
-  /// The light theme always on, the dark one over it for the screen alone - see app.js.
-  function applyHighlightTheme() {
-    var night = document.getElementById('hljs-dark');
-
-    if (night) { night.disabled = theme !== 'Dark'; }
-  }
 
   function ensureHighlighter() {
     if (highlightReady) { return highlightReady; }
@@ -440,12 +434,20 @@
         els.root.style.setProperty('--mq-accent-print', p.accentPrint);
       }
 
+      /*
+        The colors the document is drawn in: always Default's, because the cheatsheet shows
+        what Marqora does rather than being one of the reader's documents. Before the guard
+        for the same reason as the accent - the first setTheme is the only one that brings it.
+      */
+      if (p.colorTheme) {
+        window.mqColorTheme.apply(p.colorTheme, 'cheatsheet');
+      }
+
       var next = p.theme === 'Dark' ? 'Dark' : 'Light';
       if (next === theme) { return; }
 
       theme = next;
       els.root.setAttribute('data-theme', theme === 'Dark' ? 'dark' : 'light');
-      applyHighlightTheme();
       redrawDiagrams();
     },
 

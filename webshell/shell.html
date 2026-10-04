@@ -25,10 +25,9 @@
   <title>Marqora</title>
   <link rel="stylesheet" href="vendor/monaco/vs/editor/editor.main.css" />
   <link rel="stylesheet" href="vendor/katex/katex.min.css" />
-  <!-- One highlight.js theme is active at a time; the script below picks the pair. -->
-  <link id="hljs-light" rel="stylesheet" href="vendor/highlight/github.min.css" />
-  <link id="hljs-dark" rel="stylesheet" href="vendor/highlight/github-dark.min.css" media="screen" disabled />
   <link rel="stylesheet" href="app.css" />
+  <!-- Code colors are theme slots now, so one sheet serves light, dark and print. -->
+  <link rel="stylesheet" href="syntax.css" />
 
   <!--
     The theme, before the first paint.
@@ -43,9 +42,8 @@
     loading the previous session in the wrong color and correcting itself.
 
     So the host writes the answer into the address instead - see ShellUriForTheme in
-    WebViewPreviewHost - and this reads it out. Inline, in the head, and after the two
-    highlight.js links so both are there to be switched: it runs while the head is being
-    parsed, which is before the body exists and long before anything is drawn.
+    WebViewPreviewHost - and this reads it out. Inline, in the head: it runs while the head
+    is being parsed, which is before the body exists and long before anything is drawn.
 
     Light when there is no fragment to read, matching app.css's own default. That is only
     reached by opening shell.html outside the app.
@@ -82,12 +80,6 @@
       if (accentPrint) {
         document.documentElement.style.setProperty('--mq-accent-print', '#' + accentPrint[1]);
       }
-
-      // The light theme is never switched off: the dark one is layered over it for the
-      // screen alone (media="screen"), so a print is always light. See applyHighlightTheme.
-      var dark = document.getElementById('hljs-dark');
-
-      if (dark) { dark.disabled = theme !== 'dark'; }
     }());
   </script>
 </head>
@@ -125,6 +117,7 @@
   <script src="vendor/monaco/vs/loader.js"></script>
   <script src="diagram-raster.js"></script>
   <script src="diagram-output.js"></script>
+  <script src="color-theme.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

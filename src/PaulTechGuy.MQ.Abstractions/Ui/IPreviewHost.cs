@@ -440,6 +440,13 @@ public interface IPreviewHost
 
     Task SetThemeAsync(AppTheme effectiveTheme);
 
+    /// <summary>
+    /// Puts a color theme in force for every document, by id. The page holds every theme's
+    /// palettes already, so this names one rather than sending colors. Also what the theme
+    /// gallery's hover preview calls, which is why it does not save anything.
+    /// </summary>
+    Task SetColorThemeAsync(string themeId);
+
     Task SetZoomAsync(EditorPane pane, ZoomLevel zoom);
 
     Task SetScrollSyncAsync(bool enabled);

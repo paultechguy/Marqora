@@ -914,6 +914,17 @@
                                                   Command="{x:Bind ViewModel.SetThemeCommand}"
                                                   CommandParameter="Dark" />
                         </MenuFlyoutSubItem>
+
+                        <!--
+                            The color theme every document is drawn and exported in. Filled in
+                            code from the theme catalog - see BuildColorThemeMenu - so a theme added
+                            as a file appears here with nothing to edit, Default first and the rest
+                            by name. Toggles, like the Theme submenu above; the view model has one
+                            theme in force, so the group is exclusive either way.
+                        -->
+                        <MenuFlyoutSubItem x:Name="ColorThemeMenu"
+                                           Text="Color Theme"
+                                           ToolTipService.ToolTip="Color headings, links, callouts, tables and code in every document, on screen and in everything you export; your files are not changed" />
                     </MenuBarItem>
 
                     <!--

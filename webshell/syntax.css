@@ -1,0 +1,100 @@
+/*
+  Syntax colors for highlight.js, from the document's color theme.
+
+  This replaces the two GitHub stylesheets the vendor bundle ships, which were switched
+  between for light and dark and could only ever be GitHub's colors. The groups and their
+  order are GitHub's, so the cascade between them is the one highlight.js was written against:
+  a keyword inside a meta line is a keyword, a string inside one is a string. Default's slots
+  are GitHub's colors, darkened where they fell short of AA on Marqora's gray code background.
+
+  The surface and the text that no token claims come from the code block itself - see
+  .mq-preview pre in app.css - so nothing here paints a background except a diff line.
+
+  Light or dark is not decided here: every color is a slot, and the slots follow data-theme.
+  See color-theme.js.
+*/
+
+.hljs-doctag,
+.hljs-keyword,
+.hljs-meta .hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-variable.language_ {
+  color: var(--mq-theme-syntax-keyword);
+}
+
+.hljs-type {
+  color: var(--mq-theme-syntax-type);
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.class_.inherited__,
+.hljs-title.function_ {
+  color: var(--mq-theme-syntax-function);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--mq-theme-syntax-number);
+}
+
+.hljs-variable {
+  color: var(--mq-theme-syntax-variable);
+}
+
+.hljs-meta .hljs-string,
+.hljs-regexp,
+.hljs-string {
+  color: var(--mq-theme-syntax-string);
+}
+
+/* GitHub gives a list bullet in a markdown block a brown of its own; it is the one token
+   folded into a neighbor rather than given a slot. */
+.hljs-built_in,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--mq-theme-syntax-builtin);
+}
+
+.hljs-code,
+.hljs-comment,
+.hljs-formula {
+  color: var(--mq-theme-syntax-comment);
+}
+
+.hljs-name,
+.hljs-quote,
+.hljs-selector-pseudo,
+.hljs-selector-tag {
+  color: var(--mq-theme-syntax-tag);
+}
+
+.hljs-punctuation {
+  color: var(--mq-theme-syntax-punctuation);
+}
+
+.hljs-section {
+  color: var(--mq-theme-syntax-number);
+  font-weight: 700;
+}
+
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+.hljs-addition {
+  color: var(--mq-theme-syntax-addition);
+  background-color: var(--mq-theme-syntax-addition-fill);
+}
+
+.hljs-deletion {
+  color: var(--mq-theme-syntax-deletion);
+  background-color: var(--mq-theme-syntax-deletion-fill);
+}

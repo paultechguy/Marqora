@@ -6,6 +6,7 @@ using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Views;
+using PaulTechGuy.MQ.Themes;
 using Windows.Graphics;
 
 namespace PaulTechGuy.MQ.App.Services;
@@ -19,6 +20,7 @@ public sealed class CheatsheetService(
     IMarkdownRenderer renderer,
     ISettingsService settings,
     IThemeService theme,
+    ThemeCatalog colorThemes,
     ILoggerFactory loggerFactory,
     ILogger<CheatsheetService> logger) : ICheatsheetService
 {
@@ -118,6 +120,7 @@ public sealed class CheatsheetService(
                     renderer,
                     settings,
                     theme,
+                    colorThemes.Default,
                     window.WindowHandle,
                     loggerFactory.CreateLogger<CheatsheetWindow>());
 

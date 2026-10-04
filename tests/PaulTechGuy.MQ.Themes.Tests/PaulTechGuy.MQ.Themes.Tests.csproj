@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The checks every theme has to pass before it ships: that it names every slot and nothing
+    else, that its text stands out in both modes, and that the stylesheet reads only slots that
+    exist. Tests rather than a build script because they need the slot list, and a script would
+    have to carry a second copy of it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Themes.Tests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
+  </ItemGroup>
+
+</Project>

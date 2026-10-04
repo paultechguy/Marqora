@@ -14,6 +14,7 @@ using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 using Windows.Graphics;
 using Windows.System;
 
@@ -52,6 +53,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     private readonly IMarkdownRenderer _renderer;
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
+    private readonly ColorTheme _colorTheme;
     private readonly ILogger<CheatsheetWindow> _logger;
 
     private readonly WebView2 _webView = new();
@@ -71,6 +73,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         IMarkdownRenderer renderer,
         ISettingsService settings,
         IThemeService theme,
+        ColorTheme colorTheme,
         IntPtr ownerHandle,
         ILogger<CheatsheetWindow> logger)
         : base("Cheatsheet", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
@@ -79,6 +82,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         _renderer = renderer;
         _settings = settings;
         _theme = theme;
+        _colorTheme = colorTheme;
         _logger = logger;
 
         Title = "Markdown Cheatsheet";
@@ -413,6 +417,10 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     /// main window all wear it and one of them is WinUI. See WebViewPreviewHost.SetThemeAsync,
     /// which sends the same pair for the same reason - and the print shade with it, since
     /// this window prints too.
+    ///
+    /// The color theme rides along for the same reason again: app.css names no document colors
+    /// either. It is always Default, because the cheatsheet shows what Marqora does rather than
+    /// being one of the reader's documents.
     /// </summary>
     private void SendTheme(AppTheme theme) =>
         Send(
@@ -422,6 +430,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                 theme = theme.ToString(),
                 accent = AccentColors.HexFor(theme),
                 accentPrint = AccentColors.LightHex,
+                colorTheme = ColorThemePayloads.Palettes(_colorTheme),
             });
 
     private void RememberScroll(int top) =>

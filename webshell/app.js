@@ -108,6 +108,15 @@
     */
     theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'Dark' : 'Light',
     viewMode: 'SideBySide',
+
+    /*
+      Every color theme, by id - { light, dark } - posted by the host each time the page says it
+      is ready, ahead of anything else it sends, and the one in force. One theme for every
+      document: it is how Marqora shows markdown, not something a document carries. See
+      applyColorTheme.
+    */
+    colorThemes: {},
+    colorTheme: 'default',
     scrollSync: true,
     sourceZoom: 100,
     previewZoom: 100,
@@ -2211,19 +2220,12 @@
     hiding `define` for mermaid is safe by construction.
   */
 
-  var highlightReady = null;
-
   /*
-    highlight.js ships a stylesheet per theme. The light one is always on; the dark one is
-    switched on over it in dark mode, and carries media="screen" in shell.html, so a print or
-    a PDF never sees it. The two style exactly the same token classes, so on screen the dark
-    one covers the light one completely.
+    The token colors are not chosen here. syntax.css maps highlight.js's classes onto the
+    color theme's syntax slots, which follow data-theme like every other color, so a mode
+    switch and a print need nothing from this side.
   */
-  function applyHighlightTheme() {
-    var night = document.getElementById('hljs-dark');
-
-    if (night) { night.disabled = state.theme !== 'Dark'; }
-  }
+  var highlightReady = null;
 
   function ensureHighlighter() {
     if (highlightReady) { return highlightReady; }
@@ -5292,19 +5294,15 @@
       applied to the clipboard, which now takes its colors from the page rather than from
       a stylesheet that could be pinned on the host side.
 
-      The code colors are the same rule in a different place. highlight.js keeps each theme
-      in a stylesheet of its own, and the dark one is switched on over the light one, so it
-      is switched off for the measuring too - otherwise the tokens are inlined in the dark
-      theme's pale colors.
+      The document's color theme and its code colors come along without being asked: both
+      are keyed on data-theme as well - see color-theme.js - so the flip below is all it takes
+      for the measuring to read the light palette.
 
       Restored before returning, and no paint happens in between, so nothing flickers.
     */
     var root = document.documentElement;
     var theme = root.getAttribute('data-theme');
     root.setAttribute('data-theme', 'light');
-    var night = document.getElementById('hljs-dark');
-    var nightWasOn = night ? !night.disabled : false;
-    if (night) { night.disabled = true; }
 
     document.body.appendChild(stage);
 
@@ -5326,8 +5324,6 @@
 
       if (theme === null) { root.removeAttribute('data-theme'); }
       else { root.setAttribute('data-theme', theme); }
-
-      if (night) { night.disabled = !nightWasOn; }
     }
   }
 
@@ -5603,6 +5599,17 @@
   }
 
   /*
+    Puts the color theme in force. An id the page does not know - which the host does not send,
+    but a page is not the place to trust that - leaves the theme already showing alone.
+    Asking for the theme already showing costs nothing; see color-theme.js.
+  */
+  function applyColorTheme() {
+    var theme = state.colorThemes[state.colorTheme];
+
+    if (theme) { window.mqColorTheme.apply(theme, state.colorTheme); }
+  }
+
+  /*
     Puts the read-only option on the editor.
 
     Its own function because two places need it and they must not drift: the handler, for the
@@ -5796,6 +5803,29 @@
   }
 
   var handlers = {
+    /*
+      Every theme's palettes and the one in force. The host sends this first, ahead of its
+      queue, each time the page reports ready - so it is in place before the first tab opens,
+      and again on a page rebuilt after a crash.
+    */
+    setColorThemes: function (p) {
+      var themes = {};
+
+      (p.themes || []).forEach(function (theme) {
+        themes[theme.id] = { light: theme.light, dark: theme.dark };
+      });
+
+      state.colorThemes = themes;
+      state.colorTheme = p.currentId || 'default';
+      applyColorTheme();
+    },
+
+    /// A different theme for every document: picked from the menu, or previewed from the gallery.
+    setColorTheme: function (p) {
+      state.colorTheme = p.id;
+      applyColorTheme();
+    },
+
     openTab: function (p) {
       openTab(p.id, p.text || '', p.html || '');
       reportLayout('openTab');
@@ -5965,8 +5995,6 @@
       if (p.accentPrint) {
         document.documentElement.style.setProperty('--mq-accent-print', p.accentPrint);
       }
-
-      applyHighlightTheme();
 
       if (state.monaco) {
         defineThemes(state.monaco);

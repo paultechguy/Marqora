@@ -20,6 +20,7 @@ using PaulTechGuy.MQ.Finding;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Markdown;
+using PaulTechGuy.MQ.Themes;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace PaulTechGuy.MQ.App.ViewModels;
@@ -43,6 +44,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IFileDialogService _fileDialogs;
     private readonly IDialogService _dialogs;
     private readonly IThemeService _themeService;
+    private readonly ThemeCatalog _colorThemes;
     private readonly IUiDispatcher _ui;
     private readonly IHtmlExporter _exporter;
     private readonly IDocxExporter _docxExporter;
@@ -646,6 +648,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IFileDialogService fileDialogs,
         IDialogService dialogs,
         IThemeService theme,
+        ThemeCatalog colorThemes,
         IUiDispatcher ui,
         IHtmlExporter exporter,
         IDocxExporter docxExporter,
@@ -684,6 +687,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _fileDialogs = fileDialogs;
         _dialogs = dialogs;
         _themeService = theme;
+        _colorThemes = colorThemes;
         _ui = ui;
         _exporter = exporter;
         _docxExporter = docxExporter;
@@ -848,6 +852,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool IsDarkTheme => Theme == AppTheme.Dark;
 
+    /// <summary>
+    /// The color theme every document is drawn and exported in. One for the whole app - see
+    /// <see cref="AppSettings.ColorTheme"/>. Always a theme that exists: an id the settings file
+    /// names but the catalog no longer has reads as Default.
+    /// </summary>
+    public string ColorThemeId
+    {
+        get => _colorThemeId;
+        private set => SetProperty(ref _colorThemeId, value);
+    }
+
+    private string _colorThemeId = ThemeCatalog.DefaultId;
+
+    /// <summary>Every color theme, in gallery order: Default first, then by name.</summary>
+    public IReadOnlyList<ColorTheme> ColorThemes => _colorThemes.Themes;
+
     public string ZoomLabel => $"{ActiveZoomPercent}%";
 
     /// <summary>Raised when the user chooses File, Exit.</summary>
@@ -886,6 +906,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         ViewMode = current.ViewMode;
         Theme = current.Theme;
+        ColorThemeId = _colorThemes.Find(current.ColorTheme).Id;
         ScrollSyncEnabled = current.ScrollSyncEnabled;
         WordWrapEnabled = current.WordWrapEnabled;
         LineNumbersEnabled = current.ShowLineNumbers;
@@ -929,6 +950,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void AttachPreviewHost(IPreviewHost host)
     {
         _host = host;
+
+        // Before the page is up, so the host already knows the theme when it hands the page
+        // every palette on ready - the first document is drawn in it rather than in Default.
+        _ = host.SetColorThemeAsync(ColorThemeId);
 
         host.Ready += OnHostReady;
         host.FontsResolved += (_, _) => FontsResolved?.Invoke(this, EventArgs.Empty);
@@ -4086,6 +4111,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ApplyTheme(theme);
 
         RestoreDocumentFocusAfterChrome();
+    }
+
+    [RelayCommand]
+    private async Task SetColorThemeAsync(string? themeId)
+    {
+        await ApplyColorThemeAsync(themeId).ConfigureAwait(true);
+
+        RestoreDocumentFocusAfterChrome();
+    }
+
+    /// <summary>
+    /// Puts a color theme in force for every document and remembers it, without touching
+    /// focus - for the preferences dialog, as <see cref="ApplyTheme"/> is.
+    ///
+    /// Default is saved as no choice at all, so the settings file names a theme only when one
+    /// was picked, and Default's id lives in one place.
+    /// </summary>
+    public async Task ApplyColorThemeAsync(string? themeId)
+    {
+        string id = _colorThemes.Find(themeId).Id;
+
+        ColorThemeId = id;
+
+        _settings.Update(s => s with { ColorTheme = id == ThemeCatalog.DefaultId ? null : id });
+
+        if (_host is not null)
+        {
+            await _host.SetColorThemeAsync(id).ConfigureAwait(true);
+        }
     }
 
     /// <summary>

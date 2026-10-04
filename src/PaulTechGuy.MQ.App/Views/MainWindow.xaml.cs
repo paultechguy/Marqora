@@ -19,6 +19,7 @@ using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.App.ViewModels;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
@@ -46,6 +47,7 @@ public sealed partial class MainWindow : Window
     private readonly IDiagramWindowService _diagramWindows;
     private readonly IFindAllWindowService _findAll;
     private readonly IPreferencesDialogService _preferencesDialogs;
+    private readonly ThemeCatalog _colorThemes;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<MainWindow> _logger;
 
@@ -80,6 +82,7 @@ public sealed partial class MainWindow : Window
         IDiagramWindowService diagramWindows,
         IFindAllWindowService findAll,
         IPreferencesDialogService preferencesDialogs,
+        ThemeCatalog colorThemes,
         ILoggerFactory loggerFactory,
         ILogger<MainWindow> logger)
     {
@@ -93,6 +96,7 @@ public sealed partial class MainWindow : Window
         _diagramWindows = diagramWindows;
         _findAll = findAll;
         _preferencesDialogs = preferencesDialogs;
+        _colorThemes = colorThemes;
         _loggerFactory = loggerFactory;
         _logger = logger;
 
@@ -102,6 +106,7 @@ public sealed partial class MainWindow : Window
         _context.Window = this;
 
         ConfigureChrome();
+        BuildColorThemeMenu();
         RegisterAccelerators();
 
         // Alt accelerators fire on the key-down, but the message loop still translates the
@@ -754,6 +759,7 @@ public sealed partial class MainWindow : Window
                 PreviewSurface,
                 CreatePreviewWebView,
                 _assets,
+                _colorThemes,
                 _loggerFactory.CreateLogger<WebViewPreviewHost>());
 
             _previewHost.Ready += OnPreviewReady;
@@ -908,6 +914,49 @@ public sealed partial class MainWindow : Window
             case nameof(MainViewModel.ActiveTab):
                 ApplySelectionFromViewModel();
                 break;
+
+            case nameof(MainViewModel.ColorThemeId):
+                CheckColorTheme(ViewModel.ColorThemeId);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// One item per color theme, in the catalog's order. Built once: the themes are compiled into
+    /// the app and cannot change while it runs.
+    /// </summary>
+    private void BuildColorThemeMenu()
+    {
+        foreach (ColorTheme theme in ViewModel.ColorThemes)
+        {
+            var item = new ToggleMenuFlyoutItem
+            {
+                Text = theme.Name,
+                Tag = theme.Id,
+                Command = ViewModel.SetColorThemeCommand,
+                CommandParameter = theme.Id,
+            };
+
+            ToolTipService.SetToolTip(item, theme.Description);
+
+            // A toggle flips itself when clicked, which would leave the theme already in force
+            // unchecked when it is picked again; putting the marks right here keeps exactly one.
+            item.Click += (_, _) => CheckColorTheme(theme.Id);
+
+            ColorThemeMenu.Items.Add(item);
+        }
+
+        CheckColorTheme(ViewModel.ColorThemeId);
+    }
+
+    private void CheckColorTheme(string themeId)
+    {
+        foreach (MenuFlyoutItemBase entry in ColorThemeMenu.Items)
+        {
+            if (entry is ToggleMenuFlyoutItem item)
+            {
+                item.IsChecked = string.Equals(item.Tag as string, themeId, StringComparison.Ordinal);
+            }
         }
     }
 

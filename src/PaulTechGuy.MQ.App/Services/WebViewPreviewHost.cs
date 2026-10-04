@@ -10,6 +10,7 @@ using Microsoft.Web.WebView2.Core;
 using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 
 namespace PaulTechGuy.MQ.App.Services;
 
@@ -33,6 +34,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     private readonly Panel _surface;
     private readonly Func<WebView2> _createWebView;
     private readonly IWebAssetProvider _assets;
+    private readonly ThemeCatalog _colorThemes;
+
+    /// <summary>
+    /// The color theme in force, which the page is told again whenever it reports ready - so a
+    /// page rebuilt after a crash comes back in the theme the user chose rather than in Default.
+    /// </summary>
+    private string _colorThemeId = ThemeCatalog.DefaultId;
     private readonly ILogger<WebViewPreviewHost> _logger;
 
     /// <summary>
@@ -98,15 +106,20 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// because a new one has to be given the background color of the current theme and the
     /// theme is the window's business.
     /// </param>
+    /// <param name="colorThemes">
+    /// Every color theme, which the page is given in full each time it reports ready.
+    /// </param>
     public WebViewPreviewHost(
         Panel surface,
         Func<WebView2> createWebView,
         IWebAssetProvider assets,
+        ThemeCatalog colorThemes,
         ILogger<WebViewPreviewHost> logger)
     {
         _surface = surface;
         _createWebView = createWebView;
         _assets = assets;
+        _colorThemes = colorThemes;
         _logger = logger;
 
         _webView = createWebView();
@@ -555,6 +568,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// white whatever the window is wearing, and the dark teal is chosen to sit on a dark
     /// surface, not on paper. app.css maps the two.
     /// </summary>
+    public Task SetColorThemeAsync(string themeId)
+    {
+        _colorThemeId = _colorThemes.Find(themeId).Id;
+
+        return SendAsync("setColorTheme", new { id = _colorThemeId });
+    }
+
     public Task SetThemeAsync(AppTheme effectiveTheme)
     {
         // Remembered as well as sent, so a WebView rebuilt after a crash navigates to the
@@ -1755,6 +1775,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         DefaultPreviewFont = ReadString(payload, "previewFont");
 
         _logger.LogInformation("Preview shell reported ready.");
+
+        // The color themes go first, ahead of everything queued, so they are in place before
+        // the first tab opens: a document drawn before its theme arrived would paint with no
+        // colors at all for a frame. Sent by the host rather than pushed by the view model with
+        // the rest of the app's state, because this is the one place that sees every ready -
+        // the first, and each one after a crash rebuilt the page.
+        Post(JsonSerializer.Serialize(
+            new { type = "setColorThemes", payload = ColorThemePayloads.Catalog(_colorThemes, _colorThemeId) },
+            JsonOptions));
 
         foreach (string message in _pending)
         {
