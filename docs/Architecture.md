@@ -46,11 +46,11 @@ another, and nothing would catch it. `MarqoraMarkdownPipeline` in `Rendering` is
 source; `MarkdigMarkdownRenderer` adds the source-line extension on top of it for the shell's
 scroll sync, and the exporter takes it bare because it reads `Block.Line` off the tree directly.
 
-The document colors are a smaller version of the same bargain, settled the other way. `Docx`
-cannot read `webshell/app.css`, so the four callout colors and the highlight yellow are written
-down a second time in `Domain/CalloutColors.cs` - and `build/Test-DocumentColors.ps1` fails when
-the two disagree. Pushing five colors across the bridge would have cost more than it saves; a
-test costs nothing.
+The document colors follow the same rule now. They used to be written twice - in
+`webshell/app.css` and again in `Domain/CalloutColors.cs` for `Docx`, which cannot read the
+stylesheet - with a build script holding the copies together. They are the color theme's now:
+`PaulTechGuy.MQ.Themes` holds one JSON file per theme, the host posts the palettes to the shell,
+and `Docx` reads the same palette, so there is one copy and nothing to check.
 
 Each layer registers itself: `AddMarqoraRepositories()`, `AddMarqoraRendering()`,
 `AddMarqoraServices()`, `AddMarqoraSpelling()`. The composition root stays a list of intents.

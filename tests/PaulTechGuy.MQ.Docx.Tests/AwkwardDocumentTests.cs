@@ -62,8 +62,8 @@ public class AwkwardDocumentTests
 
         string xml = exported.DocumentXml();
 
-        // The body's fence got the keyword red, not the note's text.
-        xml.ShouldContain("D73A49");
+        // The body's fence got the keyword color, not the note's text.
+        xml.ShouldContain(DefaultColors.Rgb("syntax-keyword"));
         exported.PlainText().ShouldContain("let body = 1;");
         exported.FootnotesText().ShouldContain("let note = 2;");
         exported.ValidationErrors().ShouldBeEmpty();

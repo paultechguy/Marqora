@@ -8244,7 +8244,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     source,
                     rendered,
                     RequestDiagramPngAsync,
-                    images))
+                    images,
+                    _colorThemes.Find(_settings.Current.ColorTheme)))
                 .ConfigureAwait(true);
 
             _logger.LogInformation(

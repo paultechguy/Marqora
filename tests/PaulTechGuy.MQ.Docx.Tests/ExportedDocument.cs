@@ -6,6 +6,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
 using Microsoft.Extensions.Logging.Abstractions;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 
 namespace PaulTechGuy.MQ.Docx.Tests;
 
@@ -45,7 +46,8 @@ internal sealed class ExportedDocument : IDisposable
         string? renderedPreviewHtml = null,
         string? sourceDocumentPath = null,
         Func<string, Task<byte[]?>>? diagramPng = null,
-        DocumentImages? images = null)
+        DocumentImages? images = null,
+        ColorTheme? colorTheme = null)
     {
         string root = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
@@ -65,7 +67,8 @@ internal sealed class ExportedDocument : IDisposable
             sourceDocumentPath,
             renderedPreviewHtml,
             diagramPng,
-            images).ConfigureAwait(false);
+            images,
+            colorTheme).ConfigureAwait(false);
 
         return new ExportedDocument(root, path) { Issues = issues };
     }
@@ -76,6 +79,15 @@ internal sealed class ExportedDocument : IDisposable
         using WordprocessingDocument file = WordprocessingDocument.Open(Path, false);
 
         return file.MainDocumentPart!.Document!.OuterXml;
+    }
+
+    /// <summary>The document theme part - the scheme colors Word's Design tab starts from.</summary>
+    public string ThemeXml()
+    {
+        using WordprocessingDocument file = WordprocessingDocument.Open(Path, false);
+        using var reader = new StreamReader(file.MainDocumentPart!.ThemePart!.GetStream());
+
+        return reader.ReadToEnd();
     }
 
     /// <summary>The style definitions, for assertions about colors and spacing.</summary>

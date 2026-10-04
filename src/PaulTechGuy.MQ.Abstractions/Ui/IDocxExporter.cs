@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 
 namespace PaulTechGuy.MQ.Abstractions.Ui;
 
@@ -56,6 +57,11 @@ public interface IDocxExporter
     /// resumed from its page carries its pictures in memory. Null asks the folder of
     /// <paramref name="sourceDocumentPath"/>, as every caller did before.
     /// </param>
+    /// <param name="colorTheme">
+    /// The color theme the document is written in - the one the preview is showing, since an
+    /// export looks like the preview. Its light palette, because a Word document is output and
+    /// output is light. Null for Default.
+    /// </param>
     /// <returns>
     /// Anything that could not be carried into the file - an image that is not on this
     /// machine, a remote image that would need the network, a diagram that never rendered -
@@ -75,5 +81,6 @@ public interface IDocxExporter
         string? renderedPreviewHtml,
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
+        ColorTheme? colorTheme = null,
         CancellationToken cancellationToken = default);
 }

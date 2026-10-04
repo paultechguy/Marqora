@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Rendering;
+using PaulTechGuy.MQ.Themes;
 using MarkdigDocument = Markdig.Syntax.MarkdownDocument;
 using MarkdigFootnote = Markdig.Extensions.Footnotes.Footnote;
 using WordPageMargin = DocumentFormat.OpenXml.Wordprocessing.PageMargin;
@@ -24,6 +25,12 @@ namespace PaulTechGuy.MQ.Docx;
 /// </summary>
 public sealed class DocxExporter : IDocxExporter
 {
+    /// <summary>
+    /// Default, for a caller that names no theme. Read once: the themes are compiled in and
+    /// cannot change while the app runs.
+    /// </summary>
+    private static readonly Lazy<ColorTheme> DefaultTheme = new(() => ThemeCatalog.Load().Default);
+
     private readonly MarkdownPipeline _pipeline;
     private readonly ILogger<DocxExporter> _logger;
 
@@ -47,6 +54,7 @@ public sealed class DocxExporter : IDocxExporter
         string? renderedPreviewHtml,
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
+        ColorTheme? colorTheme = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -100,9 +108,12 @@ public sealed class DocxExporter : IDocxExporter
 
             // The theme first: the styles below reference it for every color and face, and a
             // reference into a part that is not there resolves to nothing.
-            DocxTheme.Write(main.AddNewPart<ThemePart>());
+            var colors = new DocxColors(colorTheme ?? DefaultTheme.Value);
+
+            DocxTheme.Write(main.AddNewPart<ThemePart>(), colors);
             DocxStyles.Write(
                 main.AddNewPart<StyleDefinitionsPart>(),
+                colors,
                 headingNumbering,
                 headingNumberId);
 
@@ -120,7 +131,7 @@ public sealed class DocxExporter : IDocxExporter
             // thing for Word to object to, and a document of prose has no lists at all.
             if (!numbering.IsEmpty)
             {
-                numbering.Write(main.AddNewPart<NumberingDefinitionsPart>());
+                numbering.Write(main.AddNewPart<NumberingDefinitionsPart>(), colors.ListMarker);
             }
 
             var renderer = new BlockRenderer(
@@ -134,6 +145,7 @@ public sealed class DocxExporter : IDocxExporter
                 report,
                 preview,
                 diagrams,
+                colors,
                 _logger);
 
             FrontMatter front = FrontMatter.Read(document);

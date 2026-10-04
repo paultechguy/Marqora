@@ -18,7 +18,7 @@ dot-sourced by the others rather than invoked.
 ## Checks
 
 Run these before you commit. `Add-FileHeaders.ps1` and `Set-AmericanSpelling.ps1` rewrite the
-tree when run with no arguments; `Test-ButtonStandards.ps1`, `Test-DocumentColors.ps1` and
+tree when run with no arguments; `Test-ButtonStandards.ps1`, `Test-NetworkClaim.ps1` and
 `Test-WebShell.ps1` only ever report, and their `-Check` changes the exit code rather than
 the output.
 
@@ -27,7 +27,6 @@ the output.
 | `Add-FileHeaders.ps1` | Puts the copyright and SPDX license header on every hand-written `.cs` file under `src\` and `tests\`. Idempotent, so re-running is safe. `IDE0073` is a build warning, so a missing header costs you a build. |
 | `Set-AmericanSpelling.ps1` | Rewrites British spellings to American ones. The word list is deliberately short and sits at the top of the script — add to it when a word actually turns up. |
 | `Test-ButtonStandards.ps1` | Checks the app's buttons against `docs\Button-App-Standards.md`: inline sizes, unstyled buttons, hard-coded colors. The mechanical half only; the document's checklist covers the rest. |
-| `Test-DocumentColors.ps1` | Checks that the callout colors and the highlight yellow agree between `webshell\app.css` and `src\PaulTechGuy.MQ.Domain`. The preview reads the stylesheet; the Word export builds a `.docx` with no browser in sight and cannot, so those few values are written twice. This is what keeps the copies honest. |
 | `Test-NetworkClaim.ps1` | Checks that nothing still carries the retired absolute claim about network access. Marqora is *offline by default* and *does nothing on its own*; it no longer claims to make no calls at all, because a Folio collects pictures from the web when asked. Carries a curated list of reader-facing surfaces and an allowlist of statements that are still true, so it reports real drift rather than thirty correct sentences. A release gate. |
 | `Test-WebShell.ps1` | Checks that the preview shell's JavaScript parses and that every name it uses exists: `node --check` for syntax, then eslint's `no-undef` for names, over the webshell folder with the vendor bundle excluded. The shell is the one part of the tree the C# compiler cannot see, and a name reached from the wrong scope is a ReferenceError that waits until the line runs. Needs Node.js; without it the script says so and exits 0. Fetches `eslint@9` through `npx` on the first run and serves it from the npx cache after that. |
 
@@ -105,7 +104,6 @@ of the run unless `-KeepStaging` is passed.
 | `ReleaseCommon.ps1` | reads, for its callers | writes, for its callers | writes, for its callers | — |
 | `Set-AmericanSpelling.ps1` | — | excluded by design | excluded by design | rewrites the whole tree |
 | `Test-ButtonStandards.ps1` | — | — | — | reads `src\PaulTechGuy.MQ.App\`, `webshell\` |
-| `Test-DocumentColors.ps1` | — | — | — | reads `webshell\app.css`, `src\PaulTechGuy.MQ.Domain\` |
 | `Test-NetworkClaim.ps1` | — | — | — | reads the whole tree; writes nothing |
 | `Test-WebShell.ps1` | — | — | — | reads `webshell\`, vendor excluded; writes nothing |
 

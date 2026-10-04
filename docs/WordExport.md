@@ -267,15 +267,18 @@ by styleId. Getting that wrong makes the style vanish from Word's gallery.
 | `Heading1..6` | theme fonts, accent1 shaded/tinted per level, `numPr` when numbering is on |
 | `TOC1..3` | ordinary body text with an indent per level. Without these the contents wear the formatting of the headings they came from — bold, heading face, a different size every line |
 | `TOCHeading` | see above |
-| `MarqoraCode` | shading `F0F0F0`, border `E2E2E2` on all four sides at **8pt space**, `Before/After 160`, `ContextualSpacing`, mono, `NoProof`, **not bold** |
+| `MarqoraCode` | shading and border from the theme's code-block slots, on all four sides at **8pt space**, `Before/After 160`, `ContextualSpacing`, mono, `NoProof`, **not bold** |
 | `MarqoraCodeChar` | inline code, **bold** — a deliberate asymmetry: a word of code in a sentence has to hold its own against the prose; thirty lines in a shaded box already stand apart |
-| `MarqoraCallout{Kind}` | left bar in the kind's color, plus **top and bottom borders in the fill color** |
-| `MarqoraCallout{Kind}Title` | bold, in the kind's color, `Before 0 / After 0` |
-| `MarqoraTable` | accent-filled header row; `tblW pct 5000` + `tblLayout autofit` = Word's *AutoFit to Window* |
+| `MarqoraCallout{Kind}` | left bar in the kind's bar color, plus **top and bottom borders in the fill color** |
+| `MarqoraCallout{Kind}Title` | bold, in the kind's title color, `Before 0 / After 0` |
+| `MarqoraTable` | header fill, ink and rule, and a stripe on every other body row, all from the theme; `tblW pct 5000` + `tblLayout autofit` = Word's *AutoFit to Window* |
 | `ListParagraph` | **no indent of its own** — the indent comes from the numbering level or from direct formatting, never from two places |
 
-Colors come from `Domain/CalloutColors.cs` and `Domain/DocumentAccent.cs`, and
-`build/Test-DocumentColors.ps1` fails the build if they drift from `webshell/app.css`.
+Colors come from the color theme the preview is showing, in its light palette, by way of
+`Docx/DocxColors.cs` - the same JSON the preview reads, so there is nothing to drift. They are
+written as plain colors, not theme references: in OOXML `themeColor` outranks `val`, and a
+theme has more colors than Word's scheme has slots. `DocxTheme` sets the scheme's accents and
+hyperlink from the theme so Word's own galleries start from it.
 
 ### Shading stops at borders
 
@@ -533,11 +536,10 @@ for); heading bookmarks always on (invisible, and what makes Word's navigation p
 ### Commands
 
 ```powershell
-# gates - all four are idempotent and have a -Check CI form
+# gates - all three are idempotent and have a -Check CI form
 pwsh ./build/Add-FileHeaders.ps1 -Check
 pwsh ./build/Set-AmericanSpelling.ps1 -Check
 pwsh ./build/Test-ButtonStandards.ps1 -Check
-pwsh ./build/Test-DocumentColors.ps1 -Check
 
 # the fast loop while iterating on the exporter
 dotnet test tests/PaulTechGuy.MQ.Docx.Tests/PaulTechGuy.MQ.Docx.Tests.csproj -c Debug

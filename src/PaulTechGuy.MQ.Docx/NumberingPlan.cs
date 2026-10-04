@@ -267,7 +267,11 @@ internal sealed class NumberingPlan
     /// it. Interleaving them resolves perfectly well and still makes Word call the file
     /// damaged.
     /// </summary>
-    public void Write(NumberingDefinitionsPart part)
+    /// <param name="markerColor">
+    /// The color theme's list-marker color, which the bullets and numbers of every list wear,
+    /// as the preview's ::marker does. Heading numbers are not lists and keep their heading's.
+    /// </param>
+    public void Write(NumberingDefinitionsPart part, string markerColor)
     {
         ArgumentNullException.ThrowIfNull(part);
 
@@ -275,7 +279,7 @@ internal sealed class NumberingPlan
 
         for (int i = 0; i < _abstracts.Count; i++)
         {
-            numbering.AppendChild(BuildAbstract(i, _abstracts[i]));
+            numbering.AppendChild(BuildAbstract(i, _abstracts[i], markerColor));
         }
 
         if (_headings is { } headings)
@@ -384,7 +388,7 @@ internal sealed class NumberingPlan
     private static string CumulativePattern(int level) =>
         string.Join('.', Enumerable.Range(1, level + 1).Select(n => $"%{n}"));
 
-    private static AbstractNum BuildAbstract(int id, LevelShape[] shapes)
+    private static AbstractNum BuildAbstract(int id, LevelShape[] shapes, string markerColor)
     {
         var abstractNum = new AbstractNum(
             new Nsid { Val = $"1A2B3C{id:X2}" },
@@ -401,7 +405,7 @@ internal sealed class NumberingPlan
                 ? shapes[level]
                 : shapes[^1].AtDepth(level);
 
-            abstractNum.AppendChild(BuildLevel(level, shape));
+            abstractNum.AppendChild(BuildLevel(level, shape, markerColor));
         }
 
         return abstractNum;
@@ -413,7 +417,7 @@ internal sealed class NumberingPlan
     /// The child order here catches people out: the justification comes <em>after</em> the
     /// text pattern, not before it, which is the opposite of how the two read.
     /// </summary>
-    private static Level BuildLevel(int level, LevelShape shape)
+    private static Level BuildLevel(int level, LevelShape shape, string markerColor)
     {
         var element = new Level(
             new StartNumberingValue { Val = shape.Start },
@@ -430,11 +434,17 @@ internal sealed class NumberingPlan
             LevelIndex = level,
         };
 
+        // The marker's own run properties: its face, for a bullet that needs one, then its color.
+        // w:rPr runs rFonts before color.
+        var marker = new NumberingSymbolRunProperties();
+
         if (shape.MarkerFont is { } font)
         {
-            element.AppendChild(new NumberingSymbolRunProperties(
-                new RunFonts { Ascii = font, HighAnsi = font, Hint = FontTypeHintValues.Default }));
+            marker.AppendChild(new RunFonts { Ascii = font, HighAnsi = font, Hint = FontTypeHintValues.Default });
         }
+
+        marker.AppendChild(new Color { Val = markerColor });
+        element.AppendChild(marker);
 
         return element;
     }

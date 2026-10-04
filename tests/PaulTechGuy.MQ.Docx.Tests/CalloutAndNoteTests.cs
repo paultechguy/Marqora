@@ -34,10 +34,8 @@ public class CalloutAndNoteTests
         string xml = exported.DocumentXml();
 
         xml.ShouldContain($"MarqoraCallout{kind}");
-        exported.StylesXml().ShouldContain(CalloutColors.BarOf(kind));
-
-        // The panel is the bar color over white, because Word's shading has no alpha.
-        exported.StylesXml().ShouldContain(CalloutColors.FillOf(kind));
+        exported.StylesXml().ShouldContain(DefaultColors.Rgb($"callout-{kind.ToString().ToLowerInvariant()}-bar"));
+        exported.StylesXml().ShouldContain(DefaultColors.Rgb($"callout-{kind.ToString().ToLowerInvariant()}-fill"));
     }
 
     /// <summary>

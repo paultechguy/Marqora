@@ -40,8 +40,15 @@ internal sealed class InlineRenderer
 
     /// <summary>Abbreviations already spelled out, so each is expanded once.</summary>
     private readonly HashSet<string> _expandedAbbreviations = new(StringComparer.Ordinal);
+    private readonly DocxColors _colors;
     private readonly int _maximumImageWidthTwips;
     private readonly ILogger _logger;
+
+    /// <summary>
+    /// How many containers deep the writing is inside something whose own color bold and
+    /// italic keep - a quote, a table's header row. See <see cref="KeepSurroundingInk"/>.
+    /// </summary>
+    private int _surroundingInk;
 
     public InlineRenderer(
         MainDocumentPart main,
@@ -51,9 +58,11 @@ internal sealed class InlineRenderer
         PreviewHarvest preview,
         ExportReport report,
         int maximumImageWidthTwips,
+        DocxColors colors,
         ILogger logger)
     {
         _main = main;
+        _colors = colors;
         _bookmarks = bookmarks;
         _images = images;
         _footnotes = footnotes;
@@ -61,6 +70,33 @@ internal sealed class InlineRenderer
         _report = report;
         _maximumImageWidthTwips = maximumImageWidthTwips;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Bold and italic keep the color of what holds them until the returned scope is disposed:
+    /// the quote ink inside a blockquote, the header ink in a table's header row - the rule the
+    /// preview's stylesheet states for the same places. Elsewhere they wear the color theme's
+    /// bold and italic colors.
+    /// </summary>
+    public IDisposable KeepSurroundingInk()
+    {
+        _surroundingInk++;
+
+        return new InkScope(this);
+    }
+
+    private sealed class InkScope(InlineRenderer owner) : IDisposable
+    {
+        private bool _done;
+
+        public void Dispose()
+        {
+            if (!_done)
+            {
+                _done = true;
+                owner._surroundingInk--;
+            }
+        }
     }
 
     /// <param name="sourceLine">
@@ -105,7 +141,7 @@ internal sealed class InlineRenderer
                 break;
 
             case EmphasisInline emphasis:
-                Write(emphasis, paragraph, Apply(emphasis, format));
+                Write(emphasis, paragraph, Inked(emphasis, Apply(emphasis, format)));
                 break;
 
             case CodeInline code:
@@ -137,7 +173,10 @@ internal sealed class InlineRenderer
                 break;
 
             case TaskList task:
-                Append(paragraph, TaskGlyph(task, format));
+                // The box in the theme's checkbox color, unless something around it colors it.
+                Append(paragraph, TaskGlyph(
+                    task,
+                    format.Color is null && !format.Hyperlink ? format.WithColor(_colors.TaskCheck) : format));
                 paragraph.AppendChild(new Run(new TabChar()));
                 break;
 
@@ -175,6 +214,21 @@ internal sealed class InlineRenderer
                 _logger.LogDebug("No Word equivalent for inline {Inline}; dropped.", inline.GetType().Name);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The color theme's bold or italic color on a run of strong or emphasis, unless the text
+    /// is inside something that keeps its own color, or already carries an ink of its own from
+    /// an outer run. RunFormat writes it only where nothing stronger colors the run.
+    /// </summary>
+    private RunFormat Inked(EmphasisInline emphasis, RunFormat format)
+    {
+        if (_surroundingInk > 0 || format.EmphasisInk is not null || emphasis.DelimiterChar is not ('*' or '_'))
+        {
+            return format;
+        }
+
+        return format.WithEmphasisInk(emphasis.DelimiterCount >= 2 ? _colors.Strong : _colors.Emphasis);
     }
 
     /// <summary>

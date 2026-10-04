@@ -48,21 +48,17 @@
   --mq-danger: #b3261e;
   --mq-danger-soft: rgba(179, 38, 30, 0.08);
 
-  /* Alert callouts. Note reuses the accent and caution the danger color; the rest are
-     their own, following the same convention GitHub set. */
-  --mq-tip: #1a7f37;
-  --mq-tip-soft: rgba(26, 127, 55, 0.08);
-  --mq-important: #8250df;
-  --mq-important-soft: rgba(130, 80, 223, 0.08);
+  /* The callouts are the color theme's - see color-theme.js. Warning is still here because
+     the source pane's dead-link underline reads it. */
   --mq-warning: #9a6700;
-  --mq-warning-soft: rgba(154, 103, 0, 0.10);
 
   /* The fourth claim a source-pane mark can make: a picture that will not appear here.
 
-     It began as an alias of --mq-important, on the grounds that one violet beats two to keep in
-     step. That held right up until the mark had to be read: the callout violet is dark enough
-     that a thin dotted underline and a two-pixel ruler tick both pass for black on white, and a
-     tick whose color cannot be told from the text is a tick that says nothing. Brighter here,
+     It began as an alias of the Important callout's violet, on the grounds that one violet
+     beats two to keep in step. That held right up until the mark had to be read: the callout
+     violet is dark enough that a thin dotted underline and a two-pixel ruler tick both pass for
+     black on white, and a tick whose color cannot be told from the text is a tick that says
+     nothing. Brighter here,
      lighter in weight than the callout it sat on top of, and the two are now separate values
      because they answer different questions - one fills a block in the preview, this one draws
      a hairline in the source pane. */
@@ -92,7 +88,6 @@
   --mq-tick-spelling: #d1242f;
   --mq-tick-link: #bf8700;
 
-  --mq-mark: #fff3a3;
   /* Whitespace marks in the source pane: present enough to read, quiet enough to ignore. */
   --mq-whitespace: #7fb0da;
   /* The source pane's selection in light mode, focused and unfocused alike. Monaco's own
@@ -129,16 +124,11 @@
     --mq-quote-bar: #4a4a4a;
     --mq-danger: #ff9d94;
     --mq-danger-soft: rgba(255, 157, 148, 0.10);
-    --mq-tip: #6fce8a;
-    --mq-tip-soft: rgba(111, 206, 138, 0.12);
-    --mq-important: #c9a6ff;
-    --mq-important-soft: rgba(201, 166, 255, 0.12);
     /* Named here now that it is a value rather than an alias. Lighter than the light-mode
        violet rather than darker: the surface it draws on went dark, so the hairline has to go
        the other way to stay visible. */
     --mq-blocked: #c9a6ff;
     --mq-warning: #e0b341;
-    --mq-warning-soft: rgba(224, 179, 65, 0.12);
 
     /* See the light theme for why the ruler carries its own two. Dark needed less work: the
        amber was already bright against the dark surface and moves a shade only to match the
@@ -147,7 +137,6 @@
        as nothing. This one is a red that is still a red at two pixels. */
     --mq-tick-spelling: #f85149;
     --mq-tick-link: #e3b341;
-    --mq-mark: #5c4a00;
     --mq-whitespace: #4d7ea6;
     /* --mq-selection and --mq-selection-text are the two exceptions to the rule above:
        they are not named here, because the Find All window paints the same pair with WinUI
@@ -1402,9 +1391,7 @@ a.mq-blocked-media {
 
   What is left is the page's furniture. The grays sit a shade darker here than on screen,
   for paper. The accent, danger and warning are re-stated because the spelling marks, the
-  find and review marks and the error boxes read them. Tip, important and the mark no longer
-  color anything in the preview; they stay until the Word export reads the theme as well,
-  because build/Test-DocumentColors.ps1 still holds them against CalloutColors.
+  find and review marks and the error boxes read them.
 */
 @media print {
   :root,
@@ -1420,14 +1407,8 @@ a.mq-blocked-media {
     --mq-accent: var(--mq-accent-print);
     --mq-danger: #b3261e;
     --mq-danger-soft: rgba(179, 38, 30, 0.08);
-    --mq-tip: #1a7f37;
-    --mq-tip-soft: rgba(26, 127, 55, 0.08);
-    --mq-important: #8250df;
-    --mq-important-soft: rgba(130, 80, 223, 0.08);
     --mq-warning: #9a6700;
-    --mq-warning-soft: rgba(154, 103, 0, 0.10);
     --mq-quote-bar: #c9c9c9;
-    --mq-mark: #fff3a3;
 
     color-scheme: light;
   }

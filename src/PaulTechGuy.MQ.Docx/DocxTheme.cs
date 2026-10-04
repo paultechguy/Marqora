@@ -11,17 +11,20 @@ namespace PaulTechGuy.MQ.Docx;
 /// <summary>
 /// The document theme, which is what lets Word restyle the whole file from the Design tab.
 ///
-/// Word's styles do not hold colors and fonts directly; they hold references into a theme -
-/// "the major font", "accent 1" - and the theme resolves them. Writing a theme is therefore
-/// the difference between a document whose headings are a teal somebody typed in, and one
-/// whose headings follow a scheme the reader can swap wholesale. The second is what a Word
-/// user expects of a Word file.
+/// Word's styles can hold references into a theme - "the major font", "accent 1" - for the
+/// theme to resolve, and the faces here are used that way, so the Design tab can swap them.
 ///
 /// The XML is an embedded resource rather than built here. Most of it is the format scheme,
 /// which Word requires in full and which nothing in a markdown document ever uses; building
-/// that in code would be a hundred lines that say nothing. What does vary - the accent and
-/// the two faces - is patched on the way out, so Marqora's teal stays written down once, in
-/// <see cref="DocumentAccent"/>.
+/// that in code would be a hundred lines that say nothing. What does vary - the scheme colors
+/// and the two faces - is patched on the way out.
+///
+/// The scheme colors are the color theme's: accent 1 and the hyperlink are its link color,
+/// accent 2 is the note callout's bar, and accents 3 to 6 are the tip, important, warning and
+/// caution bars. The styles themselves carry plain colors (see DocxStyles), so this is what
+/// Word's own galleries - a new table, a chart, SmartArt - start from. Accent 1 is the link
+/// rather than a heading color because several themes, Default among them, have near-black
+/// headings, and a black accent 1 would turn every one of those galleries black.
 /// </summary>
 internal static class DocxTheme
 {
@@ -45,14 +48,20 @@ internal static class DocxTheme
     /// <summary>The heading face. Aptos Display is Aptos cut for large sizes.</summary>
     public const string MajorFont = "Aptos Display";
 
-    public static void Write(ThemePart part)
+    public static void Write(ThemePart part, DocxColors colors)
     {
         ArgumentNullException.ThrowIfNull(part);
+        ArgumentNullException.ThrowIfNull(colors);
 
         XDocument theme = Load();
 
-        SetSchemeColor(theme, "accent1", DocumentAccent.LightRgb);
-        SetSchemeColor(theme, "hlink", DocumentAccent.LightRgb);
+        SetSchemeColor(theme, "accent1", colors.Link);
+        SetSchemeColor(theme, "accent2", colors.CalloutBar(CalloutKind.Note));
+        SetSchemeColor(theme, "accent3", colors.CalloutBar(CalloutKind.Tip));
+        SetSchemeColor(theme, "accent4", colors.CalloutBar(CalloutKind.Important));
+        SetSchemeColor(theme, "accent5", colors.CalloutBar(CalloutKind.Warning));
+        SetSchemeColor(theme, "accent6", colors.CalloutBar(CalloutKind.Caution));
+        SetSchemeColor(theme, "hlink", colors.Link);
         SetFont(theme, "majorFont", MajorFont);
         SetFont(theme, "minorFont", MinorFont);
 

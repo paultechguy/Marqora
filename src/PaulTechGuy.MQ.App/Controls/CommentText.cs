@@ -26,9 +26,10 @@ namespace PaulTechGuy.MQ.App.Controls;
 ///
 /// The colors are plain colors, not theme brushes looked up in code, which resolve against the
 /// operating system's theme rather than the one chosen in Marqora (see PaletteWindow.SurfaceBrush).
-/// The highlight is the preview's own yellow, <see cref="CalloutColors.MarkHex"/>, with black text
-/// on it in either theme, as the preview's highlight has; code wears a gray that is quiet on both
-/// the light card and the dark one.
+/// The highlight is the soft yellow Default draws a ==highlight== in, with black text on it in
+/// either theme; code wears a gray that is quiet on both the light card and the dark one. It is
+/// the app's own color, not the document's - this is the review panel, which does not follow the
+/// color theme any more than the outline row does - so it is written here and nowhere else.
 /// </summary>
 public sealed partial class CommentText : UserControl
 {
@@ -38,7 +39,9 @@ public sealed partial class CommentText : UserControl
         typeof(CommentText),
         new PropertyMetadata(string.Empty, (d, _) => ((CommentText)d).Rebuild()));
 
-    private static readonly Color HighlightColor = HexColor.Parse(CalloutColors.MarkHex, nameof(CalloutColors));
+    private const string HighlightHex = "#fff3a3";
+
+    private static readonly Color HighlightColor = HexColor.Parse(HighlightHex, nameof(CommentText));
 
     private static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
 

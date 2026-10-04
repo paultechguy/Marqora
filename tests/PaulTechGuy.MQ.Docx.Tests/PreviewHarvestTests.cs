@@ -23,10 +23,10 @@ namespace PaulTechGuy.MQ.Docx.Tests;
 /// </summary>
 public class PreviewHarvestTests
 {
-    /// <summary>GitHub light draws a keyword in this red, which is what should reach the file.</summary>
-    private const string KeywordRed = "D73A49";
+    /// <summary>The Default theme's keyword color, which is what should reach the file.</summary>
+    private static readonly string KeywordRed = DefaultColors.Rgb("syntax-keyword");
 
-    private const string NumberBlue = "005CC5";
+    private static readonly string NumberBlue = DefaultColors.Rgb("syntax-number");
 
     [Fact]
     public async Task Without_a_preview_the_document_is_written_anyway_just_without_colors()

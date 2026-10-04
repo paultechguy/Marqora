@@ -55,6 +55,7 @@ internal sealed class BlockRenderer
     private readonly PreviewHarvest _preview;
     private readonly IReadOnlyDictionary<string, byte[]> _diagrams;
     private readonly ExportReport _report;
+    private readonly DocxColors _colors;
     private readonly ILogger _logger;
 
     /// <summary>Fence languages the preview draws as pictures rather than as code.</summary>
@@ -82,9 +83,11 @@ internal sealed class BlockRenderer
         ExportReport report,
         PreviewHarvest preview,
         IReadOnlyDictionary<string, byte[]> diagrams,
+        DocxColors colors,
         ILogger logger)
     {
         _body = body;
+        _colors = colors;
         _bookmarks = bookmarks;
         _numbering = numbering;
         _usableWidthTwips = usableWidthTwips;
@@ -95,7 +98,7 @@ internal sealed class BlockRenderer
         _images = new DocxImages(main, images, report, usableHeightTwips, logger);
         _footnotes = new DocxFootnotes(main);
         _inlines = new InlineRenderer(
-            main, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, logger);
+            main, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, colors, logger);
     }
 
     /// <summary>
@@ -588,14 +591,18 @@ internal sealed class BlockRenderer
 
         int column = 0;
 
-        foreach (MarkdigTableCell cell in row.OfType<MarkdigTableCell>())
+        // Bold and italic in the header row keep the header's ink, as they do in the preview.
+        using (row.IsHeader ? _inlines.KeepSurroundingInk() : null)
         {
-            int at = cell.ColumnIndex >= 0 ? cell.ColumnIndex : column;
-            int span = Math.Max(1, cell.ColumnSpan);
+            foreach (MarkdigTableCell cell in row.OfType<MarkdigTableCell>())
+            {
+                int at = cell.ColumnIndex >= 0 ? cell.ColumnIndex : column;
+                int span = Math.Max(1, cell.ColumnSpan);
 
-            wordRow.AppendChild(WriteCell(table, cell, widths, at, span));
+                wordRow.AppendChild(WriteCell(table, cell, widths, at, span));
 
-            column = at + span;
+                column = at + span;
+            }
         }
 
         // A markdown row is allowed to be short; a Word row is not, and the missing cells
@@ -692,9 +699,13 @@ internal sealed class BlockRenderer
     {
         int before = _body.ChildElements.Count;
 
-        foreach (Block child in quote)
+        // Bold and italic in a quote keep the quote's ink, as they do in the preview.
+        using (_inlines.KeepSurroundingInk())
         {
-            Write(child);
+            foreach (Block child in quote)
+            {
+                Write(child);
+            }
         }
 
         for (int i = before; i < _body.ChildElements.Count; i++)
@@ -934,7 +945,7 @@ internal sealed class BlockRenderer
         return lines;
     }
 
-    private static Run CodeRun(CodeToken token)
+    private Run CodeRun(CodeToken token)
     {
         var run = new Run();
 
@@ -952,7 +963,18 @@ internal sealed class BlockRenderer
                 properties.AppendChild(new Italic());
             }
 
-            properties.AppendChild(new Color { Val = style.Color });
+            // Color then shading: w:rPr runs b, i, ..., color, ..., shd.
+            properties.AppendChild(new Color { Val = _colors.Syntax(style.Slot) });
+
+            if (style.FillSlot is { } fill)
+            {
+                properties.AppendChild(new Shading
+                {
+                    Val = ShadingPatternValues.Clear,
+                    Color = "auto",
+                    Fill = _colors.Syntax(fill),
+                });
+            }
 
             run.AppendChild(properties);
         }
@@ -1034,7 +1056,7 @@ internal sealed class BlockRenderer
                         Val = BorderValues.Single,
                         Size = 6U,
                         Space = 1U,
-                        Color = "D0D0D0",
+                        Color = _colors.Rule,
                     }),
                 new SpacingBetweenLines { Before = "240", After = "240" })));
 

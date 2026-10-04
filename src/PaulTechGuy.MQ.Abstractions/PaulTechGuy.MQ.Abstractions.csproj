@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+
+    <!-- A leaf like Domain: the color themes, which the Word export contract names. -->
+    <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
   </ItemGroup>
 
 </Project>

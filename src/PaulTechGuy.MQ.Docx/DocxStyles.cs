@@ -15,8 +15,14 @@ namespace PaulTechGuy.MQ.Docx;
 /// Two rules run through all of it. Word's built-in styles are defined rather than left
 /// latent, because a style a paragraph names but the file does not define is applied as
 /// Normal without complaint - the failure is silent and looks like the walker's fault. And
-/// colors and fonts are theme references rather than literals wherever Word has a slot for
-/// them, because that is what makes the Design tab able to restyle the whole document.
+/// fonts are theme references, because that is what lets the Design tab restyle the whole
+/// document.
+///
+/// Colors are the color theme's, as plain values. A theme has far more of them than Word's
+/// scheme has slots - six heading colors, a quote ink, a table stripe - and in OOXML a theme
+/// reference outranks the literal written beside it, so a reference would quietly put the
+/// scheme's color back over the theme's. The one exception is the hyperlink, whose scheme
+/// slot DocxTheme sets to the theme's link color, so the two cannot disagree.
 /// </summary>
 internal static class DocxStyles
 {
@@ -27,16 +33,19 @@ internal static class DocxStyles
     private const int CodeHalfPoints = 19;
 
     private const string CodeFont = "Cascadia Mono";
-    private const string CodeInk = "24292E";
-    private const string CodeFill = "F0F0F0";
-    private const string CodeBorder = "E2E2E2";
 
+    /// <param name="colors">
+    /// The color theme's light palette. Every color a style carries comes from it, so the
+    /// exported document wears the theme the preview does.
+    /// </param>
     public static void Write(
         StyleDefinitionsPart part,
+        DocxColors colors,
         HeadingNumbering headingNumbering = HeadingNumbering.Off,
         int? headingNumberId = null)
     {
         ArgumentNullException.ThrowIfNull(part);
+        ArgumentNullException.ThrowIfNull(colors);
 
         var styles = new Styles();
 
@@ -53,21 +62,21 @@ internal static class DocxStyles
 
         for (int level = 1; level <= 6; level++)
         {
-            styles.AppendChild(HeadingStyle(level, headingNumbering, headingNumberId));
+            styles.AppendChild(HeadingStyle(level, headingNumbering, headingNumberId, colors));
         }
 
-        styles.AppendChild(QuoteStyle());
+        styles.AppendChild(QuoteStyle(colors));
         styles.AppendChild(CaptionStyle());
         styles.AppendChild(ListParagraphStyle());
-        styles.AppendChild(HyperlinkStyle());
-        styles.AppendChild(CodeBlockStyle());
-        styles.AppendChild(CodeCharStyle());
-        styles.AppendChild(MarkStyle());
-        styles.AppendChild(TableStyle());
+        styles.AppendChild(HyperlinkStyle(colors));
+        styles.AppendChild(CodeBlockStyle(colors));
+        styles.AppendChild(CodeCharStyle(colors));
+        styles.AppendChild(MarkStyle(colors));
+        styles.AppendChild(TableStyle(colors));
         styles.AppendChild(DefinitionTermStyle());
         styles.AppendChild(DefinitionItemStyle());
         styles.AppendChild(FootnoteTextStyle());
-        styles.AppendChild(FootnoteReferenceStyle());
+        styles.AppendChild(FootnoteReferenceStyle(colors));
         styles.AppendChild(RunningStyle(StyleIds.Header, "header"));
         styles.AppendChild(RunningStyle(StyleIds.Footer, "footer"));
 
@@ -80,8 +89,8 @@ internal static class DocxStyles
 
         foreach (CalloutKind kind in Enum.GetValues<CalloutKind>())
         {
-            styles.AppendChild(CalloutStyle(kind));
-            styles.AppendChild(CalloutTitleStyle(kind));
+            styles.AppendChild(CalloutStyle(kind, colors));
+            styles.AppendChild(CalloutTitleStyle(kind, colors));
         }
 
         part.Styles = styles;
@@ -273,7 +282,7 @@ internal static class DocxStyles
     /// folds when a reader collapses a section. A heading that looks right and carries no
     /// outline level is one the document's own structure cannot see.
     /// </summary>
-    private static Style HeadingStyle(int level, HeadingNumbering numbering, int? numberId)
+    private static Style HeadingStyle(int level, HeadingNumbering numbering, int? numberId, DocxColors colors)
     {
         (int size, string before, string after) = level switch
         {
@@ -295,35 +304,30 @@ internal static class DocxStyles
             runProperties.AppendChild(new Italic());
         }
 
-        // Heading 1 is darkened and heading 6 lightened against the same accent, which is
-        // what Word's own theme does: the six read as one family rather than six identical
-        // teals. The literal beside each theme reference is the fallback for a reader that
-        // ignores themes, and is the shade Word would compute anyway.
-        runProperties.AppendChild(level switch
-        {
-            1 => new Color
-            {
-                Val = "2A6068",
-                ThemeColor = ThemeColorValues.Accent1,
-                ThemeShade = "BF",
-            },
-            6 => new Color
-            {
-                Val = "72B0B7",
-                ThemeColor = ThemeColorValues.Accent1,
-                ThemeTint = "BF",
-            },
-            _ => new Color
-            {
-                Val = DocumentAccent.LightRgb,
-                ThemeColor = ThemeColorValues.Accent1,
-            },
-        });
+        // The color theme's own color for the level, written as a plain color rather than a
+        // reference into the document theme. A reference would win over the literal - in
+        // OOXML themeColor outranks val - and the theme has six heading colors where Word's
+        // scheme has no heading slot at all; a shade of accent 1 was the old answer, from
+        // before a heading had a color of its own.
+        runProperties.AppendChild(new Color { Val = colors.Heading(level) });
 
         runProperties.AppendChild(new FontSize { Val = Text(size) });
         runProperties.AppendChild(new FontSizeComplexScript { Val = Text(size) });
 
         var paragraphProperties = new StyleParagraphProperties(new KeepNext(), new KeepLines());
+
+        // The line under a level 2 heading, which the preview draws. Borders come before the
+        // numbering in w:pPr - the schema runs keepNext, keepLines, ..., numPr, ..., pBdr - so
+        // it is held back and placed after the numbering below.
+        ParagraphBorders? rule = level == 2
+            ? new ParagraphBorders(new BottomBorder
+            {
+                Val = BorderValues.Single,
+                Size = 4U,
+                Space = 4U,
+                Color = colors.HeadingRule,
+            })
+            : null;
 
         // The section number, when the reader has asked for one. It is attached to the style
         // rather than typed in front of the text, which is what makes Word maintain it: insert
@@ -337,6 +341,11 @@ internal static class DocxStyles
             paragraphProperties.AppendChild(new NumberingProperties(
                 new NumberingLevelReference { Val = level - (int)numbering },
                 new NumberingId { Val = id }));
+        }
+
+        if (rule is not null)
+        {
+            paragraphProperties.AppendChild(rule);
         }
 
         paragraphProperties.AppendChild(new SpacingBetweenLines
@@ -363,31 +372,46 @@ internal static class DocxStyles
         };
     }
 
-    private static Style QuoteStyle() => new(
-        new StyleName { Val = "Quote" },
-        new BasedOn { Val = StyleIds.Normal },
-        new NextParagraphStyle { Val = StyleIds.Normal },
-        new UIPriority { Val = 29 },
-        new PrimaryStyle(),
-        new StyleParagraphProperties(
+    /// <summary>
+    /// A blockquote: the theme's bar down the left, its quote ink, and its fill behind when
+    /// the theme gives one - a fill equal to the page is left out rather than painted white.
+    /// </summary>
+    private static Style QuoteStyle(DocxColors colors)
+    {
+        var paragraph = new StyleParagraphProperties(
             new ParagraphBorders(
                 new LeftBorder
                 {
                     Val = BorderValues.Single,
                     Size = 18U,
                     Space = 8U,
-                    Color = DocumentAccent.LightRgb,
-                    ThemeColor = ThemeColorValues.Accent1,
-                }),
-            new SpacingBetweenLines { Before = "160", After = "160" },
-            new Indentation { Left = "432", Right = "432" }),
-        new StyleRunProperties(
-            new Italic(),
-            new Color { Val = "5D5D5D" }))
-    {
-        Type = StyleValues.Paragraph,
-        StyleId = StyleIds.Quote,
-    };
+                    Color = colors.QuoteBar,
+                }));
+
+        // Shading after the borders and before the spacing: w:pPr runs pBdr, shd, ..., spacing.
+        if (colors.QuoteFill is { } fill)
+        {
+            paragraph.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = fill });
+        }
+
+        paragraph.AppendChild(new SpacingBetweenLines { Before = "160", After = "160" });
+        paragraph.AppendChild(new Indentation { Left = "432", Right = "432" });
+
+        return new Style(
+            new StyleName { Val = "Quote" },
+            new BasedOn { Val = StyleIds.Normal },
+            new NextParagraphStyle { Val = StyleIds.Normal },
+            new UIPriority { Val = 29 },
+            new PrimaryStyle(),
+            paragraph,
+            new StyleRunProperties(
+                new Italic(),
+                new Color { Val = colors.QuoteText }))
+        {
+            Type = StyleValues.Paragraph,
+            StyleId = StyleIds.Quote,
+        };
+    }
 
     private static Style CaptionStyle() => new(
         new StyleName { Val = "caption" },
@@ -431,13 +455,18 @@ internal static class DocxStyles
         StyleId = StyleIds.ListParagraph,
     };
 
-    private static Style HyperlinkStyle() => new(
+    /// <summary>
+    /// A link, in the theme's link color. Still a reference to the document theme's hyperlink
+    /// slot, because the theme part sets that slot to the same color - see DocxTheme - so
+    /// Word's Design tab can restyle links along with everything else.
+    /// </summary>
+    private static Style HyperlinkStyle(DocxColors colors) => new(
         new StyleName { Val = "Hyperlink" },
         new BasedOn { Val = StyleIds.DefaultParagraphFont },
         new UIPriority { Val = 99 },
         new UnhideWhenUsed(),
         new StyleRunProperties(
-            new Color { Val = DocumentAccent.LightRgb, ThemeColor = ThemeColorValues.Hyperlink },
+            new Color { Val = colors.Link, ThemeColor = ThemeColorValues.Hyperlink },
             new Underline { Val = UnderlineValues.Single }))
     {
         Type = StyleValues.Character,
@@ -454,7 +483,7 @@ internal static class DocxStyles
     /// NoProof turns the spell checker off for the run, without which Word underlines every
     /// identifier in the file and the document looks broken.
     /// </summary>
-    private static Style CodeBlockStyle() => new(
+    private static Style CodeBlockStyle(DocxColors colors) => new(
         new StyleName { Val = "Marqora Code Block" },
         new BasedOn { Val = StyleIds.Normal },
         new NextParagraphStyle { Val = StyleIds.Normal },
@@ -472,11 +501,11 @@ internal static class DocxStyles
                 // was never what made fences look inconsistent. Two of them back to back were
                 // welding into a single box, and the seam written after each fence is what
                 // fixed that.
-                new TopBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = CodeBorder },
-                new LeftBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = CodeBorder },
-                new BottomBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = CodeBorder },
-                new RightBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = CodeBorder }),
-            new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = CodeFill },
+                new TopBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = colors.CodeBlockBorder },
+                new LeftBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = colors.CodeBlockBorder },
+                new BottomBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = colors.CodeBlockBorder },
+                new RightBorder { Val = BorderValues.Single, Size = 4U, Space = 8U, Color = colors.CodeBlockBorder }),
+            new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = colors.CodeBlockFill },
             // Spacing above and below the fence, not between its lines. Contextual spacing is
             // what makes that distinction: Word drops the gap when the neighbouring paragraph
             // has the same style, so ten code lines sit tight against each other and the
@@ -501,7 +530,7 @@ internal static class DocxStyles
             // its border and its face, and a page of bold monospace is heavy to read - the
             // weight earns its place on a word inside a sentence and not on thirty lines.
             new NoProof(),
-            new Color { Val = CodeInk },
+            new Color { Val = colors.CodeBlockText },
             new FontSize { Val = Text(CodeHalfPoints) },
             new FontSizeComplexScript { Val = Text(CodeHalfPoints) }))
     {
@@ -513,7 +542,7 @@ internal static class DocxStyles
     /// Inline code. Character-level shading gives the tinted pill; a border would be drawn at
     /// full line height and read as a box around the line rather than around the word.
     /// </summary>
-    private static Style CodeCharStyle() => new(
+    private static Style CodeCharStyle(DocxColors colors) => new(
         new StyleName { Val = "Marqora Inline Code" },
         new BasedOn { Val = StyleIds.DefaultParagraphFont },
         new UIPriority { Val = 99 },
@@ -522,10 +551,10 @@ internal static class DocxStyles
             MonospaceFont(),
             new Bold(),
             new NoProof(),
-            new Color { Val = CodeInk },
+            new Color { Val = colors.CodeInlineText },
             new FontSize { Val = Text(CodeHalfPoints) },
             new FontSizeComplexScript { Val = Text(CodeHalfPoints) },
-            new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = CodeFill }))
+            new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = colors.CodeInlineFill }))
     {
         Type = StyleValues.Character,
         StyleId = StyleIds.CodeChar,
@@ -535,7 +564,7 @@ internal static class DocxStyles
     /// What a == highlight == becomes. Shading rather than Word's own highlight, which offers
     /// sixteen fixed colors and none of them is the preview's soft yellow.
     /// </summary>
-    private static Style MarkStyle() => new(
+    private static Style MarkStyle(DocxColors colors) => new(
         new StyleName { Val = "Marqora Mark" },
         new BasedOn { Val = StyleIds.DefaultParagraphFont },
         new UIPriority { Val = 99 },
@@ -544,7 +573,7 @@ internal static class DocxStyles
             {
                 Val = ShadingPatternValues.Clear,
                 Color = "auto",
-                Fill = CalloutColors.MarkRgb,
+                Fill = colors.MarkFill,
             }))
     {
         Type = StyleValues.Character,
@@ -558,11 +587,11 @@ internal static class DocxStyles
     /// what make a callout of four paragraphs look like one panel rather than four stacked
     /// boxes: Word collapses the identical borders of adjacent paragraphs into a single frame.
     ///
-    /// The fill is opaque. The preview draws the panel as the bar color at eight or fourteen
-    /// percent over whatever is behind it, and Word's shading has no alpha at all, so the same
-    /// color is composited onto white in <see cref="CalloutColors"/> and written flat.
+    /// The bar, the fill and the title are the color theme's three slots for the kind. The fill
+    /// is opaque in the theme file already - Word's shading has no alpha at all, which is one of
+    /// the reasons every theme color is written that way - so it goes in as it stands.
     /// </summary>
-    private static Style CalloutStyle(CalloutKind kind) => new(
+    private static Style CalloutStyle(CalloutKind kind, DocxColors colors) => new(
         new StyleName { Val = $"Marqora {CalloutColors.TitleOf(kind)}" },
         new BasedOn { Val = StyleIds.Normal },
         new NextParagraphStyle { Val = StyleIds.Normal },
@@ -582,27 +611,27 @@ internal static class DocxStyles
                     Val = BorderValues.Single,
                     Size = 2U,
                     Space = 6U,
-                    Color = CalloutColors.FillOf(kind),
+                    Color = colors.CalloutFill(kind),
                 },
                 new LeftBorder
                 {
                     Val = BorderValues.Single,
                     Size = 18U,
                     Space = 8U,
-                    Color = CalloutColors.BarOf(kind),
+                    Color = colors.CalloutBar(kind),
                 },
                 new BottomBorder
                 {
                     Val = BorderValues.Single,
                     Size = 2U,
                     Space = 6U,
-                    Color = CalloutColors.FillOf(kind),
+                    Color = colors.CalloutFill(kind),
                 }),
             new Shading
             {
                 Val = ShadingPatternValues.Clear,
                 Color = "auto",
-                Fill = CalloutColors.FillOf(kind),
+                Fill = colors.CalloutFill(kind),
             },
             // Air below the panel and none between its own paragraphs, which is the same
             // distinction a code fence needs and the same thing that draws it: the contextual
@@ -622,7 +651,7 @@ internal static class DocxStyles
     /// sensible to put one: it would need an image part per callout and would not follow the
     /// text if the reader restyled the document. The word on its own carries the meaning.
     /// </summary>
-    private static Style CalloutTitleStyle(CalloutKind kind) => new(
+    private static Style CalloutTitleStyle(CalloutKind kind, DocxColors colors) => new(
         new StyleName { Val = $"Marqora {CalloutColors.TitleOf(kind)} Title" },
         new BasedOn { Val = StyleIds.Callout(kind) },
         new NextParagraphStyle { Val = StyleIds.Callout(kind) },
@@ -637,7 +666,7 @@ internal static class DocxStyles
             new SpacingBetweenLines { Before = "0", After = "0" }),
         new StyleRunProperties(
             new Bold(),
-            new Color { Val = CalloutColors.BarOf(kind) }))
+            new Color { Val = colors.CalloutTitle(kind) }))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.CalloutTitle(kind),
@@ -769,13 +798,14 @@ internal static class DocxStyles
     };
 
     /// <summary>The small raised number, both in the text and in front of the note.</summary>
-    private static Style FootnoteReferenceStyle() => new(
+    private static Style FootnoteReferenceStyle(DocxColors colors) => new(
         new StyleName { Val = "footnote reference" },
         new BasedOn { Val = StyleIds.DefaultParagraphFont },
         new UIPriority { Val = 99 },
         new SemiHidden(),
         new UnhideWhenUsed(),
         new StyleRunProperties(
+            new Color { Val = colors.FootnoteReference },
             new VerticalTextAlignment { Val = VerticalPositionValues.Superscript }))
     {
         Type = StyleValues.Character,
@@ -816,60 +846,89 @@ internal static class DocxStyles
     };
 
     /// <summary>
-    /// The table style, and the one accented thing on the page.
+    /// The table style: the color theme's borders, its header fill, ink and the heavier rule
+    /// under the header, and its stripe behind every other body row - the table the preview
+    /// draws.
     ///
-    /// The header fill is a theme reference with a literal beside it: the reference is what
-    /// lets the Design tab restyle the table along with everything else, and the literal is
-    /// what a reader that ignores themes falls back to. Only the first row is conditional -
-    /// banded rows are deliberately not switched on, because the preview does not band either
-    /// and a striped table reads as a different kind of document.
+    /// Plain colors rather than references into the document theme. A reference outranks the
+    /// literal beside it, and the theme has a header fill of its own where the old style
+    /// borrowed accent 1. The banding is the preview's own: body rows two, four and on, which
+    /// is band 2 once the header row is set apart - and when the theme's stripe is the page
+    /// itself there is no band to define.
     /// </summary>
-    private static Style TableStyle() => new(
-        new StyleName { Val = "Marqora Table" },
-        new BasedOn { Val = StyleIds.TableNormal },
-        new UIPriority { Val = 59 },
-        new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                Before = "40",
-                After = "40",
-                Line = "240",
-                LineRule = LineSpacingRuleValues.Auto,
-            }),
-        new StyleTableProperties(
-            new TableStyleRowBandSize { Val = 1 },
-            new TableBorders(
-                new TopBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder },
-                new LeftBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder },
-                new BottomBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder },
-                new RightBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder },
-                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder },
-                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = CodeBorder }),
-            new TableCellMarginDefault(
-                new TopMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
-                new TableCellLeftMargin { Width = 120, Type = TableWidthValues.Dxa },
-                new BottomMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
-                new TableCellRightMargin { Width = 120, Type = TableWidthValues.Dxa })),
-        new TableStyleProperties(
-            new StyleParagraphProperties(new KeepNext()),
-            new StyleRunProperties(
-                new Bold(),
-                new Color { Val = "FFFFFF", ThemeColor = ThemeColorValues.Background1 }),
-            new TableStyleConditionalFormattingTableCellProperties(
-                new Shading
-                {
-                    Val = ShadingPatternValues.Clear,
-                    Color = "auto",
-                    Fill = DocumentAccent.LightRgb,
-                    ThemeFill = ThemeColorValues.Accent1,
-                }))
-        {
-            Type = TableStyleOverrideValues.FirstRow,
-        })
+    private static Style TableStyle(DocxColors colors)
     {
-        Type = StyleValues.Table,
-        StyleId = StyleIds.Table,
-    };
+        string border = colors.TableBorder;
+
+        var style = new Style(
+            new StyleName { Val = "Marqora Table" },
+            new BasedOn { Val = StyleIds.TableNormal },
+            new UIPriority { Val = 59 },
+            new StyleParagraphProperties(
+                new SpacingBetweenLines
+                {
+                    Before = "40",
+                    After = "40",
+                    Line = "240",
+                    LineRule = LineSpacingRuleValues.Auto,
+                }),
+            new StyleTableProperties(
+                new TableStyleRowBandSize { Val = 1 },
+                new TableBorders(
+                    new TopBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border },
+                    new LeftBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border },
+                    new BottomBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border },
+                    new RightBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border },
+                    new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border },
+                    new InsideVerticalBorder { Val = BorderValues.Single, Size = 4U, Space = 0U, Color = border }),
+                new TableCellMarginDefault(
+                    new TopMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
+                    new TableCellLeftMargin { Width = 120, Type = TableWidthValues.Dxa },
+                    new BottomMargin { Width = "60", Type = TableWidthUnitValues.Dxa },
+                    new TableCellRightMargin { Width = 120, Type = TableWidthValues.Dxa })),
+            new TableStyleProperties(
+                new StyleParagraphProperties(new KeepNext()),
+                new StyleRunProperties(
+                    new Bold(),
+                    new Color { Val = colors.TableHeaderText }),
+
+                // Borders before shading: w:tcPr runs tcBorders, shd. Twelve eighths of a point
+                // is the preview's two pixels.
+                new TableStyleConditionalFormattingTableCellProperties(
+                    new TableCellBorders(
+                        new BottomBorder
+                        {
+                            Val = BorderValues.Single,
+                            Size = 12U,
+                            Space = 0U,
+                            Color = colors.TableHeaderRule,
+                        }),
+                    new Shading
+                    {
+                        Val = ShadingPatternValues.Clear,
+                        Color = "auto",
+                        Fill = colors.TableHeaderFill,
+                    }))
+            {
+                Type = TableStyleOverrideValues.FirstRow,
+            })
+        {
+            Type = StyleValues.Table,
+            StyleId = StyleIds.Table,
+        };
+
+        if (colors.TableStripe is { } stripe)
+        {
+            style.AppendChild(new TableStyleProperties(
+                new TableStyleConditionalFormattingTableCellProperties(
+                    new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = stripe }))
+            {
+                Type = TableStyleOverrideValues.Band2Horizontal,
+            });
+        }
+
+        return style;
+    }
 
     private static RunFonts MajorThemeFont() => new()
     {

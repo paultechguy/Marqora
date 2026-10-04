@@ -43,6 +43,14 @@ internal readonly record struct RunFormat
     public string? Shading { get; init; }
 
     /// <summary>
+    /// The color theme's bold or italic color, kept apart from <see cref="Color"/> because it
+    /// is weaker: it is written only when nothing else colors the run. A link keeps its link
+    /// color and inline code its code color, as they do in the preview, where a bold word in a
+    /// link is still a link.
+    /// </summary>
+    public string? EmphasisInk { get; init; }
+
+    /// <summary>
     /// A run that wears nothing, whatever the markdown around it asked for.
     ///
     /// Headings are written this way, and the reason is the table of contents. Word does not
@@ -85,6 +93,8 @@ internal readonly record struct RunFormat
     public RunFormat WithColor(string rgb) => this with { Color = rgb };
 
     public RunFormat WithShading(string rgb) => this with { Shading = rgb };
+
+    public RunFormat WithEmphasisInk(string rgb) => this with { EmphasisInk = rgb };
 
     /// <summary>
     /// The properties element, or null when nothing is set and the run needs none.
@@ -135,6 +145,10 @@ internal readonly record struct RunFormat
         if (Color is { Length: > 0 } ink)
         {
             properties.AppendChild(new Color { Val = ink });
+        }
+        else if (EmphasisInk is { Length: > 0 } emphasis && styleId is null)
+        {
+            properties.AppendChild(new Color { Val = emphasis });
         }
 
         if (Underline)
