@@ -568,11 +568,17 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// white whatever the window is wearing, and the dark teal is chosen to sit on a dark
     /// surface, not on paper. app.css maps the two.
     /// </summary>
-    public Task SetColorThemeAsync(string themeId)
+    public Task SetColorThemeAsync(string themeId, bool preview = false)
     {
-        _colorThemeId = _colorThemes.Find(themeId).Id;
+        string id = _colorThemes.Find(themeId).Id;
 
-        return SendAsync("setColorTheme", new { id = _colorThemeId });
+        // A preview is the gallery's hover; the theme a rebuilt page returns to is the chosen one.
+        if (!preview)
+        {
+            _colorThemeId = id;
+        }
+
+        return SendAsync("setColorTheme", new { id, preview });
     }
 
     public Task SetThemeAsync(AppTheme effectiveTheme)

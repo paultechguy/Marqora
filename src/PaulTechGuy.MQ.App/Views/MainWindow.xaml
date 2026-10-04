@@ -1491,6 +1491,58 @@
                                   ToolTipService.ToolTip="Synchronize scrolling between panes">
                         <FontIcon Glyph="&#xE895;" Style="{StaticResource MqIconStyle}" />
                     </ToggleButton>
+
+                    <Rectangle Width="1" Height="20" Margin="6,0"
+                               Fill="{ThemeResource MqChromeDividerBrush}" />
+
+                    <!--
+                        The color theme gallery. One card per theme, built in code from the
+                        catalog - see MainWindow.ColorThemes.cs - so a theme added as a file
+                        appears here with nothing to edit. Pointing at a card, or reaching it
+                        with the arrow keys, shows that theme on the preview without choosing
+                        it, and the document under the flyout still scrolls so more of it can
+                        be seen that way; a click or Enter keeps it; Escape or closing the
+                        flyout any other way puts back the theme that was in force.
+
+                        Not shed at narrow widths, unlike scroll sync: it is one square, and it
+                        is the way in to a feature rather than a toggle set once.
+                    -->
+                    <Button x:Name="ColorThemeButton"
+                            Style="{StaticResource MqToolButtonStyle}"
+                            ToolTipService.ToolTip="Color theme: how headings, links, callouts, tables and code are colored in every document and export"
+                            AutomationProperties.Name="Color theme">
+                        <FontIcon Glyph="&#xE790;" Style="{StaticResource MqIconStyle}" />
+                        <Button.Flyout>
+                            <Flyout x:Name="ColorThemeFlyout" Placement="BottomEdgeAlignedRight">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="12" />
+                                        <Setter Property="MaxWidth" Value="640" />
+                                        <Setter Property="CornerRadius" Value="8" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Color theme"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Text="Point at a theme to preview it, and scroll the document to see more of it. Click to keep it. Your files are not changed."
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.8" />
+
+                                    <!--
+                                        SelectionMode None with ItemClick, as the tab list: picking
+                                        a card is an action. The check mark on a card, not a
+                                        selection highlight, says which theme is in force.
+                                    -->
+                                    <GridView x:Name="ColorThemeGallery"
+                                              SelectionMode="None"
+                                              IsItemClickEnabled="True"
+                                              AutomationProperties.Name="Color themes" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

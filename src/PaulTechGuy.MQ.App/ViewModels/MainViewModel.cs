@@ -4128,6 +4128,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Default is saved as no choice at all, so the settings file names a theme only when one
     /// was picked, and Default's id lives in one place.
     /// </summary>
+    /// <summary>
+    /// Shows a color theme on the preview without choosing it - the theme gallery's hover.
+    /// Nothing is saved and <see cref="ColorThemeId"/> does not move, so the gallery can put
+    /// the chosen theme back with <see cref="EndColorThemePreviewAsync"/>.
+    /// </summary>
+    public Task PreviewColorThemeAsync(string themeId) =>
+        _host?.SetColorThemeAsync(themeId, preview: true) ?? Task.CompletedTask;
+
+    /// <summary>Puts the chosen color theme back after a preview that was not kept.</summary>
+    public Task EndColorThemePreviewAsync() =>
+        _host?.SetColorThemeAsync(ColorThemeId) ?? Task.CompletedTask;
+
     public async Task ApplyColorThemeAsync(string? themeId)
     {
         string id = _colorThemes.Find(themeId).Id;

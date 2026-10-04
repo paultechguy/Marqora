@@ -106,7 +106,7 @@ public sealed partial class MainWindow : Window
         _context.Window = this;
 
         ConfigureChrome();
-        BuildColorThemeMenu();
+        BuildColorThemeChoices();
         RegisterAccelerators();
 
         // Alt accelerators fire on the key-down, but the message loop still translates the
@@ -371,12 +371,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        bool dark = RootGrid.ActualTheme == ElementTheme.Dark;
-
-        // The same values as --mq-bg in app.css.
-        _previewWebView.DefaultBackgroundColor = dark
-            ? Windows.UI.Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F)
-            : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
+        _previewWebView.DefaultBackgroundColor = PageColor(RootGrid.ActualTheme == ElementTheme.Dark);
     }
 
     /// <summary>
@@ -916,47 +911,8 @@ public sealed partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.ColorThemeId):
-                CheckColorTheme(ViewModel.ColorThemeId);
+                ShowChosenColorTheme(ViewModel.ColorThemeId);
                 break;
-        }
-    }
-
-    /// <summary>
-    /// One item per color theme, in the catalog's order. Built once: the themes are compiled into
-    /// the app and cannot change while it runs.
-    /// </summary>
-    private void BuildColorThemeMenu()
-    {
-        foreach (ColorTheme theme in ViewModel.ColorThemes)
-        {
-            var item = new ToggleMenuFlyoutItem
-            {
-                Text = theme.Name,
-                Tag = theme.Id,
-                Command = ViewModel.SetColorThemeCommand,
-                CommandParameter = theme.Id,
-            };
-
-            ToolTipService.SetToolTip(item, theme.Description);
-
-            // A toggle flips itself when clicked, which would leave the theme already in force
-            // unchecked when it is picked again; putting the marks right here keeps exactly one.
-            item.Click += (_, _) => CheckColorTheme(theme.Id);
-
-            ColorThemeMenu.Items.Add(item);
-        }
-
-        CheckColorTheme(ViewModel.ColorThemeId);
-    }
-
-    private void CheckColorTheme(string themeId)
-    {
-        foreach (MenuFlyoutItemBase entry in ColorThemeMenu.Items)
-        {
-            if (entry is ToggleMenuFlyoutItem item)
-            {
-                item.IsChecked = string.Equals(item.Tag as string, themeId, StringComparison.Ordinal);
-            }
         }
     }
 

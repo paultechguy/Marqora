@@ -5670,6 +5670,32 @@
   }
 
   /*
+    The color theme the diagrams on the page were last drawn in, and the pending redraw.
+
+    A theme change redraws diagrams only when the theme they show is not the one in force,
+    which is what lets a gallery preview that is abandoned before the pointer rests cost
+    nothing at all: the timer is cancelled, the theme goes back, and the two still agree.
+    The cache is keyed by the themed definition, so a theme already seen redraws from it.
+  */
+  var DIAGRAM_PREVIEW_REST = 300;
+  var diagramTheme = null;
+  var diagramTimer = 0;
+
+  function scheduleDiagramRedraw(delay) {
+    clearTimeout(diagramTimer);
+
+    diagramTimer = setTimeout(function () {
+      diagramTimer = 0;
+
+      if (diagramTheme === state.colorTheme) { return; }
+
+      diagramTheme = state.colorTheme;
+
+      if (els.preview.querySelector('pre.mermaid')) { redrawDiagrams(); }
+    }, delay);
+  }
+
+  /*
     Draws every diagram on the page again, from the tab's HTML. For a change that alters how
     a diagram is drawn rather than what it says: light and dark, and the color theme.
   */
@@ -5903,20 +5929,20 @@
 
       state.colorThemes = themes;
       state.colorTheme = p.currentId || 'default';
+      diagramTheme = state.colorTheme;
       applyColorTheme();
     },
 
     /// A different theme for every document: picked from the menu, or previewed from the gallery.
     setColorTheme: function (p) {
-      if (p.id === state.colorTheme) { return; }
-
       state.colorTheme = p.id;
       applyColorTheme();
 
-      // The text recolors from the stylesheet; diagrams carry their colors in the drawing, so
-      // they are drawn again. The cache is keyed by the themed definition, so a theme already
-      // seen comes back from it rather than from mermaid.
-      if (els.preview.querySelector('pre.mermaid')) { redrawDiagrams(); }
+      // The text recolors from the stylesheet at once. Diagrams carry their colors in the
+      // drawing and are drawn again - straight away for a theme that was picked, and only once
+      // the pointer has rested for a gallery preview, so sweeping across the cards does not
+      // redraw every diagram for every card on the way.
+      scheduleDiagramRedraw(p.preview ? DIAGRAM_PREVIEW_REST : 0);
     },
 
     openTab: function (p) {

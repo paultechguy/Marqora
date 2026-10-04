@@ -442,10 +442,14 @@ public interface IPreviewHost
 
     /// <summary>
     /// Puts a color theme in force for every document, by id. The page holds every theme's
-    /// palettes already, so this names one rather than sending colors. Also what the theme
-    /// gallery's hover preview calls, which is why it does not save anything.
+    /// palettes already, so this names one rather than sending colors. Nothing is saved here.
     /// </summary>
-    Task SetColorThemeAsync(string themeId);
+    /// <param name="preview">
+    /// True for the theme gallery's hover: the theme shows, but is not the one a page rebuilt
+    /// after a crash comes back in, and the page waits for the pointer to rest before it
+    /// redraws diagrams, so sweeping across the gallery does not draw every one of them.
+    /// </param>
+    Task SetColorThemeAsync(string themeId, bool preview = false);
 
     Task SetZoomAsync(EditorPane pane, ZoomLevel zoom);
 
