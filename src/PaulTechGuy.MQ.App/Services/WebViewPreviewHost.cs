@@ -41,6 +41,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// page rebuilt after a crash comes back in the theme the user chose rather than in Default.
     /// </summary>
     private string _colorThemeId = ThemeCatalog.DefaultId;
+
+    /// <summary>The color theme exports are drawn in, resent on every ready for the same reason.</summary>
+    private string _exportColorThemeId = ThemeCatalog.DefaultId;
     private readonly ILogger<WebViewPreviewHost> _logger;
 
     /// <summary>
@@ -568,6 +571,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// white whatever the window is wearing, and the dark teal is chosen to sit on a dark
     /// surface, not on paper. app.css maps the two.
     /// </summary>
+    public Task SetExportColorThemeAsync(string themeId)
+    {
+        _exportColorThemeId = _colorThemes.Find(themeId).Id;
+
+        return SendAsync("setExportColorTheme", new { id = _exportColorThemeId });
+    }
+
     public Task SetColorThemeAsync(string themeId, bool preview = false)
     {
         string id = _colorThemes.Find(themeId).Id;
@@ -1788,7 +1798,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         // the rest of the app's state, because this is the one place that sees every ready -
         // the first, and each one after a crash rebuilt the page.
         Post(JsonSerializer.Serialize(
-            new { type = "setColorThemes", payload = ColorThemePayloads.Catalog(_colorThemes, _colorThemeId) },
+            new { type = "setColorThemes", payload = ColorThemePayloads.Catalog(_colorThemes, _colorThemeId, _exportColorThemeId) },
             JsonOptions));
 
         foreach (string message in _pending)

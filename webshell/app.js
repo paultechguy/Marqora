@@ -117,6 +117,10 @@
     */
     colorThemes: {},
     colorTheme: 'default',
+
+    // The theme everything that leaves the app is drawn in: the screen's, unless Preferences
+    // names another for exports. Always an id the host has resolved, never "same as".
+    exportColorTheme: 'default',
     scrollSync: true,
     sourceZoom: 100,
     previewZoom: 100,
@@ -1603,8 +1607,10 @@
     anything being moved around for it - the same way the text goes light. Everything else
     that leaves the app takes the light drawing out with outputMarkup or outputSvgOf.
 
-    In light mode there is one drawing and it is already the light one, so there is no
-    wrapper at all.
+    In light mode there is usually one drawing, already the light one, and no wrapper at all.
+    The exception is a theme chosen for exports that is not the one on screen: then the drawing
+    that leaves the app is a different one in light mode too, and it gets the same wrapper.
+    See needsOutputCopy.
   */
   var OUTPUT_COPY = 'mq-diagram-output';
 
@@ -1617,7 +1623,8 @@
   }
 
   /*
-    Gives a rendered block its light drawing, when the app is dark.
+    Gives a rendered block its output drawing, when the one on screen will not do - the app is
+    dark, or exports are drawn in a theme of their own.
 
     From the cache when it is there, which is every keystroke that does not touch the diagram,
     so nothing flickers and nothing waits. Otherwise drawn, and placed only if the block still
@@ -1625,10 +1632,11 @@
     block has asked for its own.
   */
   function attachOutputCopy(node, source, key) {
-    if (mermaidTheme() !== 'dark') { return; }
+    if (!needsOutputCopy()) { return; }
 
-    // In the color theme's light colors - the drawing that leaves the app is light.
-    var definition = themedDefinition(source, 'light');
+    // In the export theme's light colors - the drawing that leaves the app is light, and in
+    // the theme chosen for exports.
+    var definition = themedDefinition(source, 'light', state.exportColorTheme);
     var cached = window.mqDiagramOutput.cached(definition);
 
     if (cached !== null) {
@@ -1639,7 +1647,7 @@
     var job = window.mqDiagramOutput.render(definition).then(function (svg) {
       if (node.isConnected
           && node.getAttribute('data-mq-diagram') === key
-          && mermaidTheme() === 'dark') {
+          && needsOutputCopy()) {
         placeOutputCopy(node, svg);
 
         // A pop-out following this diagram is owed its light drawing too.
@@ -2071,7 +2079,13 @@
     drawing, where the pale color was right all along, and a diagram that names its own theme
     keeps it - that is a light drawing too, and its ink is dark.
   */
-  var BAND_FLOOR = 0.18;
+  // The dark shade of an author's light color, and the colorbox pass - shared with the
+  // cheatsheet, so they live in color-theme.js.
+  var darkShadeOf = window.mqColorTheme.darkShadeOf;
+
+  function shadeMathBackgrounds(root) {
+    window.mqColorTheme.shadeMathBackgrounds(root || els.preview);
+  }
 
   /// True when the definition picks a mermaid theme of its own, in an init directive or in
   /// frontmatter config. themeVariables alone does not count: that tunes the app's theme.
@@ -2106,7 +2120,8 @@
     Frontmatter is the one thing that has to stay first, so the line goes after it.
 
     `mode` is the palette: 'dark' for the screen in dark mode, 'light' for the screen in light
-    mode and for every drawing that leaves the app, which is on white.
+    mode and for every drawing that leaves the app, which is on white. `themeId` is the theme, the
+    screen's when it is left out; a drawing that leaves the app passes the export theme.
   */
   var DIAGRAM_VARIABLES = {
     primaryColor: 'diagram-primary',
@@ -2123,8 +2138,8 @@
     textColor: 'diagram-primary-text'
   };
 
-  function themedDefinition(source, mode) {
-    var theme = state.colorThemes[state.colorTheme];
+  function themedDefinition(source, mode, themeId) {
+    var theme = state.colorThemes[themeId || state.colorTheme];
     var palette = theme ? (mode === 'dark' ? theme.dark : theme.light) : null;
 
     if (!palette || !palette['diagram-primary'] || namesOwnTheme(source)) { return source; }
@@ -2156,47 +2171,28 @@
     var bands = node.querySelectorAll(':scope > svg rect.rect');
 
     for (var i = 0; i < bands.length; i++) {
-      var rgb = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/
-        .exec(getComputedStyle(bands[i]).fill);
+      var shade = darkShadeOf(getComputedStyle(bands[i]).fill);
 
-      if (!rgb) { continue; }
-
-      var hsl = toHsl(+rgb[1], +rgb[2], +rgb[3]);
-
-      if (hsl.l <= 0.5) { continue; }
-
-      var alpha = rgb[4] === undefined ? 1 : +rgb[4];
-      var lightness = Math.max(BAND_FLOOR, 1 - hsl.l);
-
-      bands[i].style.fill = 'hsla(' + Math.round(hsl.h) + ', ' + Math.round(hsl.s * 100) + '%, '
-        + Math.round(lightness * 100) + '%, ' + alpha + ')';
+      if (shade) { bands[i].style.fill = shade; }
     }
   }
 
-  function toHsl(r, g, b) {
-    r /= 255; g /= 255; b /= 255;
-
-    var max = Math.max(r, g, b);
-    var min = Math.min(r, g, b);
-    var l = (max + min) / 2;
-    var d = max - min;
-
-    if (d === 0) { return { h: 0, s: 0, l: l }; }
-
-    var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    var h = max === r ? (g - b) / d + (g < b ? 6 : 0)
-      : max === g ? (b - r) / d + 2
-      : (r - g) / d + 4;
-
-    return { h: h * 60, s: s, l: l };
-  }
 
   /*
     `output` is what the off-screen export pass passes: the markup is leaving the app, so it
     gets the light drawing alone, from the output mermaid, and never the screen's.
   */
-  function renderOneDiagram(mermaid, node, output) {
-    var source = node.textContent;
+  /*
+    What each drawn diagram was drawn from. Drawing replaces the block's text with the SVG, so
+    the definition is gone from the page once it is drawn; it is kept here, against the block,
+    for redrawDiagrams to draw it again in place. Weak, so a block the page has thrown away
+    takes its definition with it.
+  */
+  var diagramSources = new WeakMap();
+
+  /// `source` is passed when the block's own text is already a drawing - a redraw in place.
+  function renderOneDiagram(mermaid, node, output, source) {
+    if (source === undefined) { source = node.textContent; }
     var key = diagramKey(source);
 
     // The definition mermaid is actually given: the author's, with the color theme's diagram
@@ -2208,6 +2204,7 @@
 
     function place(svg) {
       node.innerHTML = svg;
+      diagramSources.set(node, source);
       node.setAttribute('data-processed', 'true');
       node.setAttribute('data-mq-diagram', key);
       state.lineMapDirty = true;
@@ -2216,7 +2213,7 @@
     var rendering;
 
     if (output) {
-      rendering = window.mqDiagramOutput.render(themedDefinition(source, 'light')).then(place);
+      rendering = window.mqDiagramOutput.render(themedDefinition(source, 'light', state.exportColorTheme)).then(place);
     } else if (cached) {
       // Re-rendering an unchanged diagram on every keystroke is the single biggest
       // cost in a document full of diagrams, so cache the SVG by its definition.
@@ -2273,6 +2270,7 @@
         throwOnError: false,
         errorColor: 'var(--mq-danger)'
       });
+      shadeMathBackgrounds(root);
       state.lineMapDirty = true;
     }).catch(function (err) {
       report('warning', 'KaTeX failed to load', err && err.message);
@@ -5375,6 +5373,11 @@
     var theme = root.getAttribute('data-theme');
     root.setAttribute('data-theme', 'light');
 
+    // And in the export theme: the copy leaves the app, and Preferences may have named a theme
+    // for exports that is not the one on screen. Put back with the rest, below.
+    var exportTheme = state.colorThemes[state.exportColorTheme];
+    if (exportTheme) { window.mqColorTheme.apply(exportTheme, exportTheme, 'copy|' + state.exportColorTheme); }
+
     document.body.appendChild(stage);
 
     try {
@@ -5395,6 +5398,8 @@
 
       if (theme === null) { root.removeAttribute('data-theme'); }
       else { root.setAttribute('data-theme', theme); }
+
+      applyColorTheme();
     }
   }
 
@@ -5696,18 +5701,46 @@
   }
 
   /*
-    Draws every diagram on the page again, from the tab's HTML. For a change that alters how
-    a diagram is drawn rather than what it says: light and dark, and the color theme.
+    Draws every diagram on the page again, in place. For a change that alters how a diagram is
+    drawn rather than what it says: light and dark, the color theme, the export theme.
+
+    In place is the point. This used to put the tab's HTML back and let the render pass draw
+    everything from scratch, which turned each diagram back into its definition text for a
+    moment - a different height - so the page grew and shrank under a reader who had not moved,
+    and the scroll bar walked up and back down with it. Now each diagram keeps its drawing until
+    the new one is ready and the two simply swap; a theme changes colors, not sizes, so nothing
+    around it moves.
+
+    One at a time, like the render pass: mermaid keeps a single working area per document. A
+    block still waiting for its first drawing is left to the pass that is drawing it, which reads
+    the theme in force when it gets there.
   */
   function redrawDiagrams() {
-    var processed = els.preview.querySelectorAll('pre.mermaid[data-processed]');
-    for (var i = 0; i < processed.length; i++) {
-      processed[i].removeAttribute('data-processed');
-    }
+    var blocks = Array.prototype.filter.call(
+      els.preview.querySelectorAll('pre.mermaid[data-processed]'),
+      function (block) { return diagramSources.has(block); });
 
-    var html = state.lastHtml;
-    state.lastHtml = null;
-    if (html !== null) { applyPreviewHtml(html, false); }
+    if (blocks.length === 0) { return; }
+
+    ensureMermaid().then(function (mermaid) {
+      var chain = Promise.resolve();
+
+      blocks.forEach(function (block) {
+        chain = chain.then(function () {
+          // A block an edit has replaced in the meantime is no longer on the page to redraw.
+          if (!block.isConnected) { return null; }
+
+          return renderOneDiagram(mermaid, block, false, diagramSources.get(block));
+        });
+      });
+
+      return chain;
+    }).then(function () {
+      // A pop-out following one of these is owed its new drawing.
+      reportDiagrams();
+    }).catch(function (err) {
+      report('warning', 'Diagrams could not be redrawn', err && err.message);
+    });
   }
 
   /*
@@ -5718,7 +5751,18 @@
   function applyColorTheme() {
     var theme = state.colorThemes[state.colorTheme];
 
-    if (theme) { window.mqColorTheme.apply(theme, state.colorTheme); }
+    if (theme) {
+      window.mqColorTheme.apply(
+        theme,
+        state.colorThemes[state.exportColorTheme],
+        state.colorTheme + '|' + state.exportColorTheme);
+    }
+  }
+
+  /// True when what leaves the app cannot be the drawing on screen: the screen is dark, or
+  /// exports are drawn in a theme of their own.
+  function needsOutputCopy() {
+    return mermaidTheme() === 'dark' || state.exportColorTheme !== state.colorTheme;
   }
 
   /*
@@ -5929,8 +5973,23 @@
 
       state.colorThemes = themes;
       state.colorTheme = p.currentId || 'default';
+      state.exportColorTheme = p.exportId || state.colorTheme;
       diagramTheme = state.colorTheme;
       applyColorTheme();
+    },
+
+    /*
+      The theme exports are drawn in: print and PDF through the stylesheet, the clipboard copy
+      while it measures, and every diagram's output drawing - which are drawn again now, because
+      whether a block needs one at all can have changed with it.
+    */
+    setExportColorTheme: function (p) {
+      if (p.id === state.exportColorTheme) { return; }
+
+      state.exportColorTheme = p.id;
+      applyColorTheme();
+
+      if (els.preview.querySelector('pre.mermaid')) { redrawDiagrams(); }
     },
 
     /// A different theme for every document: picked from the menu, or previewed from the gallery.

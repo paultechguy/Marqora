@@ -10,6 +10,31 @@
     build\release-notes-vnext.md.
 -->
 
+## Color themes
+
+Give your documents color without touching them. Pick a color theme and Marqora recolors how
+every document looks: headings, links, callouts, tables, code and its syntax, lists, quotes,
+highlights and diagrams. Ten themes ship: Default, Ember, Forest, Nordic, Ocean, Orchid, Pastel,
+Slate, Sunset and Vintage Press, each in both light and dark.
+
+Open the palette button at the end of the toolbar to see them. Point at a theme and the preview
+changes to it at once, and you can scroll the document to see more of it before you decide.
+Click to keep it, or close the gallery to go back. The same choice is on `View > Color Theme`
+and in Preferences.
+
+Your prints, PDFs, Word and HTML files, Folios, review pages and copies use the same theme, in
+its light colors, so what you send looks like what you saw. If you'd rather keep a colorful
+screen and send plainer files, choose a different theme for exports under **Preferences >
+Appearance > For exports**.
+
+A theme is a setting, not part of a document: your markdown files are never changed, and
+someone opening your file in another editor sees it as they always would.
+
+Default is Marqora as it has always looked, with a few colors darkened so they meet the usual
+readability standard: links, the note and warning callout titles, the smallest heading, list
+markers, and some code colors. A Word export with Default now follows the preview too, with
+near-black headings and a pale table header in place of the old teal ones.
+
 ## Everything you print, export or copy is light
 
 Dark mode now stays on your screen. A print, a PDF, an HTML export, a Folio, a Word document,
@@ -51,6 +76,19 @@ equation numbers reached two pixels past the edge of the page.
 pale color, which is what most authors choose, left the messages and arrows over it nearly
 invisible in dark mode. Marqora now shows such a region as a deep shade of the same color on
 screen, so its contents read clearly. Prints and exports keep the color as written.
+
+**Highlighted math is readable in dark mode.** A formula inside a `\colorbox` drew white text on
+the bright color the author chose, usually yellow, in dark mode. Marqora now shows a light color
+box as a deep shade of the same color on screen. Prints, exports and copies keep the color as
+written.
+
+**User journey labels sit in their boxes.** The task labels in a user journey diagram could sit
+off their boxes in the preview and in a PDF, though the diagram looked right when opened in its
+own window.
+
+**The outline filter can always be cleared.** After you clicked a heading in a filtered outline,
+the button that clears the filter disappeared, leaving the filter on. A clear button now shows
+whenever the filter has text.
 
 **Long notes in sequence diagrams stay inside their box.** A note spanning two participants
 used to run past both edges of its box when the text was long. It now wraps to fit, in the

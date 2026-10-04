@@ -160,6 +160,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// </summary>
     private readonly RadioButtons _themeChoice;
     private readonly ComboBox _colorTheme;
+    private readonly ComboBox _exportTheme;
 
     private readonly ComboBox _sourceFont;
     private readonly NumberBox _sourceFontSize;
@@ -287,6 +288,15 @@ internal sealed class PreferencesWindow : PaletteWindow
             _colorTheme.SelectedIndex >= 0
                 ? _vm.SetColorThemeAsync(_vm.ColorThemes[_colorTheme.SelectedIndex].Id)
                 : Task.CompletedTask);
+
+        // "Same as the screen" first, as no choice at all; then every theme, in the same order.
+        _exportTheme = BuildCombo([SameAsScreen, .. _vm.ColorThemes.Select(t => t.Name)]);
+        _exportTheme.SelectionChanged += (_, _) => ApplyAsync(() => _exportTheme.SelectedIndex switch
+        {
+            < 0 => Task.CompletedTask,
+            0 => _vm.SetExportColorThemeAsync(null),
+            int index => _vm.SetExportColorThemeAsync(_vm.ColorThemes[index - 1].Id),
+        });
 
         _sourceFont = BuildFontBox(MonospaceFonts);
         _sourceFont.TextSubmitted += (_, _) => ApplyAsync(() =>
@@ -1046,9 +1056,11 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("COLOR THEME"));
         panel.Children.Add(Field("Theme", _colorTheme));
+        panel.Children.Add(Field("For exports", _exportTheme));
         panel.Children.Add(Note(
-            "How headings, links, callouts, tables and code are colored in every document, on "
-            + "screen and in everything you print, export or copy. Your files are not changed."));
+            "How headings, links, callouts, tables and code are colored in every document. Exports "
+            + "- prints, PDFs, Word and HTML files, and copies - use the screen's theme unless "
+            + "you choose another for them, always in its light colors. Your files are not changed."));
 
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("SOURCE PANE"));
@@ -1769,6 +1781,7 @@ internal sealed class PreferencesWindow : PaletteWindow
 
             _themeChoice.SelectedIndex = (int)s.Theme;
             _colorTheme.SelectedIndex = IndexOfColorTheme(_vm.ColorThemeId);
+            _exportTheme.SelectedIndex = _vm.ExportColorThemeChoice is { } export ? IndexOfColorTheme(export) + 1 : 0;
 
             WriteFont(_sourceFont, s.SourceFontFamily);
             _sourceFontSize.Value = s.SourceFontSize;
@@ -2016,6 +2029,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         return box;
     }
+
+    /// <summary>The first entry in the export theme list, which is no choice at all.</summary>
+    private const string SameAsScreen = "Same as the screen";
 
     /// <summary>Where a color theme sits in the list; Default, at the top, for one that is not there.</summary>
     private int IndexOfColorTheme(string themeId)

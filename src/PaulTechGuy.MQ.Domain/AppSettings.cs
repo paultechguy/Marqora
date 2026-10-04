@@ -42,6 +42,14 @@ public sealed record AppSettings
     /// </summary>
     public string? ColorTheme { get; set; }
 
+    /// <summary>
+    /// The color theme everything that leaves the app is drawn in - print, PDF, HTML, Folio, Word,
+    /// a shared review and the clipboard - by id. Null for the same theme as the screen, which
+    /// is the default: an export looks like the preview unless the user has said otherwise.
+    /// Exports always take the theme's light palette, because they are white.
+    /// </summary>
+    public string? ExportColorTheme { get; set; }
+
     public ViewMode ViewMode { get; set; } = ViewMode.SideBySide;
 
     public int SourceZoomPercent { get; set; } = ZoomLevel.Default;

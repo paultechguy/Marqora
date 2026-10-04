@@ -1515,30 +1515,114 @@
                         <Button.Flyout>
                             <Flyout x:Name="ColorThemeFlyout" Placement="BottomEdgeAlignedRight">
                                 <Flyout.FlyoutPresenterStyle>
+                                    <!--
+                                        No horizontal scrolling at the presenter. Left on, as it is
+                                        by default, the presenter measures its content at unlimited
+                                        width: the row of cards grew to its full length, the
+                                        presenter scrolled instead of the row, and the chevrons -
+                                        which follow the row - had nothing to do and stayed hidden.
+                                        The tab list's flyout turns it off for the same reason.
+                                    -->
                                     <Style TargetType="FlyoutPresenter">
                                         <Setter Property="Padding" Value="12" />
                                         <Setter Property="MaxWidth" Value="640" />
                                         <Setter Property="CornerRadius" Value="8" />
+                                        <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Disabled" />
+                                        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
                                     </Style>
                                 </Flyout.FlyoutPresenterStyle>
 
                                 <StackPanel Spacing="8">
-                                    <TextBlock Text="Color theme"
-                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <!--
+                                        The heading, and on the same line the theme being
+                                        previewed - named here because the card under the pointer
+                                        can be half off the edge of the row, its name with it.
+                                        Set by HighlightCard.
+                                    -->
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Text="Color theme"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock x:Name="ColorThemePreviewLabel"
+                                                   Grid.Column="1"
+                                                   HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
                                     <TextBlock Text="Point at a theme to preview it, and scroll the document to see more of it. Click to keep it. Your files are not changed."
                                                Style="{StaticResource CaptionTextBlockStyle}"
                                                TextWrapping="Wrap"
                                                Opacity="0.8" />
 
                                     <!--
+                                        Shown only when Preferences names a theme for exports, so a
+                                        preview here does not promise a PDF it will not produce.
+                                        Filled as the gallery opens.
+                                    -->
+                                    <TextBlock x:Name="ColorThemeExportNote"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.8"
+                                               Visibility="Collapsed" />
+
+                                    <!--
                                         SelectionMode None with ItemClick, as the tab list: picking
                                         a card is an action. The check mark on a card, not a
                                         selection highlight, says which theme is in force.
                                     -->
-                                    <GridView x:Name="ColorThemeGallery"
-                                              SelectionMode="None"
-                                              IsItemClickEnabled="True"
-                                              AutomationProperties.Name="Color themes" />
+                                    <!--
+                                        One row of cards between two chevrons. A chevron scrolls
+                                        by a visible width of cards, grays when there is nothing
+                                        further its way, and both go when every card fits - see
+                                        UpdateGalleryChevrons. The arrow keys and the scroll bar
+                                        go on working as they did.
+                                    -->
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Button x:Name="ColorThemeGalleryBack"
+                                                Grid.Column="0"
+                                                Style="{StaticResource MqIconButtonStyle}"
+                                                VerticalAlignment="Center"
+                                                ToolTipService.ToolTip="Previous themes"
+                                                AutomationProperties.Name="Previous themes">
+                                            <FontIcon Glyph="&#xE76B;" Style="{StaticResource MqIconStyle}" />
+                                        </Button>
+
+                                        <GridView x:Name="ColorThemeGallery"
+                                                  Grid.Column="1"
+                                                  SelectionMode="None"
+                                                  IsItemClickEnabled="True"
+                                                  ScrollViewer.HorizontalScrollMode="Enabled"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                                  AutomationProperties.Name="Color themes">
+                                            <GridView.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <ItemsStackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </GridView.ItemsPanel>
+                                        </GridView>
+
+                                        <Button x:Name="ColorThemeGalleryForward"
+                                                Grid.Column="2"
+                                                Style="{StaticResource MqIconButtonStyle}"
+                                                VerticalAlignment="Center"
+                                                ToolTipService.ToolTip="More themes"
+                                                AutomationProperties.Name="More themes">
+                                            <FontIcon Glyph="&#xE76C;" Style="{StaticResource MqIconStyle}" />
+                                        </Button>
+                                    </Grid>
                                 </StackPanel>
                             </Flyout>
                         </Button.Flyout>
@@ -2243,6 +2327,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <TextBox x:Name="OutlineFilterBox"
@@ -2252,6 +2337,26 @@
                                  Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="Filter the outline"
                                  Visibility="{x:Bind VisibleWhen(ViewModel.HasOutlineHeadings), Mode=OneWay}" />
+
+                        <!--
+                            Clears the filter. The box has a clear button of its own, but WinUI
+                            shows it only while the box has focus - and clicking a result moves
+                            focus to the document, so the filter stayed on with no way to see
+                            how to take it off. This one stands in for it exactly then: shown
+                            while the filter has text and the box does not have focus, so the
+                            two are never on screen together. See UpdateOutlineClearButton.
+                        -->
+                        <Button x:Name="OutlineFilterClear"
+                                Grid.Column="1"
+                                Margin="2,7,0,7"
+                                Style="{StaticResource MqIconButtonStyle}"
+                                Visibility="Collapsed"
+                                ToolTipService.ToolTip="Clear the filter"
+                                AutomationProperties.Name="Clear the outline filter">
+                            <FontIcon Glyph="&#xE711;"
+                                      Style="{StaticResource MqIconStyle}"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Button>
 
                         <!--
                             Hides the panel: the same command as View, Outline and Alt+4.
@@ -2270,7 +2375,7 @@
                             one on the left: this glyph's arrow points left, toward where the
                             panel goes, and the rail's E89F ("ClosePane") points back out.
                         -->
-                        <Button Grid.Column="1"
+                        <Button Grid.Column="2"
                                 Margin="4,7,6,7"
                                 Style="{StaticResource MqIconButtonStyle}"
                                 Command="{x:Bind ViewModel.ToggleOutlineCommand}"

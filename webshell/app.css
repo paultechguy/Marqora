@@ -965,9 +965,21 @@ a.mq-blocked-media {
   color: transparent;
 }
 
+/*
+  A drawn diagram sits in a <pre>, and a pre hands its text styles down: white-space: pre from
+  the element itself and the code block's line-height from the rule above. Mermaid measured and
+  laid the diagram out in its own frame, with neither - and some diagrams set their label text in
+  HTML inside the SVG (a foreignObject) without restating them, so the user journey's task
+  labels inherited both, stopped wrapping where they had been measured to wrap, and sat off
+  their boxes in the preview and the PDF. The pop-out showed the same SVG correctly, because it
+  has no pre around it. Putting both back to normal here makes the page match where it was
+  measured.
+*/
 .mq-preview pre.mermaid[data-processed] {
   color: inherit;
   font-family: var(--mq-font-ui);
+  white-space: normal;
+  line-height: normal;
 }
 
 /*
@@ -1297,6 +1309,20 @@ a.mq-blocked-media {
 
 /* KaTeX inherits the preview color rather than its own default. */
 .mq-preview .katex { color: inherit; font-size: 1.04em; }
+
+/*
+  A \colorbox in dark mode, on screen. The author chose the color for a white page - yellow,
+  usually - and the formula inside inherits the dark theme's light ink, so it was white on
+  yellow. app.js (shadeMathBackgrounds) leaves a deep shade of the same hue on each light box as
+  --mq-dark-fill, and it takes over here: screen only and dark only, so print, PDF, every export
+  and Copy as rich text keep the author's color. !important because KaTeX writes the color
+  inline, and this is the one place it is meant to be overruled.
+*/
+@media screen {
+  :root[data-theme="dark"] .mq-preview .katex [style*="--mq-dark-fill"] {
+    background-color: var(--mq-dark-fill) !important;
+  }
+}
 .mq-preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
 
 /*

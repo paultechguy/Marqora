@@ -25,14 +25,15 @@ internal static class ColorThemePayloads
         return new { light = theme.Light.Colors, dark = theme.Dark.Colors };
     }
 
-    /// <summary>Every theme, and the id of the one in force.</summary>
-    public static object Catalog(ThemeCatalog catalog, string currentId)
+    /// <summary>Every theme, the id of the one on screen, and the id of the one exports are drawn in.</summary>
+    public static object Catalog(ThemeCatalog catalog, string currentId, string exportId)
     {
         ArgumentNullException.ThrowIfNull(catalog);
 
         return new
         {
             currentId,
+            exportId,
             themes = catalog.Themes
                 .Select(theme => new { id = theme.Id, light = theme.Light.Colors, dark = theme.Dark.Colors })
                 .ToArray(),

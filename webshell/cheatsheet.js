@@ -250,6 +250,9 @@
         throwOnError: false,
         errorColor: 'var(--mq-danger)'
       });
+
+      // A light \colorbox shaded for dark mode, as in the preview - see color-theme.js.
+      window.mqColorTheme.shadeMathBackgrounds(els.article);
     }).catch(function (err) {
       report('warning', 'KaTeX failed to load', err && err.message);
     });
@@ -440,7 +443,7 @@
         for the same reason as the accent - the first setTheme is the only one that brings it.
       */
       if (p.colorTheme) {
-        window.mqColorTheme.apply(p.colorTheme, 'cheatsheet');
+        window.mqColorTheme.apply(p.colorTheme, null, 'cheatsheet');
       }
 
       var next = p.theme === 'Dark' ? 'Dark' : 'Light';

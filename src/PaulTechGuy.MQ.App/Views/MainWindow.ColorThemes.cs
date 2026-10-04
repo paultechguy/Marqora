@@ -5,6 +5,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using PaulTechGuy.MQ.Themes;
 
@@ -33,6 +34,12 @@ public sealed partial class MainWindow
 
     /// <summary>Set by a click on a card, so the flyout closing behind it does not put the old theme back.</summary>
     private bool _galleryKept;
+
+    /// <summary>The gallery row's own scroll viewer, which the chevrons drive. Null until the flyout has first opened.</summary>
+    private ScrollViewer? _galleryScroller;
+
+    /// <summary>Each card's frame and the color its ring takes when it is the one being previewed.</summary>
+    private readonly Dictionary<string, (Border Frame, Brush Ring)> _galleryRings = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The page behind the preview, in the theme the window is wearing - the same values as
@@ -111,6 +118,24 @@ public sealed partial class MainWindow
         // defeat the point. The preview holds until another card is pointed at, or the gallery
         // closes.
         ColorThemeFlyout.OverlayInputPassThroughElement = PreviewSurface;
+
+        // The chevrons either side of the row. The scroll viewer is the GridView's own, which
+        // exists only once its template has been applied - so it is found when the flyout has
+        // opened, and the chevrons follow it from there.
+        ColorThemeGalleryBack.Click += (_, _) => ScrollGallery(-1);
+        ColorThemeGalleryForward.Click += (_, _) => ScrollGallery(1);
+        ColorThemeGallery.SizeChanged += (_, _) => UpdateGalleryChevrons();
+        ColorThemeFlyout.Opened += (_, _) =>
+        {
+            HookGalleryScroller();
+
+            // The theme in force in view, so a theme late in the list is not hidden off the end.
+            if (ColorThemeGallery.Items.OfType<FrameworkElement>()
+                    .FirstOrDefault(card => card.Tag as string == ViewModel.ColorThemeId) is { } chosen)
+            {
+                ColorThemeGallery.ScrollIntoView(chosen);
+            }
+        };
     }
 
     /// <summary>The check marks: on the menu now, and on the gallery the next time it opens.</summary>
@@ -129,8 +154,23 @@ public sealed partial class MainWindow
     {
         _galleryKept = false;
         _galleryPreview = null;
+        _galleryRings.Clear();
 
         bool dark = RootGrid.ActualTheme == ElementTheme.Dark;
+
+        // Exports in a theme of their own: say so, or the gallery would be promising that what is
+        // previewed here is what a PDF will look like.
+        if (ViewModel.ExportColorThemeChoice is { } export)
+        {
+            string name = ViewModel.ColorThemes.First(t => t.Id == export).Name;
+
+            ColorThemeExportNote.Text = $"Exports use {name}, as chosen in Preferences, whatever is picked here.";
+            ColorThemeExportNote.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ColorThemeExportNote.Visibility = Visibility.Collapsed;
+        }
 
         ColorThemeGallery.Items.Clear();
 
@@ -138,6 +178,8 @@ public sealed partial class MainWindow
         {
             ColorThemeGallery.Items.Add(BuildCard(theme, dark, theme.Id == ViewModel.ColorThemeId));
         }
+
+        HighlightCard(null);
     }
 
     /// <summary>
@@ -149,7 +191,7 @@ public sealed partial class MainWindow
     /// those resolve against Windows' theme rather than Marqora's, which is the trap
     /// Button-App-Standards.md records.
     /// </summary>
-    private StackPanel BuildCard(ColorTheme theme, bool dark, bool chosen)
+    private Border BuildCard(ColorTheme theme, bool dark, bool chosen)
     {
         ThemePalette palette = theme.PaletteFor(dark ? PaletteMode.Dark : PaletteMode.Light);
 
@@ -204,10 +246,25 @@ public sealed partial class MainWindow
             name.Children.Add(new FontIcon { Glyph = "", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
         }
 
-        var card = new StackPanel { Spacing = 6, Tag = theme.Id, Margin = new Thickness(2) };
+        var content = new StackPanel { Spacing = 6 };
 
-        card.Children.Add(sample);
-        card.Children.Add(name);
+        content.Children.Add(sample);
+        content.Children.Add(name);
+
+        // The ring the previewed card wears - see HighlightCard. Always two pixels and simply
+        // transparent until then, so lighting it moves nothing. Its color is the card's own link
+        // color, so the ring is part of the theme being shown rather than the app's chrome.
+        var card = new Border
+        {
+            Child = content,
+            Tag = theme.Id,
+            Padding = new Thickness(3),
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(2),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+        };
+
+        _galleryRings[theme.Id] = (card, Brush("link"));
 
         ToolTipService.SetToolTip(card, theme.Description);
         AutomationProperties.SetName(card, chosen ? $"{theme.Name}, current theme" : theme.Name);
@@ -223,6 +280,8 @@ public sealed partial class MainWindow
     /// </summary>
     private void PreviewFromGallery(string themeId)
     {
+        HighlightCard(themeId);
+
         if (themeId == _galleryPreview)
         {
             return;
@@ -236,6 +295,156 @@ public sealed partial class MainWindow
 
         _galleryPreview = themeId;
         _ = ViewModel.PreviewColorThemeAsync(themeId);
+    }
+
+    /// <summary>
+    /// Rings the card being pointed at or reached with the keyboard, a step stronger than the
+    /// hover tint every card already gets, and takes the ring off the rest. Null rings none.
+    /// </summary>
+    private void HighlightCard(string? themeId)
+    {
+        var clear = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        foreach ((string id, (Border frame, Brush ring)) in _galleryRings)
+        {
+            frame.BorderBrush = id == themeId ? ring : clear;
+        }
+
+        string? name = themeId is null ? null : ViewModel.ColorThemes.FirstOrDefault(t => t.Id == themeId)?.Name;
+
+        ColorThemePreviewLabel.Text = name switch
+        {
+            null => string.Empty,
+            _ when themeId == ViewModel.ColorThemeId => $"{name}, the current theme",
+            _ => $"Previewing {name}",
+        };
+    }
+
+    /// <summary>Finds the row's scroll viewer, once per instance, and follows it.</summary>
+    private void HookGalleryScroller()
+    {
+        if (FindDescendant<ScrollViewer>(ColorThemeGallery) is { } scroller && scroller != _galleryScroller)
+        {
+            _galleryScroller = scroller;
+            scroller.ViewChanged += (_, _) => UpdateGalleryChevrons();
+
+            // Land on a card's left edge when the wheel or the scroll bar lets go, as the
+            // chevrons do, so the card at the start of the row is never cut in half. Set here
+            // rather than in XAML because snap points are the scroll viewer's own properties, not
+            // attachable ones.
+            scroller.HorizontalSnapPointsType = SnapPointsType.Mandatory;
+            scroller.HorizontalSnapPointsAlignment = SnapPointsAlignment.Near;
+
+            // ViewChanged reports scrolling only. Whether there is anywhere to scroll is settled
+            // by layout, after the flyout has opened and the cards have been measured, so the
+            // scrollable width is followed directly as well.
+            scroller.RegisterPropertyChangedCallback(
+                ScrollViewer.ScrollableWidthProperty,
+                (_, _) => UpdateGalleryChevrons());
+        }
+
+        UpdateGalleryChevrons();
+    }
+
+    /// <summary>
+    /// Scrolls the row by as many whole cards as fit, and lands on a card's left edge - so the
+    /// card at the start of the row is always whole, name and all, and the one that was cut off
+    /// at the far edge is the first one shown whole rather than skipped past. The snap points on
+    /// the GridView do the same for the wheel and the scroll bar.
+    /// </summary>
+    private void ScrollGallery(int direction)
+    {
+        if (_galleryScroller is not { } scroller)
+        {
+            return;
+        }
+
+        double card = ColorThemeGallery.ContainerFromIndex(0) is FrameworkElement first
+            ? first.ActualWidth + first.Margin.Left + first.Margin.Right
+            : 0;
+
+        double target;
+
+        if (card > 1)
+        {
+            int perView = Math.Max(1, (int)Math.Floor(scroller.ViewportWidth / card));
+
+            target = (Math.Round(scroller.HorizontalOffset / card) + (direction * perView)) * card;
+        }
+        else
+        {
+            target = scroller.HorizontalOffset + (direction * Math.Max(scroller.ViewportWidth - 48, 48));
+        }
+
+        target = Math.Clamp(target, 0, scroller.ScrollableWidth);
+
+        scroller.ChangeView(target, null, null);
+    }
+
+    /// <summary>
+    /// Both chevrons when the row is wider than the flyout, each grayed at its own end; neither
+    /// when every card fits, because a chevron that can never do anything is just clutter.
+    /// </summary>
+    private void UpdateGalleryChevrons()
+    {
+        AlignGalleryEnd();
+
+        ScrollViewer? scroller = _galleryScroller;
+        bool scrolls = scroller is { ScrollableWidth: > 0.5 };
+        Visibility shown = scrolls ? Visibility.Visible : Visibility.Collapsed;
+
+        ColorThemeGalleryBack.Visibility = shown;
+        ColorThemeGalleryForward.Visibility = shown;
+
+        if (scrolls)
+        {
+            ColorThemeGalleryBack.IsEnabled = scroller!.HorizontalOffset > 0.5;
+            ColorThemeGalleryForward.IsEnabled = scroller.HorizontalOffset < scroller.ScrollableWidth - 0.5;
+        }
+    }
+
+    /// <summary>
+    /// Pads the end of the row so the scrollable width is a whole number of cards.
+    ///
+    /// Snapping and the chevrons both land on a card's left edge, but the last stop is wherever
+    /// the row runs out, and with ten cards in a flyout of a given width that is rarely on an
+    /// edge - so the card at the start of the row was cut in half there, name and all. Less than
+    /// one card of space after the last one moves that final stop onto an edge as well; the
+    /// space only shows at the very end. Recomputed as the row's size changes, and only written
+    /// when it differs, so setting it does not set it off again.
+    /// </summary>
+    private void AlignGalleryEnd()
+    {
+        if (_galleryScroller is not { ViewportWidth: > 0 } scroller
+            || ColorThemeGallery.ContainerFromIndex(0) is not FrameworkElement first)
+        {
+            return;
+        }
+
+        double card = first.ActualWidth + first.Margin.Left + first.Margin.Right;
+
+        if (card < 1)
+        {
+            return;
+        }
+
+        double padded = ColorThemeGallery.Padding.Right;
+        double content = scroller.ExtentWidth - padded;
+        double overflow = content - scroller.ViewportWidth;
+
+        double needed = 0;
+
+        if (overflow > 0.5)
+        {
+            double remainder = overflow % card;
+
+            needed = remainder < 0.5 || card - remainder < 0.5 ? 0 : card - remainder;
+        }
+
+        if (Math.Abs(needed - padded) > 0.5)
+        {
+            ColorThemeGallery.Padding = new Thickness(0, 0, needed, 0);
+        }
     }
 
     private void EndGalleryPreview()

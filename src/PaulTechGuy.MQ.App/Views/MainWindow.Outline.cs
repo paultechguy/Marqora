@@ -65,12 +65,31 @@ public sealed partial class MainWindow
         OutlineFilterBox.GotFocus += OnOutlineGotFocus;
         OutlineFilterBox.KeyDown += OnOutlineFilterKeyDown;
 
+        // The standing clear button: shown whenever the box's own is not. See the XAML.
+        OutlineFilterBox.GotFocus += (_, _) => UpdateOutlineClearButton();
+        OutlineFilterBox.LostFocus += (_, _) => UpdateOutlineClearButton();
+        OutlineFilterBox.TextChanged += (_, _) => UpdateOutlineClearButton();
+        OutlineFilterBox.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => UpdateOutlineClearButton());
+        OutlineFilterClear.Click += (_, _) => ViewModel.OutlineFilter = string.Empty;
+
         OutlineSplitter.CurrentWidth = () => ViewModel.OutlineWidth;
         OutlineSplitter.WidthChanged += OnOutlineSplitterDragged;
 
         ViewModel.OutlineSelectionChanged += OnOutlineFollowRequested;
         ViewModel.OutlineFocusRequested += OnOutlineFocusRequested;
     }
+
+    /// <summary>
+    /// Shows the standing clear button while the filter has text and the box has no focus -
+    /// the one case in which WinUI hides the box's own - and hides it with the box.
+    /// </summary>
+    private void UpdateOutlineClearButton() =>
+        OutlineFilterClear.Visibility =
+            OutlineFilterBox.Visibility == Visibility.Visible
+            && OutlineFilterBox.FocusState == FocusState.Unfocused
+            && !string.IsNullOrEmpty(OutlineFilterBox.Text)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
     // ------------------------------------------------------------------- focus
 

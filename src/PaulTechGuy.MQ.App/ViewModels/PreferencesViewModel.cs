@@ -161,6 +161,11 @@ public sealed class PreferencesViewModel(
 
     public Task SetColorThemeAsync(string themeId) => main.ApplyColorThemeAsync(themeId);
 
+    /// <summary>The theme named for exports, or null for the same theme as the screen.</summary>
+    public string? ExportColorThemeChoice => main.ExportColorThemeChoice;
+
+    public Task SetExportColorThemeAsync(string? themeId) => main.ApplyExportColorThemeAsync(themeId);
+
     // ------------------------------------------------------------------ everything else
 
     /// <summary>
@@ -229,6 +234,7 @@ public sealed class PreferencesViewModel(
 
         SetTheme(restored.Theme);
         await main.ApplyColorThemeAsync(restored.ColorTheme).ConfigureAwait(true);
+        await main.ApplyExportColorThemeAsync(restored.ExportColorTheme).ConfigureAwait(true);
         SetReloadOnExternalChange(restored.ReloadOnExternalChange);
 
         await main.SetWordWrapAsync(restored.WordWrapEnabled).ConfigureAwait(true);

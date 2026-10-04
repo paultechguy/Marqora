@@ -90,6 +90,11 @@ Windows properties, which it never touches.
 **Your session comes back.** Close Marqora with a dozen documents open and they are all there
 next time, with the same tab in front.
 
+**Color, without touching your files.** The palette button at the end of the toolbar opens ten
+color themes for headings, links, callouts, tables, code and diagrams. Point at one and this
+document changes to it straight away; scroll to see more, click to keep it. Prints and exports
+follow it too, and your markdown stays exactly as you wrote it.
+
 **Markdown without the punctuation.** The Format menu and the toolbar beneath it apply bold,
 italic, links, lists, quotes, headings, tables and code blocks — and everything toggles, so
 the button that switched something on switches it off again. The bar is live: it lights up

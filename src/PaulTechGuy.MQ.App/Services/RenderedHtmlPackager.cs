@@ -127,9 +127,12 @@ public sealed partial class RenderedHtmlPackager(
         builder.AppendLine(AccentDeclarations());
 
         // app.css reads every document color as a theme slot and declares none, so a page with
-        // no host to post it a theme carries the light palette written out - the theme the app
-        // is showing, because an export looks like the preview.
-        builder.AppendLine(ColorThemePayloads.LightDeclarations(colorThemes.Find(settings.Current.ColorTheme)));
+        // no host to post it a theme carries the light palette written out - the export theme:
+        // the one named for exports in Preferences, or else the one the app is showing.
+        AppSettings current = settings.Current;
+
+        builder.AppendLine(ColorThemePayloads.LightDeclarations(
+            colorThemes.Find(colorThemes.Contains(current.ExportColorTheme) ? current.ExportColorTheme : current.ColorTheme)));
 
         // The token colors are theme slots too, so the one sheet serves every theme.
         if (renderedHtml.Contains("hljs", StringComparison.Ordinal))

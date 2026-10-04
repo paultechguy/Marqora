@@ -571,12 +571,15 @@ wrapper (`attachOutputCopy` in `app.js`). Then:
   through `diagram.css`, and exports and copies the light one.
 - **The cheatsheet** carries both drawings the same way, and `app.css` prints the light one.
 
-In light mode there is one drawing and it is already the light one, so no wrapper is added.
+In light mode there is usually one drawing, already the light one, and no wrapper. The exception
+is an export theme that differs from the screen's (see *Color themes* below): then the drawing
+that leaves the app is a different one in light mode too, and it gets the same wrapper
+(`needsOutputCopy` in `app.js`).
 
-**Code highlighting.** highlight.js keeps each theme in a stylesheet of its own. The light one
-is always on; the dark one is layered over it in dark mode and carries `media="screen"`, so
-paper never sees it. The two style exactly the same token classes, so on screen the dark one
-covers the light one completely. `withInlineStyles` switches it off while it measures.
+**Code highlighting.** The token colors are the color theme's syntax slots. `webshell/syntax.css`
+maps highlight.js's classes onto them, in GitHub's groups, and replaced the two GitHub
+stylesheets that used to be switched between for light and dark. The slots follow `data-theme`
+like every other theme color, so print and `withInlineStyles` need nothing special for code.
 
 Three decisions worth keeping:
 
@@ -588,9 +591,10 @@ Three decisions worth keeping:
    about one object.
 2. **The author's theme wins.** Light is the *default* for output, not an override. A
    definition that names its own theme, by an init directive or frontmatter config, is drawn
-   that way in output too: it was a choice somebody made on purpose. Prepending a theme
-   directive to force light would also break any definition that opens with frontmatter,
-   which has to come first.
+   that way in output too: it was a choice somebody made on purpose. Color themes do put an
+   init directive in front of a definition, to give it the theme's colors, but never in
+   front of one that names its own theme, and after frontmatter rather than before it,
+   because frontmatter has to come first.
 3. **Print is the live page, not the HTML export printed in a hidden view.** That was weighed
    and rejected. The export deliberately restores remote pictures for its reader's browser, so
    a view loading it would fetch them, which breaks *offline by default*. It drops the "not
@@ -601,6 +605,138 @@ Three decisions worth keeping:
 What is not covered: the cheatsheet's Print does not wait for its light drawings, which it
 renders straight after the dark ones at load. Only a print in the moment after switching
 theme could catch one missing, and that diagram would print as shown.
+
+---
+
+## Color themes
+
+A color theme decides how Marqora colors markdown: headings, links, callouts, tables, code and
+its syntax, lists, quotes, highlights and mermaid diagrams. **One theme is in force for the
+whole app**, chosen from the toolbar gallery, `View > Color Theme` or Preferences. It is a
+setting, like Light/Dark, not something a document carries: no file is ever written to record
+it, and a markdown file looks as it always did in any other editor. Exports use the theme too,
+in its light palette, unless Preferences names a different theme for exports.
+
+The page itself is not part of a theme. Every theme draws on the same neutral page and body text
+(`--mq-bg` and `--mq-text` in `app.css`), so a theme colors what sits on the page and nothing
+prints a page of ink.
+
+### One copy of every document color
+
+Themes live in `PaulTechGuy.MQ.Themes`, a library with no dependencies, one JSON file per theme
+under `Themes/`, embedded at build time. The file name is the id. `ThemeCatalog` lists them
+Default first and the rest by name, falls back to Default for an id it does not know, and fills
+any gap in a theme from Default, logging what it filled. That forgiveness is not for the themes
+that ship: the tests hold every one of them to an empty problem list.
+
+`ThemeSlots.cs` is the only place slot ids are written: 67 per mode, each with what it colors
+and, for text, what it is read against and the ratio it needs. Everything else is checked
+against that list rather than copying it. The stylesheet reads `var(--mq-theme-<slot>)` and
+declares none. A test fails if any CSS names a slot that does not exist, and the slot table and
+skeleton in `docs/ColorThemes-Authoring.md` are generated from the list
+(`build/Update-ThemeSlotTable.ps1`).
+
+That retired the one duplication the app used to check rather than remove. The callout colors
+and the highlight yellow were written in `app.css` and again in `Domain/CalloutColors.cs`, for
+the Word export, held together by a build script. They are slots now, read by the preview and
+Word alike, and the script is gone.
+
+**Every value is opaque `#rrggbb`.** Word's shading has no alpha and the rich-text clipboard
+drops `rgba()` and `color-mix()`, so a tint is written already blended over the neutral page.
+Because the page is fixed, that blend is exact.
+
+### Getting colors into the page
+
+The host posts every palette once, in `OnShellReady`, ahead of anything queued, along with the
+screen theme and the export theme. So the theme is in place before the first tab opens, and
+again on a page rebuilt after a crash. A change afterwards is a small message naming an id.
+
+`webshell/color-theme.js`, shared by the shell and the cheatsheet, writes one `<style>`:
+
+```text
+:root                          the screen theme's light palette
+:root[data-theme="dark"]       the screen theme's dark palette
+@media print { :root, ... }    the export theme's light palette
+```
+
+It is keyed on `data-theme`, the same way `app.css` keys its own colors, rather than holding
+"the current mode". A mode switch then needs nothing, and that is load-bearing:
+`withInlineStyles` measures the clipboard copy after setting `data-theme` to light, and a
+current-mode block would have handed it the dark palette. For that moment it also puts the
+export theme on screen, because the copy is an export.
+
+It is a stylesheet rather than `style.setProperty` on the root, which is how the accent arrives.
+An inline property outranks every rule, so a print block could never re-point it, and the
+accent's screen/print pair, multiplied by sixty-odd slots, would have put the whole slot list
+into `app.css` twice.
+
+Marqora's teal is not a theme color. It belongs to the app: the outline row, the Find All tint,
+the cheatsheet, and the marks the preview draws to talk to the user (find hits, review marks,
+focus outlines). The cheatsheet always shows Default, because it documents Marqora rather than
+being one of the reader's documents.
+
+### Diagrams
+
+Mermaid bakes colors into the SVG, so a theme reaches a diagram by changing what mermaid is
+given. `themedDefinition` puts `%%{init: {"theme": "base", "themeVariables": {...}}}%%` in front
+of the author's definition, built from the eight diagram slots. `base` is the theme mermaid
+built to be recolored, and it works out the rest itself. mermaid merges every init directive in
+order, later winning (`detectInit`), so whatever else the author set still applies.
+
+Neither mermaid instance is re-initialized for a theme, so the output instance stays "configured
+light once" (see above). A theme with no diagram slots, Default, leaves definitions untouched
+and keeps mermaid's stock looks, which compute too much to restate through `base`. A definition
+that names its own theme is left as written. The screen cache is keyed by the themed definition,
+so a theme already seen redraws from it.
+
+A theme or mode change redraws diagrams **in place** (`redrawDiagrams`): each keeps its drawing
+until the new one is ready. Redrawing by putting the tab's HTML back turned every diagram into
+its definition text for a moment, a different height, and the scroll bar walked up and down
+under a reader who had not moved. Gallery previews wait for the pointer to rest (300 ms) before
+redrawing, and redraw only when the theme the diagrams show differs from the one in force, so a
+preview abandoned early costs nothing.
+
+An author's own light colors on a dark screen (a sequence diagram's `rect rgb(...)` band, a
+`\colorbox`) are shown as a deep shade of the same hue by `darkShadeOf`, on screen only. The
+band is changed in the screen drawing; the box keeps its color and a dark-only, screen-only rule
+in `app.css` overrides it, so print and the clipboard see the author's color.
+
+### Exports
+
+- **Print and PDF** use the live page's print block, which carries the export theme.
+- **HTML, Folio, the review page and the clipboard** go through
+  `RenderedHtmlPackager.ReadStyles`, which writes the export theme's light palette as a
+  column-zero `:root` block. It has to be column zero: that is the only kind of block
+  `FlattenCustomProperties` reads when it folds the variables in for Word and Outlook.
+- **Word** is handed the export theme. `DocxColors` reads its light palette, and every style
+  carries plain colors. In OOXML `themeColor` outranks `val`, and a theme has more colors than
+  Word's scheme has slots, so a reference would quietly put the scheme's color back. The
+  exception is the hyperlink, whose scheme slot `DocxTheme` sets to the same link color, along
+  with accent 1 (the link) and accents 2 to 6 (the callout bars), which Word's own galleries
+  start from. Bold and italic take the theme's colors through `RunFormat.EmphasisInk`, which a
+  link or code outranks and which is switched off inside quotes and table headers, as in the
+  preview.
+- **Diagrams** leave the app as their output drawing, in the export theme, whenever that is not
+  the drawing on screen: the screen is dark, or the export theme differs.
+
+### The gallery
+
+The toolbar's palette button opens a flyout of cards drawn from each theme's palette in the
+mode the window is wearing, so a new theme needs no artwork. Pointing at a card, or reaching it
+with the keyboard, calls `SetColorThemeAsync(id, preview: true)`. A preview is never saved and
+never becomes the theme a crash-rebuilt page returns to. It holds while the flyout is open, and
+the document still scrolls beneath it (`OverlayInputPassThroughElement`), so more of it can be
+read in that theme. A click keeps the theme; closing any other way puts the chosen one back.
+The previewed card wears a ring in its own link color, and the header names it, because a card
+can be half off the edge of the row.
+
+### Adding a theme
+
+See `docs/ColorThemes-Authoring.md`: the rules, the generated slot table, a prompt for drafting
+a theme with an AI, and the steps. The tests check every slot, every value, and contrast in both
+modes against what each text slot is read on. They also refuse a text slot that is pure black or
+white: those pass every contrast check while discarding the theme's hue, and a broken first
+draft of the second batch of themes passed every other test that way.
 
 ---
 

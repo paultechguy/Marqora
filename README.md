@@ -213,6 +213,7 @@ would rather not reach for the mouse.
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
 | 🌗  | **Light, dark or system**                | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included                                                                                                                                             |
+| 🖌️  | **Color themes**                         | Ten palettes for headings, links, callouts, tables, code and diagrams, previewed live from the toolbar gallery and carried into every export. Your files are never changed                                                               |
 | 🪟  | **One window, well behaved**             | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it                                                                                                                    |
 | 👀  | **Files stay in sync**                   | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work                                                                                                                   |
 | ⌨️  | **Keyboard all the way down**            | `Alt` drives the menu bar, every command has a shortcut, and `Help > Keyboard Shortcuts...` lists the lot with a button to copy them                                                                                                     |
@@ -664,8 +665,9 @@ the same setting the preview uses, and unset by default, so an exported page fil
 `.docx` is not a web page. The document is read again and written into Word's own constructs:
 Heading 1 to 6 rather than large bold text, so the navigation pane finds your sections and a
 contents field can collect them; tables it can resize; footnotes at the foot of the page; and
-equations you can click into and edit. The colors come from a document theme, so
-**Design → Colors** restyles the whole file the way it would any Word document.
+equations you can click into and edit. The colors are your color theme's, the one exports use,
+in its light palette. The document theme carries them as well, so Word's own galleries, such as a
+new table or a chart, start from the same colors.
 
 Numbering is Word's own — for lists, and for numbered headings when you have those switched on.
 Section numbers are attached to the heading styles the way Word's own **Multilevel List → link
@@ -890,6 +892,25 @@ A word in your dictionary stays known when you make it possessive, so adding `Ma
 
 System, Light or Dark, under `View > Theme`. System follows Windows and tracks changes made
 while the app is running. The window uses Mica and an extended title bar.
+
+**Color themes**
+
+A color theme decides how Marqora colors markdown: headings, links, callouts, tables, code and
+its syntax, lists, quotes, highlights and mermaid diagrams. Ten ship: Default, Ember, Forest,
+Nordic, Ocean, Orchid, Pastel, Slate, Sunset and Vintage Press, each with a light and a dark
+palette. One theme is in force for every document, and your files are never changed.
+
+The palette button at the end of the toolbar opens the gallery. Point at a theme, or reach it
+with the arrow keys, and the preview shows it at once; scroll the document to see more of it,
+click to keep it, or close the gallery to go back. The chevrons move along the row. The same
+choice is on `View > Color Theme` and under **Preferences > Appearance**.
+
+Everything that leaves the app uses the theme too, in its light colors: print, PDF, HTML, Folio,
+Word, a shared review and the clipboard. To keep a colorful screen and send plainer files,
+choose another theme under **Preferences > Appearance > For exports**. A diagram that names a
+mermaid theme of its own keeps it.
+
+New themes are one JSON file each; see `docs/ColorThemes-Authoring.md`.
 
 **Other View options**
 

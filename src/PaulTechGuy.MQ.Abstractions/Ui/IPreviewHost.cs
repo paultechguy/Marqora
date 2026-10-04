@@ -451,6 +451,12 @@ public interface IPreviewHost
     /// </param>
     Task SetColorThemeAsync(string themeId, bool preview = false);
 
+    /// <summary>
+    /// The color theme exports are drawn in, by id, already resolved: the screen's own when the
+    /// user has not named one for exports.
+    /// </summary>
+    Task SetExportColorThemeAsync(string themeId);
+
     Task SetZoomAsync(EditorPane pane, ZoomLevel zoom);
 
     Task SetScrollSyncAsync(bool enabled);

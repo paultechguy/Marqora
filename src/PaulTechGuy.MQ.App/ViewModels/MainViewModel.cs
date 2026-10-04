@@ -868,6 +868,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Every color theme, in gallery order: Default first, then by name.</summary>
     public IReadOnlyList<ColorTheme> ColorThemes => _colorThemes.Themes;
 
+    /// <summary>
+    /// The theme the user named for exports, or null for the same theme as the screen. See
+    /// <see cref="AppSettings.ExportColorTheme"/>.
+    /// </summary>
+    public string? ExportColorThemeChoice { get; private set; }
+
+    /// <summary>The theme exports are drawn in: the one named for them, or else the screen's.</summary>
+    public string ExportColorThemeId => _colorThemes.Find(ExportColorThemeChoice ?? ColorThemeId).Id;
+
     public string ZoomLabel => $"{ActiveZoomPercent}%";
 
     /// <summary>Raised when the user chooses File, Exit.</summary>
@@ -907,6 +916,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ViewMode = current.ViewMode;
         Theme = current.Theme;
         ColorThemeId = _colorThemes.Find(current.ColorTheme).Id;
+        ExportColorThemeChoice = _colorThemes.Contains(current.ExportColorTheme) ? current.ExportColorTheme : null;
         ScrollSyncEnabled = current.ScrollSyncEnabled;
         WordWrapEnabled = current.WordWrapEnabled;
         LineNumbersEnabled = current.ShowLineNumbers;
@@ -954,6 +964,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Before the page is up, so the host already knows the theme when it hands the page
         // every palette on ready - the first document is drawn in it rather than in Default.
         _ = host.SetColorThemeAsync(ColorThemeId);
+        _ = host.SetExportColorThemeAsync(ExportColorThemeId);
 
         host.Ready += OnHostReady;
         host.FontsResolved += (_, _) => FontsResolved?.Invoke(this, EventArgs.Empty);
@@ -4148,9 +4159,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _settings.Update(s => s with { ColorTheme = id == ThemeCatalog.DefaultId ? null : id });
 
+        OnPropertyChanged(nameof(ExportColorThemeId));
+
         if (_host is not null)
         {
             await _host.SetColorThemeAsync(id).ConfigureAwait(true);
+
+            // Exports follow the screen unless a theme was named for them.
+            if (ExportColorThemeChoice is null)
+            {
+                await _host.SetExportColorThemeAsync(ExportColorThemeId).ConfigureAwait(true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Names the theme exports are drawn in, or null for the screen's, and remembers it. For the
+    /// preferences dialog, the one place it is chosen.
+    /// </summary>
+    public async Task ApplyExportColorThemeAsync(string? themeId)
+    {
+        ExportColorThemeChoice = _colorThemes.Contains(themeId) ? themeId : null;
+
+        OnPropertyChanged(nameof(ExportColorThemeChoice));
+        OnPropertyChanged(nameof(ExportColorThemeId));
+
+        string? choice = ExportColorThemeChoice;
+
+        _settings.Update(s => s with { ExportColorTheme = choice });
+
+        if (_host is not null)
+        {
+            await _host.SetExportColorThemeAsync(ExportColorThemeId).ConfigureAwait(true);
         }
     }
 
@@ -8257,7 +8297,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     rendered,
                     RequestDiagramPngAsync,
                     images,
-                    _colorThemes.Find(_settings.Current.ColorTheme)))
+                    _colorThemes.Find(ExportColorThemeId)))
                 .ConfigureAwait(true);
 
             _logger.LogInformation(
