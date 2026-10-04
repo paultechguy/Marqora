@@ -213,7 +213,7 @@ would rather not reach for the mouse.
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
 | 🌗  | **Light, dark or system**                | Mica, an extended title bar and a theme that tracks Windows as it changes, diagrams included                                                                                                                                             |
-| 🖌️  | **Color themes**                         | Ten palettes for headings, links, callouts, tables, code and diagrams, previewed live from the toolbar gallery and carried into every export. Your files are never changed                                                               |
+| 🖌️  | **Color themes**                         | Palettes for headings, links, callouts, tables, code and diagrams, applied to the preview, to your exports, or to both, and previewed live from a gallery on the menu bar. Your files are never changed                                    |
 | 🪟  | **One window, well behaved**             | Single-instance by default, so "Open with" adds a tab instead of another copy. Drag files or folders straight onto it                                                                                                                    |
 | 👀  | **Files stay in sync**                   | Every open document is watched; change one outside the app and the tab reloads, or asks first if you have unsaved work                                                                                                                   |
 | ⌨️  | **Keyboard all the way down**            | `Alt` drives the menu bar, every command has a shortcut, and `Help > Keyboard Shortcuts...` lists the lot with a button to copy them                                                                                                     |
@@ -325,9 +325,9 @@ editors and browsers behave. `Ctrl+1`–`Ctrl+9` belong to tab selection.
 In split view the panes scroll together, mapped through source line numbers rather than
 scroll percentage, so tall diagrams and images do not throw the alignment off. Drag the
 divider to resize. Double-clicking evens the split up again — either on the divider itself or
-on the **Split** button in the toolbar, which is a much larger target than a six-pixel rule.
+on the **Split** button on the menu bar, which is a much larger target than a six-pixel rule.
 
-The toolbar row thins out as the window narrows rather than clipping: below about 900px the
+The menu bar row thins out as the window narrows rather than clipping: below about 900px the
 view switcher tightens and the scroll-sync toggle steps aside, and below about 720px the
 switcher and the zoom readout go too. Nothing becomes unreachable — view modes stay on the
 View menu and on `Alt+1`–`Alt+3`, and `Ctrl+0` still resets the zoom. The formatting bar
@@ -524,7 +524,7 @@ Explicit heading levels are on the menu without shortcuts. `Ctrl`+digit belongs 
 selection, and `Ctrl+Alt`+digit is indistinguishable from `AltGr`+digit on European
 keyboards, where it types a character.
 
-The same commands sit on a toolbar under the menu bar, which is live: the buttons light up
+The same commands sit on the formatting bar under the menu bar, which is live: the buttons light up
 for whatever the caret is inside, and the heading control reads `H2` on an H2. Each says
 what it would *do* rather than what the text is, so a lit button always turns itself off. The
 two indent buttons are the exception and never light: depth is not a state a line is in.
@@ -896,14 +896,16 @@ while the app is running. The window uses Mica and an extended title bar.
 **Color themes**
 
 A color theme decides how Marqora colors markdown: headings, links, callouts, tables, code and
-its syntax, lists, quotes, highlights and mermaid diagrams. Ten ship: Default, Ember, Forest,
-Nordic, Ocean, Orchid, Pastel, Slate, Sunset and Vintage Press, each with a light and a dark
-palette. One theme is in force for every document, and your files are never changed.
+its syntax, lists, quotes, highlights and mermaid diagrams. They ship in the box: Default, Ember,
+Forest, Nordic, Ocean, Orchid, Pastel, Slate, Sunset, Sweetheart and Vintage Press, each with a
+light and a dark palette. One theme is in force for every document, and your files are never
+changed.
 
-The palette button at the end of the toolbar opens the gallery. Point at a theme, or reach it
-with the arrow keys, and the preview shows it at once; scroll the document to see more of it,
-click to keep it, or close the gallery to go back. The chevrons move along the row. The same
-choice is on `View > Color Theme` and under **Preferences > Appearance**.
+The palette button at the right-hand end of the menu bar, next to the zoom buttons, opens the
+gallery. Point at a theme, or reach it with the arrow keys, and the preview shows it at once;
+scroll the document to see more of it, click to keep it, or close the gallery to go back. The
+chevrons move along the row. The same choice is on `View > Color Theme` and under
+**Preferences > Appearance**.
 
 Everything that leaves the app uses the theme too, in its light colors: print, PDF, HTML, Folio,
 Word, a shared review and the clipboard. To keep a colorful screen and send plainer files,

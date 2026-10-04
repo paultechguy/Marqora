@@ -16,6 +16,7 @@ on its own.
 
 - [x] Open this document — done
 - [ ] Press `Alt+2` for the split view, then `Alt+3` to come back to the preview
+- [ ] Click the palette button at the right-hand end of the menu bar, next to the zoom buttons, and point at a color theme — this page recolors as you look, and nothing in the file changes
 - [ ] Press `Alt+4` to list this page's headings beside it, and arrow down them
 - [ ] Press `Ctrl+F1` for the Markdown cheatsheet, and leave it beside the editor
 - [ ] Double-click the diagram further down this page
@@ -90,12 +91,13 @@ Windows properties, which it never touches.
 **Your session comes back.** Close Marqora with a dozen documents open and they are all there
 next time, with the same tab in front.
 
-**Color, without touching your files.** The palette button at the end of the toolbar opens ten
-color themes for headings, links, callouts, tables, code and diagrams. Point at one and this
-document changes to it straight away; scroll to see more, click to keep it. Prints and exports
-follow it too, and your markdown stays exactly as you wrote it.
+**Color, without touching your files.** The palette button at the right-hand end of the menu
+bar, next to the zoom buttons, opens a gallery of color themes for headings, links, callouts,
+tables, code and diagrams. Point at one and this document changes to it straight away; scroll to see
+more, click to keep it. Prints and exports follow it too, and your markdown stays exactly as you
+wrote it.
 
-**Markdown without the punctuation.** The Format menu and the toolbar beneath it apply bold,
+**Markdown without the punctuation.** The Format menu and the formatting bar beneath it apply bold,
 italic, links, lists, quotes, headings, tables and code blocks — and everything toggles, so
 the button that switched something on switches it off again. The bar is live: it lights up
 for whatever the cursor is inside, and the heading control reads `H2` when you are in one.
@@ -340,7 +342,7 @@ page whenever you want it.
 - **Files are watched.** If a document changes on disk and you have no unsaved edits in it, the
   tab quietly catches up. If you do have edits, Marqora asks first.
 - **Snippets are just files.** Drop a `.md` file into your snippets folder and it appears on the
-  toolbar's **Insert** menu, under *Your snippets*. `$0` in the file is where the caret lands,
+  **Insert** menu, under *Your snippets*. `$0` in the file is where the caret lands,
   and `$SEL` is where your selected text goes.
 - **Callouts take the text you are looking at.** Select a sentence, or just leave the caret in a
   paragraph, and **Insert > Callouts > Note** puts it inside the callout instead of leaving you

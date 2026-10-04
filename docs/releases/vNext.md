@@ -14,13 +14,13 @@
 
 Give your documents color without touching them. Pick a color theme and Marqora recolors how
 every document looks: headings, links, callouts, tables, code and its syntax, lists, quotes,
-highlights and diagrams. Ten themes ship: Default, Ember, Forest, Nordic, Ocean, Orchid, Pastel,
-Slate, Sunset and Vintage Press, each in both light and dark.
+highlights and diagrams. Eleven themes ship: Default, Ember, Forest, Nordic, Ocean, Orchid,
+Pastel, Slate, Sunset, Sweetheart and Vintage Press, each in both light and dark.
 
-Open the palette button at the end of the toolbar to see them. Point at a theme and the preview
-changes to it at once, and you can scroll the document to see more of it before you decide.
-Click to keep it, or close the gallery to go back. The same choice is on `View > Color Theme`
-and in Preferences.
+Click the palette button at the right-hand end of the menu bar, next to the zoom buttons, to
+see them. Point at a theme and the preview changes to it at once, and you can scroll the
+document to see more of it before you decide. Click to keep it, or close the gallery to go
+back. The same choice is on `View > Color Theme` and in Preferences.
 
 Your prints, PDFs, Word and HTML files, Folios, review pages and copies use the same theme, in
 its light colors, so what you send looks like what you saw. If you'd rather keep a colorful

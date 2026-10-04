@@ -12,8 +12,14 @@ touched.
 
 One JSON file in `src/PaulTechGuy.MQ.Themes/Themes/`. The file name is the theme's id:
 `vintage-press.json` is the theme `vintage-press`. Adding a theme means adding a file and
-rebuilding. Nothing else needs editing: the gallery, `View > Color Theme` and Preferences all
-list what the folder holds, Default first and the rest alphabetically by name.
+rebuilding. Nothing in the app needs editing: the gallery, `View > Color Theme` and both
+theme choices in Preferences list what the folder holds.
+
+**The order is Default first, then alphabetical by the theme's `name`, ignoring case.** Not by
+id and not by file name: `sweetheart.json`, named "Sweetheart", lands between Sunset and Vintage
+Press because that is where its name falls. `ThemeCatalog` sorts once, and every list in the
+app reads that one list, so nothing else sorts and nothing needs telling where a new theme goes.
+A test holds the order.
 
 The files are embedded in the Themes library at build time, so they ship inside the app rather
 than beside it.
@@ -56,9 +62,12 @@ through mermaid's `base` theme. Default alone says `"diagrams": "stock"` instead
 mermaid's own light and dark themes and leaves the diagram slots out. A diagram that names a
 mermaid theme of its own is always left as written.
 
-**Beware pure black and white.** A text slot that comes out `#000000` or `#ffffff` passes every
-contrast check while throwing away the theme's hue. It is almost always a sign that something
-pushed the color as far as it would go. Look before accepting it.
+**Beware pure black and white, and gray where a color belongs.** A text slot that comes out
+`#000000` or `#ffffff` passes every contrast check while throwing away the theme's hue, and
+so does a gray where a color should be. Both are almost always a sign that something pushed
+the color as far as it would go. The tests refuse a pure black or white text slot, and a
+`mark-fill` with no hue in either palette, which are the two ways this has gone wrong. Look
+before accepting a palette anyway: nothing checks that a theme looks good.
 
 ## The slots
 
@@ -154,6 +163,7 @@ table above.
 >   both palettes. Check them; do not guess.
 > - A fill that should look tinted is written as its blend over the page, not with alpha.
 > - Keep Caution in the red family and Warning in amber or orange.
+> - The highlight (`mark-fill`) must be a visible color in both palettes, never a gray.
 > - Choose an id in lowercase-with-hyphens, a name, and a one-sentence description.
 
 The skeleton, generated from the slot list like the table:
@@ -322,10 +332,27 @@ The skeleton, generated from the slot list like the table:
    needs. Darken a light-palette text color, or lighten a dark-palette one, keeping its hue,
    until it passes.
 3. Build, open `docs/UltimateMarkdownContent.md` (never run a formatter over it, because its
-   untidiness is what it tests), and open the gallery on the toolbar. Point at the new card in
-   light mode and in dark, and scroll through the document while it is previewed.
+   untidiness is what it tests), and open the gallery from the palette button on the menu bar.
+   Point at the new card in light mode and in dark, and scroll through the document while it is
+   previewed. Check that the card sits where its name should: after Default, in alphabetical
+   order.
 4. Export a PDF and a Word file in the new theme and look at both. Output uses the light
    palette, so this is the light palette's real test.
+5. Bring the places that show the themes up to date. The app needs nothing, but three pieces
+   of documentation do:
+
+   ```powershell
+   pwsh ./build/Update-HomepageThemes.ps1        # the swatches on docs/index.html
+   pwsh ./build/Update-HomepageThemes.ps1 -Check # report only; non-zero if they are stale
+   ```
+
+   The homepage cards are drawn from the theme files, in the app's order, so that is the only
+   step there. Two lists of names are written by hand: the color themes section of
+   `README.md`, and the color themes section of `docs/releases/vNext.md` (which also says how
+   many, so that count changes with it) while a release is in progress. Find them by searching for the name of any other theme, for example
+   `Select-String -Path README.md,docs/releases/vNext.md -Pattern Sunset`. Nothing else counts
+   the themes: the welcome document, the homepage text and the README's feature row are written
+   without a number so that a new theme does not make them wrong.
 
 ## A worked example: Pastel
 
@@ -348,3 +375,26 @@ work:
 The general lesson: decide which slots carry a theme's character. The fills and bars can be as
 soft or as loud as the theme wants, and the text slots then follow the same hues as far as
 contrast allows.
+
+## A second example: Sweetheart
+
+Sweetheart, a Valentine's Day theme, is the opposite problem. Nothing about it is pale: it is
+crimson, rose and blush pink, so nearly every slot wants to be some kind of red. That is easy to
+make look right and easy to make unusable, and three decisions kept it usable:
+
+- **The callouts stay distinguishable.** With red everywhere, Note, Tip, Important, Warning and
+  Caution could blur into one. Note is a rose, Tip a green, Important a plum, Warning an amber
+  and Caution a vivid crimson, so the hue still says what the callout means even in a palette
+  that is mostly red. This is the "keep Caution red and Warning amber" rule doing its job, and
+  Tip and Important are where the theme steps outside its own family.
+- **The headings read as a hierarchy, not as six pinks.** Level 1 is the darkest wine, levels 2
+  and 3 step toward raspberry, and levels 4 to 6 settle into muted rose-grays, so size and depth
+  of color say the same thing. The seeds were chosen to clear their contrast bars as they
+  stand: none of the light heading, link or emphasis colors had to be moved to pass.
+- **The highlight is pink in both modes**, and the dark one is a deep rose, not a gray. A
+  highlight in a pink theme is the easiest place to lose the hue: light text on a deep rose
+  passes contrast, and so does light text on a neutral gray, so only the highlight-hue test
+  stands between the two.
+
+The general lesson: an occasion theme is a single hue family, and the work is keeping the
+meaning-bearing slots (callouts, the diff colors, the highlight) readable apart from it.

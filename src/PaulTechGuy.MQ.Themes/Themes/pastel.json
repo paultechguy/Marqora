@@ -131,14 +131,14 @@
     "syntax-addition-fill": "#1d3a24",
     "syntax-deletion": "#ffc8c0",
     "syntax-deletion-fill": "#45201c",
-    "mark-fill": "#424242",
+    "mark-fill": "#7e6007",
     "diagram-primary": "#3f4149",
     "diagram-primary-border": "#8596cc",
     "diagram-primary-text": "#e6e6e6",
     "diagram-secondary": "#482c35",
     "diagram-tertiary": "#2b2b2e",
     "diagram-line": "#8393cd",
-    "diagram-note": "#3c3c3c",
+    "diagram-note": "#5c4c1b",
     "diagram-note-text": "#e6e6e6"
   }
 }

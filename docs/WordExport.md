@@ -66,10 +66,11 @@ Two consequences worth knowing when testing:
 | `DocxFootnotes.cs` | 181 | `FootnotesPart` and the mandatory separator notes |
 | `RunFormat.cs` | 187 | the formatting a run accumulates down the inline tree; owns `w:rPr` child order, and refuses the lot for a heading |
 | `DocxFrontMatter.cs` | 119 | the YAML keys Word has somewhere to put, plus `version` |
-| `HighlightPalette.cs` | 117 | hljs class to GitHub-light hex |
+| `HighlightPalette.cs` | 132 | hljs class to color theme syntax slot, the same groups as `syntax.css` |
+| `DocxColors.cs` | 97 | the color theme's light palette as Word RGB; every style and run color is read from it |
 | `BookmarkTable.cs` | 112 | heading bookmarks and internal anchor links |
 | `Measure.cs` | 88 | twips, EMU, usable width and height |
-| `DocxTheme.cs` | 87 | `theme1.xml`, accent1 patched to Marqora teal |
+| `DocxTheme.cs` | 96 | `theme1.xml`; accent 1 and the hyperlink take the theme's link color, accents 2 to 6 its callout bars |
 | `DocxSettings.cs` | 84 | `settings.xml`, including `updateFields` |
 | `XmlSafeText.cs` | 83 | strips what XML cannot carry |
 | `StyleIds.cs` | 72 | every style id in one place |
@@ -264,7 +265,7 @@ by styleId. Getting that wrong makes the style vanish from Word's gallery.
 | Style | Notes |
 | --- | --- |
 | docDefaults | `After="160"` (8pt), `Line="278"` — Word's own paragraph spacing |
-| `Heading1..6` | theme fonts, accent1 shaded/tinted per level, `numPr` when numbering is on |
+| `Heading1..6` | theme fonts, the color theme's own color per level as a plain value (no `themeColor`, which would outrank it), a rule under level 2, `numPr` when numbering is on |
 | `TOC1..3` | ordinary body text with an indent per level. Without these the contents wear the formatting of the headings they came from — bold, heading face, a different size every line |
 | `TOCHeading` | see above |
 | `MarqoraCode` | shading and border from the theme's code-block slots, on all four sides at **8pt space**, `Before/After 160`, `ContextualSpacing`, mono, `NoProof`, **not bold** |

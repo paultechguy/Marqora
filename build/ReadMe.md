@@ -17,9 +17,9 @@ dot-sourced by the others rather than invoked.
 
 ## Checks
 
-Run these before you commit. `Add-FileHeaders.ps1`, `Set-AmericanSpelling.ps1` and
-`Update-ThemeSlotTable.ps1` rewrite what they own when run with no arguments;
-`Test-ButtonStandards.ps1`, `Test-NetworkClaim.ps1` and
+Run these before you commit. `Add-FileHeaders.ps1`, `Set-AmericanSpelling.ps1`,
+`Update-ThemeSlotTable.ps1` and `Update-HomepageThemes.ps1` rewrite what they own when run
+with no arguments; `Test-ButtonStandards.ps1`, `Test-NetworkClaim.ps1` and
 `Test-WebShell.ps1` only ever report, and their `-Check` changes the exit code rather than
 the output.
 
@@ -29,6 +29,7 @@ the output.
 | `Set-AmericanSpelling.ps1` | Rewrites British spellings to American ones. The word list is deliberately short and sits at the top of the script — add to it when a word actually turns up. |
 | `Test-ButtonStandards.ps1` | Checks the app's buttons against `docs\Button-App-Standards.md`: inline sizes, unstyled buttons, hard-coded colors. The mechanical half only; the document's checklist covers the rest. |
 | `Test-NetworkClaim.ps1` | Checks that nothing still carries the retired absolute claim about network access. Marqora is *offline by default* and *does nothing on its own*; it no longer claims to make no calls at all, because a Folio collects pictures from the web when asked. Carries a curated list of reader-facing surfaces and an allowlist of statements that are still true, so it reports real drift rather than thirty correct sentences. A release gate. |
+| `Update-HomepageThemes.ps1` | Rewrites the color theme swatches on `docs\index.html` from the theme files in `src\PaulTechGuy.MQ.Themes\Themes\`: each theme's heading color and five accents, light and dark, in the app's own order (Default first, then by name). Only the block between the `theme-strip` markers is written. Run it after adding a theme; `-Check` reports a stale page and exits non-zero. |
 | `Update-ThemeSlotTable.ps1` | Rewrites the slot table and the JSON skeleton in `docs\ColorThemes-Authoring.md` from the color theme slot list in `src\PaulTechGuy.MQ.Themes\ThemeSlots.cs`. The generating is done by `AuthoringDocumentTests`, which reads the list as the compiler sees it, so there is no second copy of it here; this runs those tests with the write switch set. `-Check` only reports. |
 | `Test-WebShell.ps1` | Checks that the preview shell's JavaScript parses and that every name it uses exists: `node --check` for syntax, then eslint's `no-undef` for names, over the webshell folder with the vendor bundle excluded. The shell is the one part of the tree the C# compiler cannot see, and a name reached from the wrong scope is a ReferenceError that waits until the line runs. Needs Node.js; without it the script says so and exits 0. Fetches `eslint@9` through `npx` on the first run and serves it from the npx cache after that. |
 
@@ -108,6 +109,7 @@ of the run unless `-KeepStaging` is passed.
 | `Test-ButtonStandards.ps1` | — | — | — | reads `src\PaulTechGuy.MQ.App\`, `webshell\` |
 | `Test-NetworkClaim.ps1` | — | — | — | reads the whole tree; writes nothing |
 | `Test-WebShell.ps1` | — | — | — | reads `webshell\`, vendor excluded; writes nothing |
+| `Update-HomepageThemes.ps1` | — | — | — | reads `src\PaulTechGuy.MQ.Themes\Themes\`; rewrites one marked block in `docs\index.html` |
 | `Update-ThemeSlotTable.ps1` | — | — | — | rewrites two marked blocks in `docs\ColorThemes-Authoring.md` |
 
 `Publish-Release.ps1` reaches `installer\` and both artifacts folders only through the scripts

@@ -146,6 +146,28 @@ public sealed class ShippedThemeTests
             .ShouldBeEmpty($"{id} ({mode})");
     }
 
+    /// <summary>
+    /// The highlight is a color. A ==highlight== is the one fill whose whole job is to stand out
+    /// from its surroundings, and a neutral gray does not - it reads as a stain. It also passes
+    /// every contrast check, which is how a drafting bug once handed four themes a gray dark
+    /// highlight while all the tests stayed green. The spread between the strongest and weakest
+    /// channel is the cheapest honest measure of "has a hue".
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ThemesAndModes))]
+    public void The_highlight_has_a_hue(string id, PaletteMode mode)
+    {
+        ThemePalette palette = ThemeCatalog.Load().Find(id).PaletteFor(mode);
+        string hex = palette["mark-fill"];
+
+        int[] channels = [Channel(hex, 1), Channel(hex, 3), Channel(hex, 5)];
+
+        (channels.Max() - channels.Min()).ShouldBeGreaterThanOrEqualTo(24, $"{id} ({mode}) mark-fill {hex} is a gray");
+    }
+
+    private static int Channel(string hex, int at) =>
+        int.Parse(hex.AsSpan(at, 2), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+
     [Fact]
     public void The_catalog_reads_the_shipped_themes_without_a_problem() =>
         ThemeCatalog.Load().Problems.ShouldBeEmpty();

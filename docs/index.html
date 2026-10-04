@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Marqora — a local-first markdown editor for Windows</title>
-<meta name="description" content="Marqora is a markdown editor and previewer for Windows 11 with live split-pane preview, Mermaid diagrams and KaTeX math -- built on one rule: nothing happens that you didn't decide. No telemetry, no account, ever.">
+<meta name="description" content="Marqora is a markdown editor and previewer for Windows 11 with live split-pane preview, Mermaid diagrams, KaTeX math and color themes that carry into every export -- built on one rule: nothing happens that you didn't decide. No telemetry, no account, ever.">
 <meta property="og:title" content="Marqora">
 <meta property="og:description" content="A markdown editor for Windows that makes exactly one promise: nothing you write here goes anywhere else.">
 <meta property="og:type" content="website">
@@ -144,6 +144,22 @@
   .feature-tile h3{ font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); margin: 0; }
   .feature-tile p{ font-size: 0.93rem; line-height: 1.55; color: var(--ink-soft); margin: 0; }
 
+
+  /* color themes */
+  .themes{ margin-top: 34px; padding-top: 30px; border-top: 1px solid var(--line); }
+  .themes h3{ font-family: var(--serif-display); font-weight: 600; font-size: clamp(1.25rem, 1.2vw + 0.9rem, 1.6rem); line-height: 1.2; margin: 0 0 10px; max-width: 30ch; }
+  .themes .themes-sub{ color: var(--ink-soft); font-size: 1rem; line-height: 1.65; max-width: 62ch; margin: 0 0 8px; }
+  .theme-strip{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 22px 18px; margin-top: 26px; }
+  @media (max-width: 900px){ .theme-strip{ grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px){ .theme-strip{ grid-template-columns: repeat(2, 1fr); } }
+  .theme-card{ display:flex; flex-direction:column; gap: 8px; }
+  .theme-pair{ display:grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .theme-half{ padding: 10px 10px 11px; display:flex; flex-direction:column; gap: 9px; }
+  .theme-half .aa{ font-family: var(--serif-display); font-weight: 600; font-size: 1.55rem; line-height: 1; }
+  .sws{ display:flex; gap: 4px; }
+  .sw{ width: 8px; height: 8px; border-radius: 50%; display:block; }
+  .theme-name{ font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+
   /* closing */
   .closing{ padding-block: 52px; border-top: 1px solid var(--line); max-width: 900px; }
   .closing p{ max-width: 66ch; font-size: 1.03rem; line-height: 1.7; margin: 0 0 20px; }
@@ -204,9 +220,9 @@
   </header>
 
   <section class="hero">
-    <p class="kicker">A markdown editor for Windows 11</p>
+    <p class="kicker">Your markdown editor for Windows 11</p>
     <h1>Nothing you write here goes anywhere else.</h1>
-    <p class="standfirst">Split-pane editing with live preview, Mermaid diagrams, KaTeX math, real find-and-replace — the whole modern set, built to be used every day rather than demonstrated once. And underneath all of it, one rule: nothing happens that you didn't decide. No telemetry, no account. Ever.</p>
+    <p class="standfirst">Split-pane editing with live preview, Mermaid diagrams, KaTeX math, color themes, beautiful Word exports, real find-and-replace — the whole modern set, built to be used every day rather than demonstrated once. And underneath all of it, one rule: nothing happens that you didn't decide. No telemetry, no account. Ever.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/paultechguy/Marqora/releases/latest">Download for Windows &rarr;</a>
       <a class="btn btn-ghost" href="https://github.com/paultechguy/Marqora">View source on GitHub</a>
@@ -281,12 +297,25 @@
     <p class="kicker">The short version</p>
     <h2>What's actually in the box</h2>
     <p class="sub">Everything below ships in the zip, works offline, and is reachable from the keyboard — the modern set in full, with nothing held back for a paid tier that doesn't exist.</p>
+
     <div class="feature-grid">
 
       <div class="feature-tile">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="8.5" height="16" rx="1"/><rect x="13.5" y="4" width="8.5" height="16" rx="1"/></svg>
         <h3>Split view</h3>
         <p>Source and rendered preview side by side, scrolling in lockstep through source line numbers.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a9 9 0 1 0 0 18c1.3 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.4-4-7-9-7z"/><circle cx="7.6" cy="11.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="10.2" cy="7.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.6" cy="7" r="1.1" fill="currentColor" stroke="none"/></svg>
+        <h3>Color themes</h3>
+        <p>Palettes for headings, links, callouts, tables, code and diagrams: use one for the preview, for your exports, or a different one for each. Point at one on the menu bar to see it live. Your files are never touched.</p>
+      </div>
+
+      <div class="feature-tile">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" opacity="0.28" stroke="none"/><line x1="12" y1="3.5" x2="12" y2="20.5"/></svg>
+        <h3>Light, dark or system</h3>
+        <p>Mica, an extended title bar and a theme that tracks Windows as it changes &mdash; diagrams included. Dark is a screen setting: whatever you print, export or copy stays light.</p>
       </div>
 
       <div class="feature-tile">
@@ -378,7 +407,58 @@
         <h3>Keyboard-first</h3>
         <p>Every command has a shortcut. Alt drives the whole menu bar if you'd rather not reach for the mouse.</p>
       </div>
-
+    </div>
+    <div class="themes">
+      <h3>Color, without touching your file</h3>
+      <p class="themes-sub">Markdown is mostly gray. Pick a color theme and headings, links, callouts, tables, code and diagrams take its colors &mdash; in light and in dark, in the preview and in everything you print, export or copy.</p>
+      <div class="theme-strip">
+        <!-- theme-strip:start -->
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Default, light"><b class="aa" style="color:#1b1b1b">Aa</b><span class="sws"><i class="sw" style="background:#2f7680"></i><i class="sw" style="background:#1a7f37"></i><i class="sw" style="background:#8250df"></i><i class="sw" style="background:#9a6700"></i><i class="sw" style="background:#cd2a39"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Default, dark"><b class="aa" style="color:#e6e6e6">Aa</b><span class="sws"><i class="sw" style="background:#7fcdd5"></i><i class="sw" style="background:#6fce8a"></i><i class="sw" style="background:#c9a6ff"></i><i class="sw" style="background:#e0b341"></i><i class="sw" style="background:#ff7b72"></i></span></div></div>
+          <span class="theme-name">Default</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Ember, light"><b class="aa" style="color:#3a2a24">Aa</b><span class="sws"><i class="sw" style="background:#b5501a"></i><i class="sw" style="background:#6b8e23"></i><i class="sw" style="background:#8e3b6e"></i><i class="sw" style="background:#c9930a"></i><i class="sw" style="background:#b3261e"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Ember, dark"><b class="aa" style="color:#dacdc8">Aa</b><span class="sws"><i class="sw" style="background:#e7b093"></i><i class="sw" style="background:#c0da8b"></i><i class="sw" style="background:#cd98b9"></i><i class="sw" style="background:#edcc78"></i><i class="sw" style="background:#e59995"></i></span></div></div>
+          <span class="theme-name">Ember</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Forest, light"><b class="aa" style="color:#1e4d2b">Aa</b><span class="sws"><i class="sw" style="background:#2b7a3b"></i><i class="sw" style="background:#5a8f29"></i><i class="sw" style="background:#7b4f8a"></i><i class="sw" style="background:#b7791f"></i><i class="sw" style="background:#8a3b12"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Forest, dark"><b class="aa" style="color:#9fd4a8">Aa</b><span class="sws"><i class="sw" style="background:#8fd19e"></i><i class="sw" style="background:#a5d36b"></i><i class="sw" style="background:#c9a3dc"></i><i class="sw" style="background:#e5b45a"></i><i class="sw" style="background:#f0a46c"></i></span></div></div>
+          <span class="theme-name">Forest</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Nordic, light"><b class="aa" style="color:#2e3f55">Aa</b><span class="sws"><i class="sw" style="background:#3b6e9e"></i><i class="sw" style="background:#4f8a74"></i><i class="sw" style="background:#8a5a8e"></i><i class="sw" style="background:#b08a3a"></i><i class="sw" style="background:#8a4a6e"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Nordic, dark"><b class="aa" style="color:#c5d0dd">Aa</b><span class="sws"><i class="sw" style="background:#a3bdd6"></i><i class="sw" style="background:#a1c4b7"></i><i class="sw" style="background:#bfa4c1"></i><i class="sw" style="background:#d3be92"></i><i class="sw" style="background:#ceacbf"></i></span></div></div>
+          <span class="theme-name">Nordic</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Ocean, light"><b class="aa" style="color:#0b3d5c">Aa</b><span class="sws"><i class="sw" style="background:#0b6aa2"></i><i class="sw" style="background:#1a8a6e"></i><i class="sw" style="background:#5b5fc7"></i><i class="sw" style="background:#c27c0e"></i><i class="sw" style="background:#b4492f"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Ocean, dark"><b class="aa" style="color:#b2d8f0">Aa</b><span class="sws"><i class="sw" style="background:#8cc9ee"></i><i class="sw" style="background:#86dfc9"></i><i class="sw" style="background:#9395d2"></i><i class="sw" style="background:#ebbf7a"></i><i class="sw" style="background:#dea99c"></i></span></div></div>
+          <span class="theme-name">Ocean</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Orchid, light"><b class="aa" style="color:#4a1f5c">Aa</b><span class="sws"><i class="sw" style="background:#8b3a9e"></i><i class="sw" style="background:#2f8a6a"></i><i class="sw" style="background:#a83a8a"></i><i class="sw" style="background:#b07a1a"></i><i class="sw" style="background:#a8326e"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Orchid, dark"><b class="aa" style="color:#d9bee4">Aa</b><span class="sws"><i class="sw" style="background:#cda3d7"></i><i class="sw" style="background:#93d2bc"></i><i class="sw" style="background:#d293c1"></i><i class="sw" style="background:#e3c082"></i><i class="sw" style="background:#db9ebd"></i></span></div></div>
+          <span class="theme-name">Orchid</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Pastel, light"><b class="aa" style="color:#5a6aa8">Aa</b><span class="sws"><i class="sw" style="background:#5a6fbf"></i><i class="sw" style="background:#7fc8a0"></i><i class="sw" style="background:#b9a0e6"></i><i class="sw" style="background:#efc070"></i><i class="sw" style="background:#b24b85"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Pastel, dark"><b class="aa" style="color:#c5cadd">Aa</b><span class="sws"><i class="sw" style="background:#a4aed6"></i><i class="sw" style="background:#99ccb0"></i><i class="sw" style="background:#a88dd8"></i><i class="sw" style="background:#e6c07f"></i><i class="sw" style="background:#d4a6bf"></i></span></div></div>
+          <span class="theme-name">Pastel</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Slate, light"><b class="aa" style="color:#2b2f36">Aa</b><span class="sws"><i class="sw" style="background:#2f6690"></i><i class="sw" style="background:#4a7a5a"></i><i class="sw" style="background:#5a5a8a"></i><i class="sw" style="background:#a07a2a"></i><i class="sw" style="background:#8a3a3a"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Slate, dark"><b class="aa" style="color:#cdd0d6">Aa</b><span class="sws"><i class="sw" style="background:#a0c1d9"></i><i class="sw" style="background:#a3c2ad"></i><i class="sw" style="background:#a5a5c0"></i><i class="sw" style="background:#d8c08d"></i><i class="sw" style="background:#d4a6a6"></i></span></div></div>
+          <span class="theme-name">Slate</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Sunset, light"><b class="aa" style="color:#a8264f">Aa</b><span class="sws"><i class="sw" style="background:#c2410c"></i><i class="sw" style="background:#2f9a6a"></i><i class="sw" style="background:#b0306a"></i><i class="sw" style="background:#d9890a"></i><i class="sw" style="background:#c81e5a"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Sunset, dark"><b class="aa" style="color:#eab8c8">Aa</b><span class="sws"><i class="sw" style="background:#eea88b"></i><i class="sw" style="background:#90d5b6"></i><i class="sw" style="background:#d88daf"></i><i class="sw" style="background:#eec077"></i><i class="sw" style="background:#e693b0"></i></span></div></div>
+          <span class="theme-name">Sunset</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Sweetheart, light"><b class="aa" style="color:#8a0f30">Aa</b><span class="sws"><i class="sw" style="background:#c2185b"></i><i class="sw" style="background:#2f9a6a"></i><i class="sw" style="background:#8a3a9e"></i><i class="sw" style="background:#d4880a"></i><i class="sw" style="background:#c2185b"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Sweetheart, dark"><b class="aa" style="color:#f0b2c3">Aa</b><span class="sws"><i class="sw" style="background:#e991b3"></i><i class="sw" style="background:#90d5b6"></i><i class="sw" style="background:#c594d1"></i><i class="sw" style="background:#eec177"></i><i class="sw" style="background:#e991b3"></i></span></div></div>
+          <span class="theme-name">Sweetheart</span>
+        </div>
+        <div class="theme-card">
+          <div class="theme-pair"><div class="theme-half" style="background:#ffffff" aria-label="Vintage Press, light"><b class="aa" style="color:#2b2218">Aa</b><span class="sws"><i class="sw" style="background:#7a2a1a"></i><i class="sw" style="background:#4a6a3a"></i><i class="sw" style="background:#6a3a5a"></i><i class="sw" style="background:#a8782a"></i><i class="sw" style="background:#8a2a1a"></i></span></div><div class="theme-half" style="background:#1f1f1f" aria-label="Vintage Press, dark"><b class="aa" style="color:#dcd2c6">Aa</b><span class="sws"><i class="sw" style="background:#e1a498"></i><i class="sw" style="background:#acc69f"></i><i class="sw" style="background:#c69fb9"></i><i class="sw" style="background:#dabc8b"></i><i class="sw" style="background:#e3a196"></i></span></div></div>
+          <span class="theme-name">Vintage Press</span>
+        </div>
+        <!-- theme-strip:end -->
+      </div>
     </div>
   </section>
 
