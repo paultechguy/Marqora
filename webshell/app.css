@@ -1282,6 +1282,18 @@ a.mq-blocked-media {
 .mq-preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
 
 /*
+  A numbered display - align, gather, \tag - drew a scroll bar for no visible reason.
+
+  KaTeX pins the equation numbers to the right edge (.katex-tag, absolute, right: 0), and the
+  stack inside it carries KaTeX's old Safari workaround: a 2px spacer cell cancelled by a
+  -2px right margin. Everywhere else the two net out; at the right edge the margin lets the
+  spacer hang 2px past the box, and the overflow-x above turns those 2px into a scroll bar
+  with nothing to scroll. Keeping the spacer inside the number column moves the numbers 2px
+  in and changes nothing else, so an equation that really is too wide still scrolls.
+*/
+.mq-preview .katex-display > .katex > .katex-html > .katex-tag .vlist-t2 { margin-right: 0; }
+
+/*
   highlight.js themes paint their own surface on the code element. The Marqora pre already
   supplies the surface, so only the token colors from the theme are wanted here.
 */

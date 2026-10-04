@@ -43,6 +43,10 @@ section-number commands, Undo, Redo, Replace, and the editor's right-click edits
 lit on a read-only document. The confirmation for **Format All Open Documents** now counts
 only the documents it can change, and says how many read-only ones it will skip.
 
+**Numbered equations no longer show a stray scroll bar.** An `align` or other numbered display
+math block could draw a horizontal scroll bar under itself with nothing to scroll, because the
+equation numbers reached two pixels past the edge of the page.
+
 **Long notes in sequence diagrams stay inside their box.** A note spanning two participants
 used to run past both edges of its box when the text was long. It now wraps to fit, in the
 preview, the cheatsheet and exports.
