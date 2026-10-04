@@ -2047,6 +2047,77 @@
   }
 
   /*
+    Dark mode, and a band the author painted light.
+
+    A sequence diagram's `rect rgb(...)` region is a highlight behind the messages, and
+    authors pick pale colors for it - they are writing for a white page. Under mermaid's dark
+    theme the messages, arrows and dashed lines over it are drawn in light gray, so a pale band
+    made them all but disappear. The author's color is kept as a hue and flipped in lightness:
+    a pale blue band becomes a deep blue one, and the light ink reads on it again. A band that
+    is already dark is left exactly as written.
+
+    The screen drawing only, and only while the app is dark. Prints and exports take the light
+    drawing, where the pale color was right all along, and a diagram that names its own theme
+    keeps it - that is a light drawing too, and its ink is dark.
+  */
+  var BAND_FLOOR = 0.18;
+
+  /// True when the definition picks a mermaid theme of its own, in an init directive or in
+  /// frontmatter config. themeVariables alone does not count: that tunes the app's theme.
+  function namesOwnTheme(source) {
+    var directives = source.match(/%%\{[\s\S]*?\}%%/g) || [];
+
+    for (var i = 0; i < directives.length; i++) {
+      if (/\btheme["']?\s*:/.test(directives[i])) { return true; }
+    }
+
+    var front = /^\s*---\r?\n([\s\S]*?)\r?\n\s*---/.exec(source);
+
+    return !!front && /^\s*theme\s*:/m.test(front[1]);
+  }
+
+  function darkenLightBands(node, source) {
+    if (mermaidTheme() !== 'dark' || namesOwnTheme(source)) { return; }
+
+    var bands = node.querySelectorAll(':scope > svg rect.rect');
+
+    for (var i = 0; i < bands.length; i++) {
+      var rgb = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/
+        .exec(getComputedStyle(bands[i]).fill);
+
+      if (!rgb) { continue; }
+
+      var hsl = toHsl(+rgb[1], +rgb[2], +rgb[3]);
+
+      if (hsl.l <= 0.5) { continue; }
+
+      var alpha = rgb[4] === undefined ? 1 : +rgb[4];
+      var lightness = Math.max(BAND_FLOOR, 1 - hsl.l);
+
+      bands[i].style.fill = 'hsla(' + Math.round(hsl.h) + ', ' + Math.round(hsl.s * 100) + '%, '
+        + Math.round(lightness * 100) + '%, ' + alpha + ')';
+    }
+  }
+
+  function toHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+
+    var max = Math.max(r, g, b);
+    var min = Math.min(r, g, b);
+    var l = (max + min) / 2;
+    var d = max - min;
+
+    if (d === 0) { return { h: 0, s: 0, l: l }; }
+
+    var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    var h = max === r ? (g - b) / d + (g < b ? 6 : 0)
+      : max === g ? (b - r) / d + 2
+      : (r - g) / d + 4;
+
+    return { h: h * 60, s: s, l: l };
+  }
+
+  /*
     `output` is what the off-screen export pass passes: the markup is leaving the app, so it
     gets the light drawing alone, from the output mermaid, and never the screen's.
   */
@@ -2070,12 +2141,14 @@
       // Re-rendering an unchanged diagram on every keystroke is the single biggest
       // cost in a document full of diagrams, so cache the SVG by its definition.
       place(cached);
+      darkenLightBands(node, source);
       attachOutputCopy(node, source, key);
       return Promise.resolve();
     } else {
       rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), source).then(function (result) {
         mermaidCache[source] = result.svg;
         place(result.svg);
+        darkenLightBands(node, source);
         attachOutputCopy(node, source, key);
       });
     }

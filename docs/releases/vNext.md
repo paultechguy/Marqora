@@ -47,6 +47,11 @@ only the documents it can change, and says how many read-only ones it will skip.
 math block could draw a horizontal scroll bar under itself with nothing to scroll, because the
 equation numbers reached two pixels past the edge of the page.
 
+**Colored regions in a sequence diagram are readable in dark mode.** A `rect` region painted a
+pale color, which is what most authors choose, left the messages and arrows over it nearly
+invisible in dark mode. Marqora now shows such a region as a deep shade of the same color on
+screen, so its contents read clearly. Prints and exports keep the color as written.
+
 **Long notes in sequence diagrams stay inside their box.** A note spanning two participants
 used to run past both edges of its box when the text was long. It now wraps to fit, in the
 preview, the cheatsheet and exports.
