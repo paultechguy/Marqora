@@ -127,6 +127,25 @@ public sealed class ShippedThemeTests
         Contrast.Ratio(text, page).ShouldBeGreaterThanOrEqualTo(Contrast.Text, $"{id} ({mode})");
     }
 
+    /// <summary>
+    /// No text slot is pure black or pure white. Those pass every contrast check while throwing
+    /// the theme's hue away, and a text color that lands on one has almost always been pushed as
+    /// far as it would go by something meant to nudge it - which is how a draft of the second
+    /// batch of themes once passed every other test here with most of its dark palette white.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ThemesAndModes))]
+    public void No_text_slot_is_pure_black_or_white(string id, PaletteMode mode)
+    {
+        ThemePalette palette = ThemeCatalog.Load().Find(id).PaletteFor(mode);
+
+        ThemeSlots.All
+            .Where(slot => slot.Contrast is not null && slot.Contrast.Against != ThemeSlots.BodyText)
+            .Where(slot => palette.TryGet(slot.Id, out string hex) && hex is "#000000" or "#ffffff")
+            .Select(slot => slot.Id)
+            .ShouldBeEmpty($"{id} ({mode})");
+    }
+
     [Fact]
     public void The_catalog_reads_the_shipped_themes_without_a_problem() =>
         ThemeCatalog.Load().Problems.ShouldBeEmpty();
