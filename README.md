@@ -749,8 +749,10 @@ dismiss the window with its own close button.
 
 It is a real window rather than a dialog, so you can leave it beside the editor and keep
 typing. Its size, position and scroll offset are remembered between sessions, though it
-always starts closed. The content is `webshell/cheatsheet.md`, rendered through the same
-pipeline as the preview — edit that file to change what it says.
+always starts closed. It wears the color theme you chose, so its examples look the way your
+own documents do, and it changes with the theme while it is open. The content is
+`webshell/cheatsheet.md`, rendered through the same pipeline as the preview — edit that file
+to change what it says.
 
 **Welcome document**
 

@@ -51,6 +51,17 @@
 
   var theme = 'Dark';
 
+  /*
+    The color theme on screen and the one exports are drawn in, as the host sends them: each
+    { light: {...}, dark: {...} }, with the ids that say whether they are the same theme. Null
+    until the first setTheme, when the diagrams keep mermaid's stock look.
+  */
+  var colorTheme = null;
+  var exportColorTheme = null;
+  var colorThemeKey = '';
+  var screenThemeId = '';
+  var exportThemeId = '';
+
   /* Set once the content has been rendered and any saved scroll offset restored. */
   var contentReady = false;
 
@@ -142,6 +153,26 @@
 
   var diagramSeq = 0;
 
+  /// The definition the screen draws: the color theme's diagram colors, in the window's mode.
+  function screenDefinition(source) {
+    var dark = theme === 'Dark';
+    var palette = colorTheme ? (dark ? colorTheme.dark : colorTheme.light) : null;
+
+    return window.mqColorTheme.themedDefinition(source, palette, dark ? 'dark' : 'light');
+  }
+
+  /// The definition a print draws: the export theme's light colors, because paper is white.
+  function outputDefinition(source) {
+    return window.mqColorTheme.themedDefinition(
+      source, exportColorTheme ? exportColorTheme.light : null, 'light');
+  }
+
+  /// True when a print cannot show the drawing on screen: the window is dark, or exports are
+  /// drawn in a theme of their own. The same test as needsOutputCopy in app.js.
+  function needsOutputCopy() {
+    return theme === 'Dark' || exportThemeId !== screenThemeId;
+  }
+
   function renderDiagrams() {
     var nodes = els.article.querySelectorAll('pre.mermaid:not([data-processed])');
     if (nodes.length === 0) { return Promise.resolve(); }
@@ -163,13 +194,15 @@
   function renderOneLater(mermaid, node) {
     return function () {
       var source = node.getAttribute('data-mermaid-source') || node.textContent;
+      var id = 'mq-cheatsheet-diagram-' + (++diagramSeq);
 
-      return mermaid.render('mq-cheatsheet-diagram-' + (++diagramSeq), source).then(function (result) {
+      return mermaid.render(id, screenDefinition(source)).then(function (result) {
         node.innerHTML = result.svg;
         node.setAttribute('data-processed', 'true');
+        node.setAttribute('data-drawing', id);
 
         // Not waited on: the next diagram need not sit behind this one's light drawing.
-        attachOutputCopy(node, source);
+        attachOutputCopy(node, source, id);
       }).catch(function (err) {
         var message = document.createElement('span');
         message.className = 'mq-mermaid-error';
@@ -183,15 +216,20 @@
 
   /*
     While the page is dark, each diagram also carries its light drawing, which app.css prints
-    in place of the dark one: dark mode is a screen setting, and paper is white. The same
-    arrangement as the preview, built from the same shared light mermaid.
-  */
-  function attachOutputCopy(node, source) {
-    if (theme !== 'Dark') { return Promise.resolve(); }
+    in place of the dark one: dark mode is a screen setting, and paper is white. In light mode
+    too when exports are drawn in a theme of their own, since the drawing on screen is then the
+    wrong theme for paper. The same arrangement as the preview, built from the same shared
+    light mermaid.
 
-    return window.mqDiagramOutput.render(source).then(function (svg) {
+    Placed only on the drawing it was asked for: a theme change can redraw the diagram while
+    this one is still being drawn, and that newer drawing asks for its own.
+  */
+  function attachOutputCopy(node, source, drawing) {
+    if (!needsOutputCopy()) { return Promise.resolve(); }
+
+    return window.mqDiagramOutput.render(outputDefinition(source)).then(function (svg) {
       var screen = node.querySelector(':scope > svg');
-      if (!screen || theme !== 'Dark') { return; }
+      if (!screen || node.getAttribute('data-drawing') !== drawing || !needsOutputCopy()) { return; }
 
       var holder = document.createElement('div');
       holder.className = 'mq-diagram-output';
@@ -205,7 +243,9 @@
 
   /*
     A theme change has to redraw the diagrams: mermaid bakes its palette into the SVG it
-    produces, so restyling the page would leave them the color of the previous theme.
+    produces, so restyling the page would leave them the color of the previous theme. Light
+    and dark, the color theme and the export theme all come here. Each diagram keeps its old
+    drawing until the new one replaces it, so nothing turns back into text on the way.
   */
   function redrawDiagrams() {
     if (!mermaidReady) { return; }
@@ -438,20 +478,36 @@
       }
 
       /*
-        The colors the document is drawn in: always Default's, because the cheatsheet shows
-        what Marqora does rather than being one of the reader's documents. Before the guard
-        for the same reason as the accent - the first setTheme is the only one that brings it.
+        The colors the page is drawn in: the color theme the user chose, so the examples look
+        the way their own documents do, and the export theme's light palette for print. Every
+        setTheme brings both; asking for the pair already showing costs a comparison.
       */
-      if (p.colorTheme) {
-        window.mqColorTheme.apply(p.colorTheme, null, 'cheatsheet');
+      var redraw = false;
+
+      if (p.colorTheme && p.colorThemeId) {
+        var key = p.colorThemeId + '|' + (p.exportColorThemeId || p.colorThemeId);
+
+        if (key !== colorThemeKey) {
+          colorTheme = p.colorTheme;
+          exportColorTheme = p.exportColorTheme || p.colorTheme;
+          screenThemeId = p.colorThemeId;
+          exportThemeId = p.exportColorThemeId || p.colorThemeId;
+          colorThemeKey = key;
+
+          window.mqColorTheme.apply(colorTheme, exportColorTheme, 'cheatsheet|' + key);
+          redraw = true;
+        }
       }
 
       var next = p.theme === 'Dark' ? 'Dark' : 'Light';
-      if (next === theme) { return; }
 
-      theme = next;
-      els.root.setAttribute('data-theme', theme === 'Dark' ? 'dark' : 'light');
-      redrawDiagrams();
+      if (next !== theme) {
+        theme = next;
+        els.root.setAttribute('data-theme', theme === 'Dark' ? 'dark' : 'light');
+        redraw = true;
+      }
+
+      if (redraw) { redrawDiagrams(); }
     },
 
     restoreScroll: function (p) {

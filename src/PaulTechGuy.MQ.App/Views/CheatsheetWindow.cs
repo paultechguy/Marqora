@@ -53,8 +53,11 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     private readonly IMarkdownRenderer _renderer;
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
-    private readonly ColorTheme _colorTheme;
+    private readonly ThemeCatalog _colorThemes;
     private readonly ILogger<CheatsheetWindow> _logger;
+
+    /// <summary>The color theme and export theme last sent, so a settings change that touches neither sends nothing.</summary>
+    private (string Screen, string Export) _sentColorThemes;
 
     private readonly WebView2 _webView = new();
 
@@ -73,7 +76,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         IMarkdownRenderer renderer,
         ISettingsService settings,
         IThemeService theme,
-        ColorTheme colorTheme,
+        ThemeCatalog colorThemes,
         IntPtr ownerHandle,
         ILogger<CheatsheetWindow> logger)
         : base("Cheatsheet", DefaultMinimumWidth, DefaultMinimumHeight, settings, theme, ownerHandle, logger)
@@ -82,7 +85,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         _renderer = renderer;
         _settings = settings;
         _theme = theme;
-        _colorTheme = colorTheme;
+        _colorThemes = colorThemes;
         _logger = logger;
 
         Title = "Markdown Cheatsheet";
@@ -104,6 +107,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         AppWindow.Closing += OnClosing;
 
         _theme.EffectiveThemeChanged += OnEffectiveThemeChanged;
+        _settings.SettingsChanged += OnSettingsChanged;
     }
 
     /// <summary>Where the cheatsheet was last left. See <see cref="AppSettings.CheatsheetPlacement"/>.</summary>
@@ -418,11 +422,16 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     /// which sends the same pair for the same reason - and the print shade with it, since
     /// this window prints too.
     ///
-    /// The color theme rides along for the same reason again: app.css names no document colors
-    /// either. It is always Default, because the cheatsheet shows what Marqora does rather than
-    /// being one of the reader's documents.
+    /// The color themes ride along for the same reason again: app.css names no document colors
+    /// either. The screen's theme, so the examples look the way the reader's own documents do,
+    /// and the export theme for the cheatsheet's print, which is an output like any other.
     /// </summary>
-    private void SendTheme(AppTheme theme) =>
+    private void SendTheme(AppTheme theme)
+    {
+        (ColorTheme screen, ColorTheme export) = ChosenColorThemes(_settings.Current);
+
+        _sentColorThemes = (screen.Id, export.Id);
+
         Send(
             "setTheme",
             new
@@ -430,8 +439,50 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                 theme = theme.ToString(),
                 accent = AccentColors.HexFor(theme),
                 accentPrint = AccentColors.LightHex,
-                colorTheme = ColorThemePayloads.Palettes(_colorTheme),
+                colorThemeId = screen.Id,
+                colorTheme = ColorThemePayloads.Palettes(screen),
+                exportColorThemeId = export.Id,
+                exportColorTheme = ColorThemePayloads.Palettes(export),
             });
+    }
+
+    /// <summary>
+    /// The theme on screen and the one exports are drawn in, read from settings the way
+    /// MainViewModel reads them: an export theme that is not in the catalog means the screen's.
+    /// </summary>
+    private (ColorTheme Screen, ColorTheme Export) ChosenColorThemes(AppSettings settings)
+    {
+        ColorTheme screen = _colorThemes.Find(settings.ColorTheme);
+        ColorTheme export = _colorThemes.Contains(settings.ExportColorTheme)
+            ? _colorThemes.Find(settings.ExportColorTheme)
+            : screen;
+
+        return (screen, export);
+    }
+
+    /// <summary>
+    /// Follows a color theme or export theme the user chose, from the gallery, the View menu or
+    /// Preferences. Settings rather than the preview host, because only a choice is saved: the
+    /// gallery's hover previews the main window and leaves this one alone.
+    /// </summary>
+    private void OnSettingsChanged(object? sender, AppSettings settings)
+    {
+        (ColorTheme screen, ColorTheme export) = ChosenColorThemes(settings);
+
+        if ((screen.Id, export.Id) == _sentColorThemes)
+        {
+            return;
+        }
+
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            SendTheme(_theme.Effective);
+        }
+        else
+        {
+            DispatcherQueue.TryEnqueue(() => SendTheme(_theme.Effective));
+        }
+    }
 
     private void RememberScroll(int top) =>
         _settings.Update(s => s with { CheatsheetScrollTop = top });
@@ -529,6 +580,7 @@ public sealed partial class CheatsheetWindow : PaletteWindow
         CapturePlacement();
 
         _theme.EffectiveThemeChanged -= OnEffectiveThemeChanged;
+        _settings.SettingsChanged -= OnSettingsChanged;
         AppWindow.Changed -= OnAppWindowChanged;
 
         if (_webView.CoreWebView2 is { } core)

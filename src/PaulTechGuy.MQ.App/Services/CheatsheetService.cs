@@ -120,7 +120,7 @@ public sealed class CheatsheetService(
                     renderer,
                     settings,
                     theme,
-                    colorThemes.Default,
+                    colorThemes,
                     window.WindowHandle,
                     loggerFactory.CreateLogger<CheatsheetWindow>());
 

@@ -672,8 +672,12 @@ into `app.css` twice.
 
 Marqora's teal is not a theme color. It belongs to the app: the outline row, the Find All tint,
 the cheatsheet, and the marks the preview draws to talk to the user (find hits, review marks,
-focus outlines). The cheatsheet always shows Default, because it documents Marqora rather than
-being one of the reader's documents.
+focus outlines). The cheatsheet's examples are a different matter: they show the color theme on
+screen, so a heading or a callout there looks the way it will in the reader's own documents, and
+its print takes the export theme's light palette like every other output. It follows a theme
+that is chosen, through `SettingsChanged`, and not the gallery's hover, which previews the main
+window alone. Its diagrams take the theme's colors through the same `themedDefinition` the
+preview uses, which lives in `color-theme.js` so the two pages cannot drift.
 
 ### Diagrams
 
