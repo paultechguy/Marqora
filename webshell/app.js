@@ -6333,6 +6333,9 @@
       - see diagram-raster.js - so a diagram copied from the page and the same diagram copied
       from its own window are one picture. An empty reply is still a reply: the host is
       waiting on this id and would otherwise sit there until its timeout.
+
+      `copy` is the menu item asking, which gets a margin around the drawing; the Word export
+      and rich-text copy do not. See toPngBase64 in diagram-raster.js.
     */
     requestDiagramPng: function (p) {
       whenOutputReady().then(function () {
@@ -6341,7 +6344,8 @@
 
         if (!svg) { return ''; }
 
-        return window.mqDiagramRaster.markupToPngBase64(svg.outerHTML, 2);
+        var raster = window.mqDiagramRaster;
+        return raster.markupToPngBase64(svg.outerHTML, 2, p.copy ? raster.copyMargin : 0);
       }).then(function (data) {
         post('diagramPng', { requestId: p.requestId, data: data });
       }).catch(function (err) {

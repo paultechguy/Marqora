@@ -11,6 +11,14 @@
   var MIN = 0.25;
   var MAX = 5;
 
+  /*
+    How far Fit may shrink a diagram, which is further than the zoom buttons go. A wide
+    flowchart can need well under 25% to fit across a window, and holding the fit at the
+    buttons' floor left it opening with its right side off-screen and a scrollbar, at a zoom
+    that read as though it had been fitted. Below this, the labels are past reading anyway.
+  */
+  var FIT_MIN = 0.05;
+
   // Familiar browser-zoom stops rather than a fixed multiplier, so the steps land on round
   // percentages the toolbar can show without rounding noise.
   var STOPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
@@ -38,6 +46,9 @@
   var natural = { width: 0, height: 0 };
   var zoom = 1;
 
+  // Whether the zoom is still the one fit() chose. See the resize observer below.
+  var fitted = false;
+
   function post(type, payload) {
     if (!webview) { return; }
     try {
@@ -49,8 +60,9 @@
 
   // ------------------------------------------------------------------- zoom
 
-  function clamp(value) {
-    return Math.min(MAX, Math.max(MIN, value));
+  /// Held to the toolbar's range, or to a lower floor when one is given: see FIT_MIN.
+  function clamp(value, floor) {
+    return Math.min(MAX, Math.max(floor || MIN, value));
   }
 
   function apply() {
@@ -66,13 +78,25 @@
     els.in.disabled = zoom >= MAX - 0.0001;
   }
 
-  function setZoom(value) {
-    zoom = clamp(value);
+  function setZoom(value, floor) {
+    zoom = clamp(value, floor);
     apply();
+  }
+
+  /// 100%, chosen by the user, which ends fit mode like any other zoom they pick.
+  function actualSize() {
+    fitted = false;
+    setZoom(1);
   }
 
   function step(direction) {
     var i;
+
+    // Already at or below the floor, which only a fit can reach: zooming out has nowhere to
+    // go, and falling through to setZoom(MIN) would zoom in instead.
+    if (direction < 0 && zoom <= MIN + 0.0001) { return; }
+
+    fitted = false;
 
     if (direction > 0) {
       for (i = 0; i < STOPS.length; i++) {
@@ -111,52 +135,42 @@
     made a maximized window look broken: the window filled the screen and the diagram stayed
     the size it always was, marooned in the middle of it. Enlarging costs nothing here
     because zoom sets the SVG's pixel dimensions rather than transforming it, so the geometry
-    is re-rendered at the new size and stays sharp all the way up. clamp() still holds the
-    result inside the 25% to 500% the toolbar knows how to show.
+    is re-rendered at the new size and stays sharp all the way up. The result is held between
+    FIT_MIN and the 500% ceiling, not at the buttons' 25% floor, so a very wide diagram
+    still fits.
+
+    The padding is the canvas's 16 on each side and two more for sub-pixel rounding. Without
+    those two, a diagram that fits exactly can overflow by a fraction of a pixel. The scrollbar
+    that appears takes height, which can add the second scrollbar, which takes width.
   */
   function fit() {
     if (!svg || !natural.width || !natural.height) { return; }
 
-    var padding = 32;
+    var padding = 34;
     var available = els.surface.getBoundingClientRect();
 
-    setZoom(clamp(Math.min(
+    fitted = true;
+    setZoom(Math.min(
       (available.width - padding) / natural.width,
-      (available.height - padding) / natural.height)));
+      (available.height - padding) / natural.height), FIT_MIN);
   }
 
   /*
-    A fit asked for by the host immediately after it maximized the window.
+    Fit mode: a window keeps its diagram fitted until the user picks a zoom of their own.
 
-    It cannot just be fit(). Maximizing resizes the WebView over on the host's thread, and
-    the surface in here has not been laid out again by the time the message arrives, so
-    measuring now would fit the diagram to the size the window has stopped being. So this
-    fits at once - which is the right answer when the window was already the size it is going
-    to be, and harmless when it was not - and arms a single refit for the resize still on its
-    way.
+    A window opens fitted, and the fit has to survive the window settling. The page loads
+    while the host is still sizing and activating the window, so the surface measured by the
+    first fit can be a size the window is about to stop being. A diagram fitted to that size
+    came up visibly too wide. The same is true of a maximize the host asks for: the message
+    arrives before the WebView has been laid out at its new size.
 
-    The arm is dropped after a moment either way. A window that turned out not to resize must
-    not carry a refit forward into the next thing the user does with its edge.
+    So every resize refits for as long as the zoom is the fitted one. Zooming in or out, or
+    asking for 100%, ends it; Fit to Window starts it again. Centering and panning leave it
+    alone, because neither changes the zoom.
   */
-  var pendingRefit = false;
-  var refitTimer = null;
-
-  function refit() {
-    fit();
-
-    pendingRefit = true;
-    if (refitTimer) { clearTimeout(refitTimer); }
-    refitTimer = setTimeout(function () { pendingRefit = false; }, 600);
-  }
-
   if (window.ResizeObserver) {
-    // A ResizeObserver calls back once as soon as it is given something to watch, long
-    // before any refit has been asked for. The flag starting false is what sits that out.
     new ResizeObserver(function () {
-      if (!pendingRefit) { return; }
-
-      pendingRefit = false;
-      fit();
+      if (fitted) { fit(); }
     }).observe(els.surface);
   }
 
@@ -181,8 +195,9 @@
     the window is light the two are the same markup, and only one is kept.
   */
   function setDiagram(markup, outputMarkup) {
-    // The first diagram is fitted to the window; later ones are edits of the one on screen,
-    // and refitting those would yank the zoom out from under someone mid-read.
+    // The first diagram is fitted to the window. Later ones are edits of the one on screen:
+    // still in fit mode they are fitted too, so a diagram that grows stays whole, but once
+    // the user has picked a zoom, refitting would yank it out from under them mid-read.
     var isFirst = svg === null;
 
     var scroll = { left: els.surface.scrollLeft, top: els.surface.scrollTop };
@@ -213,7 +228,7 @@
     svg.removeAttribute('width');
     svg.removeAttribute('height');
 
-    if (isFirst) {
+    if (isFirst || fitted) {
       fit();
       return;
     }
@@ -263,7 +278,7 @@
   function copyPng() {
     if (!output) { return; }
 
-    window.mqDiagramRaster.markupToPngBase64(output, 2).then(function (data) {
+    window.mqDiagramRaster.markupToPngBase64(output, 2, window.mqDiagramRaster.copyMargin).then(function (data) {
       post('diagramPng', { data: data });
     }).catch(function (err) {
       post('diagramPngError', { message: err.message });
@@ -289,7 +304,7 @@
   els.in.addEventListener('click', function () { step(1); });
   els.out.addEventListener('click', function () { step(-1); });
   els.fit.addEventListener('click', fit);
-  els.reset.addEventListener('click', function () { setZoom(1); });
+  els.reset.addEventListener('click', actualSize);
   els.center.addEventListener('click', center);
 
   els.surface.addEventListener('wheel', function (e) {
@@ -385,7 +400,7 @@
   window.addEventListener('keydown', function (e) {
     if (!e.ctrlKey) { return; }
 
-    if (e.key === '0') { e.preventDefault(); setZoom(1); }
+    if (e.key === '0') { e.preventDefault(); actualSize(); }
     else if (e.key === '+' || e.key === '=') { e.preventDefault(); step(1); }
     else if (e.key === '-') { e.preventDefault(); step(-1); }
   });
@@ -410,17 +425,11 @@
   function runCommand(name) {
     if (name === 'zoomIn') { step(1); }
     else if (name === 'zoomOut') { step(-1); }
-    else if (name === 'zoomReset') { setZoom(1); }
+    else if (name === 'zoomReset') { actualSize(); }
     else if (name === 'zoomFit') { fit(); }
-    else if (name === 'refit') { refit(); }
     else if (name === 'center') { center(); }
     else if (name === 'copyPng') { copyPng(); }
   }
-
-  // Refitting on every resize, for as long as the diagram is still at its fitted zoom, would
-  // need a mode flag; the simpler rule is to leave the user's zoom alone once they have
-  // chosen one. The observer above is not that flag - it fires once, for a refit the host
-  // asked for, and then goes quiet again.
 
   if (webview) {
     webview.addEventListener('message', function (e) {

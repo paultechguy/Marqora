@@ -155,10 +155,10 @@ public sealed partial class DiagramWindow : Window
     ///
     /// <paramref name="maximize"/> is applied here, before the WebView exists, and that
     /// ordering is the whole point of doing it here rather than after the window is shown.
-    /// The page fits the first diagram it is given to whatever its surface measures; taking
-    /// the window to its full size first means that measurement is already the right one,
-    /// and no refit is needed. <see cref="MaximizeAndFit"/> is the other case - a window
-    /// that is already open and has already fitted.
+    /// The page fits the first diagram it is given and stays fitted through any resize until
+    /// the user picks a zoom, so a window still settling when the page loads ends up fitted
+    /// to the size it settles at. Taking it to full size first saves a refit, nothing more.
+    /// <see cref="MaximizeAndFit"/> is the other case - a window that is already open.
     /// </summary>
     public async Task InitializeAsync(RectInt32 placement, bool maximize)
     {
@@ -332,17 +332,17 @@ public sealed partial class DiagramWindow : Window
     /// <summary>
     /// Takes an already-open window to full size and refits its diagram to it.
     ///
-    /// The refit has to be asked of the page rather than done from here, and it cannot be
-    /// the plain "fit to window" the menu sends. Maximizing resizes the WebView on this
-    /// thread, but the page's own layout has not caught up by the time a message posted now
-    /// arrives, so a fit measured then would fit to the size the window has just stopped
-    /// being. The page's "refit" fits immediately and again on the resize when it lands,
-    /// which covers both a window that grew and one that was already this size.
+    /// The refit has to be asked of the page rather than done from here. Maximizing resizes
+    /// the WebView on this thread, but the page's own layout has not caught up by the time a
+    /// message posted now arrives, so a fit measured then is a fit to the size the window has
+    /// just stopped being. The menu's plain "fit to window" is still the right message: it
+    /// puts the page in fit mode, and fit mode refits on the resize when it lands. See
+    /// fit mode in diagram.js.
     /// </summary>
     public void MaximizeAndFit()
     {
         MaximizeWindow();
-        Send("command", new { name = "refit" });
+        Send("command", new { name = "zoomFit" });
     }
 
     /// <summary>

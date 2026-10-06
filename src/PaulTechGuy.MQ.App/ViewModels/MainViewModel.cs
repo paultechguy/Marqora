@@ -7413,7 +7413,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         KeyValuePair<string, byte[]?>[] fetched = await Task.WhenAll(
             hashes.Select(async hash => new KeyValuePair<string, byte[]?>(
                 hash,
-                await _host.RequestDiagramPngAsync(hash).ConfigureAwait(true))))
+                await _host.RequestDiagramPngAsync(hash, forCopy: false).ConfigureAwait(true))))
             .ConfigureAwait(true);
 
         foreach ((string hash, byte[]? png) in fetched)
@@ -8368,7 +8368,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // exception escaping it would take the window down rather than the export.
             try
             {
-                completion.SetResult(await host.RequestDiagramPngAsync(hash).ConfigureAwait(true));
+                completion.SetResult(await host.RequestDiagramPngAsync(hash, forCopy: false).ConfigureAwait(true));
             }
             catch (Exception ex)
             {
@@ -8562,7 +8562,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        byte[]? png = await _host.RequestDiagramPngAsync(hash).ConfigureAwait(true);
+        byte[]? png = await _host.RequestDiagramPngAsync(hash, forCopy: true).ConfigureAwait(true);
 
         if (png is null)
         {

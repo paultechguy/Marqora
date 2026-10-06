@@ -778,8 +778,13 @@ public interface IPreviewHost
     ///
     /// Always the diagram's light drawing, whatever the app is showing: dark mode is a screen
     /// setting, and the picture is leaving for somebody's white page. See diagram-output.js.
+    ///
+    /// <paramref name="forCopy"/> is Copy as PNG asking, which gets a transparent margin around
+    /// the drawing so its outermost shapes do not touch the picture's edge. The Word export
+    /// and rich-text copy pass false and get the tight crop: their document already sets a
+    /// picture apart from its text.
     /// </summary>
-    Task<byte[]?> RequestDiagramPngAsync(string hash);
+    Task<byte[]?> RequestDiagramPngAsync(string hash, bool forCopy);
 
     /// <summary>
     /// One rendered diagram as SVG markup, light like <see cref="RequestDiagramPngAsync"/>,

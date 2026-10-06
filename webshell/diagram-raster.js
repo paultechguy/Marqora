@@ -70,6 +70,16 @@
     return viewBoxOf(element);
   }
 
+  /// The bounds grown by the same amount on every side.
+  function withMargin(bounds, margin) {
+    return {
+      x: bounds.x - margin,
+      y: bounds.y - margin,
+      width: bounds.width + (margin * 2),
+      height: bounds.height + (margin * 2)
+    };
+  }
+
   /*
     Resolves with the PNG as base64, ready to cross the bridge; rejects with something the
     host can put in the log.
@@ -81,10 +91,17 @@
 
     Measured from the live element rather than the clone: bounds come from layout, and the
     clone is never in a document to be laid out.
+
+    `margin` is empty space added on every side, in the diagram's own units, so it grows with
+    the scale the way the drawing does. The two Copy as PNG items ask for it, so a pasted
+    diagram's outermost shapes do not sit against the picture's edge. The Word export and
+    rich-text copy do not: the document already sets a picture apart from its text, and a
+    margin there would be a second one. It is transparent like the rest of the background,
+    and the host decides what goes behind it.
   */
-  function toPngBase64(svgElement, scale) {
+  function toPngBase64(svgElement, scale, margin) {
     return new Promise(function (resolve, reject) {
-      var bounds = drawnBounds(svgElement);
+      var bounds = withMargin(drawnBounds(svgElement), margin || 0);
       var width = Math.round(bounds.width * scale);
       var height = Math.round(bounds.height * scale);
 
@@ -162,7 +179,7 @@
     takes and taken away again. Mermaid scopes its styles by the SVG's own id, so the copy
     restyles nothing else on the page while it is there.
   */
-  function markupToPngBase64(markup, scale) {
+  function markupToPngBase64(markup, scale, margin) {
     var stage = document.createElement('div');
     stage.setAttribute('aria-hidden', 'true');
     stage.style.cssText = 'position:absolute;left:-99999px;top:0;';
@@ -172,11 +189,22 @@
     var svg = stage.querySelector('svg');
 
     var done = svg
-      ? toPngBase64(svg, scale)
+      ? toPngBase64(svg, scale, margin)
       : Promise.reject(new Error('The diagram markup carried no SVG.'));
 
     return done.finally(function () { stage.remove(); });
   }
 
-  window.mqDiagramRaster = { toPngBase64: toPngBase64, markupToPngBase64: markupToPngBase64 };
+  /*
+    The margin both Copy as PNG items ask for, held here so the preview's copy and the
+    pop-out's cannot drift apart. In the diagram's units, so a copy at twice the size carries
+    twice the pixels.
+  */
+  var COPY_MARGIN = 16;
+
+  window.mqDiagramRaster = {
+    toPngBase64: toPngBase64,
+    markupToPngBase64: markupToPngBase64,
+    copyMargin: COPY_MARGIN
+  };
 }());

@@ -941,9 +941,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// <summary>Outstanding diagram PNG and SVG requests, keyed the same way as the HTML ones.</summary>
     private readonly Dictionary<Guid, TaskCompletionSource<string>> _diagramRequests = [];
 
-    public async Task<byte[]?> RequestDiagramPngAsync(string hash)
+    public async Task<byte[]?> RequestDiagramPngAsync(string hash, bool forCopy)
     {
-        if (await RequestDiagramAsync("requestDiagramPng", hash).ConfigureAwait(true) is not { } data)
+        if (string.IsNullOrEmpty(hash))
+        {
+            return null;
+        }
+
+        if (await AskShellAsync("requestDiagramPng", id => new { requestId = id, hash, copy = forCopy })
+                .ConfigureAwait(true) is not { } data)
         {
             return null;
         }
