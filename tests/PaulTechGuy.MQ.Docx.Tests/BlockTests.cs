@@ -160,11 +160,16 @@ public class BlockTests
 
     /// <summary>
     /// Numbering from heading two means a level-two heading is the outermost number and a
-    /// level-one heading carries none at all - which is the whole point of the preference, and
-    /// is expressed by which style each level names.
+    /// level-one heading shows none at all - which is the whole point of the preference.
+    ///
+    /// But the level-one heading is still in the list, unnumbered, because it begins a new
+    /// section and the count beneath it starts again from one: the documented rule on
+    /// HeadingNumbering, and what the preview and the PDF do. This test used to assert that
+    /// Heading 1 was absent from the list, which is exactly what let Word number a
+    /// three-chapter document's sections straight through.
     /// </summary>
     [Fact]
-    public async Task Numbering_from_a_deeper_level_leaves_the_ones_above_it_alone()
+    public async Task Numbering_from_a_deeper_level_hides_the_levels_above_it_but_restarts_on_them()
     {
         using var exported = await ExportedDocument.FromAsync(
             "# Part\n\n## First\n\n### Detail\n",
@@ -172,11 +177,52 @@ public class BlockTests
 
         string numbering = exported.NumberingXml();
 
-        numbering.ShouldContain("w:val=\"Heading2\"");
-        numbering.ShouldContain("w:val=\"Heading3\"");
-        numbering.ShouldNotContain("w:val=\"Heading1\"");
+        // Heading 1 is level zero, prints nothing, and leaves no space behind.
+        LevelOf(numbering, "Heading1").ShouldContain("<w:numFmt w:val=\"none\" />");
+        LevelOf(numbering, "Heading1").ShouldContain("<w:lvlText w:val=\"\" />");
+        LevelOf(numbering, "Heading1").ShouldContain("<w:suff w:val=\"nothing\" />");
+
+        // The numbered levels name themselves and the levels between, never the hidden one.
+        LevelOf(numbering, "Heading2").ShouldContain("<w:lvlText w:val=\"%2\" />");
+        LevelOf(numbering, "Heading3").ShouldContain("<w:lvlText w:val=\"%2.%3\" />");
+
+        // And every heading style is linked, Heading 1 included, at its own level.
+        string styles = exported.StylesXml();
+
+        styles.ShouldContain("<w:ilvl w:val=\"0\" />");
+        styles.ShouldContain("<w:ilvl w:val=\"1\" />");
 
         exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A document that skips a level reads differently in Word, and this pins how. The preview
+    /// drops a missing level's zero (HeadingNumbers), so "# A" then "### B" numbers B as "1";
+    /// Word's pattern always names the level between, so B is "0.1". Documented in
+    /// docs/Export-Alignment-Plan.md as a difference kept on purpose.
+    /// </summary>
+    [Fact]
+    public async Task A_skipped_level_keeps_its_place_in_the_word_pattern()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "# A\n\n### B\n",
+            headingNumbering: HeadingNumbering.FromHeading2);
+
+        LevelOf(exported.NumberingXml(), "Heading3").ShouldContain("<w:lvlText w:val=\"%2.%3\" />");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>The w:lvl that names a heading style, as XML.</summary>
+    private static string LevelOf(string numbering, string headingStyle)
+    {
+        int style = numbering.IndexOf($"<w:pStyle w:val=\"{headingStyle}\" />", StringComparison.Ordinal);
+
+        style.ShouldBeGreaterThanOrEqualTo(0, $"{headingStyle} is not in the heading list");
+
+        int start = numbering.LastIndexOf("<w:lvl ", style, StringComparison.Ordinal);
+        int end = numbering.IndexOf("</w:lvl>", style, StringComparison.Ordinal);
+
+        return numbering[start..end];
     }
 
     /// <summary>

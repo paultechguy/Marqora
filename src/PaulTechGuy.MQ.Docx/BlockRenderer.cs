@@ -95,10 +95,12 @@ internal sealed class BlockRenderer
         _diagrams = diagrams;
         _report = report;
         _logger = logger;
-        _images = new DocxImages(main, images, report, usableHeightTwips, logger);
-        _footnotes = new DocxFootnotes(main);
+        var owner = new RelationshipOwner(main);
+
+        _images = new DocxImages(owner, images, report, usableHeightTwips, logger);
+        _footnotes = new DocxFootnotes(owner);
         _inlines = new InlineRenderer(
-            main, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, colors, logger);
+            owner, bookmarks, _images, _footnotes, preview, report, usableWidthTwips, colors, logger);
     }
 
     /// <summary>
@@ -216,8 +218,8 @@ internal sealed class BlockRenderer
             case LinkReferenceDefinitionGroup:
                 break;
 
-            case HtmlBlock:
-                _logger.LogDebug("Raw HTML block dropped; Word has no equivalent.");
+            case HtmlBlock html:
+                WriteHtmlBlock(html);
                 break;
 
             case ContainerBlock container:
@@ -280,6 +282,30 @@ internal sealed class BlockRenderer
         _body.AppendChild(paragraph);
     }
 
+    /// <summary>
+    /// A raw HTML block, as the plain text it reads as. See <see cref="HtmlBlockText"/> for
+    /// what counts and why the floor is the text rather than nothing.
+    /// </summary>
+    private void WriteHtmlBlock(HtmlBlock block)
+    {
+        IReadOnlyList<string> paragraphs = HtmlBlockText.Paragraphs(block);
+
+        if (paragraphs.Count == 0)
+        {
+            return;
+        }
+
+        foreach (string text in paragraphs)
+        {
+            _body.AppendChild(new Paragraph(default(RunFormat).ToRun(text)));
+        }
+
+        _report.Note(
+            block.Line,
+            "Raw HTML: its text is in the document, its styling is not",
+            HtmlBlockText.SourceOf(block));
+    }
+
     private void WriteParagraph(ParagraphBlock block)
     {
         var paragraph = new Paragraph();
@@ -332,6 +358,14 @@ internal sealed class BlockRenderer
                         continue;
                     }
 
+                    // A paragraph a deeper list has already placed - a list inside a quote
+                    // inside this item - keeps its own level. Placing it again at this one
+                    // flattened the nesting and gave it a second indent, out of schema order.
+                    if (BelongsToDeeperList(paragraph))
+                    {
+                        continue;
+                    }
+
                     ApplyListFormatting(paragraph, placement, numbered, task, marker: first);
                     first = false;
                 }
@@ -368,13 +402,17 @@ internal sealed class BlockRenderer
             properties.ParagraphStyleId = new ParagraphStyleId { Val = StyleIds.ListParagraph };
         }
 
+        // Set through the typed properties, never appended: the paragraph may already hold
+        // properties that come later in the schema - a diagram's centering, a math fallback's -
+        // and an appended indent or numbering after w:jc is what Word reports as unreadable
+        // content. The typed setters insert in schema order.
         if (numbered && !task && marker)
         {
             // The level comes before the instance, which is the schema's order and not the
             // one that reads naturally.
-            properties.AppendChild(new NumberingProperties(
+            properties.NumberingProperties = new NumberingProperties(
                 new NumberingLevelReference { Val = placement.Level },
-                new NumberingId { Val = placement.NumberId }));
+                new NumberingId { Val = placement.NumberId });
         }
         else
         {
@@ -393,14 +431,23 @@ internal sealed class BlockRenderer
                 indent.Hanging = NumberingPlan.IndentPerLevel.ToString(Invariant);
             }
 
-            properties.AppendChild(indent);
+            properties.Indentation = indent;
         }
 
         if (placement.Tight)
         {
-            properties.AppendChild(new ContextualSpacing());
+            properties.ContextualSpacing = new ContextualSpacing();
         }
     }
+
+    /// <summary>
+    /// Whether a nested list has already put this paragraph in place - numbered it, or
+    /// indented it under a marker - which is the only way a fresh paragraph comes to carry
+    /// either.
+    /// </summary>
+    private static bool BelongsToDeeperList(Paragraph paragraph) =>
+        paragraph.ParagraphProperties is { } properties
+        && (properties.NumberingProperties is not null || properties.Indentation is not null);
 
     /// <summary>
     /// One of the five GitHub callouts.
@@ -718,8 +765,12 @@ internal sealed class BlockRenderer
             ParagraphProperties properties = EnsureProperties(paragraph);
 
             // A paragraph that already carries a style came from something with a stronger
-            // claim to it - a heading or a code line inside the quote - and keeps it.
-            if (properties.ParagraphStyleId is null)
+            // claim to it - a heading or a code line inside the quote - and keeps it. A list
+            // inside the quote is the exception: List Paragraph is only the list's default
+            // dress, and the item keeps its numbering and indent as direct formatting, so it
+            // can wear the quote's bar and ink like the quote's other paragraphs.
+            if (properties.ParagraphStyleId is null
+                || properties.ParagraphStyleId.Val?.Value == StyleIds.ListParagraph)
             {
                 properties.ParagraphStyleId = new ParagraphStyleId { Val = StyleIds.Quote };
             }
@@ -979,10 +1030,7 @@ internal sealed class BlockRenderer
             run.AppendChild(properties);
         }
 
-        run.AppendChild(new Text(XmlSafeText.Clean(token.Text))
-        {
-            Space = SpaceProcessingModeValues.Preserve,
-        });
+        RunText.AppendTo(run, token.Text);
 
         return run;
     }

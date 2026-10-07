@@ -20,6 +20,7 @@ using PaulTechGuy.MQ.Finding;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Markdown;
+using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Themes;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -8423,7 +8424,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = "Exporting PDF...";
 
-            await _host.ExportPdfAsync(path, setup).ConfigureAwait(true);
+            await _host.ExportPdfAsync(path, setup, PrintTitleOf(document)).ConfigureAwait(true);
             AnnounceExport(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -8477,7 +8478,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = $"Printing to {job.PrinterName}...";
 
-            await _host.PrintAsync(job).ConfigureAwait(true);
+            await _host.PrintAsync(job, _workspace.Active is { } active ? PrintTitleOf(active) : string.Empty).ConfigureAwait(true);
 
             StatusText = $"Sent to {job.PrinterName}";
         }
@@ -8500,6 +8501,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         document.Path is { } path
             ? Path.GetFileNameWithoutExtension(path) + extension
             : "Untitled" + extension;
+
+    /// <summary>
+    /// What a PDF or a print job calls itself: the front matter's title, which is the one the
+    /// Word export puts in the same property, or the file's own name. Never the path - that
+    /// went into every PDF's Title property, and so to whoever the PDF was sent.
+    /// </summary>
+    private static string PrintTitleOf(MarkdownDocument document) =>
+        FrontMatter.Read(document.Text).Title is { Length: > 0 } title
+            ? title
+            : document.DisplayName;
 
     /// <summary>
     /// Puts an export on the status line, and stops there. What was written is deliberately

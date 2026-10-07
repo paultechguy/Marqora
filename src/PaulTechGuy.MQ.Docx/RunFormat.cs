@@ -191,10 +191,7 @@ internal readonly record struct RunFormat
             run.AppendChild(properties);
         }
 
-        run.AppendChild(new Text(XmlSafeText.Clean(text))
-        {
-            Space = SpaceProcessingModeValues.Preserve,
-        });
+        RunText.AppendTo(run, text);
 
         return run;
     }

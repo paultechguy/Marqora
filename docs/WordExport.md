@@ -201,8 +201,17 @@ in `Architecture.md` — and an export of that document carries no numbers and n
 
 The "Contents" heading itself uses Word's built-in **TOC Heading** style — based on Heading 1 so
 it looks like one, `outlineLvl` 9 so it appears in neither the contents nor the navigation pane.
-It also sets `numId 0` **when numbering starts at Heading 1**, because a style based on Heading 1
-inherits its numbering instance and the word "Contents" would otherwise become section 1.
+It also sets `numId 0` **whenever headings are numbered**, because a style based on Heading 1
+inherits its numbering instance. Heading 1 is in the heading list in every numbered mode — as a
+number when numbering starts there, and otherwise as an unnumbered level that restarts the count
+beneath it — so "Contents" would otherwise become section 1, or silently restart the count.
+
+The heading list itself is one level per heading, level *n* being Heading *n + 1* whatever the
+start. Levels above the start have `numFmt none`, an empty `lvlText` and `suff nothing`: they
+print nothing and restart everything beneath them, which is the rule documented on
+`HeadingNumbering` and what the preview does — each `#` chapter numbers its `##` sections from 1.
+A skipped level differs on purpose: the preview drops the missing zero (`9.1`), Word's pattern
+cannot (`9.0.1`).
 
 #### A heading is written plain, and the contents page is why
 
@@ -301,6 +310,13 @@ to end. Their `Space` supplies the padding inside the panel.
 **One `numId` per markdown list.** Two lists sharing an instance are, to Word, *one list
 interrupted* — the second continues 4, 5, 6. The `abstractNum` is shared; every markdown list gets
 its own `w:num`. This is the single most likely defect in the feature.
+
+**And every `w:num` restarts itself.** A separate instance is not enough: Word keeps the running
+count per *abstract* definition, so a second instance of a shared definition carries on where the
+first stopped. Each instance therefore writes a `w:lvlOverride`/`w:startOverride` for every level,
+`1` included. Every level, not only the first, because a list opening with a task item has no
+numbered paragraph at level 0 to restart the levels beneath it. Without this the fixture's
+"Ordered lists" printed 17, 18, 19 — see `docs/WordVsPdf-Comparison.md` §3.2.
 
 **Heading numbering is real.** A multilevel definition is linked to the heading styles with
 `w:pStyle` inside `w:lvl` — Word's *Multilevel List → link to Heading styles*. Numbers written as

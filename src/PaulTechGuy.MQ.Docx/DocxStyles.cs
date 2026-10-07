@@ -334,12 +334,16 @@ internal static class DocxStyles
         // a section and everything after it renumbers, delete one and the gap closes. A number
         // written as text is right when the file is written and wrong from the first edit.
         //
+        // Every heading level is linked, the ones above the start included: they print no
+        // number, but they are what restarts the count beneath them - see PlanHeadings. Level
+        // n of the list is heading n + 1 whatever the start.
+        //
         // Numbering properties come after the keep flags and before the spacing - w:pPr is a
         // schema sequence, and this is not a place to guess.
-        if (numbering != HeadingNumbering.Off && numberId is { } id && level >= (int)numbering)
+        if (numbering != HeadingNumbering.Off && numberId is { } id)
         {
             paragraphProperties.AppendChild(new NumberingProperties(
-                new NumberingLevelReference { Val = level - (int)numbering },
+                new NumberingLevelReference { Val = level - 1 },
                 new NumberingId { Val = id }));
         }
 
@@ -722,18 +726,20 @@ internal static class DocxStyles
     /// nine - body text - which keeps it out of the navigation pane as well as out of the
     /// contents.
     ///
-    /// Numbering has to be taken back too, but only when Heading 1 has any. A style based on
-    /// Heading 1 inherits its numbering instance, so where the reader has asked for sections
-    /// numbered from Heading 1 the contents heading would be handed a number of its own -
-    /// instance zero is Word's way of saying none. Where numbering starts lower down, or is
-    /// off, Heading 1 carries none and there is nothing to suppress: saying so anyway would
-    /// put a numbering reference into the styles of every document that asked for no numbers.
+    /// Numbering has to be taken back too, whenever headings are numbered at all. A style based
+    /// on Heading 1 inherits its numbering instance, and Heading 1 is in the list in every
+    /// numbered mode - as a number from Heading 1, and as the unnumbered level that restarts
+    /// the count otherwise. Inheriting it, the contents heading would be handed a number of its
+    /// own, or would silently restart the count it sits in front of. Instance zero is Word's way
+    /// of saying none. With numbering off, Heading 1 carries none and there is nothing to
+    /// suppress: saying so anyway would put a numbering reference into the styles of every
+    /// document that asked for no numbers.
     /// </summary>
     private static Style ContentsHeadingStyle(HeadingNumbering numbering)
     {
         var paragraphProperties = new StyleParagraphProperties();
 
-        if (numbering == HeadingNumbering.FromHeading1)
+        if (numbering != HeadingNumbering.Off)
         {
             paragraphProperties.AppendChild(new NumberingProperties(new NumberingId { Val = 0 }));
         }

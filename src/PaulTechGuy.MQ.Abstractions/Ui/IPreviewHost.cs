@@ -844,7 +844,11 @@ public interface IPreviewHost
     /// Prints the preview to a PDF file. The editor pane is excluded by print styles rather
     /// than by changing the view, so the window does not visibly change during an export.
     /// </summary>
-    Task ExportPdfAsync(string path, PdfPageSetup setup);
+    /// <param name="title">
+    /// What the PDF calls itself: the front matter's title, or the file name. It goes into the
+    /// file's Title property, and a full path there travels with the file to whoever it is sent.
+    /// </param>
+    Task ExportPdfAsync(string path, PdfPageSetup setup, string title);
 
     /// <summary>
     /// Prints the preview, for a paper copy rather than a file. The same print styles that
@@ -856,7 +860,8 @@ public interface IPreviewHost
     /// WebView's own dialogs, and so the only route on which the browser's header and footer
     /// can be switched off.
     /// </summary>
-    Task PrintAsync(PrintJob job);
+    /// <param name="title">The name the print queue lists the job under, chosen as for a PDF.</param>
+    Task PrintAsync(PrintJob job, string title);
 }
 
 /// <summary>An inclusive, zero-based range of editor lines.</summary>

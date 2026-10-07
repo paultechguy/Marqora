@@ -6,6 +6,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Rendering;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -41,17 +42,16 @@ internal static class DocxFurniture
 
         HeaderPart headerPart = main.AddNewPart<HeaderPart>();
 
+        var titleRun = new Run(new RunProperties(new Color { Val = "767676" }));
+
+        RunText.AppendTo(titleRun, title);
+
         headerPart.Header = new Header(
             new Paragraph(
                 new ParagraphProperties(
                     new ParagraphStyleId { Val = StyleIds.Header },
                     new Justification { Val = JustificationValues.Left }),
-                new Run(
-                    new RunProperties(new Color { Val = "767676" }),
-                    new Text(XmlSafeText.Clean(title))
-                    {
-                        Space = SpaceProcessingModeValues.Preserve,
-                    })));
+                titleRun));
 
         FooterPart footerPart = main.AddNewPart<FooterPart>();
 
@@ -125,23 +125,10 @@ internal static class DocxFurniture
 
         // The three facts are one block: the air above them is what separates them from the
         // titles, so they must not also be spaced from each other.
-        body.AppendChild(Line(null, DateOrToday(front), null, before: TwoLines, tight: true));
+        body.AppendChild(Line(null, front.CoverDate(), null, before: TwoLines, tight: true));
         body.AppendChild(Line(null, front.Version, "Version", tight: true));
         body.AppendChild(Line(null, front.Author, "Author", tight: true));
     }
-
-    /// <summary>
-    /// The date the front matter gave, or today's.
-    ///
-    /// Written out rather than left as a placeholder because a cover page almost always wants
-    /// a date and this one is true at the moment of export. Not a Word DATE field, which would
-    /// keep updating: a report that is filed and read a year later should say when it was
-    /// written, not claim to be current.
-    /// </summary>
-    private static string DateOrToday(FrontMatter front) =>
-        front.Date is { Length: > 0 } stated
-            ? stated
-            : DateTime.Now.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// One line of the title page: what the front matter said, or the word to replace.
@@ -204,7 +191,7 @@ internal static class DocxFurniture
 
         body.AppendChild(new Paragraph(
             new ParagraphProperties(new ParagraphStyleId { Val = StyleIds.TocHeading }),
-            default(RunFormat).ToRun("Contents")));
+            default(RunFormat).ToRun(ContentsListing.Title)));
 
         var field = new Paragraph(
             new ParagraphProperties(
@@ -255,36 +242,20 @@ internal static class DocxFurniture
         new(new ParagraphProperties(section));
 
     /// <summary>
-    /// A one-run field. Simple fields are enough for a page number: there is nothing to show
-    /// until Word calculates it, and it always does.
-    /// </summary>
-    /// <summary>
-    /// Which heading levels the contents lists, as the field's own range.
-    ///
-    /// Tied to the heading numbering rather than fixed at one to three, so the contents begin
-    /// at the first numbered section. A document numbering from Heading 2 opens with an H1
-    /// title, and that title listing itself as the first line of its own contents - above
-    /// section 1, and the only entry with no number beside it - reads as a mistake rather
-    /// than as a title.
-    ///
-    /// Numbering switched off is treated as starting at Heading 2 too, because a markdown
-    /// file that opens with a single H1 title is the common shape whether or not anything in
-    /// it is numbered.
-    ///
-    /// Three levels deep from wherever it starts, which is what Word's own contents does.
+    /// Which heading levels the contents lists, as the field's own range. The rule is
+    /// <see cref="ContentsListing.Levels"/>, shared with the PDF's contents page.
     /// </summary>
     private static string Levels(HeadingNumbering numbering)
     {
-        int first = numbering switch
-        {
-            HeadingNumbering.FromHeading1 => 1,
-            HeadingNumbering.FromHeading3 => 3,
-            _ => 2,
-        };
+        (int first, int last) = ContentsListing.Levels(numbering);
 
-        return FormattableString.Invariant($"{first}-{first + 2}");
+        return FormattableString.Invariant($"{first}-{last}");
     }
 
+    /// <summary>
+    /// A one-run field. Simple fields are enough for a page number: there is nothing to show
+    /// until Word calculates it, and it always does.
+    /// </summary>
     private static SimpleField Field(string instruction) => new(
         new Run(new Text("1") { Space = SpaceProcessingModeValues.Preserve }))
     {

@@ -33,6 +33,11 @@ internal readonly record struct ListPlacement(int NumberId, int Level, bool Tigh
 /// by other content: the second carries on 4, 5, 6 rather than starting again. So every list
 /// gets its own instance, and they share the abstract definitions between them.
 ///
+/// A separate instance is not enough on its own, though it reads as if it should be. Word
+/// keeps the running count per abstract definition, so a second instance of a shared
+/// definition still carries on from the first. What restarts it is a start override on the
+/// instance, and every instance writes one for every level - see <see cref="BuildInstance"/>.
+///
 /// A pre-pass rather than work done during the walk, because the numbering part has to be
 /// written as a whole and because a list's shape is only known once its deepest branch has
 /// been seen.
@@ -77,7 +82,13 @@ internal sealed class NumberingPlan
     /// and Word maintains it from then on.
     ///
     /// The start level is the reader's preference: numbering from heading two means a level-two
-    /// heading is the outermost number and a level-one heading carries none at all.
+    /// heading is the outermost number and a level-one heading carries none at all. It is still
+    /// in the list, though, as an unnumbered level: a heading above the start begins a new
+    /// section and every level beneath it counts from one again, which is the documented rule
+    /// on <see cref="HeadingNumbering"/> and what the preview and the outline do. Left out of
+    /// the list, as it once was, a level-one heading restarted nothing, and Word numbered the
+    /// level-two headings of a three-chapter document straight through while the PDF of the
+    /// same document numbered each chapter from one.
     ///
     /// Word counts for itself from here, which is the trade. A document that skips a level -
     /// a level-three heading directly under a level-one - will read differently from the
@@ -332,61 +343,55 @@ internal sealed class NumberingPlan
             AbstractNumberId = id,
         };
 
-        // Level zero is the first heading level that gets a number; a document numbering from
-        // heading two leaves its level-one headings unnumbered, which is the whole point of
-        // the preference.
+        // Level n is heading n + 1, always: level zero is Heading 1 whatever the start. The
+        // levels above the start are in the list but print nothing - no number and no space
+        // after it - so they restart the levels beneath them without showing. Six heading
+        // levels exist; the nine a definition must describe run past them, and the extra ones
+        // have no style to name.
         for (int level = 0; level <= MaximumLevel; level++)
         {
-            int headingLevel = startLevel + level;
+            int headingLevel = level + 1;
+            bool numbered = headingLevel >= startLevel;
 
             var element = new Level(
                 new StartNumberingValue { Val = 1 },
-                new NumberingFormat { Val = NumberFormatValues.Decimal },
-                new ParagraphStyleIdInLevel { Val = StyleIds.Heading(headingLevel) },
-                new LevelSuffix { Val = LevelSuffixValues.Space },
-                new LevelText { Val = CumulativePattern(level) },
-                new LevelJustification { Val = LevelJustificationValues.Left },
-                new PreviousParagraphProperties(
-                    new Indentation { Left = "0", FirstLine = "0" }))
+                new NumberingFormat { Val = numbered ? NumberFormatValues.Decimal : NumberFormatValues.None })
             {
                 LevelIndex = level,
             };
 
-            abstractNum.AppendChild(element);
-
-            // Six heading levels exist; the nine a definition must describe run past them, and
-            // the extra ones have no style to name.
-            if (headingLevel >= 6)
+            if (headingLevel <= 6)
             {
-                for (int rest = level + 1; rest <= MaximumLevel; rest++)
-                {
-                    abstractNum.AppendChild(new Level(
-                        new StartNumberingValue { Val = 1 },
-                        new NumberingFormat { Val = NumberFormatValues.Decimal },
-                        new LevelSuffix { Val = LevelSuffixValues.Space },
-                        new LevelText { Val = CumulativePattern(rest) },
-                        new LevelJustification { Val = LevelJustificationValues.Left },
-                        new PreviousParagraphProperties(
-                            new Indentation { Left = "0", FirstLine = "0" }))
-                    {
-                        LevelIndex = rest,
-                    });
-                }
-
-                break;
+                element.AppendChild(new ParagraphStyleIdInLevel { Val = StyleIds.Heading(headingLevel) });
             }
+
+            element.AppendChild(new LevelSuffix
+            {
+                Val = numbered ? LevelSuffixValues.Space : LevelSuffixValues.Nothing,
+            });
+            element.AppendChild(new LevelText
+            {
+                Val = numbered ? CumulativePattern(startLevel, headingLevel) : string.Empty,
+            });
+            element.AppendChild(new LevelJustification { Val = LevelJustificationValues.Left });
+            element.AppendChild(new PreviousParagraphProperties(
+                new Indentation { Left = "0", FirstLine = "0" }));
+
+            abstractNum.AppendChild(element);
         }
 
         return abstractNum;
     }
 
     /// <summary>
-    /// "%1", then "%1.%2", and so on. The placeholders are one-based on the level, so level
-    /// zero is %1 - which is the detail that makes a three-deep pattern read 1.2.3 rather than
-    /// 0.1.2.
+    /// The number a heading shows: the start level's placeholder through its own, so numbering
+    /// from heading two gives "%2", then "%2.%3", and so on. A placeholder names a level
+    /// one-based, and level n is heading n + 1, so each heading's placeholder is its own level
+    /// number - which is the detail that keeps the unnumbered levels above the start out of
+    /// the pattern.
     /// </summary>
-    private static string CumulativePattern(int level) =>
-        string.Join('.', Enumerable.Range(1, level + 1).Select(n => $"%{n}"));
+    private static string CumulativePattern(int startLevel, int headingLevel) =>
+        string.Join('.', Enumerable.Range(startLevel, headingLevel - startLevel + 1).Select(n => $"%{n}"));
 
     private static AbstractNum BuildAbstract(int id, LevelShape[] shapes, string markerColor)
     {
@@ -457,19 +462,20 @@ internal sealed class NumberingPlan
             NumberID = instance.NumberId,
         };
 
-        // A list that starts at something other than one - "5." in the source - overrides the
-        // definition's start rather than getting a definition of its own, which is what keeps
-        // the abstract definitions shareable.
+        // Every level states its start, one included. Word keeps one count per abstract
+        // definition, not per instance: a second instance of a shared definition carries on
+        // where the first stopped unless it overrides the start, so the fixture's "Ordered
+        // lists" came out 17, 18, 19. Every level rather than only the first, because a list
+        // whose opening item is a task item has no numbered paragraph at level 0 to restart
+        // the levels below it. A list that starts at five - "5." in the source - is the same
+        // override with a different number, which is what keeps the definitions shareable.
         for (int level = 0; level < instance.Shapes.Length; level++)
         {
-            if (instance.Shapes[level].Start != 1)
+            element.AppendChild(new LevelOverride(
+                new StartOverrideNumberingValue { Val = instance.Shapes[level].Start })
             {
-                element.AppendChild(new LevelOverride(
-                    new StartOverrideNumberingValue { Val = instance.Shapes[level].Start })
-                {
-                    LevelIndex = level,
-                });
-            }
+                LevelIndex = level,
+            });
         }
 
         return element;

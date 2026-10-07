@@ -26,7 +26,7 @@ namespace PaulTechGuy.MQ.Docx;
 /// </summary>
 internal sealed class DocxImages
 {
-    private readonly MainDocumentPart _main;
+    private readonly RelationshipOwner _owner;
     private readonly DocumentImages _images;
     private readonly ExportReport _report;
     private readonly ILogger _logger;
@@ -34,8 +34,12 @@ internal sealed class DocxImages
     /// <summary>The text column's height: no picture is drawn taller than one page.</summary>
     private readonly int _maximumHeightTwips;
 
-    /// <summary>Resolved path to relationship id, so a picture used twice is stored once.</summary>
-    private readonly Dictionary<string, string> _parts =
+    /// <summary>
+    /// Resolved path, or hash of the bytes, to the image part, so a picture used twice is
+    /// stored once. The part rather than a relationship id: an id belongs to the part that
+    /// declared it, and the second use may be in a footnote. See <see cref="RelationshipOwner"/>.
+    /// </summary>
+    private readonly Dictionary<string, ImagePart> _parts =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -45,13 +49,13 @@ internal sealed class DocxImages
     private uint _nextDrawingId = 1;
 
     public DocxImages(
-        MainDocumentPart main,
+        RelationshipOwner owner,
         DocumentImages images,
         ExportReport report,
         int maximumHeightTwips,
         ILogger logger)
     {
-        _main = main;
+        _owner = owner;
         _images = images;
         _report = report;
         _maximumHeightTwips = maximumHeightTwips;
@@ -156,7 +160,7 @@ internal sealed class DocxImages
             return null;
         }
 
-        ImagePart part = _main.AddImagePart(ImagePartType.Png);
+        ImagePart part = _owner.NewImagePart(ImagePartType.Png);
 
         using (var source = new MemoryStream(png))
         {
@@ -170,7 +174,7 @@ internal sealed class DocxImages
             scale);
 
         return BuildRun(
-            _main.GetIdOfPart(part),
+            _owner.IdOf(part),
             altText,
             "diagram.png",
             Math.Max(width, 1),
@@ -266,27 +270,26 @@ internal sealed class DocxImages
     {
         string key = $"data:{Convert.ToHexString(SHA256.HashData(bytes))}";
 
-        if (!_parts.TryGetValue(key, out string? relationshipId))
+        if (!_parts.TryGetValue(key, out ImagePart? part))
         {
-            ImagePart part = _main.AddImagePart(type);
+            part = _owner.NewImagePart(type);
 
             using (var source = new MemoryStream(bytes))
             {
                 part.FeedData(source);
             }
 
-            relationshipId = _main.GetIdOfPart(part);
-            _parts[key] = relationshipId;
+            _parts[key] = part;
         }
 
         (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips, _maximumHeightTwips);
 
-        return BuildRun(relationshipId, altText, name, width, height);
+        return BuildRun(_owner.IdOf(part), altText, name, width, height);
     }
 
     private Run? Build(string path, string altText, int maximumWidthTwips, int sourceLine)
     {
-        if (!_parts.TryGetValue(path, out string? relationshipId))
+        if (!_parts.TryGetValue(path, out ImagePart? part))
         {
             if (PartTypeFor(path) is not { } contentType)
             {
@@ -294,20 +297,19 @@ internal sealed class DocxImages
                 return null;
             }
 
-            ImagePart part = _main.AddImagePart(contentType);
+            part = _owner.NewImagePart(contentType);
 
             using (FileStream source = File.OpenRead(path))
             {
                 part.FeedData(source);
             }
 
-            relationshipId = _main.GetIdOfPart(part);
-            _parts[path] = relationshipId;
+            _parts[path] = part;
         }
 
         (long width, long height) = Scale(ReadPixelSize(path), maximumWidthTwips, _maximumHeightTwips);
 
-        return BuildRun(relationshipId, altText, path, width, height);
+        return BuildRun(_owner.IdOf(part), altText, path, width, height);
     }
 
     /// <summary>

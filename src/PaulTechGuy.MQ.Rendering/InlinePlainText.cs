@@ -74,6 +74,12 @@ public static class InlinePlainText
                 case AbbreviationInline abbreviation:
                     builder.Append(abbreviation.Abbreviation?.Label);
                     break;
+                // An unclosed "[" is a delimiter that holds the text after it, and the bracket
+                // is the delimiter's own, not a child's: walked as a container it vanished.
+                case LinkDelimiterInline delimiter:
+                    builder.Append(delimiter.ToLiteral());
+                    Append(delimiter, builder);
+                    break;
                 case ContainerInline nested:
                     Append(nested, builder);
                     break;

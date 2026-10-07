@@ -5871,12 +5871,16 @@
   /*
     Names the open file in the page title.
 
-    Nothing of it reaches paper. A printed page carries the document and nothing else: no
-    header, no footer, no letterhead. The title is set because it is what the print queue
-    lists the job under, which is the one place a name is still useful.
+    Nothing of it reaches the printed page, which carries the document and nothing else. The
+    title is set because it is what the print queue lists the job under, and what Chromium
+    writes into a PDF's Title property. The file's name, never its path: the path went into
+    every PDF, and so to whoever it was sent. A print or a PDF names the document properly -
+    its front matter's title, as Word does - through prepareForPrint.
   */
   function setPrintSource(path) {
-    document.title = path ? ('Marqora - ' + path) : 'Marqora';
+    var name = path ? path.replace(/^.*[\\/]/, '') : '';
+
+    document.title = name || 'Marqora';
   }
 
   /*
@@ -6376,6 +6380,12 @@
       // A shape, not a size: see the print block in app.css for why inches will not do.
       if (p.pageRatio > 0) {
         document.documentElement.style.setProperty('--mq-print-page-ratio', String(p.pageRatio));
+      }
+
+      // The PDF's Title and the print job's name. Left in place afterwards: it names the
+      // document on screen, and the next tab sets its own.
+      if (p.title) {
+        document.title = p.title;
       }
 
       whenOutputReady().then(function () {

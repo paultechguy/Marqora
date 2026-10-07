@@ -27,13 +27,13 @@ internal sealed class DocxFootnotes
     private const int SeparatorId = -1;
     private const int ContinuationSeparatorId = 0;
 
-    private readonly MainDocumentPart _main;
+    private readonly RelationshipOwner _owner;
     private readonly Dictionary<MarkdigFootnote, int> _ids = [];
 
     private Footnotes? _footnotes;
     private int _nextId = 1;
 
-    public DocxFootnotes(MainDocumentPart main) => _main = main;
+    public DocxFootnotes(RelationshipOwner owner) => _owner = owner;
 
     /// <summary>
     /// The id a footnote will be written under, allocated the first time it is asked for.
@@ -71,7 +71,18 @@ internal sealed class DocxFootnotes
 
         var footnote = new Footnote { Id = id };
 
-        List<OpenXmlElement> content = render(note);
+        // The part exists before the note is rendered, and the note is rendered as the part's:
+        // a link or a picture inside it is a relationship of the footnotes part, never of the
+        // body. Rendered first and attached afterwards, a link in a note named an id only the
+        // main part knew, and Word called the file corrupt.
+        Footnotes notes = Part();
+
+        List<OpenXmlElement> content;
+
+        using (_owner.Enter(_owner.Main.FootnotesPart!))
+        {
+            content = render(note);
+        }
 
         // The mark goes at the front of the first paragraph rather than in one of its own, so
         // a note reads as "1. The text" the way a printed footnote does.
@@ -104,7 +115,7 @@ internal sealed class DocxFootnotes
             footnote.AppendChild(element);
         }
 
-        Part().AppendChild(footnote);
+        notes.AppendChild(footnote);
     }
 
     /// <summary>The reference that goes in the body text, as a run.</summary>
@@ -125,7 +136,7 @@ internal sealed class DocxFootnotes
             return;
         }
 
-        _main.FootnotesPart!.Footnotes = _footnotes;
+        _owner.Main.FootnotesPart!.Footnotes = _footnotes;
     }
 
     private Footnotes Part()
@@ -135,7 +146,7 @@ internal sealed class DocxFootnotes
             return _footnotes;
         }
 
-        _main.AddNewPart<FootnotesPart>();
+        _owner.Main.AddNewPart<FootnotesPart>();
 
         _footnotes = new Footnotes(
             Separator(SeparatorId, new SeparatorMark()),

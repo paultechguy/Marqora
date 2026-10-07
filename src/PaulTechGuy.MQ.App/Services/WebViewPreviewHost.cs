@@ -1212,12 +1212,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// anything on screen changing - but a light drawing is made a moment after the dark one,
     /// so this waits for the last of them. Bounded by the shell request's own timeout: a print
     /// in the wrong colors beats a print that never happens.
+    ///
+    /// The title becomes the page's, which is what Chromium writes into a PDF's Title property
+    /// and what the print queue lists the job under. It used to be the window caption, full
+    /// path and all, so every PDF carried the author's folder layout to whoever it was sent.
     /// </summary>
-    private async Task PrepareForPrintAsync(double pageRatio) =>
-        await AskShellAsync("prepareForPrint", id => new { requestId = id, pageRatio })
+    private async Task PrepareForPrintAsync(double pageRatio, string title) =>
+        await AskShellAsync("prepareForPrint", id => new { requestId = id, pageRatio, title })
             .ConfigureAwait(true);
 
-    public async Task ExportPdfAsync(string path, PdfPageSetup setup)
+    public async Task ExportPdfAsync(string path, PdfPageSetup setup, string title)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(setup);
@@ -1237,7 +1241,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
         using var _ = ForceLightCanvas();
         await PrepareForPrintAsync(PrintArea.Ratio(
-            setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches))
+            setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches), title)
             .ConfigureAwait(true);
 
         await WebViewPrinting.ExportPdfAsync(core, path, setup).ConfigureAwait(true);
@@ -1257,7 +1261,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// The same print stylesheet an exported PDF goes through applies, so the editor pane
     /// stays out of it and the window does not visibly change while the job runs.
     /// </summary>
-    public async Task PrintAsync(PrintJob job)
+    public async Task PrintAsync(PrintJob job, string title)
     {
         ArgumentNullException.ThrowIfNull(job);
 
@@ -1275,7 +1279,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
         using var _ = ForceLightCanvas();
         await PrepareForPrintAsync(PrintArea.Ratio(
-            job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches))
+            job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches), title)
             .ConfigureAwait(true);
 
         await WebViewPrinting.PrintAsync(core, job);

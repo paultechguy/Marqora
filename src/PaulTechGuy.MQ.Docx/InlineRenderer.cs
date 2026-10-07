@@ -24,7 +24,7 @@ namespace PaulTechGuy.MQ.Docx;
 /// </summary>
 internal sealed class InlineRenderer
 {
-    private readonly MainDocumentPart _main;
+    private readonly RelationshipOwner _owner;
     private readonly BookmarkTable _bookmarks;
     private readonly DocxImages _images;
     private readonly DocxFootnotes _footnotes;
@@ -51,7 +51,7 @@ internal sealed class InlineRenderer
     private int _surroundingInk;
 
     public InlineRenderer(
-        MainDocumentPart main,
+        RelationshipOwner owner,
         BookmarkTable bookmarks,
         DocxImages images,
         DocxFootnotes footnotes,
@@ -61,7 +61,7 @@ internal sealed class InlineRenderer
         DocxColors colors,
         ILogger logger)
     {
-        _main = main;
+        _owner = owner;
         _colors = colors;
         _bookmarks = bookmarks;
         _images = images;
@@ -206,6 +206,15 @@ internal sealed class InlineRenderer
                 ReadHtmlTag(html.Tag, paragraph);
                 break;
 
+            // An opening bracket nothing closed into a link - "[broken][no-such-ref]", or a
+            // stray "x [y" - is left as a delimiter holding the text after it. The bracket is
+            // the delimiter itself, not one of its children, so walking it as a plain
+            // container lost it and the reader got "broken][no-such-ref]".
+            case LinkDelimiterInline delimiter:
+                Append(paragraph, format.ToRun(delimiter.ToLiteral()));
+                Write(delimiter, paragraph, format);
+                break;
+
             case ContainerInline container:
                 Write(container, paragraph, format);
                 break;
@@ -288,7 +297,7 @@ internal sealed class InlineRenderer
                 UriKind.Absolute,
                 out Uri? target))
         {
-            HyperlinkRelationship relationship = _main.AddHyperlinkRelationship(target, isExternal: true);
+            HyperlinkRelationship relationship = _owner.AddHyperlink(target);
             var hyperlink = new Hyperlink { Id = relationship.Id, History = true };
 
             hyperlink.AppendChild(format.WithHyperlink().WithItalic().ToRun(placeholder));
@@ -444,7 +453,7 @@ internal sealed class InlineRenderer
         }
 
         HyperlinkRelationship relationship =
-            _main.AddHyperlinkRelationship(target, isExternal: true);
+            _owner.AddHyperlink(target);
 
         var hyperlink = new Hyperlink { Id = relationship.Id, History = true };
 
@@ -482,7 +491,7 @@ internal sealed class InlineRenderer
         }
 
         HyperlinkRelationship relationship =
-            _main.AddHyperlinkRelationship(target, isExternal: true);
+            _owner.AddHyperlink(target);
 
         var hyperlink = new Hyperlink { Id = relationship.Id, History = true };
 

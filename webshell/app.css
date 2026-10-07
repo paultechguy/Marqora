@@ -1500,14 +1500,51 @@ a.mq-blocked-media {
     line-height: 1.55;
   }
 
-  /* Keep blocks from being split across a page boundary where it would hurt. */
+  /* Keep blocks from being split across a page boundary where it would hurt. A callout is a
+     div, not a blockquote, so it is named: without it the Caution label printed alone at
+     the foot of one page and its sentence opened the next. */
   .mq-preview pre,
   .mq-preview table,
   .mq-preview blockquote,
+  .mq-preview .markdown-alert,
   .mq-preview img,
   .mq-preview .mq-table-scroll {
     break-inside: avoid;
     overflow: visible;
+  }
+
+  /*
+    Nothing on paper is wider than the page.
+
+    On screen a wide fence scrolls inside its box. Paper has no scroll bar, and with the
+    overflow visible a 141-column line ran off the right edge and was cut there - content the
+    reader of the PDF never knew was missing, while Word wrapped the same block and kept every
+    character. Worse, Chromium shrinks the whole print to fit its widest box, so one wide line
+    made every page's text smaller. So code wraps on paper, at a space where it can and
+    anywhere where it must, and so does a table cell. The diagram's own pre is left alone:
+    its white-space is what keeps mermaid's labels laid out as they were drawn.
+  */
+  .mq-preview pre:not(.mermaid),
+  .mq-preview pre:not(.mermaid) code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .mq-preview th,
+  .mq-preview td {
+    overflow-wrap: anywhere;
+  }
+
+  /*
+    A closed <details> prints open.
+
+    Paper cannot be clicked, so a collapsed section printed as its summary line alone and its
+    content was not in the PDF at all. Opened here rather than in the page, so nothing in the
+    window moves for a print - the same reason the light drawings swap in through this block.
+  */
+  .mq-preview details::details-content {
+    content-visibility: visible;
+    display: block;
   }
 
   .mq-preview h1,

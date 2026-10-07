@@ -15,6 +15,11 @@ namespace PaulTechGuy.MQ.Docx.Tests;
 /// interrupted by other content - so the second one carries on 4, 5, 6 instead of starting
 /// again. Nothing about the file looks wrong until it is opened, and the first list is fine,
 /// which is what makes it worth a test of its own.
+///
+/// Separate instances are necessary and not sufficient. Word keeps the count per abstract
+/// definition, so two instances of one definition still run on unless each restarts itself.
+/// This test once asserted only that the ids differed, passed, and every list in the fixture
+/// after the first came out numbered from where the last one stopped.
 /// </summary>
 public partial class ListTests
 {
@@ -27,6 +32,31 @@ public partial class ListTests
         IReadOnlyList<string> ids = NumberingIds(exported.DocumentXml());
 
         ids.Distinct().Count().ShouldBe(2, "each markdown list needs its own numbering instance");
+
+        string numbering = exported.NumberingXml();
+
+        foreach (string id in ids.Distinct())
+        {
+            Match instance = Regex.Match(numbering, $"<w:num w:numId=\"{id}\">(.*?)</w:num>");
+
+            instance.Success.ShouldBeTrue();
+            instance.Groups[1].Value.ShouldContain(
+                "<w:lvlOverride w:ilvl=\"0\"><w:startOverride w:val=\"1\" /></w:lvlOverride>",
+                customMessage: "an instance that does not restart carries on its definition's count");
+        }
+    }
+
+    [Fact]
+    public async Task A_list_opening_with_a_task_item_restarts_its_nested_levels()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "- [ ] task\n  1. nested\n\nBetween.\n\n- [ ] task\n  1. nested again\n");
+
+        string numbering = exported.NumberingXml();
+
+        Regex.Count(numbering, "<w:lvlOverride w:ilvl=\"1\"><w:startOverride w:val=\"1\" />")
+            .ShouldBeGreaterThanOrEqualTo(2);
+        exported.ValidationErrors().ShouldBeEmpty();
     }
 
     [Fact]

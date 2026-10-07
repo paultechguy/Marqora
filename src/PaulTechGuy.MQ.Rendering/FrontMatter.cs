@@ -1,17 +1,24 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using Markdig;
 using Markdig.Extensions.Yaml;
 using Markdig.Syntax;
 using MarkdigDocument = Markdig.Syntax.MarkdownDocument;
 
-namespace PaulTechGuy.MQ.Docx;
+namespace PaulTechGuy.MQ.Rendering;
 
 /// <summary>
 /// What a document's front matter says about itself: the fields Word keeps about a file.
+///
+/// Here rather than in the Word exporter, where it began, because the PDF needs the same
+/// answer: its title is the front matter's title too, and two readers of one block would be
+/// two opinions about which keys count.
 /// </summary>
-internal sealed record FrontMatter
+public sealed record FrontMatter
 {
+    private static readonly MarkdownPipeline FrontMatterOnly =
+        new MarkdownPipelineBuilder().UseYamlFrontMatter().Build();
     public string? Title { get; init; }
 
     public string? Author { get; init; }
@@ -26,6 +33,34 @@ internal sealed record FrontMatter
     public string? Version { get; init; }
 
     public static FrontMatter None { get; } = new();
+
+    /// <summary>
+    /// The date a cover page shows: the front matter's, or today's.
+    ///
+    /// Written out rather than left as a placeholder because a cover page almost always wants
+    /// a date and this one is true at the moment of export. Not a Word DATE field, which would
+    /// keep updating: a report that is filed and read a year later should say when it was
+    /// written, not claim to be current. Here rather than in either exporter, so the Word cover
+    /// and the PDF cover cannot disagree about which day it is or how to write it.
+    /// </summary>
+    public string CoverDate() =>
+        Date is { Length: > 0 } stated
+            ? stated
+            : DateTime.Now.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Reads the keys from markdown text, for a caller that has no parsed document to hand.
+    /// Front matter is only ever at the very top, so nothing past the closing fence matters.
+    /// </summary>
+    public static FrontMatter Read(string markdown)
+    {
+        ArgumentNullException.ThrowIfNull(markdown);
+
+        return markdown.StartsWith("---", StringComparison.Ordinal)
+            || markdown.StartsWith("﻿---", StringComparison.Ordinal)
+                ? Read(Markdig.Markdown.Parse(markdown, FrontMatterOnly))
+                : None;
+    }
 
     /// <summary>
     /// Reads the handful of keys Word has somewhere to put.
