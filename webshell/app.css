@@ -1631,8 +1631,20 @@ a.mq-blocked-media {
     fresh page with it, found no room there beside it, and went on to the next one - a page
     holding nothing but the heading. The room is a heading of two lines at h1 size with its
     margins, so the two always share a page.
+
+    Six selectors rather than one :is(), and on purpose. The paged print page (print.js) hands
+    this sheet to Paged.js, which rewrites every rule holding a "+" by splitting its selector
+    list on each comma - including the commas inside :is() - and the fragments it then queries
+    are not selectors at all. Every paged PDF failed on this rule before laying out a page.
+    Same elements, same specificity; keep any "+" rule in this file free of commas inside
+    parentheses.
   */
-  .mq-preview :is(h1, h2, h3, h4, h5, h6) + pre.mermaid svg {
+  .mq-preview h1 + pre.mermaid svg,
+  .mq-preview h2 + pre.mermaid svg,
+  .mq-preview h3 + pre.mermaid svg,
+  .mq-preview h4 + pre.mermaid svg,
+  .mq-preview h5 + pre.mermaid svg,
+  .mq-preview h6 + pre.mermaid svg {
     --mq-print-diagram-room: 13em;
   }
 

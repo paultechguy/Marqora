@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    The paged print page: one document, laid out into pages by Paged.js, then printed to a
+    PDF by the host (docs/Export-Alignment-Plan.md, D2 and §6).
+
+    It is never shown. The host loads it into a WebView2 controller of its own, posts the
+    document's print markup to it, and waits for the pages.
+
+    The shell's policy, verbatim, and it is load-bearing here rather than a habit. The markup
+    keeps the "not shown" chips, and inside each chip is the remote picture it stands in for,
+    hidden but still an <img> with an address. Without this policy the page would fetch it -
+    the reason printing the export in a hidden view was once rejected (Architecture.md, Screen
+    and output, decision 3).
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:;
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 img-src 'self' https://marqora.document data: blob:;
+                 media-src 'self' https://marqora.document;
+                 worker-src 'self' blob:;
+                 frame-src 'self';
+                 child-src 'self';
+                 connect-src 'self' blob: data:;" />
+  <title>Marqora</title>
+  <!--
+    No stylesheet links: Paged.js is handed the sheets by print.js, because it rewrites them -
+    it lifts the print block out of @media print, turns @page rules into page boxes, and drops
+    rules for other media. A sheet linked here as well would apply twice, once unrewritten.
+  -->
+  <script src="vendor/pagedjs/paged.js"></script>
+  <script src="print.js"></script>
+</head>
+<body></body>
+</html>

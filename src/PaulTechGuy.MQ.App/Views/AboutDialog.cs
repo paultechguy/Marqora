@@ -47,6 +47,7 @@ internal sealed class AboutDialog : ContentDialog
         ("Mermaid", "11.17.0", "MIT"),
         ("KaTeX", "0.18.4", "MIT"),
         ("highlight.js", "11.12.0", "BSD-3-Clause"),
+        ("Paged.js", "0.4.3", "MIT"),
         ("Markdig", "1.3.2", "BSD-2-Clause"),
         ("DocumentFormat.OpenXml", "3.5.1", "MIT"),
         ("Serilog", "4.4.0", "Apache-2.0"),

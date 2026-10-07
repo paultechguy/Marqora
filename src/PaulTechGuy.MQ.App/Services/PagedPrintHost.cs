@@ -1,0 +1,576 @@
+// Copyright (c) 2026 Paul Carver
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Web.WebView2.Core;
+using PaulTechGuy.MQ.Abstractions.Rendering;
+using PaulTechGuy.MQ.Domain;
+
+namespace PaulTechGuy.MQ.App.Services;
+
+/// <summary>How the print page's controller is kept out of sight - the variable spike S1 tests.</summary>
+internal enum PagedHostMode
+{
+    /// <summary>
+    /// <c>IsVisible = false</c>. Tested on 2026-10-06 and it does not work: Chromium treats a
+    /// controller that is not visible as a hidden page and stops producing the animation
+    /// frames Paged.js steps its layout on, so the fixture never finished - no PDF, no error,
+    /// until the layout timeout. Kept so the result stays reproducible; nothing offers it.
+    /// </summary>
+    Hidden,
+
+    /// <summary>
+    /// Visible, with its bounds outside the window's client area, so nothing is drawn on
+    /// screen but the page is not hidden as far as the browser knows. The mode that works:
+    /// the fixture laid out in about a second (61 pages) and printed in under three.
+    /// </summary>
+    OffScreen,
+}
+
+/// <summary>
+/// The page box Paged.js lays out against, in inches: the paper after orientation, and the
+/// margins inside it. The same four figures whether the pages go to a file or a printer.
+/// </summary>
+internal sealed record PagedPage(
+    double WidthInches,
+    double HeightInches,
+    double VerticalMarginInches,
+    double HorizontalMarginInches)
+{
+    public static PagedPage Of(PdfPageSetup setup)
+    {
+        ArgumentNullException.ThrowIfNull(setup);
+
+        return new(setup.WidthInches, setup.HeightInches, setup.VerticalMarginInches, setup.HorizontalMarginInches);
+    }
+
+    public static PagedPage Of(PrintJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        return new(job.WidthInches, job.HeightInches, job.VerticalMarginInches, job.HorizontalMarginInches);
+    }
+
+    /// <summary>
+    /// The same page with an edge taken off every side and out of every margin, so what is
+    /// inside the margins does not move. A margin smaller than the edge is kept at zero rather
+    /// than going negative; that page's text then sits the difference further in.
+    /// </summary>
+    public PagedPage Inset(double edge) => new(
+        WidthInches - 2 * edge,
+        HeightInches - 2 * edge,
+        Math.Max(0, VerticalMarginInches - edge),
+        Math.Max(0, HorizontalMarginInches - edge));
+}
+
+/// <summary>The cover page's lines. Title always has an answer; the rest are left out when empty.</summary>
+internal sealed record PagedCover(string Title, string? Subtitle, string Date, string? Version, string? Author);
+
+/// <summary>The contents page: its title and the heading levels it lists (ContentsListing).</summary>
+internal sealed record PagedContents(string Title, int First, int Last);
+
+/// <summary>
+/// What surrounds the document on paper: a cover, a contents page, a running header and page
+/// number. The same three choices the Word export makes, so the two can be compared.
+/// </summary>
+internal sealed record PagedFurniture(PagedCover? Cover, PagedContents? Contents, bool HeaderAndFooter);
+
+/// <summary>What one paged job measured, for the spike's log and the status line.</summary>
+internal sealed record PagedPrintResult(
+    int Pages,
+    TimeSpan Layout,
+    TimeSpan Output,
+    long Bytes,
+    bool Tagged,
+    bool Outline,
+    string Visibility,
+    IReadOnlyDictionary<string, bool> Faces,
+    int NotesMoved,
+    int NotesPlaced,
+    int ContentsEntries);
+
+/// <summary>
+/// Lays a document out into pages with Paged.js in a WebView2 that is never shown, then prints
+/// the pages: to a PDF through the DevTools protocol, or to a printer.
+///
+/// The engine the alignment plan chose (docs/Export-Alignment-Plan.md, D2, §6.2), at the stage
+/// of the week-one spike: reached only from a Debug build's File menu, so the questions in §4 -
+/// does a hidden controller lay out at all, how fast, at what scale, with which faces, and
+/// what a real printer makes of the pages - are answered in the real app before Export to PDF
+/// or Print depends on any of it.
+///
+/// One controller per job, created and closed here. The plan's long-lived host with a queue
+/// is phase 2; Paged.js cannot run twice in one page anyway, so a fresh navigation per job is
+/// the design either way.
+/// </summary>
+internal static class PagedPrintHost
+{
+    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan LayoutTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan PrintTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// The margin a printer job asks the printer for, in inches.
+    ///
+    /// Not zero, though Paged.js draws the page's margins itself. A job of zero margins asks a
+    /// printer for edge-to-edge, which a laser cannot do: sent to an HP LaserJet, both pages
+    /// reached the spooler and Chromium never closed the job, which spooled until its process
+    /// was killed. Microsoft Print to PDF took the same pages without complaint. So the pages
+    /// are laid out this much smaller on every side, with margins this much smaller, and the
+    /// printer is asked for exactly this much - the text, header and footer land where they
+    /// would have, and nothing asks the printer for its unprintable edge.
+    /// </summary>
+    private const double PrinterEdgeInches = 0.25;
+
+    /// <param name="printMarkup">
+    /// The shell's <c>requestPrintHtml</c> answer: JSON with the markup, the theme stylesheet
+    /// and the root style.
+    /// </param>
+    public static Task<PagedPrintResult> ExportAsync(
+        CoreWebView2Environment environment,
+        IntPtr parentWindow,
+        IWebAssetProvider assets,
+        string printMarkup,
+        PdfPageSetup setup,
+        string title,
+        PagedFurniture furniture,
+        string path,
+        PagedHostMode mode,
+        ILogger logger)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        return RunAsync(
+            environment,
+            parentWindow,
+            assets,
+            printMarkup,
+            PagedPage.Of(setup),
+            title,
+            furniture,
+            mode,
+            "PDF",
+            logger,
+            async core =>
+            {
+                byte[] pdf = await PrintToPdfAsync(core, logger).ConfigureAwait(true);
+
+                await File.WriteAllBytesAsync(path, pdf).ConfigureAwait(true);
+
+                // Read from the file itself rather than trusted from the request: a runtime
+                // that does not know a flag may ignore it without saying so.
+                return (pdf.LongLength, Contains(pdf, "/StructTreeRoot"), Contains(pdf, "/Outlines"));
+            });
+    }
+
+    /// <summary>
+    /// The same pages, to the printer the user chose - spike S5.
+    ///
+    /// The pages already carry their margins: Paged.js draws them inside its page boxes. The
+    /// box is the paper less PrinterEdgeInches on every side, the job asks for exactly that edge
+    /// as its margins and no scaling, so the text lands where the PDF puts it. Zero margins hung
+    /// an HP LaserJet; see PrinterEdgeInches. What remains in question is whether a driver
+    /// rescales a page it was told is exactly its printable area.
+    /// </summary>
+    public static Task<PagedPrintResult> PrintAsync(
+        CoreWebView2Environment environment,
+        IntPtr parentWindow,
+        IWebAssetProvider assets,
+        string printMarkup,
+        PrintJob job,
+        string title,
+        PagedFurniture furniture,
+        PagedHostMode mode,
+        ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        return RunAsync(
+            environment,
+            parentWindow,
+            assets,
+            printMarkup,
+            PagedPage.Of(job).Inset(PrinterEdgeInches),
+            title,
+            furniture,
+            mode,
+            "print to " + job.PrinterName,
+            logger,
+            async core =>
+            {
+                await SendToPrinterAsync(core, job, logger).ConfigureAwait(true);
+
+                return (0L, false, false);
+            });
+    }
+
+    private static async Task<PagedPrintResult> RunAsync(
+        CoreWebView2Environment environment,
+        IntPtr parentWindow,
+        IWebAssetProvider assets,
+        string printMarkup,
+        PagedPage page,
+        string title,
+        PagedFurniture furniture,
+        PagedHostMode mode,
+        string output,
+        ILogger logger,
+        Func<CoreWebView2, Task<(long Bytes, bool Tagged, bool Outline)>> emit)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(assets);
+        ArgumentException.ThrowIfNullOrWhiteSpace(printMarkup);
+
+        CoreWebView2Controller controller = await environment.CreateCoreWebView2ControllerAsync(
+            CoreWebView2ControllerWindowReference.CreateFromWindowHandle((ulong)parentWindow));
+
+        try
+        {
+            CoreWebView2 core = Prepare(controller, assets, page, mode);
+
+            var clock = Stopwatch.StartNew();
+
+            JsonElement measured = await LayOutAsync(core, assets, printMarkup, page, title, furniture).ConfigureAwait(true);
+
+            // Step by step, because a print that stalls says nothing else: the first printer run
+            // logged the dialog and then silence, which could have been either step.
+            logger.LogInformation("Paged {Output}: laid out in {Layout} ms; sending.", output, (long)clock.Elapsed.TotalMilliseconds);
+
+            TimeSpan layout = clock.Elapsed;
+
+            clock.Restart();
+
+            (long bytes, bool tagged, bool outline) = await emit(core).ConfigureAwait(true);
+
+            TimeSpan emitted = clock.Elapsed;
+
+            var faces = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+            if (measured.TryGetProperty("faces", out JsonElement faceList))
+            {
+                foreach (JsonProperty face in faceList.EnumerateObject())
+                {
+                    faces[face.Name] = face.Value.ValueKind == JsonValueKind.True;
+                }
+            }
+
+            var result = new PagedPrintResult(
+                measured.TryGetProperty("pages", out JsonElement pages) ? pages.GetInt32() : 0,
+                layout,
+                emitted,
+                bytes,
+                tagged,
+                outline,
+                measured.TryGetProperty("visibility", out JsonElement v) ? v.GetString() ?? "?" : "?",
+                faces,
+                Count(measured, "notesMoved"),
+                Count(measured, "notesPlaced"),
+                Count(measured, "contentsEntries"));
+
+            logger.LogInformation(
+                "Paged {Output} ({Mode}): {Pages} pages, layout {Layout} ms, output {Emitted} ms, {Bytes} bytes, tagged {Tagged}, outline {Outline}, page {Visibility}, faces {Faces}, footnotes {Placed} of {Moved} at the page foot, contents {Entries} entries, cover {Cover}.",
+                output,
+                mode,
+                result.Pages,
+                (long)layout.TotalMilliseconds,
+                (long)emitted.TotalMilliseconds,
+                bytes,
+                tagged,
+                outline,
+                result.Visibility,
+                string.Join(", ", faces.Select(f => f.Key + "=" + (f.Value ? "yes" : "no"))),
+                result.NotesPlaced,
+                result.NotesMoved,
+                result.ContentsEntries,
+                furniture.Cover is not null);
+
+            logger.LogInformation(
+                "Paged {Output}: footnote markup found - {Found}.",
+                output,
+                measured.TryGetProperty("notesFound", out JsonElement found) ? found.GetString() : "not reported");
+
+            return result;
+        }
+        finally
+        {
+            controller.Close();
+        }
+    }
+
+    /// <summary>The controller sized to one page at 96 dpi, kept out of sight as asked, settings applied.</summary>
+    private static CoreWebView2 Prepare(
+        CoreWebView2Controller controller,
+        IWebAssetProvider assets,
+        PagedPage page,
+        PagedHostMode mode)
+    {
+        int width = (int)Math.Ceiling(page.WidthInches * 96);
+        int height = (int)Math.Ceiling(page.HeightInches * 96);
+
+        controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 255, 255, 255);
+
+        if (mode == PagedHostMode.Hidden)
+        {
+            controller.IsVisible = false;
+            controller.Bounds = new Windows.Foundation.Rect(0, 0, width, height);
+        }
+        else
+        {
+            controller.IsVisible = true;
+            controller.Bounds = new Windows.Foundation.Rect(-width - 10_000, -height - 10_000, width, height);
+        }
+
+        CoreWebView2 core = controller.CoreWebView2;
+
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        core.Settings.IsStatusBarEnabled = false;
+#if DEBUG
+        core.Settings.AreDevToolsEnabled = true;
+#else
+        core.Settings.AreDevToolsEnabled = false;
+#endif
+
+        core.SetVirtualHostNameToFolderMapping(
+            assets.VirtualHostName,
+            assets.RootDirectory,
+            CoreWebView2HostResourceAccessKind.Allow);
+
+        return core;
+    }
+
+    /// <summary>Loads the print page, hands it the document, and waits for its pages.</summary>
+    private static async Task<JsonElement> LayOutAsync(
+        CoreWebView2 core,
+        IWebAssetProvider assets,
+        string printMarkup,
+        PagedPage page,
+        string title,
+        PagedFurniture furniture)
+    {
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rendered = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        core.WebMessageReceived += (_, e) =>
+        {
+            using JsonDocument message = JsonDocument.Parse(e.WebMessageAsJson);
+            JsonElement root = message.RootElement;
+            string type = root.TryGetProperty("type", out JsonElement t) ? t.GetString() ?? string.Empty : string.Empty;
+
+            switch (type)
+            {
+                case "ready":
+                    ready.TrySetResult();
+                    break;
+                case "rendered":
+                    rendered.TrySetResult(root.Clone());
+                    break;
+                case "failed":
+                    rendered.TrySetException(new InvalidOperationException(
+                        "The print page could not lay the document out: "
+                        + (root.TryGetProperty("message", out JsonElement m) ? m.GetString() : "no reason given")));
+                    break;
+            }
+        };
+
+        core.Navigate($"https://{assets.VirtualHostName}/print.html");
+
+        await WithTimeout(ready.Task, ReadyTimeout, "The print page did not load.").ConfigureAwait(true);
+
+        using (JsonDocument markup = JsonDocument.Parse(printMarkup))
+        {
+            JsonElement m = markup.RootElement;
+
+            core.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                type = "paginate",
+                html = m.GetProperty("html").GetString(),
+                themeCss = m.GetProperty("themeCss").GetString(),
+                rootStyle = m.GetProperty("rootStyle").GetString(),
+                title,
+                page = new
+                {
+                    widthInches = page.WidthInches,
+                    heightInches = page.HeightInches,
+                    verticalMarginInches = page.VerticalMarginInches,
+                    horizontalMarginInches = page.HorizontalMarginInches,
+                },
+                furniture = new
+                {
+                    headerAndFooter = furniture.HeaderAndFooter,
+                    cover = furniture.Cover is { } cover
+                        ? new
+                        {
+                            title = cover.Title,
+                            subtitle = cover.Subtitle,
+                            date = cover.Date,
+                            version = cover.Version,
+                            author = cover.Author,
+                        }
+                        : null,
+                    contents = furniture.Contents is { } contents
+                        ? new { title = contents.Title, first = contents.First, last = contents.Last }
+                        : null,
+                },
+            }));
+        }
+
+        return await WithTimeout(
+            rendered.Task, LayoutTimeout, "Paged.js did not finish laying the document out.").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Page.printToPDF with the outline and tags asked for, and without them if this runtime
+    /// refuses the flags - they are marked experimental, and an untagged PDF is not a failure.
+    ///
+    /// Zero margins and the CSS page size: Paged.js has already drawn the margins inside its
+    /// page boxes, and the protocol's own default of 0.4 in would be added on top.
+    /// </summary>
+    private static async Task<byte[]> PrintToPdfAsync(CoreWebView2 core, ILogger logger)
+    {
+        string Parameters(bool tagged) => JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["printBackground"] = true,
+            ["preferCSSPageSize"] = true,
+            ["marginTop"] = 0,
+            ["marginBottom"] = 0,
+            ["marginLeft"] = 0,
+            ["marginRight"] = 0,
+            ["displayHeaderFooter"] = false,
+            ["generateTaggedPDF"] = tagged,
+            ["generateDocumentOutline"] = tagged,
+        });
+
+        string answer;
+
+        try
+        {
+            answer = await core.CallDevToolsProtocolMethodAsync("Page.printToPDF", Parameters(true));
+        }
+        catch (Exception ex) when (ex is ArgumentException or COMException or InvalidOperationException)
+        {
+            logger.LogWarning(ex, "Page.printToPDF refused the outline and tag flags; printing without them.");
+            answer = await core.CallDevToolsProtocolMethodAsync("Page.printToPDF", Parameters(false));
+        }
+
+        using JsonDocument document = JsonDocument.Parse(answer);
+
+        return Convert.FromBase64String(document.RootElement.GetProperty("data").GetString() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// The pages to a printer, on the settings WebViewPrinting.PrintAsync uses for the live
+    /// page - printer, copies, collation, color, sides - except the page itself: the paper
+    /// Paged.js laid out against, margins of PrinterEdgeInches, no scaling, no browser band.
+    /// </summary>
+    private static async Task SendToPrinterAsync(CoreWebView2 core, PrintJob job, ILogger logger)
+    {
+        CoreWebView2PrintSettings settings = core.Environment.CreatePrintSettings();
+
+        settings.PrinterName = job.PrinterName;
+        settings.Copies = job.Copies;
+        settings.Collation = job.Collate
+            ? CoreWebView2PrintCollation.Collated
+            : CoreWebView2PrintCollation.Uncollated;
+
+        settings.Orientation = job.Orientation == PageOrientation.Landscape
+            ? CoreWebView2PrintOrientation.Landscape
+            : CoreWebView2PrintOrientation.Portrait;
+
+        settings.MediaSize = CoreWebView2PrintMediaSize.Custom;
+        settings.PageWidth = job.WidthInches;
+        settings.PageHeight = job.HeightInches;
+
+        // The printer's own margins are the edge the page was inset by (PrinterEdgeInches), so
+        // the text lands exactly where the PDF puts it; see that constant for why not zero.
+        settings.MarginTop = PrinterEdgeInches;
+        settings.MarginBottom = PrinterEdgeInches;
+        settings.MarginLeft = PrinterEdgeInches;
+        settings.MarginRight = PrinterEdgeInches;
+
+        settings.ShouldPrintBackgrounds = job.IncludeBackgrounds;
+        settings.ShouldPrintHeaderAndFooter = false;
+        settings.ScaleFactor = 1.0;
+
+        settings.ColorMode = job.ColorMode switch
+        {
+            PrintColorMode.Color => CoreWebView2PrintColorMode.Color,
+            PrintColorMode.Grayscale => CoreWebView2PrintColorMode.Grayscale,
+            _ => CoreWebView2PrintColorMode.Default,
+        };
+
+        settings.Duplex = job.Duplex switch
+        {
+            PrintDuplex.OneSided => CoreWebView2PrintDuplex.OneSided,
+            PrintDuplex.LongEdge => CoreWebView2PrintDuplex.TwoSidedLongEdge,
+            PrintDuplex.ShortEdge => CoreWebView2PrintDuplex.TwoSidedShortEdge,
+            _ => CoreWebView2PrintDuplex.Default,
+        };
+
+        if (!string.IsNullOrWhiteSpace(job.PageRanges))
+        {
+            settings.PageRanges = job.PageRanges;
+        }
+
+        var clock = Stopwatch.StartNew();
+
+        logger.LogInformation(
+            "Paged print: handing {Printer} {Width}x{Height} in, margins {Edge} in, pages {Ranges}.",
+            job.PrinterName,
+            job.WidthInches,
+            job.HeightInches,
+            PrinterEdgeInches,
+            string.IsNullOrWhiteSpace(job.PageRanges) ? "all" : job.PageRanges);
+
+        // Bounded. The first run to a real printer never came back: the spooler showed the job
+        // spooling with nothing reaching the paper, and the app waited on this call for ever.
+        CoreWebView2PrintStatus status = await WithTimeout(
+            core.PrintAsync(settings).AsTask(),
+            PrintTimeout,
+            $"{job.PrinterName} did not accept the pages").ConfigureAwait(true);
+
+        logger.LogInformation(
+            "Paged print: {Printer} answered {Status} after {Elapsed} ms.",
+            job.PrinterName,
+            status,
+            (long)clock.Elapsed.TotalMilliseconds);
+
+        if (status != CoreWebView2PrintStatus.Succeeded)
+        {
+            throw new IOException(status == CoreWebView2PrintStatus.PrinterUnavailable
+                ? $"{job.PrinterName} is not available."
+                : $"The pages could not be sent to {job.PrinterName}.");
+        }
+    }
+
+    /// <summary>A number the print page reported, or zero when it did not report one.</summary>
+    private static int Count(JsonElement measured, string name) =>
+        measured.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32()
+            : 0;
+
+    /// <summary>Whether an ASCII marker occurs in the bytes - a PDF's dictionary keys are ASCII.</summary>
+    private static bool Contains(byte[] bytes, string marker) =>
+        bytes.AsSpan().IndexOf(System.Text.Encoding.ASCII.GetBytes(marker)) >= 0;
+
+    private static async Task WithTimeout(Task task, TimeSpan timeout, string message)
+    {
+        if (await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(true) != task)
+        {
+            throw new TimeoutException(message + " (" + timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture) + " s)");
+        }
+
+        await task.ConfigureAwait(true);
+    }
+
+    private static async Task<T> WithTimeout<T>(Task<T> task, TimeSpan timeout, string message)
+    {
+        await WithTimeout((Task)task, timeout, message).ConfigureAwait(true);
+
+        return await task.ConfigureAwait(true);
+    }
+}

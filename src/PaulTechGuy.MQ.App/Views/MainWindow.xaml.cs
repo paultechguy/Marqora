@@ -108,6 +108,9 @@ public sealed partial class MainWindow : Window
         ConfigureChrome();
         BuildColorThemeChoices();
         RegisterAccelerators();
+#if DEBUG
+        AddPagedPdfSpike();
+#endif
 
         // Alt accelerators fire on the key-down, but the message loop still translates the
         // press into a WM_SYSCHAR that DefWindowProc answers with a beep. The filter blanks

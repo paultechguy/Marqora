@@ -3,9 +3,10 @@
     Restores the third-party web assets the Marqora preview shell depends on.
 
 .DESCRIPTION
-    Monaco, Mermaid and KaTeX are pulled from the npm registry and unpacked into
-    webshell/vendor. That folder is git-ignored, so run this
-    once after cloning and again whenever the pinned versions below change.
+    Monaco, Mermaid, KaTeX, highlight.js and Paged.js are pulled from the npm registry and
+    unpacked into webshell/vendor. That folder is git-ignored, so run this once after cloning,
+    again whenever the pinned versions below change, and again when a package is added - a
+    package whose folder is missing is fetched on its own, without -Force.
 
     Everything is served locally from a WebView2 virtual host: the app makes no network
     calls at runtime and renders correctly offline.
@@ -30,6 +31,9 @@ $packages = @(
     @{ Name = 'mermaid';                  Version = '11.17.0'; Target = 'mermaid' }
     @{ Name = 'katex';                    Version = '0.18.4';  Target = 'katex' }
     @{ Name = '@highlightjs/cdn-assets';  Version = '11.12.0'; Target = 'highlight' }
+    # The paged-media layout for PDF and print (docs/Export-Alignment-Plan.md, D2). 0.4.3 is
+    # npm's latest; 0.5 is a beta with an open performance regression.
+    @{ Name = 'pagedjs';                  Version = '0.4.3';   Target = 'pagedjs' }
 )
 
 $repoRoot  = Split-Path -Parent $PSScriptRoot
@@ -70,9 +74,12 @@ function Copy-Asset {
     Copy-Item -Path $From -Destination $To -Recurse -Force
 }
 
-if ((Test-Path $vendorDir) -and -not $Force) {
-    $existing = @(Get-ChildItem -Path $vendorDir -Directory -ErrorAction SilentlyContinue)
-    if ($existing.Count -ge 3) {
+# Without -Force, only what is missing. Counting folders, as this once did, meant a package
+# added to the list above was never fetched on a machine that already had the others.
+if (-not $Force) {
+    $packages = @($packages | Where-Object { -not (Test-Path (Join-Path $vendorDir $_.Target)) })
+
+    if ($packages.Count -eq 0) {
         Write-Host 'Web assets already present. Re-run with -Force to refresh.' -ForegroundColor Yellow
         return
     }
@@ -134,6 +141,13 @@ try {
                 Copy-Asset -From (Join-Path $root 'highlight.min.js') -To (Join-Path $dest 'highlight.min.js')
                 Copy-Asset -From (Join-Path $root 'styles/github.min.css') -To (Join-Path $dest 'github.min.css')
                 Copy-Asset -From (Join-Path $root 'styles/github-dark.min.css') -To (Join-Path $dest 'github-dark.min.css')
+            }
+            'pagedjs' {
+                # The UMD build, which sets window.Paged and does nothing else. Not the
+                # polyfill build: that one paginates the page it is loaded into, on load,
+                # and the print page has to hand it the document first.
+                Copy-Asset -From (Join-Path $root 'dist/paged.js') -To (Join-Path $dest 'paged.js')
+                Copy-Asset -From (Join-Path $root 'LICENSE.md') -To (Join-Path $dest 'LICENSE.md')
             }
             'katex' {
                 Copy-Asset -From (Join-Path $root 'dist/katex.min.js')  -To (Join-Path $dest 'katex.min.js')

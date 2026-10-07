@@ -1099,6 +1099,7 @@ Restored by `build/Get-WebAssets.ps1`, served locally, never fetched at runtime.
 | [Mermaid](https://github.com/mermaid-js/mermaid)            | 11.17.0 | MIT          |
 | [KaTeX](https://github.com/KaTeX/KaTeX)                     | 0.18.4  | MIT          |
 | [highlight.js](https://github.com/highlightjs/highlight.js) | 11.12.0 | BSD-3-Clause |
+| [Paged.js](https://github.com/pagedjs/pagedjs)             | 0.4.3   | MIT          |
 
 NuGet: Markdig, CommunityToolkit.Mvvm, Serilog, Windows App SDK, WebView2.
 

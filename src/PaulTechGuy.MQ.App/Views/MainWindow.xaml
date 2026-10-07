@@ -444,7 +444,7 @@
                             offers markdown, a Folio is an .html file, and unpacking one writes a
                             folder rather than opening a document.
                         -->
-                        <MenuFlyoutSubItem Text="Export">
+                        <MenuFlyoutSubItem x:Name="ExportMenu" Text="Export">
                             <MenuFlyoutItem Text="Export to PDF..."
                                             Command="{x:Bind ViewModel.ExportPdfCommand}"
                                             ToolTipService.ToolTip="Export the preview as a PDF, exactly as it appears">

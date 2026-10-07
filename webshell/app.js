@@ -6271,6 +6271,31 @@
       exactly as rendered, diagrams and math included, so the host asks for it and matches
       the reply by request id rather than assuming the next message back is the answer.
     */
+    /*
+      The document as the paged print host lays it out (docs/Export-Alignment-Plan.md, §6.1).
+
+      Not requestRenderedHtml's markup, which is the HTML export's: that restores the remote
+      pictures the "not shown" chips stand in for, and printing it in another view was weighed
+      and rejected for exactly that (Architecture.md, Screen and output, decision 3). This keeps
+      the chips, takes the light drawings and drops review marks - what the printer paints
+      today, serialized. With it go the theme stylesheet color-theme.js wrote and the root's own
+      properties (the accent), because the print page has no host of its own to ask.
+    */
+    requestPrintHtml: function (p) {
+      whenOutputReady().then(function () {
+        var theme = document.getElementById('mq-theme');
+
+        post('printHtml', {
+          requestId: p.requestId,
+          data: JSON.stringify({
+            html: outputMarkup(withoutCommentMarks(els.preview.cloneNode(true))).innerHTML,
+            themeCss: theme ? theme.textContent : '',
+            rootStyle: document.documentElement.getAttribute('style') || ''
+          })
+        });
+      });
+    },
+
     requestRenderedHtml: function (p) {
       // Without comment marks: the HTML export, Word and the diagram artifacts are the
       // document, not a review of it. Only requestReviewHtml keeps them. With the light

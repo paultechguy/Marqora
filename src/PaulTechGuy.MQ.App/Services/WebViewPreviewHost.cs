@@ -1248,6 +1248,61 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     }
 
     /// <summary>
+    /// The active document as a PDF through the paged engine: Paged.js in a WebView2 of its
+    /// own, then DevTools' Page.printToPDF. See <see cref="PagedPrintHost"/>.
+    ///
+    /// Reached only from a Debug build's File menu for now - the week-one spike in
+    /// docs/Export-Alignment-Plan.md, §4 - while Export to PDF keeps printing this page.
+    /// </summary>
+    internal async Task<PagedPrintResult> ExportPagedPdfAsync(
+        string path,
+        PdfPageSetup setup,
+        string title,
+        PagedFurniture furniture,
+        PagedHostMode mode,
+        IntPtr parentWindow)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(setup);
+
+        if (_webView.CoreWebView2 is not { } core)
+        {
+            throw new InvalidOperationException("The preview is not ready to export.");
+        }
+
+        string markup = await AskShellAsync("requestPrintHtml", id => new { requestId = id }).ConfigureAwait(true)
+            ?? throw new InvalidOperationException("The preview did not hand over the document's markup.");
+
+        return await PagedPrintHost.ExportAsync(
+            core.Environment, parentWindow, _assets, markup, setup, title, furniture, path, mode, _logger).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The active document to a printer through the paged engine - spike S5, Debug builds only
+    /// for now, while Print keeps printing this page.
+    /// </summary>
+    internal async Task<PagedPrintResult> PrintPagedAsync(
+        PrintJob job,
+        string title,
+        PagedFurniture furniture,
+        PagedHostMode mode,
+        IntPtr parentWindow)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        if (_webView.CoreWebView2 is not { } core)
+        {
+            throw new InvalidOperationException("The preview is not ready to print.");
+        }
+
+        string markup = await AskShellAsync("requestPrintHtml", id => new { requestId = id }).ConfigureAwait(true)
+            ?? throw new InvalidOperationException("The preview did not hand over the document's markup.");
+
+        return await PagedPrintHost.PrintAsync(
+            core.Environment, parentWindow, _assets, markup, job, title, furniture, mode, _logger).ConfigureAwait(true);
+    }
+
+    /// <summary>
     /// Prints the preview to the printer the user chose, with no dialog of the WebView's own.
     ///
     /// Neither dialog the WebView can raise is any use here. Its print preview is a browser
@@ -1636,6 +1691,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 }
                 break;
 
+            case "printHtml":
             case "diagramPng":
             case "diagramSvg":
             case "outputReady":
