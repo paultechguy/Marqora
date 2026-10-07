@@ -40,9 +40,13 @@ Two consequences worth knowing when testing:
   preview has not finished rendering yet"*. Word degrades instead — code loses its colors, math
   falls back to TeX source, a diagram falls back to its source as a code block — and a document
   always comes out.
-- **The visual target is Word-idiomatic, not a twin of the PDF.** Aptos/Calibri, Word's heading
-  scale, Word's built-in styles. Comparing an export against a PDF is a **content and structure**
-  check, not a pixel check. Line breaks, page breaks and spacing will differ; that is expected.
+- **The visual target is the paper spec, shared with the PDF.** Faces, sizes, weights, line
+  height and spacing come from `PaperSpec` and `PaperFaces` in Domain (`docs/Paper-Design.md`),
+  which the print stylesheet reads too — Segoe UI and Cascadia Mono, the preview's heading scale,
+  11 pt body at 1.4 lines. Word's built-in styles are still the containers. This replaced
+  "Word-idiomatic, not a twin of the PDF" (Aptos, Word's heading scale) on 2026-10-07; see
+  `docs/Export-Alignment-Plan.md`, D1. Comparing an export against a PDF still is not a pixel
+  check: two layout engines break lines and pages in different places.
 
 ---
 
@@ -278,7 +282,7 @@ by styleId. Getting that wrong makes the style vanish from Word's gallery.
 | `TOC1..3` | ordinary body text with an indent per level. Without these the contents wear the formatting of the headings they came from — bold, heading face, a different size every line |
 | `TOCHeading` | see above |
 | `MarqoraCode` | shading and border from the theme's code-block slots, on all four sides at **8pt space**, `Before/After 160`, `ContextualSpacing`, mono, `NoProof`, **not bold** |
-| `MarqoraCodeChar` | inline code, **bold** — a deliberate asymmetry: a word of code in a sentence has to hold its own against the prose; thirty lines in a shaded box already stand apart |
+| `MarqoraCodeChar` | inline code, regular weight, as in the PDF (`PaperSpec.CodeInline`). It was bold once, on purpose - a word of code in a sentence holding its own against the prose - and gave way so the two exports match; the face and the tinted background still mark it out |
 | `MarqoraCallout{Kind}` | left bar in the kind's bar color, plus **top and bottom borders in the fill color** |
 | `MarqoraCallout{Kind}Title` | bold, in the kind's title color, `Before 0 / After 0` |
 | `MarqoraTable` | header fill, ink and rule, and a stripe on every other body row, all from the theme; `tblW pct 5000` + `tblLayout autofit` = Word's *AutoFit to Window* |

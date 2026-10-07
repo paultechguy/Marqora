@@ -23,17 +23,15 @@ namespace PaulTechGuy.MQ.Docx;
 /// reference outranks the literal written beside it, so a reference would quietly put the
 /// scheme's color back over the theme's. The one exception is the hyperlink, whose scheme
 /// slot DocxTheme sets to the theme's link color, so the two cannot disagree.
+///
+/// Type and space are the paper spec's (<see cref="PaperSpec"/>), the same values the print
+/// stylesheet reads, so the .docx and the PDF of one document are set alike. Every size, line
+/// height, gap and face below comes from there; nothing here states one of its own. Faces are
+/// reached by role - text and display through the document theme, which DocxTheme sets from
+/// <see cref="PaperFaces"/>, and code by name from the same place.
 /// </summary>
 internal static class DocxStyles
 {
-    /// <summary>Body text, in half-points. 24 is 12pt, which is Word's own Aptos-era default.</summary>
-    private const int BodyHalfPoints = 24;
-
-    /// <summary>Code, a little smaller so a wide line has a chance of fitting.</summary>
-    private const int CodeHalfPoints = 19;
-
-    private const string CodeFont = "Cascadia Mono";
-
     /// <param name="colors">
     /// The color theme's light palette. Every color a style carries comes from it, so the
     /// exported document wears the theme the preview does.
@@ -97,27 +95,18 @@ internal static class DocxStyles
     }
 
     /// <summary>
-    /// What every paragraph and run starts from before any style applies.
-    ///
-    /// The font is a theme reference so that swapping the theme swaps the document. The
-    /// spacing is Word's own: 8pt after a paragraph, and 1.08 lines - which is what a line
-    /// value of 278 means, 240 being single.
+    /// What every paragraph and run starts from before any style applies: the paper spec's
+    /// body text. The font is a theme reference so that swapping the theme swaps the document.
     /// </summary>
     private static DocDefaults BuildDocDefaults() => new(
         new RunPropertiesDefault(
             new RunPropertiesBaseStyle(
                 MinorThemeFont(),
-                new FontSize { Val = Text(BodyHalfPoints) },
-                new FontSizeComplexScript { Val = Text(BodyHalfPoints) },
+                SizeOf(PaperSpec.Body),
+                ComplexSizeOf(PaperSpec.Body),
                 new Languages { Val = "en-US" })),
         new ParagraphPropertiesDefault(
-            new ParagraphPropertiesBaseStyle(
-                new SpacingBetweenLines
-                {
-                    After = "160",
-                    Line = "278",
-                    LineRule = LineSpacingRuleValues.Auto,
-                })));
+            new ParagraphPropertiesBaseStyle(SpacingOf(PaperSpec.Body))));
 
     /// <summary>
     /// How Word should treat the several hundred styles this file never mentions.
@@ -235,17 +224,12 @@ internal static class DocxStyles
         new UIPriority { Val = 10 },
         new PrimaryStyle(),
         new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                After = "80",
-                Line = "240",
-                LineRule = LineSpacingRuleValues.Auto,
-            },
+            SpacingOf(PaperSpec.CoverTitle),
             new ContextualSpacing()),
         new StyleRunProperties(
-            MajorThemeFont(),
-            new FontSize { Val = "56" },
-            new FontSizeComplexScript { Val = "56" }))
+            FontOf(PaperSpec.CoverTitle),
+            SizeOf(PaperSpec.CoverTitle),
+            ComplexSizeOf(PaperSpec.CoverTitle)))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.Title,
@@ -257,25 +241,20 @@ internal static class DocxStyles
         new NextParagraphStyle { Val = StyleIds.Normal },
         new UIPriority { Val = 11 },
         new PrimaryStyle(),
-        new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                After = "160",
-                Line = "278",
-                LineRule = LineSpacingRuleValues.Auto,
-            }),
+        new StyleParagraphProperties(SpacingOf(PaperSpec.CoverSubtitle)),
         new StyleRunProperties(
-            MajorThemeFont(),
+            FontOf(PaperSpec.CoverSubtitle),
             new Color { Val = "595959" },
-            new FontSize { Val = "28" },
-            new FontSizeComplexScript { Val = "28" }))
+            SizeOf(PaperSpec.CoverSubtitle),
+            ComplexSizeOf(PaperSpec.CoverSubtitle)))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.Subtitle,
     };
 
     /// <summary>
-    /// Headings one to six, on Word's own scale.
+    /// Headings one to six, on the paper spec's scale - the preview's own, so a heading is the
+    /// same size in the PDF and the .docx - in the display face, which is semibold.
     ///
     /// The outline level is the load-bearing part and the one with no visible effect: it is
     /// what the navigation pane reads, what a table-of-contents field collects, and what Word
@@ -284,24 +263,21 @@ internal static class DocxStyles
     /// </summary>
     private static Style HeadingStyle(int level, HeadingNumbering numbering, int? numberId, DocxColors colors)
     {
-        (int size, string before, string after) = level switch
-        {
-            1 => (40, "360", "80"),
-            2 => (32, "160", "80"),
-            3 => (28, "160", "80"),
-            4 => (24, "80", "40"),
-            5 => (24, "80", "40"),
-            _ => (24, "40", "40"),
-        };
+        PaperElement element = PaperSpec.Heading(level);
 
-        var runProperties = new StyleRunProperties(MajorThemeFont());
+        var runProperties = new StyleRunProperties(FontOf(element));
 
-        // Italic before color, not after. w:rPr is a schema sequence and it runs
-        // rFonts, b, i, ... noProof, color, ... sz - so the toggles come first and the
+        // The toggles before color, not after. w:rPr is a schema sequence and it runs
+        // rFonts, b, i, caps, ... noProof, color, ... sz - so the toggles come first and the
         // color and size follow, which is the opposite of how a stylesheet reads.
-        if (level == 4)
+        if (element.Italic)
         {
             runProperties.AppendChild(new Italic());
+        }
+
+        if (element.Uppercase)
+        {
+            runProperties.AppendChild(new Caps());
         }
 
         // The color theme's own color for the level, written as a plain color rather than a
@@ -311,8 +287,8 @@ internal static class DocxStyles
         // before a heading had a color of its own.
         runProperties.AppendChild(new Color { Val = colors.Heading(level) });
 
-        runProperties.AppendChild(new FontSize { Val = Text(size) });
-        runProperties.AppendChild(new FontSizeComplexScript { Val = Text(size) });
+        runProperties.AppendChild(SizeOf(element));
+        runProperties.AppendChild(ComplexSizeOf(element));
 
         var paragraphProperties = new StyleParagraphProperties(new KeepNext(), new KeepLines());
 
@@ -352,13 +328,7 @@ internal static class DocxStyles
             paragraphProperties.AppendChild(rule);
         }
 
-        paragraphProperties.AppendChild(new SpacingBetweenLines
-        {
-            Before = before,
-            After = after,
-            Line = "240",
-            LineRule = LineSpacingRuleValues.Auto,
-        });
+        paragraphProperties.AppendChild(SpacingOf(element));
 
         paragraphProperties.AppendChild(new OutlineLevel { Val = level - 1 });
 
@@ -398,8 +368,21 @@ internal static class DocxStyles
             paragraph.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = fill });
         }
 
-        paragraph.AppendChild(new SpacingBetweenLines { Before = "160", After = "160" });
+        paragraph.AppendChild(SpacingOf(PaperSpec.Quote));
         paragraph.AppendChild(new Indentation { Left = "432", Right = "432" });
+
+        // Upright, as the preview sets a quote: the bar, the fill and the ink already mark it
+        // out, and the paper spec settled on upright for both exports.
+        var run = new StyleRunProperties();
+
+        if (PaperSpec.Quote.Italic)
+        {
+            run.AppendChild(new Italic());
+        }
+
+        run.AppendChild(new Color { Val = colors.QuoteText });
+        run.AppendChild(SizeOf(PaperSpec.Quote));
+        run.AppendChild(ComplexSizeOf(PaperSpec.Quote));
 
         return new Style(
             new StyleName { Val = "Quote" },
@@ -408,9 +391,7 @@ internal static class DocxStyles
             new UIPriority { Val = 29 },
             new PrimaryStyle(),
             paragraph,
-            new StyleRunProperties(
-                new Italic(),
-                new Color { Val = colors.QuoteText }))
+            run)
         {
             Type = StyleValues.Paragraph,
             StyleId = StyleIds.Quote,
@@ -425,19 +406,13 @@ internal static class DocxStyles
         new UnhideWhenUsed(),
         new PrimaryStyle(),
         new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                Before = "0",
-                After = "200",
-                Line = "240",
-                LineRule = LineSpacingRuleValues.Auto,
-            },
+            SpacingOf(PaperSpec.Caption),
             new Justification { Val = JustificationValues.Center }),
         new StyleRunProperties(
             new Italic(),
             new Color { Val = "5D5D5D" },
-            new FontSize { Val = "20" },
-            new FontSizeComplexScript { Val = "20" }))
+            SizeOf(PaperSpec.Caption),
+            ComplexSizeOf(PaperSpec.Caption)))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.Caption,
@@ -515,28 +490,21 @@ internal static class DocxStyles
             // has the same style, so ten code lines sit tight against each other and the
             // prose after the last one still gets its air. Set to zero here, the next
             // paragraph began immediately under the box.
-            new SpacingBetweenLines
-            {
-                Before = "160",
-                After = "160",
-                Line = "264",
-                LineRule = LineSpacingRuleValues.Auto,
-            },
+            SpacingOf(PaperSpec.CodeBlock),
             // Indentation before contextual spacing: w:pPr is a schema sequence and this is
             // the pair that gets written the wrong way round, because the natural order to
             // think of them in is the reverse of the one the schema lists.
             new Indentation { Left = "115", Right = "115" },
             new ContextualSpacing()),
         new StyleRunProperties(
-            MonospaceFont(),
+            FontOf(PaperSpec.CodeBlock),
 
-            // Not bold, though inline code is. A fence is already marked out by its shading,
-            // its border and its face, and a page of bold monospace is heavy to read - the
-            // weight earns its place on a word inside a sentence and not on thirty lines.
+            // Not bold. A fence is already marked out by its shading, its border and its
+            // face, and a page of bold monospace is heavy to read.
             new NoProof(),
             new Color { Val = colors.CodeBlockText },
-            new FontSize { Val = Text(CodeHalfPoints) },
-            new FontSizeComplexScript { Val = Text(CodeHalfPoints) }))
+            SizeOf(PaperSpec.CodeBlock),
+            ComplexSizeOf(PaperSpec.CodeBlock)))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.CodeBlock,
@@ -545,24 +513,36 @@ internal static class DocxStyles
     /// <summary>
     /// Inline code. Character-level shading gives the tinted pill; a border would be drawn at
     /// full line height and read as a box around the line rather than around the word.
+    ///
+    /// Regular weight, as the preview and the PDF set it. It was bold here once, which made
+    /// every code span in a Word export heavier than the same span on paper from the PDF.
     /// </summary>
-    private static Style CodeCharStyle(DocxColors colors) => new(
-        new StyleName { Val = "Marqora Inline Code" },
-        new BasedOn { Val = StyleIds.DefaultParagraphFont },
-        new UIPriority { Val = 99 },
-        new PrimaryStyle(),
-        new StyleRunProperties(
-            MonospaceFont(),
-            new Bold(),
-            new NoProof(),
-            new Color { Val = colors.CodeInlineText },
-            new FontSize { Val = Text(CodeHalfPoints) },
-            new FontSizeComplexScript { Val = Text(CodeHalfPoints) },
-            new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = colors.CodeInlineFill }))
+    private static Style CodeCharStyle(DocxColors colors)
     {
-        Type = StyleValues.Character,
-        StyleId = StyleIds.CodeChar,
-    };
+        var run = new StyleRunProperties(FontOf(PaperSpec.CodeInline));
+
+        if (PaperSpec.CodeInline.Bold)
+        {
+            run.AppendChild(new Bold());
+        }
+
+        run.AppendChild(new NoProof());
+        run.AppendChild(new Color { Val = colors.CodeInlineText });
+        run.AppendChild(SizeOf(PaperSpec.CodeInline));
+        run.AppendChild(ComplexSizeOf(PaperSpec.CodeInline));
+        run.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = colors.CodeInlineFill });
+
+        return new Style(
+            new StyleName { Val = "Marqora Inline Code" },
+            new BasedOn { Val = StyleIds.DefaultParagraphFont },
+            new UIPriority { Val = 99 },
+            new PrimaryStyle(),
+            run)
+        {
+            Type = StyleValues.Character,
+            StyleId = StyleIds.CodeChar,
+        };
+    }
 
     /// <summary>
     /// What a == highlight == becomes. Shading rather than Word's own highlight, which offers
@@ -680,25 +660,25 @@ internal static class DocxStyles
     /// The running header or footer: small, and with none of the paragraph spacing body text
     /// carries, so a one-line header sits on its own line rather than pushing itself about.
     /// </summary>
-    private static Style RunningStyle(string styleId, string builtInName) => new(
-        new StyleName { Val = builtInName },
-        new BasedOn { Val = StyleIds.Normal },
-        new UIPriority { Val = 99 },
-        new UnhideWhenUsed(),
-        new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                After = "0",
-                Line = "240",
-                LineRule = LineSpacingRuleValues.Auto,
-            }),
-        new StyleRunProperties(
-            new FontSize { Val = "18" },
-            new FontSizeComplexScript { Val = "18" }))
+    private static Style RunningStyle(string styleId, string builtInName)
     {
-        Type = StyleValues.Paragraph,
-        StyleId = styleId,
-    };
+        PaperElement element = styleId == StyleIds.Header ? PaperSpec.RunningHeader : PaperSpec.RunningFooter;
+
+        return new Style(
+            new StyleName { Val = builtInName },
+            new BasedOn { Val = StyleIds.Normal },
+            new UIPriority { Val = 99 },
+            new UnhideWhenUsed(),
+            new StyleParagraphProperties(SpacingOf(element)),
+            new StyleRunProperties(
+                FontOf(element),
+                SizeOf(element),
+                ComplexSizeOf(element)))
+        {
+            Type = StyleValues.Paragraph,
+            StyleId = styleId,
+        };
+    }
 
     /// <summary>
     /// One line of the table of contents.
@@ -766,13 +746,13 @@ internal static class DocxStyles
         new UIPriority { Val = 39 },
         new UnhideWhenUsed(),
         new StyleParagraphProperties(
-            new SpacingBetweenLines { After = "0", Line = "278", LineRule = LineSpacingRuleValues.Auto },
+            SpacingOf(PaperSpec.ContentsEntry),
             new Indentation { Left = ((level - 1) * 220).ToString(CultureInfo.InvariantCulture) }),
         new StyleRunProperties(
-            MinorThemeFont(),
+            FontOf(PaperSpec.ContentsEntry),
             new Color { Val = "auto" },
-            new FontSize { Val = Text(BodyHalfPoints) },
-            new FontSizeComplexScript { Val = Text(BodyHalfPoints) }))
+            SizeOf(PaperSpec.ContentsEntry),
+            ComplexSizeOf(PaperSpec.ContentsEntry)))
     {
         Type = StyleValues.Paragraph,
         StyleId = $"TOC{level.ToString(CultureInfo.InvariantCulture)}",
@@ -788,16 +768,10 @@ internal static class DocxStyles
         new UIPriority { Val = 99 },
         new SemiHidden(),
         new UnhideWhenUsed(),
-        new StyleParagraphProperties(
-            new SpacingBetweenLines
-            {
-                After = "0",
-                Line = "240",
-                LineRule = LineSpacingRuleValues.Auto,
-            }),
+        new StyleParagraphProperties(SpacingOf(PaperSpec.Footnote)),
         new StyleRunProperties(
-            new FontSize { Val = "20" },
-            new FontSizeComplexScript { Val = "20" }))
+            SizeOf(PaperSpec.Footnote),
+            ComplexSizeOf(PaperSpec.Footnote)))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.FootnoteText,
@@ -870,14 +844,10 @@ internal static class DocxStyles
             new StyleName { Val = "Marqora Table" },
             new BasedOn { Val = StyleIds.TableNormal },
             new UIPriority { Val = 59 },
-            new StyleParagraphProperties(
-                new SpacingBetweenLines
-                {
-                    Before = "40",
-                    After = "40",
-                    Line = "240",
-                    LineRule = LineSpacingRuleValues.Auto,
-                }),
+            new StyleParagraphProperties(SpacingOf(PaperSpec.Table)),
+            new StyleRunProperties(
+                SizeOf(PaperSpec.Table),
+                ComplexSizeOf(PaperSpec.Table)),
             new StyleTableProperties(
                 new TableStyleRowBandSize { Val = 1 },
                 new TableBorders(
@@ -954,10 +924,39 @@ internal static class DocxStyles
 
     private static RunFonts MonospaceFont() => new()
     {
-        Ascii = CodeFont,
-        HighAnsi = CodeFont,
-        ComplexScript = CodeFont,
+        Ascii = PaperFaces.Code.WordFamily,
+        HighAnsi = PaperFaces.Code.WordFamily,
+        ComplexScript = PaperFaces.Code.WordFamily,
     };
+
+    /// <summary>The face an element's role names: the theme's two faces, or code by name.</summary>
+    private static RunFonts FontOf(PaperElement element) => element.Face switch
+    {
+        PaperFaceRole.Display => MajorThemeFont(),
+        PaperFaceRole.Code => MonospaceFont(),
+        _ => MinorThemeFont(),
+    };
+
+    /// <summary>An element's size, in the half-points Word stores.</summary>
+    private static string HalfPoints(PaperElement element) => Text((int)Math.Round(element.SizePoints * 2));
+
+    private static FontSize SizeOf(PaperElement element) => new() { Val = HalfPoints(element) };
+
+    private static FontSizeComplexScript ComplexSizeOf(PaperElement element) => new() { Val = HalfPoints(element) };
+
+    /// <summary>
+    /// An element's line height and the space around it. Points become twips, twenty to the
+    /// point; a line height of 1.4 is Word's "auto" spacing of 336, 240 being single.
+    /// </summary>
+    private static SpacingBetweenLines SpacingOf(PaperElement element) => new()
+    {
+        Before = Twips(element.BeforePoints),
+        After = Twips(element.AfterPoints),
+        Line = Text((int)Math.Round(element.LineHeight * 240)),
+        LineRule = LineSpacingRuleValues.Auto,
+    };
+
+    private static string Twips(double points) => Text((int)Math.Round(points * 20));
 
     private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
 }

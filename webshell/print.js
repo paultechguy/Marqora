@@ -19,9 +19,8 @@
   /// there is no editor here.
   var SHEETS = ['vendor/katex/katex.min.css', 'app.css', 'syntax.css'];
 
-  /// The faces the paper spec names (§8), and the one it set aside, checked as the page sees
-  /// them - S4. A face Office installs as a cloud font is invisible to WebView2.
-  var FACES = ['Segoe UI Variable Text', 'Segoe UI', 'Cascadia Mono', 'Aptos'];
+  /// The paper spec's four face roles, whose family chains arrive as custom properties.
+  var FACE_ROLES = ['text', 'display', 'code', 'diagram'];
 
   function post(type, data) {
     var message = data || {};
@@ -43,15 +42,20 @@
   function pageSheet(page, title, furniture) {
     var ratio = (page.heightInches - 2 * page.verticalMarginInches)
       / (page.widthInches - 2 * page.horizontalMarginInches);
-    var band = 'font: 9pt "Segoe UI", sans-serif; color: #767676;';
+
+    // The header and footer bands, set as the paper spec sets them (PaperSpec.RunningHeader
+    // and RunningFooter), as Word sets its own.
+    var band = function (element) {
+      return 'font-family: var(--mq-paper-' + element + '-family); font-size: var(--mq-paper-' + element + '-size); color: #767676;';
+    };
 
     // The running header and page number, when the export asks for them - the same switch
     // as Word's header and footer. The number is each page's own label, written onto the page
     // after layout (labelPages), never Paged.js's page counter: that counter honored a reset
     // for one page only, so the body's page 1 was followed by page 5.
     var boxes = furniture && furniture.headerAndFooter
-      ? '  @top-left { content: ' + cssString(title) + '; ' + band + ' }\n'
-        + '  @bottom-right { content: var(--mq-page-label, ""); ' + band + ' }\n'
+      ? '  @top-left { content: ' + cssString(title) + '; ' + band('header') + ' }\n'
+        + '  @bottom-right { content: var(--mq-page-label, ""); ' + band('footer') + ' }\n'
       : '';
 
     // The page area's shape, which the print block sizes diagrams by. The live print is told it
@@ -93,22 +97,32 @@
   function furnitureSheet(page) {
     var third = ((page.heightInches - 2 * page.verticalMarginInches) / 3).toFixed(3) + 'in';
 
+    // One paper element's type, as the paper spec states it (PaperSpec in Domain): its face,
+    // size, weight, slant, case and line height. Nothing in this page names a font or a size
+    // of its own.
+    function set(element) {
+      var p = '--mq-paper-' + element + '-';
+
+      return 'font-family: var(' + p + 'family); font-size: var(' + p + 'size); font-weight: var(' + p + 'weight); '
+        + 'font-style: var(' + p + 'style); text-transform: var(' + p + 'transform); line-height: var(' + p + 'line);';
+    }
+
     return '.mq-cover { page: cover; break-after: page; padding-top: ' + third + '; }\n'
-      + '.mq-cover-title { font-size: 28pt; line-height: 1.2; font-weight: 600; color: var(--mq-theme-heading-1); }\n'
-      + '.mq-cover-subtitle { font-size: 15pt; margin-top: 0.3em; color: #595959; }\n'
+      + '.mq-cover-title { ' + set('cover-title') + ' color: var(--mq-theme-heading-1); }\n'
+      + '.mq-cover-subtitle { ' + set('cover-subtitle') + ' margin-top: 0.3em; color: #595959; }\n'
       + '.mq-cover-facts { margin-top: 2.2em; }\n'
       + '.mq-cover-facts > div { margin: 0; }\n'
       + '.mq-contents { page: contents; break-after: page; }\n'
-      + '.mq-contents-title { font-size: 2.05em; font-weight: 700; color: var(--mq-theme-heading-1); margin: 0 0 0.6em; }\n'
+      + '.mq-contents-title { ' + set('h1') + ' color: var(--mq-theme-heading-1); margin: 0 0 0.6em; }\n'
       + '.mq-contents ol { list-style: none; margin: 0; padding: 0; }\n'
-      + '.mq-contents li { margin: 0.3em 0; }\n'
+      + '.mq-contents li { ' + set('contents-entry') + ' margin: 0.3em 0; }\n'
       + '.mq-contents li.mq-toc-2 { padding-left: 1.4em; }\n'
       + '.mq-contents li.mq-toc-3 { padding-left: 2.8em; }\n'
       + '.mq-contents a { display: flex; align-items: baseline; color: inherit; text-decoration: none; border: 0; }\n'
       + '.mq-contents .mq-toc-fill { flex: 1; margin: 0 0.4em; border-bottom: 1px dotted #9a9a9a; }\n'
-      + '.mq-note { float: footnote; font-size: 0.85em; line-height: 1.45; }\n'
+      + '.mq-note { float: footnote; ' + set('footnote') + ' }\n'
       + '.mq-note .mq-note-block { display: block; margin: 0.3em 0 0; }\n'
-      + '.mq-note .mq-note-code { display: block; white-space: pre-wrap; font-family: "Cascadia Mono", Consolas, monospace; font-size: 0.9em; margin: 0.3em 0 0; padding: 0.4em 0.6em; border: 1px solid var(--mq-theme-code-block-border); background: var(--mq-theme-code-block-fill); }\n'
+      + '.mq-note .mq-note-code { display: block; white-space: pre-wrap; font-family: var(--mq-face-code); font-size: 0.9em; margin: 0.3em 0 0; padding: 0.4em 0.6em; border: 1px solid var(--mq-theme-code-block-border); background: var(--mq-theme-code-block-fill); }\n'
       + 'sup.mq-note-again { font-size: 65%; vertical-align: super; line-height: normal; }\n'
       // The call in the text is a real superscript. Paged.js asks the font for superscript
       // glyphs (font-variant-position: super), and Segoe UI has none, so the first run printed
@@ -117,7 +131,7 @@
       // The notes area is outside .mq-preview, so the preview's link and code rules do not
       // reach a note; these are the same theme slots those rules use.
       + '.mq-note a { color: var(--mq-theme-link); text-decoration: none; }\n'
-      + '.mq-note code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 0.9em; padding: 0.05em 0.3em; border: 1px solid var(--mq-theme-code-inline-border); border-radius: 4px; background: var(--mq-theme-code-inline-fill); color: var(--mq-theme-code-inline-text); }\n';
+      + '.mq-note code { font-family: var(--mq-face-code); font-size: 0.9em; padding: 0.05em 0.3em; border: 1px solid var(--mq-theme-code-inline-border); border-radius: 4px; background: var(--mq-theme-code-inline-fill); color: var(--mq-theme-code-inline-text); }\n';
   }
 
   /*
@@ -306,13 +320,28 @@
     document.fonts.check() answers true for any name it has no web font to load for, installed
     or not, so it said yes to Aptos, which WebView2 cannot see. A face is here if text set in
     it, with a generic family behind it, measures differently from the generic family alone.
+
+    The faces checked are the ones the paper spec names, read from its own properties, so this
+    page names none itself (PaperFaces is the one place).
   */
   function faces() {
     var found = {};
     var context = document.createElement('canvas').getContext('2d');
     var sample = 'mmmmmmmmmmlli1WQ@#';
+    var root = getComputedStyle(document.documentElement);
+    var names = [];
 
-    FACES.forEach(function (face) {
+    FACE_ROLES.forEach(function (role) {
+      root.getPropertyValue('--mq-face-' + role).split(',').forEach(function (family) {
+        var name = family.trim().replace(/^["']|["']$/g, '');
+
+        if (name && !/^(serif|sans-serif|monospace|system-ui)$/.test(name) && names.indexOf(name) < 0) {
+          names.push(name);
+        }
+      });
+    });
+
+    names.forEach(function (face) {
       found[face] = ['monospace', 'serif', 'sans-serif'].some(function (generic) {
         context.font = '72px ' + generic;
         var alone = context.measureText(sample).width;
@@ -543,6 +572,7 @@
       var sheets = SHEETS.slice();
 
       if (p.themeCss) { sheets.push(sheet(p.themeCss)); }
+      if (p.paperCss) { sheets.push(sheet(p.paperCss)); }
       sheets.push(sheet(pageSheet(p.page, p.title, furniture)));
 
       if (notes.rules) { sheets.push(sheet(notes.rules)); }

@@ -2,7 +2,7 @@
 
 **Status:** revision 2, 2026-10-06, after an adversarial review by two reviewers (§12). The
 four decisions the review raised are settled (§2), and the §8 values are approved.
-**Progress (2026-10-06):** phase 0 is in the working tree, uncommitted. W1–W8 are done and tested (`FixtureExportTests` validates the fixture in all four numbering modes); P1–P4 are done; P5 waits on a measured export. The engine spike (§4) runs behind a Debug-only menu (File > Export > Paged PDF engine): S1 to S6 are done; S6 limits Word's SVG to an allowlist of ten diagram types (§7.2).
+**Progress (2026-10-07):** phase 0 and the engine spike are committed (`6a92c7d`, `9db875a`); all six spike tests have run (§4). **Phase 1 is built, uncommitted:** `PaperSpec` and `PaperFaces` in Domain, Word's styles and theme fonts written from them, the print block of `app.css` and the paged print page reading them as custom properties the host pushes, `PaperSpecTests` (Word follows the spec, every element is printed, fonts are named only in `PaperFaces`, `docs/Paper-Design.md` is generated), and `build/Update-PaperDesign.ps1`. Two items move on: the diagram face reaches mermaid's drawings in phase 3 with the PNG font fix, and the computed-style check runs at the phase 2 gate.
 **Evidence:** `docs/WordVsPdf-Comparison.md`, the side-by-side of `UltimateMarkdownContent.md`.
 **Goal:** a document exported to Word and to PDF comes out as close to the same document as
 the two formats allow. Each export takes what the other does better, and the bugs in both
@@ -340,6 +340,7 @@ The row wording is shared with Word's. `CLAUDE.md`'s description of the window i
     and KaTeX is all web fonts.
   - The TeX goes in the alt text, and the export report gets a row.
 - **Tests.** `MathCorpusTests` gains the fixture's equations.
+- **Open: line 1119 of the fixture.** A Word export on 2026-10-07 reported the `\textcolor` … `\colorbox` equation as "Could not be converted", where the first export (2026-10-06) wrote it without its colors. Nothing on the math path changed in between, and `MathCorpusTests` converts the same equation from KaTeX's own MathML, so the preview handed the export different MathML for that line. Capture the preview's markup for it in the real app to find out what.
 
 ### 7.2 Diagrams (D7)
 

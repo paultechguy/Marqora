@@ -34,20 +34,16 @@ internal static class DocxTheme
         "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     /// <summary>
-    /// The body face, and the fallback behind it.
+    /// Writes the theme part: the color theme's link and callout colors into the scheme, and
+    /// the paper spec's two faces as the theme's fonts - the body face as minor, the display
+    /// face as major. The styles reference those two by role rather than naming a face, which
+    /// is what lets Word's Design tab restyle the document, and <see cref="PaperFaces"/> is the
+    /// only place either is named.
     ///
-    /// Aptos is what Word itself has used for new documents since 2024, so it is the face
-    /// that makes an exported file look native rather than like something a converter
-    /// produced. It ships with Microsoft 365 and not with Windows, which is why the styles
-    /// reference the theme rather than naming a face: on a machine without Aptos, Word
-    /// substitutes rather than falling back to Times New Roman, and the document still reads
-    /// as intended.
+    /// The faces were Aptos and Aptos Display until the paper spec, which is what Word itself
+    /// uses for new documents. Aptos is an Office cloud font WebView2 cannot see, so the PDF of
+    /// the same document came out in Segoe UI; both exports now use the faces both can draw.
     /// </summary>
-    public const string MinorFont = "Aptos";
-
-    /// <summary>The heading face. Aptos Display is Aptos cut for large sizes.</summary>
-    public const string MajorFont = "Aptos Display";
-
     public static void Write(ThemePart part, DocxColors colors)
     {
         ArgumentNullException.ThrowIfNull(part);
@@ -62,8 +58,8 @@ internal static class DocxTheme
         SetSchemeColor(theme, "accent5", colors.CalloutBar(CalloutKind.Warning));
         SetSchemeColor(theme, "accent6", colors.CalloutBar(CalloutKind.Caution));
         SetSchemeColor(theme, "hlink", colors.Link);
-        SetFont(theme, "majorFont", MajorFont);
-        SetFont(theme, "minorFont", MinorFont);
+        SetFont(theme, "majorFont", PaperFaces.Display.WordFamily!);
+        SetFont(theme, "minorFont", PaperFaces.Text.WordFamily!);
 
         using Stream stream = part.GetStream(FileMode.Create, FileAccess.Write);
 

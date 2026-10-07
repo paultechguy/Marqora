@@ -1867,6 +1867,14 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             new { type = "setColorThemes", payload = ColorThemePayloads.Catalog(_colorThemes, _colorThemeId, _exportColorThemeId) },
             JsonOptions));
 
+        // The paper spec, as the custom properties the print rules read - type and space on
+        // paper, the same values Word's styles are written from. Sent with the themes and for
+        // the same reason: in place before anything prints, and again after a crash rebuilt
+        // the page.
+        Post(JsonSerializer.Serialize(
+            new { type = "setPaper", payload = new { css = PaperSpec.Css() } },
+            JsonOptions));
+
         foreach (string message in _pending)
         {
             Post(message);

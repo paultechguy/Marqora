@@ -390,6 +390,7 @@ internal static class PagedPrintHost
                 type = "paginate",
                 html = m.GetProperty("html").GetString(),
                 themeCss = m.GetProperty("themeCss").GetString(),
+                paperCss = m.TryGetProperty("paperCss", out JsonElement paper) ? paper.GetString() : string.Empty,
                 rootStyle = m.GetProperty("rootStyle").GetString(),
                 title,
                 page = new

@@ -183,20 +183,23 @@ public class AppearanceTests
     }
 
     /// <summary>
-    /// Inline code is bold and a fence is not, which is a deliberate asymmetry rather than an
-    /// oversight. A word of code inside a sentence has to hold its own against the prose
-    /// around it; thirty lines in a shaded, bordered box already stand apart, and setting all
-    /// of them bold makes a listing heavy to read.
+    /// Neither inline code nor a fence is bold - the paper spec's rule, which the PDF follows
+    /// too (PaperSpec.CodeInline, settled 2026-10-07).
+    ///
+    /// Inline code was bold here once, on purpose: a word of code inside a sentence had to hold
+    /// its own against the prose around it. The preview and the PDF set it in regular weight,
+    /// though, and the two exports of one document have to match, so one had to give. The code
+    /// is still marked out by its face and its tinted background.
     /// </summary>
     [Fact]
-    public async Task Inline_code_is_bold_and_a_fence_is_not()
+    public async Task Neither_inline_code_nor_a_fence_is_bold()
     {
         using var exported = await ExportedDocument.FromAsync(
             "A `snippet` inline.\n\n```js\nvar a = 1;\n```\n");
 
         string styles = exported.StylesXml();
 
-        StyleOf(styles, "MarqoraCodeChar").ShouldContain("<w:b ");
+        StyleOf(styles, "MarqoraCodeChar").ShouldNotContain("<w:b ");
         StyleOf(styles, "MarqoraCode").ShouldNotContain("<w:b ");
 
         exported.ValidationErrors().ShouldBeEmpty();

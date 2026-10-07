@@ -1496,8 +1496,134 @@ a.mq-blocked-media {
     max-width: none;
     margin: 0;
     padding: 0;
-    font-size: 11pt;
-    line-height: 1.55;
+  }
+
+  /*
+    Type and space on paper: the paper spec's (PaperSpec and PaperFaces in Domain, the table in
+    docs/Paper-Design.md), which Word's styles are written from too, so the PDF and the .docx
+    of one document are set alike.
+
+    Every value is a custom property the host pushes (setPaper), and nothing here states one of
+    its own. The second value in each var() is not a choice either: it is what a page the host
+    never reaches - the cheatsheet, an exported HTML file in a browser - printed before the
+    spec existed, so those pages print as they always have. Faces fall back to the screen's
+    own, which follow the reader's chosen preview font; with the spec in force, paper uses the
+    spec's faces whatever the screen shows.
+  */
+  .mq-preview {
+    font-family: var(--mq-paper-body-family, var(--mq-font-ui));
+    font-size: var(--mq-paper-body-size, 11pt);
+    line-height: var(--mq-paper-body-line, 1.55);
+  }
+
+  .mq-preview p { margin: 0 0 var(--mq-paper-body-after, 1.15em); }
+
+  .mq-preview h1 {
+    font-family: var(--mq-paper-h1-family, inherit);
+    font-size: var(--mq-paper-h1-size, 2.05em);
+    font-weight: var(--mq-paper-h1-weight, 700);
+    font-style: var(--mq-paper-h1-style, normal);
+    text-transform: var(--mq-paper-h1-transform, none);
+    line-height: var(--mq-paper-h1-line, 1.28);
+    margin: var(--mq-paper-h1-before, 1.9em) 0 var(--mq-paper-h1-after, 0.6em);
+  }
+
+  .mq-preview h2 {
+    font-family: var(--mq-paper-h2-family, inherit);
+    font-size: var(--mq-paper-h2-size, 1.55em);
+    font-weight: var(--mq-paper-h2-weight, 640);
+    font-style: var(--mq-paper-h2-style, normal);
+    text-transform: var(--mq-paper-h2-transform, none);
+    line-height: var(--mq-paper-h2-line, 1.28);
+    margin: var(--mq-paper-h2-before, 1.9em) 0 var(--mq-paper-h2-after, 0.6em);
+  }
+
+  .mq-preview h3 {
+    font-family: var(--mq-paper-h3-family, inherit);
+    font-size: var(--mq-paper-h3-size, 1.26em);
+    font-weight: var(--mq-paper-h3-weight, 640);
+    font-style: var(--mq-paper-h3-style, normal);
+    text-transform: var(--mq-paper-h3-transform, none);
+    line-height: var(--mq-paper-h3-line, 1.28);
+    margin: var(--mq-paper-h3-before, 1.9em) 0 var(--mq-paper-h3-after, 0.6em);
+  }
+
+  .mq-preview h4 {
+    font-family: var(--mq-paper-h4-family, inherit);
+    font-size: var(--mq-paper-h4-size, 1.08em);
+    font-weight: var(--mq-paper-h4-weight, 640);
+    font-style: var(--mq-paper-h4-style, normal);
+    text-transform: var(--mq-paper-h4-transform, none);
+    line-height: var(--mq-paper-h4-line, 1.28);
+    margin: var(--mq-paper-h4-before, 1.9em) 0 var(--mq-paper-h4-after, 0.6em);
+  }
+
+  .mq-preview h5 {
+    font-family: var(--mq-paper-h5-family, inherit);
+    font-size: var(--mq-paper-h5-size, 1em);
+    font-weight: var(--mq-paper-h5-weight, 640);
+    font-style: var(--mq-paper-h5-style, normal);
+    text-transform: var(--mq-paper-h5-transform, none);
+    line-height: var(--mq-paper-h5-line, 1.28);
+    margin: var(--mq-paper-h5-before, 1.9em) 0 var(--mq-paper-h5-after, 0.6em);
+  }
+
+  .mq-preview h6 {
+    font-family: var(--mq-paper-h6-family, inherit);
+    font-size: var(--mq-paper-h6-size, 0.92em);
+    font-weight: var(--mq-paper-h6-weight, 640);
+    font-style: var(--mq-paper-h6-style, normal);
+    text-transform: var(--mq-paper-h6-transform, uppercase);
+    line-height: var(--mq-paper-h6-line, 1.28);
+    margin: var(--mq-paper-h6-before, 1.9em) 0 var(--mq-paper-h6-after, 0.6em);
+  }
+
+  .mq-preview pre:not(.mermaid) {
+    margin: var(--mq-paper-code-block-before, 0) 0 var(--mq-paper-code-block-after, 1.3em);
+    line-height: var(--mq-paper-code-block-line, 1.55);
+  }
+
+  .mq-preview pre:not(.mermaid) code {
+    font-family: var(--mq-paper-code-block-family, var(--mq-font-mono));
+    font-size: var(--mq-paper-code-block-size, 0.88em);
+  }
+
+  .mq-preview :not(pre) > code {
+    font-family: var(--mq-paper-code-inline-family, var(--mq-font-mono));
+    font-size: var(--mq-paper-code-inline-size, 0.88em);
+    font-weight: var(--mq-paper-code-inline-weight, inherit);
+  }
+
+  .mq-preview blockquote {
+    font-size: var(--mq-paper-quote-size, inherit);
+    font-style: var(--mq-paper-quote-style, inherit);
+    line-height: var(--mq-paper-quote-line, inherit);
+    margin: var(--mq-paper-quote-before, 0) 0 var(--mq-paper-quote-after, 1.15em);
+  }
+
+  .mq-preview table {
+    font-family: var(--mq-paper-table-family, inherit);
+    font-size: var(--mq-paper-table-size, 0.94em);
+    line-height: var(--mq-paper-table-line, inherit);
+  }
+
+  .mq-preview .footnotes {
+    font-family: var(--mq-paper-footnote-family, inherit);
+    font-size: var(--mq-paper-footnote-size, 0.92em);
+    line-height: var(--mq-paper-footnote-line, inherit);
+  }
+
+  .mq-preview figcaption {
+    font-family: var(--mq-paper-caption-family, inherit);
+    font-size: var(--mq-paper-caption-size, inherit);
+    font-style: var(--mq-paper-caption-style, inherit);
+    line-height: var(--mq-paper-caption-line, inherit);
+  }
+
+  .mq-preview .markdown-alert-title {
+    font-family: var(--mq-paper-callout-title-family, inherit);
+    font-size: var(--mq-paper-callout-title-size, inherit);
+    font-weight: var(--mq-paper-callout-title-weight, 600);
   }
 
   /* Keep blocks from being split across a page boundary where it would hurt. A callout is a

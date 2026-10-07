@@ -5922,6 +5922,24 @@
     },
 
     /*
+      The paper spec: type and space on paper, as custom properties (PaperSpec.Css in Domain).
+      The print rules in app.css read them and fall back to the screen's own values where they
+      are absent - the cheatsheet and an exported HTML file never receive them. One <style> of
+      its own, written whole each time, the way color-theme.js writes the theme.
+    */
+    setPaper: function (p) {
+      var style = document.getElementById('mq-paper');
+
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'mq-paper';
+        document.head.appendChild(style);
+      }
+
+      style.textContent = p.css || '';
+    },
+
+    /*
       The theme exports are drawn in: print and PDF through the stylesheet, the clipboard copy
       while it measures, and every diagram's output drawing - which are drawn again now, because
       whether a block needs one at all can have changed with it.
@@ -6284,12 +6302,14 @@
     requestPrintHtml: function (p) {
       whenOutputReady().then(function () {
         var theme = document.getElementById('mq-theme');
+        var paper = document.getElementById('mq-paper');
 
         post('printHtml', {
           requestId: p.requestId,
           data: JSON.stringify({
             html: outputMarkup(withoutCommentMarks(els.preview.cloneNode(true))).innerHTML,
             themeCss: theme ? theme.textContent : '',
+            paperCss: paper ? paper.textContent : '',
             rootStyle: document.documentElement.getAttribute('style') || ''
           })
         });
