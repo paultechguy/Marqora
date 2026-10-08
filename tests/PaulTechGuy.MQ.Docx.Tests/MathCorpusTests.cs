@@ -79,6 +79,59 @@ public class MathCorpusTests
         xml.ShouldContain("<m:rad>");    // roots
     }
 
+    /// <summary>
+    /// Brackets round a matrix grow with it. KaTeX writes a pmatrix, bmatrix, vmatrix or cases
+    /// as a \left ... \right group inside the equation's row; flattened into that row, the
+    /// group's brackets were written as one-line characters beside a three-line matrix, and
+    /// the cases brace came out short. Each is now a delimiter round the matrix - cases with
+    /// no closing character, as \right. asks.
+    /// </summary>
+    [Fact]
+    public async Task Brackets_round_a_matrix_stretch_with_it()
+    {
+        using ExportedDocument exported = await FromCorpusAsync();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<m:begChr m:val=\"(\" /><m:endChr m:val=\")\" />");
+        xml.ShouldContain("<m:begChr m:val=\"[\" /><m:endChr m:val=\"]\" />");
+        xml.ShouldContain("<m:begChr m:val=\"∣\" /><m:endChr m:val=\"∣\" />");
+        xml.ShouldContain("<m:begChr m:val=\"{\" /><m:endChr m:val=\"\" />");
+    }
+
+    /// <summary>
+    /// \quad and \qquad between equations on one line are gaps the author put there, and
+    /// come across as em spaces; dropped with TeX's thin spaces, they ran the fixture's limit,
+    /// product, union and contour integral together into one expression.
+    /// </summary>
+    [Fact]
+    public async Task Wide_spaces_between_equations_are_kept()
+    {
+        using ExportedDocument exported = await FromCorpusAsync();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<m:t xml:space=\"preserve\">\u2003\u2003</m:t>");
+        xml.ShouldContain("<m:t xml:space=\"preserve\">\u2003</m:t>");
+    }
+
+    /// <summary>
+    /// \textcolor and \colorbox keep their colors: the ink on each run, and the box's fill
+    /// as shading. Named colors take CSS's values, which are what the preview drew.
+    /// </summary>
+    [Fact]
+    public async Task Color_and_colorbox_in_an_equation_keep_their_colors()
+    {
+        using ExportedDocument exported = await FromCorpusAsync();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<w:color w:val=\"FF0000\" />");
+        xml.ShouldContain("<w:color w:val=\"0000FF\" />");
+        xml.ShouldContain("<w:color w:val=\"008000\" />");
+        xml.ShouldContain("<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"FFFF00\" />");
+    }
+
     private static async Task<ExportedDocument> FromCorpusAsync()
     {
         string folder = Path.Combine(AppContext.BaseDirectory, "Fixtures");

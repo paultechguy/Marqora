@@ -1,10 +1,12 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using M = DocumentFormat.OpenXml.Math;
+using W = DocumentFormat.OpenXml.Wordprocessing;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -55,7 +57,9 @@ internal static class MathmlToOmml
         ["["] = "]",
         ["{"] = "}",
         ["|"] = "|",
+        ["∣"] = "∣",
         ["‖"] = "‖",
+        ["∥"] = "∥",
         ["⟨"] = "⟩",
         ["⌈"] = "⌉",
         ["⌊"] = "⌋",
@@ -135,6 +139,20 @@ internal static class MathmlToOmml
         {
             switch (child.Name.LocalName)
             {
+                // A \left ... \right group stays whole. Flattened into the run around it, its
+                // brackets were no longer the ends of anything, so Fence never saw a pair:
+                // "A = (matrix)" wrote the parentheses one line tall beside a three-line
+                // matrix, and the cases brace came out a single short "{".
+                case "mrow" when IsFenced(child):
+                    yield return child;
+                    break;
+
+                // \color and \colorbox stay whole too, so their color reaches what they hold
+                // (Painted). Stepped through like any other style, the color was lost.
+                case "mstyle" or "mpadded" when IsColored(child):
+                    yield return child;
+                    break;
+
                 case "semantics":
                 case "mrow":
                 case "mstyle":
@@ -271,24 +289,46 @@ internal static class MathmlToOmml
         XElement first = nodes[0];
         XElement last = nodes[^1];
 
-        if (first.Name.LocalName != "mo" || last.Name.LocalName != "mo")
+        if (first.Name.LocalName != "mo")
         {
             return null;
         }
 
         string open = first.Value.Trim();
-        string close = last.Value.Trim();
+        string close;
+        int end;
 
-        if (!Fences.TryGetValue(open, out string? expected)
-            || expected != close
-            || (string?)first.Attribute("stretchy") == "false")
+        if (IsFence(first))
         {
-            return null;
+            // KaTeX's own \left ... \right: the pair is whatever the author wrote, matched or
+            // not - \left( ... \right] is legal - and an empty or missing close is \right.,
+            // which is how cases opens a brace and closes nothing.
+            bool closed = IsFence(last);
+
+            close = closed ? last.Value.Trim() : string.Empty;
+            end = closed ? nodes.Count - 1 : nodes.Count;
+        }
+        else
+        {
+            if (last.Name.LocalName != "mo")
+            {
+                return null;
+            }
+
+            close = last.Value.Trim();
+            end = nodes.Count - 1;
+
+            if (!Fences.TryGetValue(open, out string? expected)
+                || expected != close
+                || (string?)first.Attribute("stretchy") == "false")
+            {
+                return null;
+            }
         }
 
         var inner = new M.Base();
 
-        foreach (XElement node in nodes[1..^1])
+        foreach (XElement node in nodes[1..end])
         {
             foreach (OpenXmlElement element in Node(node))
             {
@@ -303,6 +343,117 @@ internal static class MathmlToOmml
                 new M.ControlProperties()),
             inner);
     }
+
+    /// <summary>A style that carries \color (mathcolor) or \colorbox (mathbackground).</summary>
+    private static bool IsColored(XElement element) =>
+        element.Attribute("mathcolor") is not null || element.Attribute("mathbackground") is not null;
+
+    /// <summary>
+    /// Every run in what a \color or \colorbox held, in its color or on its fill.
+    ///
+    /// The innermost color wins, as it does in TeX: the inner style is converted first and
+    /// paints its runs, and an outer one leaves a run that already has a color alone. A color
+    /// this cannot name in hex is left off rather than guessed - the run keeps the document's
+    /// ink, which is what a reader would see if the color had not been there.
+    /// </summary>
+    private static List<OpenXmlElement> Painted(List<OpenXmlElement> parts, XElement style)
+    {
+        string? ink = HexOf((string?)style.Attribute("mathcolor"));
+        string? fill = HexOf((string?)style.Attribute("mathbackground"));
+
+        if (ink is null && fill is null)
+        {
+            return parts;
+        }
+
+        IEnumerable<M.Run> runs = parts.SelectMany(part =>
+            part is M.Run run ? [run] : part.Descendants<M.Run>());
+
+        foreach (M.Run run in runs)
+        {
+            // In m:r the Word run properties follow the math ones and precede the text.
+            W.RunProperties properties = run.GetFirstChild<W.RunProperties>()
+                ?? run.InsertAfter(new W.RunProperties(), run.GetFirstChild<M.RunProperties>())
+                ?? run.PrependChild(new W.RunProperties());
+
+            if (ink is not null && properties.Color is null)
+            {
+                properties.Color = new W.Color { Val = ink };
+            }
+
+            if (fill is not null && properties.Shading is null)
+            {
+                properties.Shading = new W.Shading { Val = W.ShadingPatternValues.Clear, Color = "auto", Fill = fill };
+            }
+        }
+
+        return parts;
+    }
+
+    /// <summary>
+    /// A color as KaTeX hands it on - a hex value, or a name it passed to the browser - as the
+    /// six hex digits Word writes. The names are CSS's values for them, since that is what
+    /// the preview drew: CSS green is #008000, not xcolor's #00FF00.
+    /// </summary>
+    private static string? HexOf(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return null;
+        }
+
+        string value = color.Trim();
+
+        if (value.StartsWith('#'))
+        {
+            string digits = value[1..];
+
+            return digits.Length switch
+            {
+                3 => string.Concat(digits.Select(c => new string(c, 2))).ToUpperInvariant(),
+                6 => digits.ToUpperInvariant(),
+                _ => null,
+            };
+        }
+
+        return NamedColors.GetValueOrDefault(value);
+    }
+
+    /// <summary>The CSS names xcolor's base set shares, plus the common extras.</summary>
+    private static readonly Dictionary<string, string> NamedColors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["black"] = "000000",
+        ["white"] = "FFFFFF",
+        ["red"] = "FF0000",
+        ["green"] = "008000",
+        ["blue"] = "0000FF",
+        ["cyan"] = "00FFFF",
+        ["magenta"] = "FF00FF",
+        ["yellow"] = "FFFF00",
+        ["gray"] = "808080",
+        ["darkgray"] = "A9A9A9",
+        ["lightgray"] = "D3D3D3",
+        ["brown"] = "A52A2A",
+        ["lime"] = "00FF00",
+        ["olive"] = "808000",
+        ["orange"] = "FFA500",
+        ["pink"] = "FFC0CB",
+        ["purple"] = "800080",
+        ["teal"] = "008080",
+        ["violet"] = "EE82EE",
+        ["navy"] = "000080",
+        ["maroon"] = "800000",
+        ["silver"] = "C0C0C0",
+        ["gold"] = "FFD700",
+    };
+
+    /// <summary>An operator KaTeX marks as one end of a \left ... \right pair.</summary>
+    private static bool IsFence(XElement node) =>
+        node.Name.LocalName == "mo" && (string?)node.Attribute("fence") == "true";
+
+    /// <summary>A row that opens with a \left: KaTeX's whole delimited group.</summary>
+    private static bool IsFenced(XElement row) =>
+        row.Elements().FirstOrDefault() is { } first && IsFence(first);
 
     /// <summary>
     /// One MathML element as OMML. Several, in the case of a wrapper that has no equivalent
@@ -324,10 +475,8 @@ internal static class MathmlToOmml
             case "mtext":
                 return [NormalText(element.Value)];
 
-            // TeX's spacing classes. OMML does its own spacing, so carrying these across
-            // would double it.
             case "mspace":
-                return [];
+                return Space(element);
 
             case "mfrac":
                 return [Fraction(element)];
@@ -361,6 +510,9 @@ internal static class MathmlToOmml
 
             case "mphantom":
                 return [new M.Phantom(new M.PhantomProperties(), ContentsAs<M.Base>(element))];
+
+            case "mstyle" or "mpadded" when IsColored(element):
+                return Painted(Children(element), element);
 
             // Spacing and position only - see Unwrap for why mpadded is one of these.
             case "mrow":
@@ -445,6 +597,32 @@ internal static class MathmlToOmml
     /// Text that is prose rather than mathematics - what <c>\text{...}</c> produces. The
     /// normal-text flag is what stops Word setting it in the italic math face.
     /// </summary>
+    /// <summary>
+    /// A space the author asked for.
+    ///
+    /// Below half an em it is TeX's spacing between symbols - <c>\,</c>, <c>\;</c> - which
+    /// OMML does for itself, so carrying it across would double it. From half an em up it is
+    /// a gap the author put there: <c>\quad</c> and <c>\qquad</c> between equations on one
+    /// line. Dropped, those ran "= e ∏ k = n! ⋃ Aᵢ" together into one expression. Word keeps
+    /// em and en spaces in an equation where it would discard an ordinary one.
+    /// </summary>
+    private static List<OpenXmlElement> Space(XElement element)
+    {
+        string width = ((string?)element.Attribute("width") ?? string.Empty).Trim();
+
+        if (!width.EndsWith("em", StringComparison.Ordinal)
+            || !double.TryParse(width[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out double ems)
+            || ems < 0.5)
+        {
+            return [];
+        }
+
+        int whole = (int)Math.Floor(ems);
+        string gap = new string('\u2003', whole) + (ems - whole >= 0.5 ? "\u2002" : string.Empty);
+
+        return [NormalText(gap)];
+    }
+
     private static M.Run NormalText(string text) => new(
         new M.RunProperties(new M.NormalText()),
         new M.Text(XmlSafeText.Clean(text)) { Space = SpaceProcessingModeValues.Preserve });

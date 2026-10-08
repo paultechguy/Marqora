@@ -22,13 +22,20 @@ namespace PaulTechGuy.MQ.Docx;
 /// reason. A block that is nothing but tags - a <c>&lt;details&gt;</c> line on its own - has no
 /// words and writes nothing.
 /// </summary>
+/// <summary>A paragraph of a raw HTML block's text, and whether it was a details summary.</summary>
+internal readonly record struct HtmlParagraph(string Text, bool IsSummary);
+
 internal static partial class HtmlBlockText
 {
     /// <summary>
-    /// One string per paragraph the block reads as, or none. A block-level close or a
+    /// One entry per paragraph the block reads as, or none. A block-level close or a
     /// <c>&lt;br&gt;</c> ends a paragraph; whitespace inside one collapses, as HTML does.
+    ///
+    /// A <c>&lt;details&gt;</c> summary is marked, so it can be set in bold above the content
+    /// it opens - the line the preview shows with its disclosure triangle, and the only
+    /// thing that says the paragraphs under it were a collapsible section at all.
     /// </summary>
-    public static IReadOnlyList<string> Paragraphs(HtmlBlock block)
+    public static IReadOnlyList<HtmlParagraph> Paragraphs(HtmlBlock block)
     {
         ArgumentNullException.ThrowIfNull(block);
 
@@ -44,11 +51,40 @@ internal static partial class HtmlBlockText
         return
         [
             .. html.Split("\n\n")
-                .Select(chunk => WebUtility.HtmlDecode(Tag().Replace(chunk, " ")))
-                .Select(text => Whitespace().Replace(text, " ").Trim())
-                .Where(text => text.Length > 0),
+                .Select(chunk => new HtmlParagraph(
+                    Whitespace().Replace(WebUtility.HtmlDecode(Tag().Replace(chunk, " ")), " ").Trim(),
+                    chunk.Contains("<summary", StringComparison.OrdinalIgnoreCase)))
+                .Where(paragraph => paragraph.Text.Length > 0),
         ];
     }
+
+    /// <summary>
+    /// Each opening tag in the block for something that shows without words
+    /// (<see cref="InlineHtml.IsEmbedded"/>), as written. Taking the markup away keeps a
+    /// block's sentences and loses these, so each needs its own report row - an
+    /// <c>&lt;iframe&gt;</c> alone on a line has no words at all, and wrote nothing and said
+    /// nothing.
+    /// </summary>
+    public static IReadOnlyList<string> Embedded(HtmlBlock block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+
+        if (block.Type is not (HtmlBlockType.InterruptingBlock or HtmlBlockType.NonInterruptingBlock))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. OpeningTag().Matches(block.Lines.ToString())
+                .Where(match => InlineHtml.IsEmbedded(match.Groups[1].Value.ToLowerInvariant()))
+                .Select(match => match.Value),
+        ];
+    }
+
+    /// <summary>A fragment of HTML as the words it reads as, on one line.</summary>
+    public static string PlainText(string html) =>
+        Whitespace().Replace(WebUtility.HtmlDecode(Tag().Replace(html, " ")), " ").Trim();
 
     /// <summary>The first line of the block's source, for the report.</summary>
     public static string SourceOf(HtmlBlock block) =>
@@ -60,6 +96,9 @@ internal static partial class HtmlBlockText
 
     [GeneratedRegex("<[^>]*>")]
     private static partial Regex Tag();
+
+    [GeneratedRegex(@"<([A-Za-z][A-Za-z0-9]*)\b[^>]*>")]
+    private static partial Regex OpeningTag();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();

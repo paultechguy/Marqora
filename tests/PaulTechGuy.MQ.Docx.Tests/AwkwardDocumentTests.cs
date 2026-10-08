@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Text.RegularExpressions;
 using Shouldly;
 using Xunit;
 
@@ -250,5 +251,214 @@ public class AwkwardDocumentTests
         using var exported = await ExportedDocument.FromAsync(string.Empty);
 
         exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Raw HTML that shows something but holds no words was left out with no report row, so
+    /// the report closed on "Everything else came across" over three things that had not. A
+    /// frame Word cannot show is reported; an inline rule is drawn after its paragraph, as a
+    /// markdown "---" is; an inline image goes the way a markdown image does, embedded or
+    /// reported as a picture.
+    /// </summary>
+    [Fact]
+    public async Task Raw_html_that_shows_without_words_is_drawn_or_reported()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "<iframe src=\"https://example.com\" title=\"frame\"></iframe>\n\n"
+            + "A rule as HTML: <hr />\n\n"
+            + "An image tag: <img src=\"x.png\" alt=\"square\" /> and <b>bold</b> after it.\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        PaulTechGuy.MQ.Domain.ExportIssue[] leftOut =
+        [
+            .. exported.Issues.Where(i => i.Problem.StartsWith("Raw HTML that Word cannot show", StringComparison.Ordinal)),
+        ];
+
+        leftOut.Select(i => i.Line).ShouldBe([1]);
+        leftOut[0].Item.ShouldStartWith("<iframe");
+
+        // The rule: one bottom-bordered paragraph, after the one that held it and before the
+        // next.
+        string xml = exported.DocumentXml();
+        int rule = xml.IndexOf("<w:bottom ", StringComparison.Ordinal);
+
+        rule.ShouldBeGreaterThan(xml.IndexOf("A rule as HTML:", StringComparison.Ordinal));
+        rule.ShouldBeLessThan(xml.IndexOf("An image tag:", StringComparison.Ordinal));
+        xml.LastIndexOf("<w:bottom ", StringComparison.Ordinal).ShouldBe(rule);
+
+        // The picture is a picture's row, under its alt text, on its own line.
+        exported.Issues.ShouldContain(i => i.Line == 5 && i.Item == "square");
+
+        string text = exported.PlainText();
+
+        text.ShouldContain("[square]");
+        text.ShouldContain("bold after it.");
+    }
+
+    /// <summary>
+    /// The inline HTML a browser gives a look Word does not infer from the tag: a q's
+    /// quotation marks - curly, single inside double - and small's smaller size.
+    /// </summary>
+    [Fact]
+    public async Task Q_gets_its_quotation_marks_and_small_its_size()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "She said <q>go <q>now</q></q> and a <small>small span</small>.\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+        exported.PlainText().ShouldContain("She said \u201Cgo \u2018now\u2019\u201D and a small span.");
+        exported.DocumentXml().ShouldContain("<w:sz w:val=\"18\" /><w:szCs w:val=\"18\" /></w:rPr><w:t xml:space=\"preserve\">small span");
+    }
+
+    /// <summary>
+    /// A raw HTML table is a Word table, laid out as the browser lays it: the fixture's own,
+    /// whose "North" spans two rows and whose "merged across two columns" therefore starts in
+    /// the second column of the row below, not the first. Its caption is a caption; its head
+    /// row repeats; it is not reported, because nothing was lost.
+    /// </summary>
+    [Fact]
+    public async Task A_raw_html_table_is_a_word_table_with_its_spans()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "<table>\n"
+            + "  <caption>Quarterly <code>figures</code></caption>\n"
+            + "  <thead>\n    <tr><th>Region</th><th>Q1</th><th>Q2</th></tr>\n  </thead>\n"
+            + "  <tbody>\n"
+            + "    <tr><td rowspan=\"2\">North</td><td>100</td><td>120</td></tr>\n"
+            + "    <tr><td colspan=\"2\" style=\"text-align:center\">merged across two columns</td></tr>\n"
+            + "    <tr><td>South</td><td>80</td><td>95</td></tr>\n"
+            + "  </tbody>\n"
+            + "</table>\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+        exported.Issues.ShouldBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("w:val=\"Caption\"");
+        xml.ShouldContain("Quarterly figures");
+        xml.ShouldContain("<w:tblHeader />");
+
+        // North starts a vertical merge; the row below continues it, then the two-column cell.
+        xml.ShouldContain("<w:vMerge w:val=\"restart\" />");
+        xml.ShouldContain(
+            "<w:vMerge w:val=\"continue\" /></w:tcPr><w:p /></w:tc><w:tc><w:tcPr><w:tcW w:w=\"0\" w:type=\"auto\" />"
+            + "<w:gridSpan w:val=\"2\" /></w:tcPr><w:p><w:pPr><w:jc w:val=\"center\" /></w:pPr>");
+        Regex.Count(xml, "<w:gridCol ").ShouldBe(3);
+    }
+
+    /// <summary>
+    /// A styled HTML block keeps its box: the borders and fill the preview drew, measured by
+    /// the shell and stamped on the block, become the paragraphs' borders and shading. The
+    /// fixture's callout - a colored rule down the left and a tinted fill - read as two plain
+    /// paragraphs before.
+    /// </summary>
+    [Fact]
+    public async Task A_styled_html_block_keeps_its_box()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "Before.\n\n<div style=\"border-left: 4px solid #6366f1; background: #eef2ff; padding: 12px\">\n"
+            + "<strong>A styled callout.</strong><br>Second line.\n</div>\n",
+            renderedPreviewHtml:
+                "<p data-src-line=\"0\">Before.</p>"
+                + "<div class=\"mq-src-marker\" data-src-line=\"2\"></div>"
+                + "<div style=\"border-left: 4px solid #6366f1\" data-mq-box=\"border-left:4px solid #6366f1;background:#eef2ff;padding-left:12px\">"
+                + "<strong>A styled callout.</strong><br>Second line.</div>");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        // 4px is 3pt, 24 eighths; 12px of padding is 9pt.
+        Regex.Count(xml, "<w:left w:val=\"single\" w:color=\"6366F1\" w:sz=\"24\" w:space=\"9\" /></w:pBdr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"EEF2FF\" />")
+            .ShouldBe(2);
+        exported.Issues.ShouldContain(i => i.Problem.Contains("its box are in the document", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A diagram of a type Word draws from SVG goes in as a vector, its PNG kept as the
+    /// fallback; a type Word draws wrong - a flowchart, whose labels sit in foreignObject -
+    /// stays a PNG and its SVG is never asked for.
+    /// </summary>
+    [Fact]
+    public async Task Diagrams_word_draws_from_svg_go_in_as_vectors()
+    {
+        byte[] pixel = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        var asked = new List<string>();
+
+        using var exported = await ExportedDocument.FromAsync(
+            "```mermaid\npie\n  \"A\" : 1\n```\n\n```mermaid\nflowchart LR\n  A --> B\n```\n",
+            renderedPreviewHtml:
+                "<pre class=\"mermaid\" data-src-line=\"0\" data-mq-diagram=\"pie1\"><svg aria-roledescription=\"pie\"></svg></pre>"
+                + "<pre class=\"mermaid\" data-src-line=\"5\" data-mq-diagram=\"flow1\"><svg aria-roledescription=\"flowchart-v2\"></svg></pre>",
+            diagramPng: _ => Task.FromResult<byte[]?>(pixel),
+            diagramSvg: hash =>
+            {
+                asked.Add(hash);
+                return Task.FromResult<string?>("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"></svg>");
+            });
+
+        exported.ValidationErrors().ShouldBeEmpty();
+        asked.ShouldBe(["pie1"]);
+
+        string xml = exported.DocumentXml();
+
+        Regex.Count(xml, "<a:blip ").ShouldBe(2);
+        Regex.Count(xml, "svgBlip").ShouldBe(1);
+        xml.ShouldContain("{96DAC541-7B7A-43D3-8B79-37D633B846F1}");
+    }
+
+    /// <summary>
+    /// A details block's summary is set in bold above what it opens, the line the preview
+    /// shows beside its disclosure triangle.
+    /// </summary>
+    [Fact]
+    public async Task A_details_summary_is_bold()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "<details>\n<summary>Click to expand</summary>\n\nHidden content.\n\n</details>\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+        exported.DocumentXml().ShouldContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">Click to expand");
+    }
+
+    /// <summary>
+    /// Pandoc's {width=64px height=64px} sets the picture's size. Ignored, the fixture's
+    /// one-pixel image went into Word one pixel wide.
+    /// </summary>
+    [Fact]
+    public async Task A_pandoc_size_sets_the_picture_size()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "![Sized](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==){width=64px height=64px}\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        // 64 CSS pixels at 9525 EMU each.
+        exported.DocumentXml().ShouldContain("<wp:extent cx=\"609600\" cy=\"609600\" />");
+    }
+
+    /// <summary>
+    /// Something in a pipe table's cell is reported on the line of its row. A cell holding a
+    /// broken image link - the fixture's "![dot](data:...&lt;svg ...&gt;)" - is left at line
+    /// zero by Markdig, and its row at line 761 was reported as line 1. The row is the
+    /// fixture's own, with the cells around it that a plain table did not need.
+    /// </summary>
+    [Fact]
+    public async Task Something_in_a_table_cell_is_reported_on_its_row()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "Intro.\n\n| Element | Example | Renders as |\n|---|---|---|\n"
+            + "| Code | `` `code` `` | `code` |\n"
+            + "| Image | `![a](data:...)` | ![dot](data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\"><circle cx=\"6\" cy=\"6\" r=\"5\" fill=\"%23ef4444\"/></svg>) |\n"
+            + "| Escaped pipe | `a \\| b` | a \\| b |\n"
+            + "| Inline math | `$x^2$` | $x^2$ |\n");
+
+        exported.Issues
+            .Where(i => i.Problem.StartsWith("Raw HTML that Word cannot show", StringComparison.Ordinal))
+            .Select(i => i.Line)
+            .ShouldBe([6]);
     }
 }

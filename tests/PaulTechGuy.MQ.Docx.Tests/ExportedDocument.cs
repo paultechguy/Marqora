@@ -60,7 +60,8 @@ internal sealed class ExportedDocument : IDisposable
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
-        ExportLayout? layout = null)
+        ExportLayout? layout = null,
+        Func<string, Task<string?>>? diagramSvg = null)
     {
         string root = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
@@ -82,7 +83,8 @@ internal sealed class ExportedDocument : IDisposable
             renderedPreviewHtml,
             diagramPng,
             images,
-            colorTheme).ConfigureAwait(false);
+            colorTheme,
+            diagramSvg).ConfigureAwait(false);
 
         return new ExportedDocument(root, path) { Issues = issues };
     }

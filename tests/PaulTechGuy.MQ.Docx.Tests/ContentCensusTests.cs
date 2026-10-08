@@ -71,7 +71,8 @@ public sealed class ContentCensusTests
 
         return new Census(
             document.Descendants<MdFootnote>().Count(),
-            document.Descendants<MdTable>().Count(),
+            document.Descendants<MdTable>().Count()
+                + document.Descendants<HtmlBlock>().Count(html => html.Lines.ToString().TrimStart().StartsWith("<table", StringComparison.OrdinalIgnoreCase)),
             // A task item is written with its box as text and no list numbering - one Word
             // list level cannot hold a ticked box and an empty one - so it is counted as the
             // numbered paragraphs Word writes, which leave it out.
@@ -115,11 +116,19 @@ public sealed class ContentCensusTests
             drawings - embeddedPictures + report.Count(IsDiagramRow));
     }
 
-    /// <summary>The pictures the markdown names - image links, wherever they sit.</summary>
-    private static int Pictures(string markdown) =>
-        Markdig.Markdown.Parse(markdown, MarqoraMarkdownPipeline.CreateBuilder().Build())
-            .Descendants<LinkInline>()
-            .Count(link => link.IsImage);
+    /// <summary>
+    /// The pictures the markdown names - image links, wherever they sit, and an
+    /// <c>&lt;img&gt;</c> written inline as HTML, which Word now embeds or reports as a picture.
+    /// </summary>
+    private static int Pictures(string markdown)
+    {
+        MdDocument document =
+            Markdig.Markdown.Parse(markdown, MarqoraMarkdownPipeline.CreateBuilder().Build());
+
+        return document.Descendants<LinkInline>().Count(link => link.IsImage)
+            + document.Descendants<HtmlInline>().Count(html =>
+                html.Tag.StartsWith("<img", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static Task<string> FixtureTextAsync() =>
         File.ReadAllTextAsync(Repository.Root() + "/docs/UltimateMarkdownContent.md", TestContext.Current.CancellationToken);

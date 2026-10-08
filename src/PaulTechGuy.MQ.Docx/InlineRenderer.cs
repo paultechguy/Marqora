@@ -8,6 +8,7 @@ using Markdig.Extensions.Abbreviations;
 using Markdig.Extensions.Footnotes;
 using Markdig.Extensions.Mathematics;
 using Markdig.Extensions.TaskLists;
+using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,26 @@ internal sealed class InlineRenderer
 
     /// <summary>Inline HTML currently open, innermost last.</summary>
     private readonly Stack<RunFormat> _htmlFormat = new();
+
+    /// <summary>How many &lt;q&gt; elements are open, which decides double or single marks.</summary>
+    private int _quoteNesting;
+
+    /// <summary>An inline &lt;hr&gt; was met; see <see cref="TakeRule"/>.</summary>
+    private bool _ruleAfterParagraph;
+
+    /// <summary>
+    /// Whether the paragraph just written held an inline <c>&lt;hr&gt;</c>, clearing it. Word
+    /// cannot draw a rule inside a paragraph, so the block walker draws one after it - the same
+    /// rule a markdown "---" becomes. It was left out before, and the preview's line under
+    /// "A horizontal rule as HTML:" was missing from the document.
+    /// </summary>
+    public bool TakeRule()
+    {
+        bool rule = _ruleAfterParagraph;
+
+        _ruleAfterParagraph = false;
+        return rule;
+    }
 
     /// <summary>Abbreviations already spelled out, so each is expanded once.</summary>
     private readonly HashSet<string> _expandedAbbreviations = new(StringComparer.Ordinal);
@@ -119,6 +140,7 @@ internal sealed class InlineRenderer
         {
             _sourceLine = sourceLine;
             _mathOrdinal = 0;
+            _quoteNesting = 0;
         }
 
         foreach (Inline inline in container)
@@ -203,7 +225,7 @@ internal sealed class InlineRenderer
                 break;
 
             case HtmlInline html:
-                ReadHtmlTag(html.Tag, paragraph);
+                ReadHtmlTag(html, paragraph);
                 break;
 
             // An opening bracket nothing closed into a link - "[broken][no-such-ref]", or a
@@ -278,7 +300,13 @@ internal sealed class InlineRenderer
         string alt = AltTextOf(image);
         string url = image.Url ?? string.Empty;
 
-        if (_images.TryBuild(url, alt, _maximumImageWidthTwips, _sourceLine) is { } run)
+        // Pandoc's {width=64px height=64px}, which Markdig keeps as attributes on the image.
+        HtmlAttributes? attributes = image.TryGetAttributes();
+        (uint?, uint?) requested = (
+            Pixels(attributes?.Properties?.FirstOrDefault(p => p.Key == "width").Value),
+            Pixels(attributes?.Properties?.FirstOrDefault(p => p.Key == "height").Value));
+
+        if (_images.TryBuild(url, alt, _maximumImageWidthTwips, _sourceLine, requested) is { } run)
         {
             paragraph.AppendChild(run);
             return;
@@ -316,8 +344,10 @@ internal sealed class InlineRenderer
     /// which is the right way round. A closing tag for something never opened is ignored, so a
     /// document with unbalanced markup cannot unwind the stack past the bottom.
     /// </summary>
-    private void ReadHtmlTag(string tag, Paragraph paragraph)
+    private void ReadHtmlTag(HtmlInline html, Paragraph paragraph)
     {
+        string tag = html.Tag;
+
         if (InlineHtml.Parse(tag) is not { } parsed)
         {
             return;
@@ -330,10 +360,58 @@ internal sealed class InlineRenderer
             return;
         }
 
+        if (parsed.Name == "img" && !parsed.IsClosing)
+        {
+            WriteHtmlImage(parsed, paragraph, html.Line);
+            return;
+        }
+
+        // A rule cannot sit inside a paragraph in Word, so it goes straight after it; the
+        // block walker asks for it once the paragraph is written (TakeRule).
+        if (parsed.Name == "hr")
+        {
+            _ruleAfterParagraph = true;
+            return;
+        }
+
+        if (InlineHtml.IsEmbedded(parsed.Name))
+        {
+            // The tag's own line rather than its block's. A pipe table cell holding a broken
+            // image link - "![dot](data:...<svg ...>)" - is left at line zero by Markdig, and the
+            // fixture's row at line 761 was reported as line 1. The tag always knows where it is.
+            if (!parsed.IsClosing)
+            {
+                _report.Note(html.Line, ExportReport.EmbeddedHtmlLeftOut, ExportReport.Shorten(tag));
+            }
+
+            return;
+        }
+
         if (!InlineHtml.IsKnown(parsed.Name))
         {
             _logger.LogDebug("Inline <{Tag}> has no Word equivalent; its content is kept.", parsed.Name);
             return;
+        }
+
+        // A q is its quotation marks: the browser writes them, and Word has nothing that would.
+        // Curly double quotes, single inside another q, as the browser alternates them.
+        if (parsed.Name == "q" && !parsed.IsSelfClosing)
+        {
+            RunFormat around = _htmlFormat.Count > 0 ? _htmlFormat.Peek() : default;
+
+            if (parsed.IsClosing)
+            {
+                if (_quoteNesting > 0)
+                {
+                    _quoteNesting--;
+                    Append(paragraph, around.ToRun(_quoteNesting % 2 == 0 ? "\u201D" : "\u2019"));
+                }
+            }
+            else
+            {
+                Append(paragraph, around.ToRun(_quoteNesting % 2 == 0 ? "\u201C" : "\u2018"));
+                _quoteNesting++;
+            }
         }
 
         if (parsed.IsClosing)
@@ -367,6 +445,7 @@ internal sealed class InlineRenderer
         Italic = markdown.Italic || html.Italic,
         Strike = markdown.Strike || html.Strike,
         Underline = markdown.Underline || html.Underline,
+        Small = markdown.Small || html.Small,
         VerticalAlignment = markdown.VerticalAlignment ?? html.VerticalAlignment,
         CharacterStyle = markdown.CharacterStyle ?? html.CharacterStyle,
         Color = html.Color ?? markdown.Color,
@@ -424,6 +503,16 @@ internal sealed class InlineRenderer
             }
 
             _report.UnsupportedMath(_sourceLine, unsupported, math.Content.ToString());
+
+            // As for a display equation (BlockRenderer.WriteDisplayMath): unreadable markup
+            // has no other record than this.
+            if (unsupported is null)
+            {
+                _logger.LogWarning(
+                    "The equation at line {Line} did not read as MathML: {MathMl}",
+                    _sourceLine,
+                    mathml);
+            }
         }
         else
         {
@@ -553,6 +642,47 @@ internal sealed class InlineRenderer
     }
 
     private static string AltTextOf(LinkInline image) => InlinePlainText.Of(image);
+
+    /// <summary>
+    /// A size written as CSS pixels - "64" or "64px" - or null for anything else. A percentage
+    /// or an em is a size relative to something Word does not have, so it is not guessed at.
+    /// </summary>
+    private static uint? Pixels(string? value)
+    {
+        string text = (value ?? string.Empty).Trim();
+
+        if (text.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[..^2];
+        }
+
+        return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double pixels)
+            && pixels >= 1
+            ? (uint)Math.Round(pixels)
+            : null;
+    }
+
+    /// <summary>
+    /// An <c>&lt;img&gt;</c> written in the markdown as HTML, embedded the way a markdown image is.
+    /// The picture path reports what it cannot embed, so a miss is a row like any image's.
+    /// </summary>
+    private void WriteHtmlImage(HtmlTag tag, Paragraph paragraph, int line)
+    {
+        string url = InlineHtml.AttributeOf(tag, "src") ?? string.Empty;
+        string alt = System.Net.WebUtility.HtmlDecode(InlineHtml.AttributeOf(tag, "alt") ?? string.Empty);
+        (uint?, uint?) requested = (
+            Pixels(InlineHtml.AttributeOf(tag, "width")),
+            Pixels(InlineHtml.AttributeOf(tag, "height")));
+        RunFormat around = _htmlFormat.Count > 0 ? _htmlFormat.Peek() : default;
+
+        if (_images.TryBuild(url, alt, _maximumImageWidthTwips, line, requested) is { } run)
+        {
+            paragraph.AppendChild(run);
+            return;
+        }
+
+        Append(paragraph, around.WithItalic().ToRun(alt.Length > 0 ? $"[{alt}]" : "[image]"));
+    }
 
     private static void Append(Paragraph paragraph, Run run) => paragraph.AppendChild(run);
 }

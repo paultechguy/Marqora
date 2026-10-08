@@ -8421,7 +8421,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     rendered,
                     RequestDiagramPngAsync,
                     images,
-                    _colorThemes.Find(ExportColorThemeId)))
+                    _colorThemes.Find(ExportColorThemeId),
+                    RequestDiagramSvgForExportAsync))
                 .ConfigureAwait(true);
 
             _logger.LogInformation(
@@ -8497,6 +8498,37 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "A diagram could not be rasterized for the Word export.");
+                completion.SetResult(null);
+            }
+        });
+
+        return completion.Task;
+    }
+
+    /// <summary>
+    /// A diagram's light drawing as SVG, for the Word export's vector diagrams: the same one
+    /// Copy as SVG takes. Asked across the dispatcher for the reason the PNG is
+    /// (<see cref="RequestDiagramPngAsync"/>); null, and the diagram stays a PNG, on any failure.
+    /// </summary>
+    private Task<string?> RequestDiagramSvgForExportAsync(string hash)
+    {
+        if (_host is not { } host)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        var completion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _ui.Post(async () =>
+        {
+            try
+            {
+                completion.SetResult(await host.RequestDiagramSvgAsync(hash).ConfigureAwait(true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "A diagram's SVG could not be had for the Word export; it stays a PNG.");
                 completion.SetResult(null);
             }
         });

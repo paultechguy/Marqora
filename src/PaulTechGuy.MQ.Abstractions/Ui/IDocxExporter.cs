@@ -62,6 +62,11 @@ public interface IDocxExporter
     /// export looks like the preview. Its light palette, because a Word document is output and
     /// output is light. Null for Default.
     /// </param>
+    /// <param name="diagramSvg">
+    /// Asks the shell for a diagram's light drawing as SVG, by hash. Asked only for the
+    /// diagram types Word draws correctly from SVG; those go in as vectors with the PNG as the
+    /// fallback. Null keeps every diagram a PNG.
+    /// </param>
     /// <returns>
     /// Anything that could not be carried into the file - an image that is not on this
     /// machine, a remote image that would need the network, a diagram that never rendered -
@@ -83,5 +88,6 @@ public interface IDocxExporter
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
+        Func<string, Task<string?>>? diagramSvg = null,
         CancellationToken cancellationToken = default);
 }

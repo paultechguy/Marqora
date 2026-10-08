@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -54,9 +55,15 @@ internal sealed class BlockRenderer
     private readonly DocxFootnotes _footnotes;
     private readonly PreviewHarvest _preview;
     private readonly IReadOnlyDictionary<string, byte[]> _diagrams;
+
+    /// <summary>The diagrams Word draws from SVG, as SVG, by hash; see PreviewHarvest.DrawsAsVector.</summary>
+    private readonly IReadOnlyDictionary<string, string> _diagramSvgs;
     private readonly ExportReport _report;
     private readonly DocxColors _colors;
     private readonly ILogger _logger;
+
+    /// <summary>How many quotes the walker is inside while it writes a quote's children.</summary>
+    private int _quoteDepth;
 
     /// <summary>Fence languages the preview draws as pictures rather than as code.</summary>
     private static readonly string[] DiagramLanguages = ["mermaid"];
@@ -84,7 +91,8 @@ internal sealed class BlockRenderer
         PreviewHarvest preview,
         IReadOnlyDictionary<string, byte[]> diagrams,
         DocxColors colors,
-        ILogger logger)
+        ILogger logger,
+        IReadOnlyDictionary<string, string>? diagramSvgs = null)
     {
         _body = body;
         _colors = colors;
@@ -93,6 +101,7 @@ internal sealed class BlockRenderer
         _usableWidthTwips = usableWidthTwips;
         _preview = preview;
         _diagrams = diagrams;
+        _diagramSvgs = diagramSvgs ?? new Dictionary<string, string>();
         _report = report;
         _logger = logger;
         var owner = new RelationshipOwner(main);
@@ -288,22 +297,193 @@ internal sealed class BlockRenderer
     /// </summary>
     private void WriteHtmlBlock(HtmlBlock block)
     {
-        IReadOnlyList<string> paragraphs = HtmlBlockText.Paragraphs(block);
+        if (block.Type is HtmlBlockType.InterruptingBlock or HtmlBlockType.NonInterruptingBlock
+            && HtmlTables.Read(block.Lines.ToString()) is { } table)
+        {
+            WriteHtmlTable(table);
+            return;
+        }
+
+        foreach (string embedded in HtmlBlockText.Embedded(block))
+        {
+            _report.Note(block.Line, ExportReport.EmbeddedHtmlLeftOut, ExportReport.Shorten(embedded));
+        }
+
+        IReadOnlyList<HtmlParagraph> paragraphs = HtmlBlockText.Paragraphs(block);
 
         if (paragraphs.Count == 0)
         {
             return;
         }
 
-        foreach (string text in paragraphs)
+        // The box the preview drew round the block, where it drew one: the same borders and
+        // fill on every paragraph, which Word draws as one box round them all.
+        HtmlBlockBox? box = _preview.TryBox(block.Line, out HtmlBlockBox found) ? found : null;
+
+        foreach (HtmlParagraph paragraph in paragraphs)
         {
-            _body.AppendChild(new Paragraph(default(RunFormat).ToRun(text)));
+            RunFormat format = paragraph.IsSummary ? default(RunFormat).WithBold() : default;
+            var written = new Paragraph(format.ToRun(paragraph.Text));
+
+            if (box is not null)
+            {
+                // Typed setters, so each lands where the schema puts it: pBdr, then shd.
+                ParagraphProperties properties = EnsureProperties(written);
+
+                properties.ParagraphBorders = box.Borders();
+                properties.Shading = box.Shading();
+            }
+
+            _body.AppendChild(written);
         }
 
         _report.Note(
             block.Line,
-            "Raw HTML: its text is in the document, its styling is not",
+            box is null
+                ? "Raw HTML: its text is in the document, its styling is not"
+                : "Raw HTML: its text and its box are in the document, its other styling is not",
             HtmlBlockText.SourceOf(block));
+    }
+
+    /// <summary>
+    /// A raw HTML table as a Word table (see <see cref="HtmlTables"/>), in the same table
+    /// properties a markdown table wears, its columns shared equally - HTML states no widths a
+    /// page could use.
+    ///
+    /// The grid is laid out the way a browser lays it: a cell spanning rows holds its column
+    /// in the rows below, so each of those rows gets a continuing cell there - Word's vertical
+    /// merge - and its own cells move along past it. Without the bookkeeping, "merged across
+    /// two columns" in the fixture would have started in the first column, under "North".
+    /// </summary>
+    private void WriteHtmlTable(HtmlTable table)
+    {
+        // Columns from the widest row once the spans from above are counted in.
+        // Where a cell spanning rows holds a column in a row below it, and how many columns.
+        var covered = new Dictionary<(int Row, int Column), int>();
+        var placed = new List<List<(int Column, HtmlTableCell Cell)>>();
+        int columns = 0;
+
+        for (int r = 0; r < table.Rows.Count; r++)
+        {
+            var row = new List<(int, HtmlTableCell)>();
+            int column = 0;
+
+            foreach (HtmlTableCell cell in table.Rows[r].Cells)
+            {
+                while (covered.ContainsKey((r, column)))
+                {
+                    column += covered[(r, column)];
+                }
+
+                row.Add((column, cell));
+
+                for (int below = 1; below < cell.RowSpan && r + below < table.Rows.Count; below++)
+                {
+                    covered[(r + below, column)] = cell.ColumnSpan;
+                }
+
+                column += cell.ColumnSpan;
+            }
+
+            // A row can end on a span from above, which its own cells never reach.
+            int heldBelow = covered.Where(c => c.Key.Row == r).Select(c => c.Key.Column + c.Value).DefaultIfEmpty(0).Max();
+
+            columns = Math.Max(columns, Math.Max(column, heldBelow));
+            placed.Add(row);
+        }
+
+        if (columns == 0)
+        {
+            return;
+        }
+
+        if (table.Caption is { Length: > 0 } caption)
+        {
+            // Kept with the table: the fixture's caption was left alone at the foot of a page
+            // with its table on the next.
+            _body.AppendChild(new Paragraph(
+                new ParagraphProperties(new ParagraphStyleId { Val = StyleIds.Caption }, new KeepNext()),
+                default(RunFormat).ToRun(caption)));
+        }
+
+        int[] widths = [.. Enumerable.Repeat(_usableWidthTwips / columns, columns)];
+        var word = new WordTable(DocxTables.Properties(), DocxTables.Grid(widths));
+
+        for (int r = 0; r < table.Rows.Count; r++)
+        {
+            var wordRow = new TableRow();
+
+            if (table.Rows[r].IsHead)
+            {
+                wordRow.AppendChild(new TableRowProperties(new CantSplit(), new TableHeader()));
+            }
+
+            Dictionary<int, HtmlTableCell> starts = placed[r].ToDictionary(p => p.Column, p => p.Cell);
+
+            for (int column = 0; column < columns;)
+            {
+                if (covered.TryGetValue((r, column), out int continued))
+                {
+                    wordRow.AppendChild(HtmlCell(string.Empty, false, continued, MergedCellValues.Continue, null));
+                    column += continued;
+                }
+                else if (starts.TryGetValue(column, out HtmlTableCell? cell))
+                {
+                    wordRow.AppendChild(HtmlCell(
+                        cell.Text,
+                        cell.IsHeader,
+                        cell.ColumnSpan,
+                        cell.RowSpan > 1 ? MergedCellValues.Restart : null,
+                        cell.Alignment));
+                    column += cell.ColumnSpan;
+                }
+                else
+                {
+                    // A short row, as a markdown table may have: Word needs every cell.
+                    wordRow.AppendChild(HtmlCell(string.Empty, false, 1, null, null));
+                    column++;
+                }
+            }
+
+            word.AppendChild(wordRow);
+        }
+
+        _body.AppendChild(word);
+        _body.AppendChild(new Paragraph());
+    }
+
+    /// <summary>One cell of a raw HTML table; a header cell's words are bold.</summary>
+    private static TableCell HtmlCell(string text, bool header, int span, MergedCellValues? merge, string? alignment)
+    {
+        // The schema's order: tcW, gridSpan, vMerge.
+        var properties = new TableCellProperties(new TableCellWidth { Width = "0", Type = TableWidthUnitValues.Auto });
+
+        if (span > 1)
+        {
+            properties.AppendChild(new GridSpan { Val = span });
+        }
+
+        if (merge is { } value)
+        {
+            properties.AppendChild(new VerticalMerge { Val = value });
+        }
+
+        var paragraph = new Paragraph();
+
+        if (alignment is "center" or "right")
+        {
+            paragraph.AppendChild(new ParagraphProperties(new Justification
+            {
+                Val = alignment == "center" ? JustificationValues.Center : JustificationValues.Right,
+            }));
+        }
+
+        if (text.Length > 0)
+        {
+            paragraph.AppendChild((header ? default(RunFormat).WithBold() : default).ToRun(text));
+        }
+
+        return new TableCell(properties, paragraph);
     }
 
     private void WriteParagraph(ParagraphBlock block)
@@ -313,6 +493,11 @@ internal sealed class BlockRenderer
         _inlines.Write(block.Inline, paragraph, default, block.Line);
 
         _body.AppendChild(paragraph);
+
+        if (_inlines.TakeRule())
+        {
+            WriteThematicBreak();
+        }
     }
 
     /// <summary>
@@ -744,16 +929,42 @@ internal sealed class BlockRenderer
     /// </summary>
     private void WriteQuote(QuoteBlock quote)
     {
+        // Word draws consecutive paragraphs with the same borders as one box, so two quotes
+        // in a row came out as one panel - the fixture's single-line quote, two-paragraph
+        // quote and nested quote read as a single quote. A hairline paragraph between them,
+        // in Normal and without a border, ends one box before the next begins. Named Normal
+        // rather than left unstyled, so a quote round both cannot dress it as its own.
+        if (FollowsQuote(quote))
+        {
+            _body.AppendChild(new Paragraph(
+                new ParagraphProperties(
+                    new ParagraphStyleId { Val = StyleIds.Normal },
+                    new SpacingBetweenLines { Before = "0", After = "0", Line = "20", LineRule = LineSpacingRuleValues.Exact })));
+        }
+
         int before = _body.ChildElements.Count;
 
-        // Bold and italic in a quote keep the quote's ink, as they do in the preview.
-        using (_inlines.KeepSurroundingInk())
+        _quoteDepth++;
+
+        try
         {
-            foreach (Block child in quote)
+            // Bold and italic in a quote keep the quote's ink, as they do in the preview.
+            using (_inlines.KeepSurroundingInk())
             {
-                Write(child);
+                foreach (Block child in quote)
+                {
+                    Write(child);
+                }
             }
         }
+        finally
+        {
+            _quoteDepth--;
+        }
+
+        // The innermost quote runs this first, so each paragraph is styled - and stood in - by
+        // the quote it belongs to; an outer quote finds it already styled and leaves it.
+        int depth = _quoteDepth + 1;
 
         for (int i = before; i < _body.ChildElements.Count; i++)
         {
@@ -773,9 +984,29 @@ internal sealed class BlockRenderer
                 || properties.ParagraphStyleId.Val?.Value == StyleIds.ListParagraph)
             {
                 properties.ParagraphStyleId = new ParagraphStyleId { Val = StyleIds.Quote };
+
+                // A nested quote stands in one more step per level, as the preview indents it.
+                // Not over an indent already there: a list item keeps its own.
+                if (depth > 1 && properties.Indentation is null)
+                {
+                    properties.Indentation = new Indentation
+                    {
+                        Left = (DocxStyles.QuoteIndentTwips * depth).ToString(CultureInfo.InvariantCulture),
+                        Right = DocxStyles.QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
+                    };
+                }
             }
         }
     }
+
+    /// <summary>
+    /// Whether the block straight before this quote is a plain quote too. A callout is not:
+    /// its title paragraph has a style of its own, so Word never joins it to a neighbor.
+    /// </summary>
+    private static bool FollowsQuote(QuoteBlock quote) =>
+        quote.Parent is { } parent
+        && parent.IndexOf(quote) is > 0 and var at
+        && parent[at - 1] is QuoteBlock and not AlertBlock;
 
     /// <summary>
     /// A fenced or indented code block.
@@ -822,7 +1053,8 @@ internal sealed class BlockRenderer
                 "Diagram",
                 _usableWidthTwips,
                 scale: 2,
-                reservedHeightTwips: DiagramSpacingTwips + (FollowsHeading(block) ? HeadingRoomTwips : 0)) is { } run)
+                reservedHeightTwips: DiagramSpacingTwips + (FollowsHeading(block) ? HeadingRoomTwips : 0),
+                svg: _diagramSvgs.GetValueOrDefault(hash)) is { } run)
         {
             // Room to breathe, the same amount on each side. The preview sets a diagram
             // apart with a padded panel in a different color; Word gets the picture on its
@@ -1065,6 +1297,17 @@ internal sealed class BlockRenderer
             // which construct stopped it: that is how the converter grows to cover what real
             // documents actually contain.
             _report.UnsupportedMath(math.Line, unsupported, SourceOf(math));
+
+            // No construct named means the markup itself did not read as MathML, which no
+            // test fixture reproduces - the fixtures are well formed by construction. The
+            // markup is the only evidence, so it goes in the log.
+            if (unsupported is null)
+            {
+                _logger.LogWarning(
+                    "The equation at line {Line} did not read as MathML: {MathMl}",
+                    math.Line,
+                    mathml);
+            }
         }
         else
         {

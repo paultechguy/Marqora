@@ -78,7 +78,7 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 | ATX and Setext headings, levels 1–6 | ✅ | ✅ | Word now restarts H2 numbering after each H1, as the preview does |
 | Inline emphasis matrix | ✅ | ✅ | |
 | Hard breaks (two spaces, backslash, `<br>`) | ✅ | ✅ | |
-| Blockquotes, nested to three levels | ✅ | 🟡 | No longer italic. **Nested quotes do not indent**, and adjacent quotes merge into one panel (phase 3) |
+| Blockquotes, nested to three levels | ✅ | ✅ | Phase 3: quotes in a row are separate panels, each nested level stands in one more step |
 | GFM callouts | ✅ | ✅ | Was 🟡 for the PDF: callouts are kept whole now. Word still has no icons |
 | Ordered lists | ✅ | ✅ | Was ❌ for Word: every list restarts (§3.2 fixed) |
 | Nested and task lists | ✅ | 🟡 | Word still flattens the matryoshka: the list inside the quote inside the list leaves the quote |
@@ -93,30 +93,30 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 | Relative link to another `.md` | ✅ text only on paper | ✅ text only | Same by design |
 | Internal anchor link | ✅ | ✅ | |
 | `data:` PNG images | ✅ | ✅ | |
-| Pandoc `{width=64px}` image | — not rechecked | ❌ 1px | Word still ignores the size attribute. The image is a transparent pixel, so the PDF's size cannot be seen on the page; it was 64px on 2026-10-06 |
+| Pandoc `{width=64px}` image | — not rechecked | ✅ | Phase 3: Word takes the size. The image is a transparent pixel, so the PDF's size cannot be seen on the page; it was 64px on 2026-10-06 |
 | Remote image | 🟡 "not shown" chip, reported | 🟡 linked alt text, reported | Both reports name it; the PDF's by URL, Word's by alt text |
 | Missing local image | 🟡 broken-image glyph + alt, reported | ✅ bracketed alt, reported | |
 | Footnotes | ✅ at the page foot | ✅ at the page foot | Was 🟡 for the PDF: 3 of 3 placed at the foot, no ↩ links |
 | Pipe, aligned, ragged, grid tables | ✅ | ✅ | |
-| HTML table with a merged cell | ✅ | 🟡 | Was ❌ for Word: its text is in the document and reported, its merge is not |
+| HTML table with a merged cell | ✅ | ✅ | Phase 3: a Word table with its caption, header row, `rowspan` and `colspan` |
 | Horizontal rules (all syntaxes) | ✅ | ✅ | |
-| Block HTML `<div>` callout | ✅ | 🟡 | Was ❌ for Word: the sentence is there as plain text, and reported |
-| `<details>` | ✅ printed open | 🟡 | Was ❌ for the PDF (§4.5 fixed). Word keeps summary and content, reported |
-| `<iframe>` | 🟡 "not shown" chip, reported | ❌ | **Word drops it without a report row** (phase 3) |
+| Block HTML `<div>` callout | ✅ | 🟡 | Phase 3: the sentence keeps its box - border and fill, measured by the preview. Its inline bold does not come; reported |
+| `<details>` | ✅ printed open | 🟡 | Word keeps the content, with the summary in bold above it; reported |
+| `<iframe>` | 🟡 "not shown" chip, reported | 🟡 | Phase 3: Word cannot show a frame, and now reports it |
 | `<form>` | ✅ | 🟡 | Word keeps the button's text, reported |
-| Inline HTML (`<sup>`, `<sub>`, `<mark>`, `<kbd>`, `<var>`, …) | ✅ | 🟡 | Word still loses `<q>`'s quotation marks and `<small>`'s size |
-| `<hr />` and `<img>` written inline | ✅ | ❌ | **Both still absent in Word, and not reported** |
+| Inline HTML (`<sup>`, `<sub>`, `<mark>`, `<kbd>`, `<var>`, …) | ✅ | ✅ | Phase 3: `<q>` has its quotation marks and `<small>` its size |
+| `<hr />` and `<img>` written inline | ✅ | 🟡 | Phase 3: the rule is drawn after its paragraph; the image goes the way a markdown image does - the fixture's is an SVG `data:` URL, which Word cannot show, so it is reported under its alt text |
 | Definition lists, abbreviations | ✅ | ✅ | |
 | `&shy;` soft hyphen | ✅ invisible | ✅ invisible | Was ❌ for Word (§3.6 fixed) |
 | Repeated spaces | ✅ collapsed | 🟡 kept | |
 | Inline and display math | ✅ KaTeX, exact | 🟡 | Simple equations convert well |
-| Matrices, `cases`, `\left…\right` | ✅ | ❌ | Unchanged: Word's matrix parentheses and `\det` bars do not stretch, and the `cases` brace is missing (phase 3) |
-| Several equations on one line (`\qquad`) | ✅ | ❌ | Unchanged: the spacing is lost (phase 3) |
-| `\text`, `\color`, `\colorbox` in math | ✅ | ❌ | The line 1119 equation is not converted; its source is in the document, reported (phase 3) |
+| Matrices, `cases`, `\left…\right` | ✅ | ✅ | Phase 3: the brackets are Word delimiters and grow with the matrix; `cases` has its brace |
+| Several equations on one line (`\qquad`) | ✅ | ✅ | Phase 3: `\quad` and `\qquad` are em spaces |
+| `\text`, `\color`, `\colorbox` in math | ✅ | ✅ | Phase 3: colors on the runs, the box as shading. Line 1119 had failed only after a second KaTeX pass drew inside its TeX annotation; fixed |
 | `\overbrace` and `\underbrace` | ✅ | 🟡 | |
-| `align` equation numbers | ❌ (0)(0)(0) | 🟡 none | **Changed for the PDF:** was (1)(1)(1). KaTeX's `katexEqnNo` counter does not survive Paged.js. The preview's own (1)(1)(1) is the older defect underneath |
+| `align` equation numbers | ✅ (1)(2)(3) | 🟡 none | Phase 3: the shell writes the numbers, so the preview and the PDF count 1, 2, 3. Word does not number equations yet |
 | mhchem `\ce{}` | ❌ | ❌ | Not loaded in the preview, so both print raw `\ce` (expected by the fixture) |
-| Mermaid diagrams (24 types) | ✅ vector | 🟡 raster | Labels are now Segoe UI in Word, not a serif face |
+| Mermaid diagrams (24 types) | ✅ vector | 🟡 | Phase 3: the ten types Word draws from SVG are vectors, the PNG kept as fallback; the rest are PNG. The pie's slices come out darker in Word, which ignores mermaid's class-based opacity |
 | Broken mermaid | ✅ red parse-error box, reported | ✅ source as code, reported | |
 
 ### Page layout
@@ -158,10 +158,11 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 
 ### What is left
 
-Every ❌ above is in Word's column except two that both exports share or that sit in the
-preview: mhchem (expected) and the `align` numbers. Word's ❌s are phase 3's list: stretchy
-delimiters and spacing in math, the line 1119 color equation, the `<iframe>` and the inline
-`<hr />` and `<img>` that leave no report row, and the Pandoc image size.
+**Updated after phase 3 (2026-10-08, Word's rendering of the `.docx` exported at 14:18).**
+The only ❌ left is mhchem, in both columns, which the fixture expects. Word's column has no
+other ❌, which is phase 3's gate. Its 🟡s are what Word cannot hold or does not yet do:
+equation numbers, a frame, an SVG `data:` image, a raw HTML block's inline formatting, the
+matryoshka's nesting, and the pie's opacity.
 
 ---
 

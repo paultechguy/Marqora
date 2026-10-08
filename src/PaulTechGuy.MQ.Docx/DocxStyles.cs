@@ -32,6 +32,12 @@ namespace PaulTechGuy.MQ.Docx;
 /// </summary>
 internal static class DocxStyles
 {
+    /// <summary>
+    /// How far a quote stands in from each margin, 0.3in. A nested quote stands in this much
+    /// again per level (BlockRenderer.WriteQuote), so the style and the nesting agree.
+    /// </summary>
+    public const int QuoteIndentTwips = 432;
+
     /// <param name="colors">
     /// The color theme's light palette. Every color a style carries comes from it, so the
     /// exported document wears the theme the preview does.
@@ -369,7 +375,11 @@ internal static class DocxStyles
         }
 
         paragraph.AppendChild(SpacingOf(PaperSpec.Quote));
-        paragraph.AppendChild(new Indentation { Left = "432", Right = "432" });
+        paragraph.AppendChild(new Indentation
+        {
+            Left = QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
+            Right = QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
+        });
 
         // Upright, as the preview sets a quote: the bar, the fill and the ink already mark it
         // out, and the paper spec settled on upright for both exports.

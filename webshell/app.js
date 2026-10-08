@@ -5278,6 +5278,74 @@
     'list-style-type'
   ];
 
+  /*
+    The box round each raw HTML block - its borders, its fill and its padding - as the page
+    computed them, for the Word export (docs/Export-Alignment-Plan.md §7.3).
+
+    Word has no home for a block of HTML and writes its words as plain paragraphs. The box is
+    the part of its look a paragraph can carry: borders and shading. Measured here rather than
+    read from the markup in C#, so a var(), a named color, an hsl() or a class all arrive
+    resolved. Every color is opaque #rrggbb, blended over white where it had an alpha: Word's
+    shading has none. These are the author's colors, not the theme's.
+
+    Only the block's own element - the one straight after its source-line marker - and only
+    when it draws something. Read from the live page, because a clone has no computed style,
+    and matched to the clone by order; the clone keeps every marker the page has.
+  */
+  function htmlBlockBoxes(root) {
+    return Array.prototype.map.call(root.querySelectorAll('.mq-src-marker + *'), function (block) {
+      var style = getComputedStyle(block);
+      var parts = [];
+
+      ['top', 'right', 'bottom', 'left'].forEach(function (side) {
+        var width = parseFloat(style.getPropertyValue('border-' + side + '-width')) || 0;
+        var line = style.getPropertyValue('border-' + side + '-style');
+        var color = opaqueHex(style.getPropertyValue('border-' + side + '-color'));
+
+        if (width > 0 && line !== 'none' && line !== 'hidden' && color) {
+          parts.push('border-' + side + ':' + width + 'px ' + line + ' ' + color);
+        }
+      });
+
+      var fill = opaqueHex(style.backgroundColor);
+
+      if (fill && fill !== '#ffffff') { parts.push('background:' + fill); }
+
+      if (parts.length > 0) {
+        parts.push('padding-left:' + (parseFloat(style.paddingLeft) || 0) + 'px');
+      }
+
+      return parts.join(';');
+    });
+  }
+
+  function stampHtmlBlockBoxes(markup, boxes) {
+    var blocks = markup.querySelectorAll('.mq-src-marker + *');
+
+    if (blocks.length !== boxes.length) { return; }
+
+    for (var i = 0; i < blocks.length; i++) {
+      if (boxes[i]) { blocks[i].setAttribute('data-mq-box', boxes[i]); }
+    }
+  }
+
+  /// A computed color as #rrggbb over white, or null for a transparent one.
+  function opaqueHex(color) {
+    var m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)/.exec(color || '');
+
+    if (!m) { return null; }
+
+    var alpha = m[4] === undefined ? 1
+      : (m[4].slice(-1) === '%' ? parseFloat(m[4]) / 100 : parseFloat(m[4]));
+
+    if (!(alpha > 0)) { return null; }
+
+    return '#' + [m[1], m[2], m[3]].map(function (channel) {
+      var over = Math.round(parseFloat(channel) * alpha + 255 * (1 - alpha));
+      return ('0' + Math.max(0, Math.min(255, over)).toString(16)).slice(-2);
+    }).join('');
+  }
+
   // Inherited properties are only worth writing when they differ from the parent, which
   // keeps the markup from repeating the body font on every span in the document.
   var INHERITED_PROPERTIES = {
@@ -6390,9 +6458,14 @@
       // document, not a review of it. Only requestReviewHtml keeps them. With the light
       // drawings, once they are all in: this markup is leaving the app.
       whenOutputReady().then(function () {
+        var boxes = htmlBlockBoxes(els.preview);
+        var markup = outputMarkup(withoutCommentMarks(withoutBlockedChips(els.preview)));
+
+        stampHtmlBlockBoxes(markup, boxes);
+
         post('renderedHtml', {
           requestId: p.requestId,
-          html: outputMarkup(withoutCommentMarks(withoutBlockedChips(els.preview))).innerHTML
+          html: markup.innerHTML
         });
       });
     },

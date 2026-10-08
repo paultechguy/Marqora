@@ -83,8 +83,19 @@ public sealed partial class FixtureExportTests
 
         // Comments, scripts and bare tag lines are not reported: a report that lists every
         // <details> line is one nobody reads.
-        exported.Skipped.Count(row => row.Contains("Raw HTML", StringComparison.Ordinal))
+        exported.Issues.Count(i => i.Problem.StartsWith("Raw HTML: its text", StringComparison.Ordinal))
             .ShouldBeLessThanOrEqualTo(6);
+
+        // What shows without words is reported rather than left out in silence: the iframe
+        // and three <svg> drawings. (The inline <hr /> is drawn as a rule now, and the inline
+        // <img> is reported as a picture, under its alt text.) Those are written as images
+        // with an svg data URL, but the unescaped markup breaks the link, so Markdig reads
+        // raw HTML and the preview draws it.
+        exported.Issues
+            .Where(i => i.Problem.StartsWith("Raw HTML that Word cannot show", StringComparison.Ordinal))
+            .Select(i => i.Line)
+            .Order()
+            .ShouldBe([685, 701, 761, 909]);
     }
 
     internal static async Task<ExportedDocument> ExportFixtureAsync(

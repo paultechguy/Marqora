@@ -6,7 +6,7 @@ using System.Globalization;
 namespace PaulTechGuy.MQ.Docx;
 
 /// <summary>One inline HTML tag, read far enough to know what it asks for.</summary>
-internal readonly record struct HtmlTag(string Name, bool IsClosing, bool IsSelfClosing, string? Style);
+internal readonly record struct HtmlTag(string Name, bool IsClosing, bool IsSelfClosing, string? Style, string Attributes = "");
 
 /// <summary>
 /// The inline HTML a markdown document is allowed to contain, and what Word can do about it.
@@ -66,7 +66,7 @@ internal static class InlineHtml
 
         string? style = nameEnd < 0 ? null : Attribute(inner[nameEnd..], "style");
 
-        return new HtmlTag(name.ToString().ToLowerInvariant(), closing, selfClosing, style);
+        return new HtmlTag(name.ToString().ToLowerInvariant(), closing, selfClosing, style, nameEnd < 0 ? string.Empty : inner[nameEnd..].ToString());
     }
 
     /// <summary>
@@ -89,8 +89,11 @@ internal static class InlineHtml
             "kbd" or "code" or "samp" or "tt" => format.WithCharacterStyle(StyleIds.CodeChar),
             "mark" => format.WithCharacterStyle(StyleIds.Mark),
 
+            "small" => format.WithSmall(),
+
             // A span carries nothing on its own; whether it means anything is in its style.
-            "span" or "small" or "big" or "abbr" or "q" => format,
+            // A q's quotation marks are text, written by the walker either side of it.
+            "span" or "big" or "abbr" or "q" => format,
 
             _ => format,
         };
@@ -115,6 +118,20 @@ internal static class InlineHtml
         or "u" or "ins" or "s" or "del" or "strike"
         or "sub" or "sup" or "kbd" or "code" or "samp" or "tt" or "mark"
         or "span" or "small" or "big" or "abbr" or "q";
+
+    /// <summary>One attribute's value from a tag, unquoted, or null when it has none.</summary>
+    public static string? AttributeOf(HtmlTag tag, string name) =>
+        tag.Attributes.Length == 0 ? null : Attribute(tag.Attributes, name);
+
+    /// <summary>
+    /// Whether a tag is something the preview shows that has no words of its own - a picture,
+    /// a rule, a frame, a player. Stepping over an unknown tag keeps its words; one of these
+    /// has none to keep, so stepping over it left nothing behind and the export report still
+    /// said everything else came across. Each one gets a report row instead.
+    /// </summary>
+    public static bool IsEmbedded(string name) => name is
+        "img" or "picture" or "svg" or "canvas" or "hr"
+        or "iframe" or "embed" or "object" or "video" or "audio";
 
     /// <summary>
     /// The colors out of an inline style declaration.

@@ -71,6 +71,17 @@ internal readonly record struct RunFormat
     /// </summary>
     public bool Plain { get; init; }
 
+    /// <summary>
+    /// <c>&lt;small&gt;</c>: the browser's "smaller", five sixths of the body size, rounded to
+    /// the half point Word stores. The paper spec names no small size of its own, so this is
+    /// what the preview drew.
+    /// </summary>
+    public bool Small { get; init; }
+
+    private static int SmallHalfPoints => (int)Math.Round(PaulTechGuy.MQ.Domain.PaperSpec.Body.SizePoints * 2 * 5 / 6);
+
+    public RunFormat WithSmall() => this with { Small = true };
+
     public RunFormat WithBold() => this with { Bold = true };
 
     public RunFormat WithItalic() => this with { Italic = true };
@@ -149,6 +160,14 @@ internal readonly record struct RunFormat
         else if (EmphasisInk is { Length: > 0 } emphasis && styleId is null)
         {
             properties.AppendChild(new Color { Val = emphasis });
+        }
+
+        if (Small)
+        {
+            string halfPoints = SmallHalfPoints.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            properties.AppendChild(new FontSize { Val = halfPoints });
+            properties.AppendChild(new FontSizeComplexScript { Val = halfPoints });
         }
 
         if (Underline)

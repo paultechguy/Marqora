@@ -56,6 +56,7 @@ public sealed class DocxExporter : IDocxExporter
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
+        Func<string, Task<string?>>? diagramSvg = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -89,6 +90,9 @@ public sealed class DocxExporter : IDocxExporter
         // would otherwise be able to spend four minutes waiting one at a time.
         IReadOnlyDictionary<string, byte[]> diagrams =
             await FetchDiagramsAsync(document, preview, diagramPng, report).ConfigureAwait(false);
+
+        IReadOnlyDictionary<string, string> diagramSvgs =
+            await FetchDiagramSvgsAsync(diagrams.Keys, preview, diagramSvg).ConfigureAwait(false);
 
         long diagramsMs = elapsed.ElapsedMilliseconds;
 
@@ -148,7 +152,8 @@ public sealed class DocxExporter : IDocxExporter
                 preview,
                 diagrams,
                 colors,
-                _logger);
+                _logger,
+                diagramSvgs);
 
             FrontMatter front = FrontMatter.Read(document);
 
@@ -280,6 +285,43 @@ public sealed class DocxExporter : IDocxExporter
         }
 
         return pictures;
+    }
+
+    /// <summary>
+    /// The SVG for each diagram whose type Word draws correctly from one (see
+    /// <see cref="PreviewHarvest.DrawsAsVector"/>), asked for together for the same reason the
+    /// PNGs are. Only for a diagram whose PNG came back: the SVG rides on the PNG as Word's
+    /// extension, and without the PNG there is no picture for it to ride on. One that does not
+    /// come back simply leaves its diagram a PNG.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<string, string>> FetchDiagramSvgsAsync(
+        IEnumerable<string> drawn,
+        PreviewHarvest preview,
+        Func<string, Task<string?>>? diagramSvg)
+    {
+        var svgs = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (diagramSvg is null)
+        {
+            return svgs;
+        }
+
+        string[] vectors = [.. drawn.Where(preview.DrawsAsVector)];
+
+        KeyValuePair<string, string?>[] fetched = await Task.WhenAll(
+            vectors.Select(async hash =>
+                new KeyValuePair<string, string?>(hash, await diagramSvg(hash).ConfigureAwait(false))))
+            .ConfigureAwait(false);
+
+        foreach ((string hash, string? svg) in fetched)
+        {
+            if (svg is { Length: > 0 } && svg.Contains("<svg", StringComparison.Ordinal))
+            {
+                svgs[hash] = svg;
+            }
+        }
+
+        return svgs;
     }
 
     /// <summary>

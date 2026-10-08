@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Text.RegularExpressions;
 using PaulTechGuy.MQ.Domain;
 using Shouldly;
 using Xunit;
@@ -100,6 +101,44 @@ public class BlockTests
         using var exported = await ExportedDocument.FromAsync("> Something said.\n");
 
         exported.DocumentXml().ShouldContain("w:val=\"Quote\"");
+    }
+
+    /// <summary>
+    /// Two quotes in a row are two panels. Word draws consecutive paragraphs with the same
+    /// borders as one box, so the fixture's three quotes in a row read as a single quote; a
+    /// hairline paragraph between them ends each box. One between each pair, none inside a
+    /// quote, and none before a quote that follows a callout, whose title already separates it.
+    /// </summary>
+    [Fact]
+    public async Task Quotes_in_a_row_stay_separate_panels()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "> One.\n\n> Two.\n>\n> Still two.\n\n> Three.\n\n> [!NOTE]\n> A note.\n\n> Four.\n");
+
+        string xml = exported.DocumentXml();
+
+        Regex.Count(xml, "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\" />")
+            .ShouldBe(2);
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Each level of a nested quote stands in one more step, as the preview indents it. The
+    /// style's bar is drawn once whatever the depth, so without the step three levels read as
+    /// one.
+    /// </summary>
+    [Fact]
+    public async Task A_nested_quote_stands_in_one_step_per_level()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "> Level one.\n>\n> > Level two.\n> >\n> > > Level three.\n");
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<w:ind w:left=\"864\" w:right=\"432\" />");
+        xml.ShouldContain("<w:ind w:left=\"1296\" w:right=\"432\" />");
+        Regex.Count(xml, "w:val=\"Quote\"").ShouldBe(3);
+        exported.ValidationErrors().ShouldBeEmpty();
     }
 
     [Fact]

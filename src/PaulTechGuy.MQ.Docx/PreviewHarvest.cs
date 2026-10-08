@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -29,13 +30,15 @@ internal readonly record struct CodeToken(string Text, string? TokenClass);
 /// caught up, or with the preview never asked at all, simply gets no colors and no diagrams -
 /// which is the property that makes a Word export degrade instead of refusing.
 /// </summary>
-internal sealed class PreviewHarvest
+internal sealed partial class PreviewHarvest
 {
     private static readonly PreviewHarvest Nothing = new();
 
     private readonly Dictionary<int, string> _diagrams = [];
     private readonly Dictionary<int, IReadOnlyList<CodeToken>> _code = [];
     private readonly Dictionary<(int Line, int Ordinal), string> _math = [];
+    private readonly Dictionary<int, HtmlBlockBox> _boxes = [];
+    private readonly Dictionary<string, string> _roles = new(StringComparer.Ordinal);
 
     private PreviewHarvest()
     {
@@ -56,12 +59,32 @@ internal sealed class PreviewHarvest
         harvest.ReadDiagrams(renderedHtml);
         harvest.ReadCode(renderedHtml);
         harvest.ReadMath(renderedHtml);
+        harvest.ReadBoxes(renderedHtml);
 
         return harvest;
     }
 
     /// <summary>The hash the shell knows a diagram by, so its picture can be asked for.</summary>
     public bool TryDiagram(int line, out string hash) => _diagrams.TryGetValue(line, out hash!);
+
+    /// <summary>
+    /// Whether Word draws this diagram's type correctly from its SVG, words and all, so it can
+    /// go in as a vector with its PNG as the fallback.
+    ///
+    /// The ten types spike S6 saw Word 365 draw right (docs/Export-Alignment-Plan.md §4, §7.2).
+    /// A type whose labels are HTML in a foreignObject - flowchart, class, state, ER, journey,
+    /// block, kanban, mindmap - lost every word, and the timeline, treemap and git graph lost
+    /// fills or text to mermaid's class-based styles; those keep the PNG. A type joins this
+    /// list only after Word has been seen drawing it.
+    /// </summary>
+    public bool DrawsAsVector(string hash) =>
+        _roles.TryGetValue(hash, out string? role) && VectorTypes.Contains(role);
+
+    private static readonly HashSet<string> VectorTypes = new(StringComparer.Ordinal)
+    {
+        "sequence", "gantt", "pie", "quadrantChart", "c4",
+        "sankey", "xychart", "packet", "architecture", "radar",
+    };
 
     /// <summary>
     /// The colored runs of one code block.
@@ -79,6 +102,31 @@ internal sealed class PreviewHarvest
     /// </summary>
     public bool TryMath(int line, int ordinal, out string mathml) =>
         _math.TryGetValue((line, ordinal), out mathml!);
+
+    /// <summary>
+    /// The box the preview drew round a raw HTML block - its borders, fill and padding, as the
+    /// shell measured them (htmlBlockBoxes in app.js) - keyed by the block's line.
+    /// </summary>
+    public bool TryBox(int line, out HtmlBlockBox box) => _boxes.TryGetValue(line, out box!);
+
+    /// <summary>
+    /// Each block's box, from the attribute the shell stamps on the element straight after the
+    /// block's source-line marker. The marker carries the line; the element carries the box.
+    /// </summary>
+    private void ReadBoxes(string html)
+    {
+        foreach (Match match in BoxedBlock().Matches(html))
+        {
+            if (int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int line)
+                && HtmlBlockBox.Parse(WebUtility.HtmlDecode(match.Groups[2].Value)) is { } box)
+            {
+                _boxes[line] = box;
+            }
+        }
+    }
+
+    [GeneratedRegex("<div class=\"mq-src-marker\"[^>]*?data-src-line=\"(\\d+)\"[^>]*></div>\\s*<[a-zA-Z][^>]*?\\sdata-mq-box=\"([^\"]*)\"")]
+    private static partial Regex BoxedBlock();
 
     /// <summary>
     /// Mermaid blocks, which the shell stamps with a hash of their definition once it has
@@ -106,6 +154,21 @@ internal sealed class PreviewHarvest
                 && Attribute(tag, "data-mq-diagram") is { Length: > 0 } hash)
             {
                 _diagrams[number] = hash;
+
+                // The drawing's type, from its own svg, before the pre closes.
+                int end = html.IndexOf("</pre>", close, StringComparison.Ordinal);
+                int role = html.IndexOf("aria-roledescription=\"", close, StringComparison.Ordinal);
+
+                if (role > 0 && (end < 0 || role < end))
+                {
+                    int from = role + "aria-roledescription=\"".Length;
+                    int to = html.IndexOf('"', from);
+
+                    if (to > from)
+                    {
+                        _roles[hash] = html[from..to];
+                    }
+                }
             }
 
             at = close + 1;

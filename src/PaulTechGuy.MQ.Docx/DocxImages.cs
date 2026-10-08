@@ -66,7 +66,62 @@ internal sealed class DocxImages
     /// The picture as a run, or null when it could not be embedded - in which case the caller
     /// writes the alt text instead and the reason has already been recorded.
     /// </summary>
-    public Run? TryBuild(string url, string altText, int maximumWidthTwips, int sourceLine)
+    /// <param name="requested">
+    /// The size the document asked for, in CSS pixels - Pandoc's <c>{width=64px}</c>, or an
+    /// <c>&lt;img width&gt;</c> - with either side left out to keep the picture's proportions.
+    /// Without it a 1-pixel image asked to show at 64 went into Word one pixel wide.
+    /// </param>
+    public Run? TryBuild(
+        string url,
+        string altText,
+        int maximumWidthTwips,
+        int sourceLine,
+        (uint? Width, uint? Height) requested = default)
+    {
+        _requested = requested;
+
+        try
+        {
+            return TryBuildAsked(url, altText, maximumWidthTwips, sourceLine);
+        }
+        finally
+        {
+            _requested = default;
+        }
+    }
+
+    /// <summary>The size asked of the picture being built; see <see cref="TryBuild"/>.</summary>
+    private (uint? Width, uint? Height) _requested;
+
+    /// <summary>
+    /// The picture's own size, or the size the document asked for where it asked. One side
+    /// asked for takes the other from the picture's proportions, as a browser does.
+    /// </summary>
+    private (uint Width, uint Height)? Requested((uint Width, uint Height)? natural)
+    {
+        (uint? width, uint? height) = _requested;
+
+        if (width is null && height is null)
+        {
+            return natural;
+        }
+
+        if (width is { } w && height is { } h)
+        {
+            return (w, h);
+        }
+
+        if (natural is not { Width: > 0, Height: > 0 } size)
+        {
+            return width is { } only ? (only, only) : (height!.Value, height.Value);
+        }
+
+        return width is { } asked
+            ? (asked, (uint)Math.Max(1, Math.Round(asked * (size.Height / (double)size.Width))))
+            : ((uint)Math.Max(1, Math.Round(height!.Value * (size.Width / (double)size.Height))), height.Value);
+    }
+
+    private Run? TryBuildAsked(string url, string altText, int maximumWidthTwips, int sourceLine)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -146,12 +201,18 @@ internal sealed class DocxImages
     /// Page height the picture must leave to something else - a diagram's spacing, and the
     /// heading it is kept with - so that the two fit on one page together.
     /// </param>
+    /// <param name="svg">
+    /// The same drawing as SVG, for a diagram Word draws correctly from one. It goes in beside
+    /// the PNG as Word's own SVG extension: Word 2016 and later draw the vector, sharp at any
+    /// zoom and in print, and anything older draws the PNG.
+    /// </param>
     public Run? TryBuildFromBytes(
         byte[] png,
         string altText,
         int maximumWidthTwips,
         int scale = 1,
-        int reservedHeightTwips = 0)
+        int reservedHeightTwips = 0,
+        string? svg = null)
     {
         ArgumentNullException.ThrowIfNull(png);
 
@@ -167,6 +228,20 @@ internal sealed class DocxImages
             part.FeedData(source);
         }
 
+        string? svgId = null;
+
+        if (svg is { Length: > 0 })
+        {
+            ImagePart vector = _owner.NewImagePart(ImagePartType.Svg);
+
+            using (var source = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(svg)))
+            {
+                vector.FeedData(source);
+            }
+
+            svgId = _owner.IdOf(vector);
+        }
+
         (long width, long height) = Scale(
             ImageDimensions.Read(png),
             maximumWidthTwips,
@@ -178,7 +253,8 @@ internal sealed class DocxImages
             altText,
             "diagram.png",
             Math.Max(width, 1),
-            Math.Max(height, 1));
+            Math.Max(height, 1),
+            svgId);
     }
 
     /// <summary>
@@ -282,7 +358,7 @@ internal sealed class DocxImages
             _parts[key] = part;
         }
 
-        (long width, long height) = Scale(ImageDimensions.Read(bytes), maximumWidthTwips, _maximumHeightTwips);
+        (long width, long height) = Scale(Requested(ImageDimensions.Read(bytes)), maximumWidthTwips, _maximumHeightTwips);
 
         return BuildRun(_owner.IdOf(part), altText, name, width, height);
     }
@@ -307,7 +383,7 @@ internal sealed class DocxImages
             _parts[path] = part;
         }
 
-        (long width, long height) = Scale(ReadPixelSize(path), maximumWidthTwips, _maximumHeightTwips);
+        (long width, long height) = Scale(Requested(ReadPixelSize(path)), maximumWidthTwips, _maximumHeightTwips);
 
         return BuildRun(_owner.IdOf(part), altText, path, width, height);
     }
@@ -383,12 +459,33 @@ internal sealed class DocxImages
         return ImageDimensions.Read(head.AsSpan(0, read));
     }
 
-    private Run BuildRun(
-        string relationshipId,
+    /// <summary>
+    /// The picture's blip: the PNG, and the SVG as Word's own extension on it when there is one.
+    /// The extension's uri is the one Office writes for an SVG picture.
+    /// </summary>
+    private static A.Blip Blip(string relationshipId, string? svgRelationshipId)
+    {
+        var blip = new A.Blip { Embed = relationshipId };
+
+        if (svgRelationshipId is not null)
+        {
+            blip.AppendChild(new A.BlipExtensionList(
+                new A.BlipExtension(
+                    new DocumentFormat.OpenXml.Office2019.Drawing.SVG.SVGBlip { Embed = svgRelationshipId })
+                {
+                    Uri = "{96DAC541-7B7A-43D3-8B79-37D633B846F1}",
+                }));
+        }
+
+        return blip;
+    }
+
+    private Run BuildRun(        string relationshipId,
         string altText,
         string path,
         long width,
-        long height)
+        long height,
+        string? svgRelationshipId = null)
     {
         uint id = _nextDrawingId++;
         string name = Path.GetFileName(path);
@@ -405,7 +502,7 @@ internal sealed class DocxImages
                 new PIC.NonVisualPictureDrawingProperties(
                     new A.PictureLocks { NoChangeAspect = true, NoChangeArrowheads = true })),
             new PIC.BlipFill(
-                new A.Blip { Embed = relationshipId },
+                Blip(relationshipId, svgRelationshipId),
                 new A.SourceRectangle(),
                 new A.Stretch(new A.FillRectangle())),
             new PIC.ShapeProperties(

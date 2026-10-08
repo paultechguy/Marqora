@@ -90,6 +90,13 @@ internal sealed class ExportReport
     /// (ContentCensusTests) found every equation in a document exported without the preview
     /// written as source, and not one row saying so.
     /// </summary>
+    /// <summary>
+    /// The row for raw HTML that shows something but says nothing - a picture, a rule, a
+    /// frame (<see cref="InlineHtml.IsEmbedded"/>). One wording for the block and the inline
+    /// path, so the same element reads the same wherever it was written.
+    /// </summary>
+    public const string EmbeddedHtmlLeftOut = "Raw HTML that Word cannot show; it is left out";
+
     public void MathWithoutPreview(int sourceLine, string? tex) =>
         Note(
             sourceLine,
