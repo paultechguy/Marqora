@@ -1360,7 +1360,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// printout and a PDF are one layout, unless the classic engine is asked for or the paged
     /// engine fails before sending anything. See <see cref="PagedJobs"/>.
     /// </summary>
-    public async Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture, bool useClassicEngine)
+    public async Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture)
     {
         ArgumentNullException.ThrowIfNull(job);
         ArgumentNullException.ThrowIfNull(furniture);
@@ -1377,7 +1377,6 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             job,
             title,
             furniture,
-            useClassicEngine,
             OnWebResourceRequested,
             _logger,
             () => PrintClassicAsync(core, job, title)).ConfigureAwait(true);

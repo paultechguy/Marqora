@@ -8624,7 +8624,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // Said when it happens, because the reader asked for the paged engine and the file
             // they got has none of what it adds - no page numbers, no contents - at a smaller
             // size. The log says why.
-            if (outcome.Engine == PrintEngine.Classic && !setup.UseClassicEngine)
+            if (outcome.Engine == PrintEngine.Classic)
             {
                 StatusText += " (with the classic engine; the paged engine could not finish)";
             }
@@ -8716,12 +8716,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             StatusText = $"Printing to {job.PrinterName}...";
 
             PrintEngine engine = await _host
-                .PrintAsync(job, PrintTitleOf(document), FurnitureFor(document), setup.UseClassicEngine)
+                .PrintAsync(job, PrintTitleOf(document), FurnitureFor(document))
                 .ConfigureAwait(true);
 
             StatusText = $"Sent to {job.PrinterName}";
 
-            if (engine == PrintEngine.Classic && !setup.UseClassicEngine)
+            if (engine == PrintEngine.Classic)
             {
                 StatusText += " (with the classic engine; the paged engine could not lay it out)";
             }

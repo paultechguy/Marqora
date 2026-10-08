@@ -220,7 +220,6 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly ComboBox _orientation;
     private readonly ComboBox _margin;
     private readonly CheckBox _backgrounds;
-    private readonly CheckBox _classicPdf;
     private readonly ComboBox _wordPaper;
     private readonly ComboBox _wordOrientation;
     private readonly ComboBox _wordMargin;
@@ -536,9 +535,6 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _backgrounds = BuildCheck("Shade code, tables and callouts");
         Bind(_backgrounds, v => UpdatePdfAsync(setup => setup with { IncludeBackgrounds = v }));
-
-        _classicPdf = BuildCheck("Use the classic print engine");
-        Bind(_classicPdf, v => UpdatePdfAsync(setup => setup with { UseClassicEngine = v }));
 
         _wordPaper = BuildCombo(["Letter", "A4", "Legal"]);
         _wordPaper.SelectionChanged += (_, _) => ApplyAsync(() => UpdateDocxAsync(setup => setup with
@@ -1269,13 +1265,6 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "dialog has no field for. Changing the setup in the export or print dialog "
             + "updates these too."));
 
-        panel.Children.Add(_classicPdf);
-
-        panel.Children.Add(Note(
-            "Export to PDF and Print lay the document out into pages of its own, at true size, with "
-            + "page numbers, the contents and footnotes at the foot of each page. The classic "
-            + "engine prints the preview as it stands, as every PDF and printout was made before. It is "
-            + "here for one release, in case a document comes out wrong."));
 
         panel.Children.Add(Divider());
 
@@ -1878,7 +1867,6 @@ internal sealed class PreferencesWindow : PaletteWindow
             _orientation.SelectedIndex = (int)pdf.Orientation;
             _margin.SelectedIndex = (int)pdf.Margin;
             _backgrounds.IsChecked = pdf.IncludeBackgrounds;
-            _classicPdf.IsChecked = pdf.UseClassicEngine;
 
             DocxExportSetup docx = s.DocxDefaults;
             _wordPaper.SelectedIndex = (int)docx.Paper;

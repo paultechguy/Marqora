@@ -266,14 +266,8 @@ internal sealed class PrintDialog : ContentDialog
         // The shading box with the three layout boxes, one group: all four say what goes on
         // the page. Shading is the same setting Export to PDF and Preferences show - here,
         // where the ink is actually spent, as well. The layout three are the shared answer
-        // both export dialogs show, and the classic engine prints the preview as it stands,
-        // with none of them.
-        paper.Children.Add(DialogFields.Group(
-            new[] { _shading }.Concat((_layout?.Boxes ?? []).Select(box =>
-            {
-                box.IsEnabled = !_defaults.UseClassicEngine;
-                return box;
-            }))));
+        // both export dialogs show.
+        paper.Children.Add(DialogFields.Group([_shading, .. _layout?.Boxes ?? []]));
 
         return DialogFields.TwoColumns(this, job, paper);
     }

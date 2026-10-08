@@ -54,9 +54,9 @@ match, the difference must be known and reported.
 
 - **Engine:** PDF and Print use Paged.js 0.4.3 in an off-screen WebView2 (`PagedPrintHost`),
   then DevTools `Page.printToPDF` (PDF) or `CoreWebView2.PrintAsync` (printer). The old
-  live-preview path is the **classic engine**: automatic fallback, and a Preferences switch
-  "Use the classic print engine" (`PdfPageSetup.UseClassicEngine`) kept **for one release only**,
-  then removed with `WebViewPrinting`.
+  live-preview path is the **classic engine**, now only the automatic fallback: Paul had the
+  Preferences switch and `PdfPageSetup.UseClassicEngine` removed on 2026-10-08, ahead of the
+  one release first planned. `WebViewPrinting` stays for the fallback.
 - **Fallback rules** (`Services/PagedJobs.cs`, one copy for all windows): fall back when the page
   gives no markup or the engine fails *before sending*; never fall back after pages may have
   reached a printer (would print twice) — report instead; never fall back for an unwritable PDF.
@@ -147,8 +147,8 @@ layout across dialogs; title-page behavior; startup message.
   purpose (`CheatsheetService.OpenAsync`), so a Ctrl+P straight after opening it prints the
   main window's document.
 
-- The classic engine and its Preferences switch are to be removed one release after the paged
-  engine ships.
+- The classic engine's code (`WebViewPrinting`) remains as the automatic fallback; its switch is
+  gone. Removing the fallback too is a later decision.
 - Microsoft Print to PDF output looks a hair heavier than the direct PDF — the printer driver's
   rendering, accepted.
 - Word's report says "Example image alt text" where the PDF report says the URL for the same

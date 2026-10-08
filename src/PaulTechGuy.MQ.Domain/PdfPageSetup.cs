@@ -97,15 +97,6 @@ public sealed record PdfPageSetup
     /// </summary>
     public bool IncludeBackgrounds { get; set; } = true;
 
-    /// <summary>
-    /// Print the live preview as it stands, as every PDF and printout was made before the
-    /// paged engine. Read by Export to PDF and by Print alike.
-    ///
-    /// The way back for one release (docs/Export-Alignment-Plan.md, §6.2), in case the paged
-    /// engine misreads somebody's document. Off by default: the paged engine is the one that
-    /// prints at true size, with page numbers, a contents page and footnotes at the foot.
-    /// </summary>
-    public bool UseClassicEngine { get; set; }
 
     public static PdfPageSetup Default => new();
 

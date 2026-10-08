@@ -875,8 +875,8 @@ public interface IPreviewHost
     /// Prints the active document, for a paper copy rather than a file.
     ///
     /// Through the paged engine, so a printout and a PDF of the same document are one layout,
-    /// unless <paramref name="useClassicEngine"/> asks for the preview to be printed as it
-    /// stands, or the paged engine fails before sending anything. A failure after pages may
+    /// unless the paged engine fails before sending anything, when the preview is printed as it
+    /// stands. A failure after pages may
     /// have reached the printer throws rather than falling back, which would print twice.
     /// Answers which engine printed.
     ///
@@ -887,7 +887,7 @@ public interface IPreviewHost
     /// </summary>
     /// <param name="title">The name the print queue lists the job under, chosen as for a PDF.</param>
     /// <param name="furniture">The cover, contents and header and footer, resolved for this document.</param>
-    Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture, bool useClassicEngine);
+    Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture);
 }
 
 /// <summary>An inclusive, zero-based range of editor lines.</summary>

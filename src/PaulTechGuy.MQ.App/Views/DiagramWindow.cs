@@ -767,7 +767,6 @@ public sealed partial class DiagramWindow : Window
                 job,
                 _title,
                 NoFurniture,
-                _settings.Current.PdfDefaults.UseClassicEngine,
                 documentAssets: null,
                 _logger,
                 async () =>

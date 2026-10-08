@@ -401,7 +401,6 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                 job,
                 Title,
                 new PaperFurniture(null, null, HeaderAndFooter: true),
-                _settings.Current.PdfDefaults.UseClassicEngine,
                 documentAssets: null,
                 _logger,
                 () => WebViewPrinting.PrintAsync(core, job)).ConfigureAwait(true);

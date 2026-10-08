@@ -151,10 +151,6 @@ public sealed class AppSettingsTests : IDisposable
         settings.PdfSetup.ShouldBeNull();
         settings.PdfDefaults.ShouldBe(PdfPageSetup.Default);
 
-        // The paged engine arrived after the setup did; a file from before it prints with it,
-        // and the classic engine is only ever something somebody asked for.
-        settings.PdfDefaults.UseClassicEngine.ShouldBeFalse();
-
         // The exception to "nothing arrives switched on", and it earns it by changing nothing
         // outside the preview: standing Marqora's numbering down for a document that numbers
         // its own headings is a reading decision, is never written to disk, and is one Alt+5
@@ -207,7 +203,7 @@ public sealed class AppSettingsTests : IDisposable
             AutoSaveDelaySeconds = 45,
             NewFileLineEnding = LineEndingStyle.Lf,
             WriteUtf8Bom = true,
-            PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape, UseClassicEngine = true },
+            PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape },
             DocxSetup = new DocxExportSetup
             {
                 Paper = PaperSize.Legal,

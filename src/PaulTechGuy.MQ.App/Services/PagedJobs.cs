@@ -51,33 +51,30 @@ internal static class PagedJobs
         ArgumentNullException.ThrowIfNull(setup);
         ArgumentNullException.ThrowIfNull(exportClassic);
 
-        if (!setup.UseClassicEngine)
+        string? markup = await requestMarkup().ConfigureAwait(true);
+
+        if (markup is null)
         {
-            string? markup = await requestMarkup().ConfigureAwait(true);
-
-            if (markup is null)
+            logger.LogWarning("The page did not hand over its print markup; {Path} goes to the classic engine.", path);
+        }
+        else
+        {
+            try
             {
-                logger.LogWarning("The page did not hand over its print markup; {Path} goes to the classic engine.", path);
+                PagedPrintResult result = await PagedPrintHost.ExportAsync(
+                    parentWindow, assets, markup, setup, title, furniture, path,
+                    PagedHostMode.OffScreen, documentAssets, logger).ConfigureAwait(true);
+
+                return new PdfJob(PrintEngine.Paged, result.NotesAsEndnotes ? result.NotesMoved : 0);
             }
-            else
+            catch (PagedOutputException ex) when (ex.InnerException is IOException or UnauthorizedAccessException)
             {
-                try
-                {
-                    PagedPrintResult result = await PagedPrintHost.ExportAsync(
-                        parentWindow, assets, markup, setup, title, furniture, path,
-                        PagedHostMode.OffScreen, documentAssets, logger).ConfigureAwait(true);
-
-                    return new PdfJob(PrintEngine.Paged, result.NotesAsEndnotes ? result.NotesMoved : 0);
-                }
-                catch (PagedOutputException ex) when (ex.InnerException is IOException or UnauthorizedAccessException)
-                {
-                    ExceptionDispatchInfo.Throw(ex.InnerException);
-                    throw;
-                }
-                catch (Exception ex) when (IsEngineFailure(ex))
-                {
-                    logger.LogWarning(ex, "The paged engine could not write {Path}; it goes to the classic engine.", path);
-                }
+                ExceptionDispatchInfo.Throw(ex.InnerException);
+                throw;
+            }
+            catch (Exception ex) when (IsEngineFailure(ex))
+            {
+                logger.LogWarning(ex, "The paged engine could not write {Path}; it goes to the classic engine.", path);
             }
         }
 
@@ -96,7 +93,6 @@ internal static class PagedJobs
         PrintJob job,
         string title,
         PaperFurniture furniture,
-        bool useClassicEngine,
         TypedEventHandler<CoreWebView2, CoreWebView2WebResourceRequestedEventArgs>? documentAssets,
         ILogger logger,
         Func<Task> printClassic)
@@ -105,35 +101,32 @@ internal static class PagedJobs
         ArgumentNullException.ThrowIfNull(job);
         ArgumentNullException.ThrowIfNull(printClassic);
 
-        if (!useClassicEngine)
+        string? markup = await requestMarkup().ConfigureAwait(true);
+
+        if (markup is null)
         {
-            string? markup = await requestMarkup().ConfigureAwait(true);
-
-            if (markup is null)
+            logger.LogWarning("The page did not hand over its print markup; the print goes to the classic engine.");
+        }
+        else
+        {
+            try
             {
-                logger.LogWarning("The page did not hand over its print markup; the print goes to the classic engine.");
+                await PagedPrintHost.PrintAsync(
+                    parentWindow, assets, markup, job, title, furniture,
+                    PagedHostMode.OffScreen, documentAssets, logger).ConfigureAwait(true);
+
+                return PrintEngine.Paged;
             }
-            else
+            catch (PagedOutputException ex)
             {
-                try
-                {
-                    await PagedPrintHost.PrintAsync(
-                        parentWindow, assets, markup, job, title, furniture,
-                        PagedHostMode.OffScreen, documentAssets, logger).ConfigureAwait(true);
-
-                    return PrintEngine.Paged;
-                }
-                catch (PagedOutputException ex)
-                {
-                    logger.LogError(ex, "The paged engine failed sending to {Printer}; not retried, to avoid a second copy.", job.PrinterName);
-                    throw new InvalidOperationException(
-                        $"The pages could not be sent to {job.PrinterName}. Check the print queue before printing again: some may have arrived.",
-                        ex);
-                }
-                catch (Exception ex) when (IsEngineFailure(ex))
-                {
-                    logger.LogWarning(ex, "The paged engine could not lay out the print; it goes to the classic engine.");
-                }
+                logger.LogError(ex, "The paged engine failed sending to {Printer}; not retried, to avoid a second copy.", job.PrinterName);
+                throw new InvalidOperationException(
+                    $"The pages could not be sent to {job.PrinterName}. Check the print queue before printing again: some may have arrived.",
+                    ex);
+            }
+            catch (Exception ex) when (IsEngineFailure(ex))
+            {
+                logger.LogWarning(ex, "The paged engine could not lay out the print; it goes to the classic engine.");
             }
         }
 

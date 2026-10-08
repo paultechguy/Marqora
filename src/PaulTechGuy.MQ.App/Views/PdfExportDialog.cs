@@ -100,13 +100,7 @@ internal sealed class PdfExportDialog : ContentDialog
         StackPanel content = DialogFields.Column();
 
         // The shading box with the layout boxes, one group: all four say what goes on the page.
-        // The classic engine prints the preview as it stands, with none of the layout three.
-        content.Children.Add(DialogFields.Group(
-            new[] { _backgrounds }.Concat((_layout?.Boxes ?? []).Select(box =>
-            {
-                box.IsEnabled = !_current.UseClassicEngine;
-                return box;
-            }))));
+        content.Children.Add(DialogFields.Group([_backgrounds, .. _layout?.Boxes ?? []]));
 
         content.Children.Add(new TextBlock
         {
@@ -114,10 +108,7 @@ internal sealed class PdfExportDialog : ContentDialog
                 + "print without their gray or colored fill, and the text prints as before."
                 + (_layout is null
                     ? string.Empty
-                    : " The header, contents and title page are shared with Export to Word"
-                        + (_current.UseClassicEngine
-                            ? ", and the classic print engine set in Preferences draws none of them."
-                            : ".")),
+                    : " The header, contents and title page are shared with Export to Word."),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Opacity = 0.7,
