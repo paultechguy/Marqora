@@ -76,7 +76,58 @@ internal static class MathmlToOmml
     /// use - and that only happens if a miss says what it was instead of quietly becoming a
     /// line of source.
     /// </param>
-    public static M.OfficeMath? Convert(string? mathml, out string? unsupported)
+    public static M.OfficeMath? Convert(string? mathml, out string? unsupported) =>
+        Convert(mathml, out unsupported, []);
+
+    /// <param name="numbers">
+    /// The equation's numbers as the preview shows them, "(1)" - one per line of an align, one
+    /// for a numbered equation; empty when it has none. KaTeX's MathML does not carry them.
+    /// </param>
+    public static M.OfficeMath? Convert(string? mathml, out string? unsupported, IReadOnlyList<string> numbers)
+    {
+        M.OfficeMath? math = ConvertUnnumbered(mathml, out unsupported);
+
+        if (math is not null && numbers.Count > 0)
+        {
+            Number(math, numbers);
+        }
+
+        return math;
+    }
+
+    /// <summary>
+    /// Writes an equation's numbers. An align arrives as one matrix with a row per line, so
+    /// each line's number goes in a column of its own on that row's right; any other numbered
+    /// equation takes its one number after a gap. Word sets the numbers beside the equation
+    /// rather than at the margin, as the PDF does: putting them at the margin needs Word's
+    /// equation-array form, which the matrix would have to be rebuilt into.
+    /// </summary>
+    private static void Number(M.OfficeMath math, IReadOnlyList<string> numbers)
+    {
+        if (math.ChildElements.Count == 1
+            && math.FirstChild is M.Matrix matrix
+            && matrix.Elements<M.MatrixRow>().ToList() is { } rows
+            && rows.Count == numbers.Count)
+        {
+            // A column of its own, set right, after the equation's columns.
+            matrix.GetFirstChild<M.MatrixProperties>()!.GetFirstChild<M.MatrixColumns>()!.AppendChild(
+                new M.MatrixColumn(
+                    new M.MatrixColumnProperties(
+                        new M.MatrixColumnCount { Val = 1 },
+                        new M.MatrixColumnJustification { Val = M.HorizontalAlignmentValues.Right })));
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                rows[i].AppendChild(new M.Base(NormalText("\u2003\u2003" + numbers[i])));
+            }
+
+            return;
+        }
+
+        math.AppendChild(NormalText("\u2003\u2003" + string.Join(" ", numbers)));
+    }
+
+    private static M.OfficeMath? ConvertUnnumbered(string? mathml, out string? unsupported)
     {
         unsupported = null;
 

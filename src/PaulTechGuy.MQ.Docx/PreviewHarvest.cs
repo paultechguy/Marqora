@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
+using PaulTechGuy.MQ.Abstractions.Ui;
 
 namespace PaulTechGuy.MQ.Docx;
 
@@ -39,6 +40,8 @@ internal sealed partial class PreviewHarvest
     private readonly Dictionary<(int Line, int Ordinal), string> _math = [];
     private readonly Dictionary<int, HtmlBlockBox> _boxes = [];
     private readonly Dictionary<string, string> _roles = new(StringComparer.Ordinal);
+    private readonly Dictionary<(int Line, int Ordinal), IReadOnlyList<string>> _numbers = [];
+    private readonly Dictionary<(int Line, int Ordinal), MathPicture> _mathPictures = [];
 
     private PreviewHarvest()
     {
@@ -102,6 +105,28 @@ internal sealed partial class PreviewHarvest
     /// </summary>
     public bool TryMath(int line, int ordinal, out string mathml) =>
         _math.TryGetValue((line, ordinal), out mathml!);
+
+    /// <summary>
+    /// The numbers the preview gave an equation - one per line of an align, one for a numbered
+    /// equation - as the reader sees them, "(1)". None for an equation that is not numbered.
+    /// </summary>
+    public IReadOnlyList<string> NumbersOf(int line, int ordinal) =>
+        _numbers.TryGetValue((line, ordinal), out IReadOnlyList<string>? numbers) ? numbers : [];
+
+    /// <summary>Every equation the preview gave, by its block's line and its ordinal there.</summary>
+    public IEnumerable<KeyValuePair<(int Line, int Ordinal), string>> Equations => _math;
+
+    /// <summary>
+    /// A picture of an equation, drawn by the preview, for one the converter cannot write as a
+    /// Word equation. Fetched before the walk, as the diagrams are; see DocxExporter.
+    /// </summary>
+    public void AddMathPicture(int line, int ordinal, MathPicture picture) => _mathPictures[(line, ordinal)] = picture;
+
+    public bool TryMathPicture(int line, int ordinal, out MathPicture picture) =>
+        _mathPictures.TryGetValue((line, ordinal), out picture!);
+
+    [GeneratedRegex("data-mq-eqn=\"([^\"]*)\"")]
+    private static partial Regex EquationNumber();
 
     /// <summary>
     /// The box the preview drew round a raw HTML block - its borders, fill and padding, as the
@@ -274,6 +299,17 @@ internal sealed partial class PreviewHarvest
             if (line >= 0)
             {
                 _math[(line, ordinal)] = html[math..end];
+
+                // The equation's numbers, which the shell wrote onto KaTeX's visible half
+                // (numberEquations in app.js) - after this equation's MathML, before the next.
+                int next = html.IndexOf("<math", end, StringComparison.Ordinal);
+                string after = next < 0 ? html[end..] : html[end..next];
+
+                if (EquationNumber().Matches(after) is { Count: > 0 } numbers)
+                {
+                    _numbers[(line, ordinal)] = [.. numbers.Select(n => WebUtility.HtmlDecode(n.Groups[1].Value))];
+                }
+
                 ordinal++;
             }
 

@@ -67,6 +67,11 @@ public interface IDocxExporter
     /// diagram types Word draws correctly from SVG; those go in as vectors with the PNG as the
     /// fallback. Null keeps every diagram a PNG.
     /// </param>
+    /// <param name="mathPng">
+    /// Asks the shell for a picture of one equation, by its block's line and its ordinal there.
+    /// Asked only for an equation the exporter cannot write as a Word equation, which then goes
+    /// in as that picture rather than as its TeX source. Null keeps the source.
+    /// </param>
     /// <returns>
     /// Anything that could not be carried into the file - an image that is not on this
     /// machine, a remote image that would need the network, a diagram that never rendered -
@@ -89,5 +94,6 @@ public interface IDocxExporter
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
         Func<string, Task<string?>>? diagramSvg = null,
+        Func<int, int, Task<MathPicture?>>? mathPng = null,
         CancellationToken cancellationToken = default);
 }

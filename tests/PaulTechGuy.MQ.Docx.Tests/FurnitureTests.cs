@@ -115,7 +115,7 @@ public class FurnitureTests
     public async Task The_contents_placeholder_says_how_to_build_it()
     {
         using var exported = await ExportedDocument.FromAsync(
-            "# One\n",
+            "# One\n\n## Two\n",
             new ExportLayout { IncludeTableOfContents = true });
 
         exported.PlainText().ShouldContain("Update Field");
@@ -229,7 +229,7 @@ public class FurnitureTests
     public async Task A_title_page_and_a_contents_each_get_a_section_of_their_own()
     {
         using var exported = await ExportedDocument.FromAsync(
-            "---\ntitle: A Report\n---\n\n# One\n\nText.\n",
+            "---\ntitle: A Report\n---\n\n# One\n\n## Two\n\nText.\n",
             new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true });
 
         string xml = exported.DocumentXml();
@@ -242,13 +242,29 @@ public class FurnitureTests
     }
 
     /// <summary>
+    /// A contents that would list nothing is left out, as the PDF leaves it out: a document
+    /// whose only heading is its H1 title printed Word's "No table of contents entries found."
+    /// on a page of its own.
+    /// </summary>
+    [Fact]
+    public async Task A_contents_with_nothing_to_list_is_left_out()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "# One\n\nText.\n",
+            new ExportLayout { IncludeTableOfContents = true });
+
+        exported.DocumentXml().ShouldNotContain("TOC");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// The contents number themselves i, ii, iii and the body begins again at 1.
     /// </summary>
     [Fact]
     public async Task The_contents_are_roman_and_the_body_starts_again_at_one()
     {
         using var exported = await ExportedDocument.FromAsync(
-            "# One\n\nText.\n",
+            "# One\n\n## Two\n\nText.\n",
             new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true });
 
         string xml = exported.DocumentXml();

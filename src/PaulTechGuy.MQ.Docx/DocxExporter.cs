@@ -57,6 +57,7 @@ public sealed class DocxExporter : IDocxExporter
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
         Func<string, Task<string?>>? diagramSvg = null,
+        Func<int, int, Task<MathPicture?>>? mathPng = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -94,6 +95,8 @@ public sealed class DocxExporter : IDocxExporter
         IReadOnlyDictionary<string, string> diagramSvgs =
             await FetchDiagramSvgsAsync(diagrams.Keys, preview, diagramSvg).ConfigureAwait(false);
 
+        await FetchMathPicturesAsync(preview, mathPng).ConfigureAwait(false);
+
         long diagramsMs = elapsed.ElapsedMilliseconds;
 
         using (WordprocessingDocument file =
@@ -128,9 +131,15 @@ public sealed class DocxExporter : IDocxExporter
             // are going to be any.
             bool hasFootnotes = document.Descendants<MarkdigFootnote>().Any();
 
+            // A contents only when it would list something - the same rule the PDF's contents
+            // page keeps (print.js). An empty one printed Word's "No table of contents entries
+            // found." on a page of its own.
+            (int firstListed, int lastListed) = ContentsListing.Levels(headingNumbering);
+            bool includeContents = layout.IncludeTableOfContents
+                && document.Descendants<HeadingBlock>().Any(h => h.Level >= firstListed && h.Level <= lastListed);
             DocxSettings.Write(
                 main.AddNewPart<DocumentSettingsPart>(),
-                updateFieldsOnOpen: layout.IncludeTableOfContents,
+                updateFieldsOnOpen: includeContents,
                 hasFootnotes);
 
             // Only when there is something to number: an empty numbering part is one more
@@ -176,7 +185,7 @@ public sealed class DocxExporter : IDocxExporter
                     SectionProperties(setup, headerId: null, footerId: null, pageNumbers: null)));
             }
 
-            if (layout.IncludeTableOfContents)
+            if (includeContents)
             {
                 DocxFurniture.WriteTableOfContents(
                     body,
@@ -285,6 +294,38 @@ public sealed class DocxExporter : IDocxExporter
         }
 
         return pictures;
+    }
+
+    /// <summary>
+    /// A picture of each equation the converter cannot write as a Word equation, asked for
+    /// together and kept on the harvest for the walk to place. The converter is cheap and run
+    /// here only to learn which ones fail; the walk runs it again where it writes them.
+    /// </summary>
+    private static async Task FetchMathPicturesAsync(PreviewHarvest preview, Func<int, int, Task<MathPicture?>>? mathPng)
+    {
+        if (mathPng is null)
+        {
+            return;
+        }
+
+        (int Line, int Ordinal)[] failing =
+        [
+            .. preview.Equations
+                .Where(equation => MathmlToOmml.Convert(equation.Value, out _) is null)
+                .Select(equation => equation.Key),
+        ];
+
+        (int Line, int Ordinal, MathPicture? Picture)[] fetched = await Task.WhenAll(
+            failing.Select(async key => (key.Line, key.Ordinal, await mathPng(key.Line, key.Ordinal).ConfigureAwait(false))))
+            .ConfigureAwait(false);
+
+        foreach ((int line, int ordinal, MathPicture? picture) in fetched)
+        {
+            if (picture is { Png.Length: > 0 })
+            {
+                preview.AddMathPicture(line, ordinal, picture);
+            }
+        }
     }
 
     /// <summary>

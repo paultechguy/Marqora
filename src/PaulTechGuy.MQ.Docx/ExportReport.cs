@@ -91,6 +91,20 @@ internal sealed class ExportReport
     /// written as source, and not one row saying so.
     /// </summary>
     /// <summary>
+    /// An equation the converter could not write as a Word equation, placed instead as the
+    /// picture the preview drew of it. Nothing is missing to the eye, but the equation cannot
+    /// be edited in Word, which is worth saying - and the construct is named, as for
+    /// <see cref="UnsupportedMath"/>, so the converter can learn it.
+    /// </summary>
+    public void MathAsPicture(int sourceLine, string? element, string? tex) =>
+        Note(
+            sourceLine,
+            element is { Length: > 0 }
+                ? $"No Word form for <{element}>; the equation is a picture of it, not editable in Word"
+                : "Could not be converted; the equation is a picture of it, not editable in Word",
+            Shorten(tex) is { Length: > 0 } source ? source : "An equation");
+
+    /// <summary>
     /// The row for raw HTML that shows something but says nothing - a picture, a rule, a
     /// frame (<see cref="InlineHtml.IsEmbedded"/>). One wording for the block and the inline
     /// path, so the same element reads the same wherever it was written.

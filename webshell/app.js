@@ -1678,6 +1678,190 @@
   }
 
   /// The drawing of a rendered block that is fit to leave the app.
+  /*
+    The equation the Word export means by a block's line and an ordinal: the nth KaTeX render
+    whose nearest stamped block is on that line, in document order - the count PreviewHarvest
+    keeps when it files each equation's MathML.
+  */
+  function equationAt(line, ordinal) {
+    var seen = 0;
+    var all = els.preview.querySelectorAll('.katex');
+
+    for (var i = 0; i < all.length; i++) {
+      var block = all[i].closest('[data-src-line]');
+
+      if (block && parseInt(block.getAttribute('data-src-line'), 10) === line) {
+        if (seen === ordinal) { return all[i]; }
+        seen++;
+      }
+    }
+
+    return null;
+  }
+
+  /*
+    KaTeX's stylesheet with its fonts inside it, made once. The picture of an equation is
+    drawn in an isolated image document that cannot fetch anything, and KaTeX is all web
+    fonts: without them every symbol falls back to a system face and the layout KaTeX measured
+    comes apart. So each woff2 the sheet names is read and written into it as a data: URL; the
+    woff and ttf fallbacks are dropped, since the browser that draws it reads woff2.
+  */
+  var katexSheetWithFonts = null;
+
+  function katexOutputSheet() {
+    if (katexSheetWithFonts) { return katexSheetWithFonts; }
+
+    katexSheetWithFonts = fetch('vendor/katex/katex.min.css').then(function (response) {
+      return response.text();
+    }).then(function (css) {
+      css = css.replace(/,\s*url\(fonts\/[^)]+\.(?:woff|ttf)\)\s*format\("[^"]+"\)/g, '');
+
+      var names = [];
+
+      css.replace(/url\(fonts\/([^)]+\.woff2)\)/g, function (all, name) {
+        if (names.indexOf(name) < 0) { names.push(name); }
+        return all;
+      });
+
+      return Promise.all(names.map(function (name) {
+        return fetch('vendor/katex/fonts/' + name).then(function (response) {
+          return response.arrayBuffer();
+        }).then(function (buffer) {
+          var bytes = new Uint8Array(buffer);
+          var text = '';
+
+          for (var i = 0; i < bytes.length; i += 0x8000) {
+            text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          }
+
+          css = css.split('url(fonts/' + name + ')').join('url(data:font/woff2;base64,' + btoa(text) + ')');
+        });
+      })).then(function () { return css; });
+    });
+
+    katexSheetWithFonts.catch(function () { katexSheetWithFonts = null; });
+
+    return katexSheetWithFonts;
+  }
+
+  /*
+    An equation's visible half as a PNG, at twice its size: KaTeX's HTML, with the stylesheet
+    and fonts above, inside an SVG foreignObject, rasterized as a diagram is. Light, whatever
+    the window shows, because it is leaving the app; a \color the author wrote keeps its color.
+  */
+  function mathPngOf(equation) {
+    var visible = equation.querySelector('.katex-html');
+
+    if (!visible) { return Promise.resolve(''); }
+
+    var rect = visible.getBoundingClientRect();
+    var size = getComputedStyle(equation).fontSize;
+
+    // The equation's own width: what is drawn, not the box it is drawn in. A displayed
+    // equation's box is the whole column, centered inside it, so measuring the box drew a
+    // column-wide picture with the equation at its left end - and Word centered the picture,
+    // not the equation. A range over the contents measures the union of the drawn boxes,
+    // whatever elements KaTeX set them in.
+    var range = document.createRange();
+
+    range.selectNodeContents(visible);
+
+    var drawn = range.getBoundingClientRect();
+    var drawnWidth = drawn.width > 0 ? Math.min(drawn.width, rect.width) : rect.width;
+
+    // How far the equation reaches below its baseline, so Word can sit an inline picture on
+    // the line rather than on top of it: a zero-size box set beside the equation stands on
+    // the baseline. Only for an equation in a line of text; a displayed one has a line of its
+    // own. Measured and taken away again before anything paints.
+    var depth = 0;
+
+    if (!equation.closest('.katex-display')) {
+      var probe = document.createElement('span');
+
+      probe.style.cssText = 'display:inline-block;width:0;height:0;';
+      equation.after(probe);
+      depth = Math.max(0, rect.bottom - probe.getBoundingClientRect().top);
+      probe.remove();
+    }
+
+    return katexOutputSheet().then(function (css) {
+      var copy = equation.cloneNode(true);
+      var width = Math.ceil(drawnWidth) + 4;
+      var height = Math.ceil(rect.height) + 4;
+
+      Array.prototype.forEach.call(copy.querySelectorAll('.katex-mathml'), function (mathml) {
+        mathml.remove();
+      });
+
+      var html = copy.querySelector('.katex-html');
+
+      if (html) { html.style.display = 'inline-block'; }
+
+      copy.style.fontSize = size;
+
+      // A string, not a serialized element tree. markupToPngBase64 parses this as HTML, where a
+      // <style> is raw text and no entity in it is decoded - and XMLSerializer writes every ">"
+      // in the stylesheet as "&gt;", so each KaTeX rule with a child combinator was thrown away
+      // and the picture came out with its parts at the wrong heights and no cancel strokes.
+      // The rasterizer serializes the parsed tree itself, correctly, for the image.
+      var markup = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height
+        + '" viewBox="0 0 ' + width + ' ' + height + '">'
+        + '<foreignObject width="' + width + '" height="' + height + '">'
+        + '<div xmlns="http://www.w3.org/1999/xhtml" style="color:#1b1b1b;padding:2px;white-space:nowrap;">'
+        + '<style>' + css + '</style>' + copy.outerHTML
+        + '</div></foreignObject></svg>';
+
+      // The depth rides in front of the picture, in CSS pixels, with the padding's 2px below.
+      return window.mqDiagramRaster.markupToPngBase64(markup, 2, 0).then(function (png) {
+        return png ? (depth + 2).toFixed(2) + '|' + png : '';
+      });
+    });
+  }
+
+  /*
+    A copy of a drawing with its look written onto each shape and each run of text as
+    presentation attributes: fill, stroke, opacity, the face and size.
+
+    Mermaid styles through a <style> element of class rules, and Word draws an SVG without
+    them - spike S6 found it honors only the one rule keyed on the diagram's id - so the pie's
+    slices, faded to 70% by a class rule, went into Word at full strength. Presentation
+    attributes are the lowest-priority styling an SVG has: a browser still lets the class rules
+    win, so the drawing is unchanged anywhere that reads them, and Word, which does not, reads
+    these. Taken from the live drawing, because a clone has no computed style; walked in step
+    with the clone, which has the same elements in the same order. Never inside a
+    foreignObject, whose HTML is not drawn by these.
+  */
+  var PRESENTED = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'opacity'];
+  var PRESENTED_TEXT = ['font-family', 'font-size', 'font-weight', 'font-style'];
+  var SHAPES = { path: 1, rect: 1, circle: 1, ellipse: 1, line: 1, polyline: 1, polygon: 1, text: 2, tspan: 2, textPath: 2 };
+
+  function svgWithPresentation(svg) {
+    var copy = svg.cloneNode(true);
+    var live = svg.querySelectorAll('*');
+    var cloned = copy.querySelectorAll('*');
+
+    if (live.length !== cloned.length) { return copy; }
+
+    for (var i = 0; i < live.length; i++) {
+      var kind = SHAPES[live[i].localName];
+
+      if (!kind || live[i].closest('foreignObject')) { continue; }
+
+      var style = getComputedStyle(live[i]);
+      var names = kind === 2 ? PRESENTED.concat(PRESENTED_TEXT) : PRESENTED;
+
+      for (var n = 0; n < names.length; n++) {
+        var value = style.getPropertyValue(names[n]);
+
+        if (value && !(names[n].indexOf('opacity') >= 0 && value === '1')) {
+          cloned[i].setAttribute(names[n], value);
+        }
+      }
+    }
+
+    return copy;
+  }
+
   function outputSvgOf(block) {
     return block.querySelector(':scope > .' + OUTPUT_COPY + ' > svg')
       || block.querySelector(':scope > svg');
@@ -6545,13 +6729,32 @@
       });
     },
 
-    /// One diagram's light drawing as markup, for the preview menu's Copy as SVG.
+    /*
+      One equation as a PNG, for the Word export's fallback: an equation the exporter cannot
+      turn into a Word equation goes in as this picture of it rather than as its TeX source
+      (docs/Export-Alignment-Plan.md §7.1). Found by its block's line and its place among that
+      block's equations, as the exporter counts them. An empty reply when there is nothing to
+      draw - the exporter then writes the source, as it always did.
+    */
+    requestMathPng: function (p) {
+      var equation = equationAt(p.line, p.ordinal);
+
+      (equation ? mathPngOf(equation) : Promise.resolve('')).then(function (data) {
+        post('mathPng', { requestId: p.requestId, data: data });
+      }).catch(function (err) {
+        report('warning', 'An equation could not be drawn for the Word export', err && err.message);
+        post('mathPng', { requestId: p.requestId, data: '' });
+      });
+    },
+
+    /// One diagram's light drawing as markup, for Copy as SVG and the Word export, with its
+    /// styles written onto it (svgWithPresentation).
     requestDiagramSvg: function (p) {
       whenOutputReady().then(function () {
         var diagram = diagramByHash(p.hash);
         var svg = diagram ? outputSvgOf(diagram) : null;
 
-        post('diagramSvg', { requestId: p.requestId, data: svg ? svg.outerHTML : '' });
+        post('diagramSvg', { requestId: p.requestId, data: svg ? svgWithPresentation(svg).outerHTML : '' });
       });
     },
 

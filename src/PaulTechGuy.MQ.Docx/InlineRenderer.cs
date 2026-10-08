@@ -12,6 +12,7 @@ using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Rendering;
 
@@ -502,8 +503,6 @@ internal sealed class InlineRenderer
                 return;
             }
 
-            _report.UnsupportedMath(_sourceLine, unsupported, math.Content.ToString());
-
             // As for a display equation (BlockRenderer.WriteDisplayMath): unreadable markup
             // has no other record than this.
             if (unsupported is null)
@@ -513,6 +512,25 @@ internal sealed class InlineRenderer
                     _sourceLine,
                     mathml);
             }
+
+            // The preview's picture of it, in the line of text, where it gave one.
+            if (_preview.TryMathPicture(_sourceLine, ordinal, out MathPicture picture)
+                && _images.TryBuildFromBytes(picture.Png, math.Content.ToString(), _maximumImageWidthTwips, scale: 2) is { } run)
+            {
+                // Lowered by the equation's depth, so its baseline is the line's: Word stands
+                // an inline picture on the baseline, which set the whole equation above it.
+                // Half-points; a CSS pixel is three quarters of a point.
+                if (Math.Round(picture.DepthPixels * 0.75 * 2) is > 0 and var lower)
+                {
+                    run.PrependChild(new RunProperties(new Position { Val = (-lower).ToString(System.Globalization.CultureInfo.InvariantCulture) }));
+                }
+
+                paragraph.AppendChild(run);
+                _report.MathAsPicture(_sourceLine, unsupported, math.Content.ToString());
+                return;
+            }
+
+            _report.UnsupportedMath(_sourceLine, unsupported, math.Content.ToString());
         }
         else
         {

@@ -693,8 +693,15 @@
 
       // Contents first, then the cover in front of it, so the contents lists only the
       // document's own headings. Page numbers are written after layout (labelPages).
-      if (furniture.contents) {
-        root.insertBefore(buildContents(furniture.contents, root), root.firstChild);
+      // Not when it would list nothing: an empty contents page took the document's own H1
+      // onto it, as though the title were part of the contents, and Word's empty field said
+      // "No table of contents entries found." Neither export writes one now.
+      var contentsNav = furniture.contents ? buildContents(furniture.contents, root) : null;
+
+      if (contentsNav && contentsNav.querySelector('li')) {
+        root.insertBefore(contentsNav, root.firstChild);
+      } else {
+        furniture.contents = null;
       }
 
       if (furniture.cover) {

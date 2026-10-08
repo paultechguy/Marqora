@@ -5,6 +5,7 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
 using Microsoft.Extensions.Logging.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Themes;
 
@@ -61,7 +62,8 @@ internal sealed class ExportedDocument : IDisposable
         DocumentImages? images = null,
         ColorTheme? colorTheme = null,
         ExportLayout? layout = null,
-        Func<string, Task<string?>>? diagramSvg = null)
+        Func<string, Task<string?>>? diagramSvg = null,
+        Func<int, int, Task<MathPicture?>>? mathPng = null)
     {
         string root = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
@@ -84,7 +86,8 @@ internal sealed class ExportedDocument : IDisposable
             diagramPng,
             images,
             colorTheme,
-            diagramSvg).ConfigureAwait(false);
+            diagramSvg,
+            mathPng).ConfigureAwait(false);
 
         return new ExportedDocument(root, path) { Issues = issues };
     }

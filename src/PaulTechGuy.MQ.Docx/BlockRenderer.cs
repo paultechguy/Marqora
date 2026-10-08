@@ -16,6 +16,7 @@ using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 using MarkdigDocument = Markdig.Syntax.MarkdownDocument;
 using MarkdigFootnote = Markdig.Extensions.Footnotes.Footnote;
@@ -1278,7 +1279,7 @@ internal sealed class BlockRenderer
     {
         if (_preview.TryMath(math.Line, 0, out string mathml))
         {
-            if (MathmlToOmml.Convert(mathml, out string? unsupported) is { } equation)
+            if (MathmlToOmml.Convert(mathml, out string? unsupported, _preview.NumbersOf(math.Line, 0)) is { } equation)
             {
                 // An equation paragraph of its own, centered the way a display equation is set.
                 _body.AppendChild(new Paragraph(
@@ -1293,11 +1294,6 @@ internal sealed class BlockRenderer
                 return;
             }
 
-            // The preview had an equation and the converter would not take it. Worth saying
-            // which construct stopped it: that is how the converter grows to cover what real
-            // documents actually contain.
-            _report.UnsupportedMath(math.Line, unsupported, SourceOf(math));
-
             // No construct named means the markup itself did not read as MathML, which no
             // test fixture reproduces - the fixtures are well formed by construction. The
             // markup is the only evidence, so it goes in the log.
@@ -1308,6 +1304,24 @@ internal sealed class BlockRenderer
                     math.Line,
                     mathml);
             }
+
+            // The picture the preview drew of it, where it gave one: the equation as the
+            // reader saw it, centered as a display equation is, rather than its source.
+            if (_preview.TryMathPicture(math.Line, 0, out MathPicture picture)
+                && _images.TryBuildFromBytes(picture.Png, SourceOf(math), _usableWidthTwips, scale: 2) is { } run)
+            {
+                _body.AppendChild(new Paragraph(
+                    new ParagraphProperties(new Justification { Val = JustificationValues.Center }),
+                    run));
+
+                _report.MathAsPicture(math.Line, unsupported, SourceOf(math));
+                return;
+            }
+
+            // The preview had an equation and the converter would not take it. Worth saying
+            // which construct stopped it: that is how the converter grows to cover what real
+            // documents actually contain.
+            _report.UnsupportedMath(math.Line, unsupported, SourceOf(math));
         }
         else
         {

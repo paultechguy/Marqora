@@ -795,6 +795,13 @@ public interface IPreviewHost
     Task<byte[]?> RequestDiagramPngAsync(string hash, bool forCopy);
 
     /// <summary>
+    /// One equation drawn as a PNG at twice its size, light, for the Word export's fallback: an
+    /// equation it cannot write as a Word equation goes in as this picture. Found by its
+    /// block's zero-based line and its place among that block's equations. Null when there is
+    /// nothing to draw or the shell did not answer.
+    /// </summary>
+    Task<MathPicture?> RequestMathPngAsync(int line, int ordinal);
+    /// <summary>
     /// One rendered diagram as SVG markup, light like <see cref="RequestDiagramPngAsync"/>,
     /// or null when it could not be produced.
     /// </summary>

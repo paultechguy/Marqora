@@ -8422,7 +8422,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     RequestDiagramPngAsync,
                     images,
                     _colorThemes.Find(ExportColorThemeId),
-                    RequestDiagramSvgForExportAsync))
+                    RequestDiagramSvgForExportAsync,
+                    RequestMathPngForExportAsync))
                 .ConfigureAwait(true);
 
             _logger.LogInformation(
@@ -8529,6 +8530,37 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "A diagram's SVG could not be had for the Word export; it stays a PNG.");
+                completion.SetResult(null);
+            }
+        });
+
+        return completion.Task;
+    }
+
+    /// <summary>
+    /// A picture of one equation, for an equation the Word export cannot write as a Word
+    /// equation. Across the dispatcher, as <see cref="RequestDiagramPngAsync"/> is; null, and the
+    /// equation is written as its TeX source, on any failure.
+    /// </summary>
+    private Task<MathPicture?> RequestMathPngForExportAsync(int line, int ordinal)
+    {
+        if (_host is not { } host)
+        {
+            return Task.FromResult<MathPicture?>(null);
+        }
+
+        var completion = new TaskCompletionSource<MathPicture?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _ui.Post(async () =>
+        {
+            try
+            {
+                completion.SetResult(await host.RequestMathPngAsync(line, ordinal).ConfigureAwait(true));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "An equation could not be drawn for the Word export; its source goes in.");
                 completion.SetResult(null);
             }
         });

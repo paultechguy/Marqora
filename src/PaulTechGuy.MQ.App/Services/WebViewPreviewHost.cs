@@ -977,6 +977,30 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
+    public async Task<MathPicture?> RequestMathPngAsync(int line, int ordinal)
+    {
+        if (await AskShellAsync("requestMathPng", id => new { requestId = id, line, ordinal })
+                .ConfigureAwait(true) is not { } data)
+        {
+            return null;
+        }
+
+        // "depth|base64": see mathPngOf in app.js.
+        int bar = data.IndexOf('|', StringComparison.Ordinal);
+
+        try
+        {
+            double depth = bar > 0 && double.TryParse(data.AsSpan(0, bar), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double read) ? read : 0;
+
+            return new MathPicture(Convert.FromBase64String(data[(bar + 1)..]), depth);
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "The shell's equation image was not readable base64.");
+            return null;
+        }
+    }
+
     public Task<string?> RequestDiagramSvgAsync(string hash) =>
         RequestDiagramAsync("requestDiagramSvg", hash);
 
@@ -1779,6 +1803,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             case "printHtml":
             case "diagramPng":
             case "diagramSvg":
+            case "mathPng":
             case "outputReady":
                 if (Guid.TryParse(ReadString(payload, "requestId"), out Guid drawingId)
                     && _diagramRequests.TryGetValue(drawingId, out TaskCompletionSource<string>? drawing))
