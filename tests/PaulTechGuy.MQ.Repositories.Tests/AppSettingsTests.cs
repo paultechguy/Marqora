@@ -247,6 +247,36 @@ public sealed class AppSettingsTests : IDisposable
     }
 
     /// <summary>
+    /// Each file dialog's folder is kept apart and survives a restart. Remembering one keeps
+    /// the others, and a purpose is matched whatever its case.
+    /// </summary>
+    [Fact]
+    public async Task Each_dialogs_folder_survives_a_round_trip()
+    {
+        AppSettings written = AppSettings.Default
+            .WithDialogFolder("export Word document", @"C:\Reports")
+            .WithDialogFolder("export PDF document", @"C:\Printouts")
+            .WithDialogFolder("export Word document", @"C:\Reports\2026");
+
+        var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);
+
+        try
+        {
+            await repository.SaveAsync(written);
+
+            AppSettings read = await repository.LoadAsync();
+
+            read.DialogFolderFor("export word document").ShouldBe(@"C:\Reports\2026");
+            read.DialogFolderFor("export PDF document").ShouldBe(@"C:\Printouts");
+            read.DialogFolderFor("open").ShouldBeNull();
+        }
+        finally
+        {
+            repository.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Computed values do not belong in the settings file.
     ///
     /// A read-only property is serialized by default and ignored on the way back in, so one

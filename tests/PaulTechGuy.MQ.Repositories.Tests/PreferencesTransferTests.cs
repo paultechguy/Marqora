@@ -305,6 +305,7 @@ public sealed class PreferencesTransferTests : IDisposable
             FolioWindow = new WindowPlacement { Width = 777, Height = 888 },
             FolioProblemsHeight = 123,
             PreferencesWindow = new WindowPlacement { Width = 555, Height = 666 },
+            DialogFolders = new() { ["open"] = @"C:\Documents" },
         };
 
         AppSettings carried = AppSettings.Default.WithSessionOf(session);

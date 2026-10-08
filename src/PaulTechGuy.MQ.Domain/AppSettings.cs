@@ -306,6 +306,35 @@ public sealed record AppSettings
     [System.Text.Json.Serialization.JsonIgnore]
     public IReadOnlyList<string> DocumentsToRestore => OpenDocuments ?? [];
 
+    /// <summary>
+    /// The folder each file dialog was last used in, by what the dialog is for - "open",
+    /// "save", "export Word document", "import Open a Folio" - so each opens where it was last
+    /// used for that purpose rather than wherever any dialog was last used.
+    ///
+    /// Kept here rather than left to Windows' own per-dialog memory, which the dialogs also
+    /// ask for: Windows never records a folder under %TEMP%, so a Word export saved there
+    /// opened in Documents the next time, and nothing said why. Session state, never exported:
+    /// a folder on one machine is not a place on another.
+    /// </summary>
+    public Dictionary<string, string>? DialogFolders { get; set; }
+
+    /// <summary>The folder a dialog was last used in for this purpose, or null.</summary>
+    /// <remarks>
+    /// Matched whatever the case, by hand: the dictionary a settings file is read into has the
+    /// default, case-sensitive comparer, whatever the one it was written from had.
+    /// </remarks>
+    public string? DialogFolderFor(string purpose) =>
+        DialogFolders?.FirstOrDefault(pair => string.Equals(pair.Key, purpose, StringComparison.OrdinalIgnoreCase)).Value;
+
+    /// <summary>These settings with one dialog's folder remembered.</summary>
+    public AppSettings WithDialogFolder(string purpose, string folder) => this with
+    {
+        DialogFolders = new Dictionary<string, string>(DialogFolders ?? [], StringComparer.OrdinalIgnoreCase)
+        {
+            [purpose] = folder,
+        },
+    };
+
     /// <summary>Index into <see cref="OpenDocuments"/> that was active when the app closed.</summary>
     public int ActiveDocumentIndex { get; set; }
 
@@ -721,6 +750,7 @@ public sealed record AppSettings
             "preferencesWindow",
             "findHistory",
             "openDocuments",
+            "dialogFolders",
             "activeDocumentIndex",
             "splitterPosition",
             "outlineWidth",
@@ -763,6 +793,7 @@ public sealed record AppSettings
             PreferencesWindow = current.PreferencesWindow,
             FindHistory = current.FindHistory,
             OpenDocuments = current.OpenDocuments,
+            DialogFolders = current.DialogFolders,
             ActiveDocumentIndex = current.ActiveDocumentIndex,
             SplitterPosition = current.SplitterPosition,
             OutlineWidth = current.OutlineWidth,

@@ -36,7 +36,9 @@ internal static class Win32Dialogs
         IntPtr owner,
         string title,
         IReadOnlyList<string> extensions,
-        string filterLabel = "Markdown")
+        string filterLabel = "Markdown",
+        Guid? purpose = null,
+        string? startFolder = null)
     {
         var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
 
@@ -45,6 +47,8 @@ internal static class Win32Dialogs
             dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST);
             dialog.SetTitle(title);
             SetFilters(dialog, extensions, includeAllFiles: true, filterLabel);
+            Remember(dialog, purpose);
+            StartIn(dialog, startFolder);
 
             return Show(dialog, owner);
         }
@@ -67,7 +71,9 @@ internal static class Win32Dialogs
         string title,
         IReadOnlyList<string> extensions,
         string filterLabel = "Markdown",
-        IReadOnlyList<(string Label, IReadOnlyList<string> Extensions)>? extraFilters = null)
+        IReadOnlyList<(string Label, IReadOnlyList<string> Extensions)>? extraFilters = null,
+        Guid? purpose = null,
+        string? startFolder = null)
     {
         var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
 
@@ -76,6 +82,8 @@ internal static class Win32Dialogs
             dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST | FOS_ALLOWMULTISELECT);
             dialog.SetTitle(title);
             SetFilters(dialog, extensions, includeAllFiles: true, filterLabel, extraFilters);
+            Remember(dialog, purpose);
+            StartIn(dialog, startFolder);
 
             if (!ShowModal(dialog, owner))
             {
@@ -149,10 +157,7 @@ internal static class Win32Dialogs
             dialog.SetTitle(title);
             SetFilters(dialog, extensions, includeAllFiles: false, filterLabel);
 
-            if (purpose is Guid id)
-            {
-                dialog.SetClientGuid(ref id);
-            }
+            Remember(dialog, purpose);
 
             if (!string.IsNullOrWhiteSpace(defaultFolder)
                 && Directory.Exists(defaultFolder)
@@ -170,19 +175,8 @@ internal static class Win32Dialogs
 
             // Opens here over whatever is remembered, for the one case that has a better answer
             // than memory: the folder of the page a resumed review came from.
-            if (!string.IsNullOrWhiteSpace(forceFolder)
-                && Directory.Exists(forceFolder)
-                && SHCreateItemFromParsingName(forceFolder, IntPtr.Zero, typeof(IShellItem).GUID, out IShellItem forced) == 0)
-            {
-                try
-                {
-                    dialog.SetFolder(forced);
-                }
-                finally
-                {
-                    Marshal.ReleaseComObject(forced);
-                }
-            }
+            StartIn(dialog, forceFolder);
+
 
             if (extensions.Count > 0)
             {
@@ -206,7 +200,7 @@ internal static class Win32Dialogs
     /// Shows the folder picker. This is the Open dialog with FOS_PICKFOLDERS, which is how
     /// the modern folder chooser is produced; there is no separate folder dialog class.
     /// </summary>
-    public static string? PickFolder(IntPtr owner, string title)
+    public static string? PickFolder(IntPtr owner, string title, Guid? purpose = null, string? startFolder = null)
     {
         var dialog = (IFileOpenDialog)new FileOpenDialogRcw();
 
@@ -214,12 +208,50 @@ internal static class Win32Dialogs
         {
             dialog.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
             dialog.SetTitle(title);
+            Remember(dialog, purpose);
+            StartIn(dialog, startFolder);
 
             return Show(dialog, owner);
         }
         finally
         {
             Marshal.ReleaseComObject(dialog);
+        }
+    }
+
+    /// <summary>
+    /// Gives the dialog a memory of its own: Windows keeps the last folder per client id,
+    /// across sessions, so a dialog with one opens where it was last used for that purpose
+    /// rather than wherever the process last opened or saved anything. Null shares the
+    /// process-wide memory.
+    /// </summary>
+    private static void Remember(IFileDialog dialog, Guid? purpose)
+    {
+        if (purpose is Guid id)
+        {
+            dialog.SetClientGuid(ref id);
+        }
+    }
+
+    /// <summary>
+    /// Opens the dialog in this folder, over whatever Windows remembers - for a folder Marqora
+    /// remembers itself, and for one with a better claim than memory. Skipped for a folder
+    /// that no longer exists, which leaves the dialog to Windows.
+    /// </summary>
+    private static void StartIn(IFileDialog dialog, string? folder)
+    {
+        if (!string.IsNullOrWhiteSpace(folder)
+            && Directory.Exists(folder)
+            && SHCreateItemFromParsingName(folder, IntPtr.Zero, typeof(IShellItem).GUID, out IShellItem item) == 0)
+        {
+            try
+            {
+                dialog.SetFolder(item);
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(item);
+            }
         }
     }
 

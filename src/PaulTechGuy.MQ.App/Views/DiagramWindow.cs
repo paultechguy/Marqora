@@ -656,12 +656,7 @@ public sealed partial class DiagramWindow : Window
             // write does not make it the wrong choice.
             _settings.Update(s => s with { PdfSetup = setup });
 
-            string? path = Win32Dialogs.SaveFile(
-                WinRT.Interop.WindowNative.GetWindowHandle(this),
-                "Export as PDF document",
-                SuggestedFileName(".pdf"),
-                [".pdf"],
-                "PDF document");
+            string? path = PickExportPath(".pdf", [".pdf"], "PDF document");
 
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -706,12 +701,7 @@ public sealed partial class DiagramWindow : Window
     {
         try
         {
-            string? path = Win32Dialogs.SaveFile(
-                WinRT.Interop.WindowNative.GetWindowHandle(this),
-                "Export as HTML document",
-                SuggestedFileName(".html"),
-                [".html", ".htm"],
-                "HTML document");
+            string? path = PickExportPath(".html", [".html", ".htm"], "HTML document");
 
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -791,6 +781,32 @@ public sealed partial class DiagramWindow : Window
         {
             _logger.LogWarning(ex, "Could not print the diagram.");
         }
+    }
+
+    /// <summary>
+    /// The save dialog for one of this window's exports, opened in the folder the same export
+    /// from a diagram window last went to and remembering the one chosen - as the main window's
+    /// dialogs do (FileDialogService), each export its own, apart from the document's.
+    /// </summary>
+    private string? PickExportPath(string extension, string[] extensions, string label)
+    {
+        string purpose = "diagram export " + label;
+
+        string? path = Win32Dialogs.SaveFile(
+            WinRT.Interop.WindowNative.GetWindowHandle(this),
+            "Export as " + label,
+            SuggestedFileName(extension),
+            extensions,
+            label,
+            FileDialogService.PurposeOf(purpose),
+            forceFolder: _settings.Current.DialogFolderFor(purpose));
+
+        if (!string.IsNullOrWhiteSpace(path) && Path.GetDirectoryName(path) is { Length: > 0 } folder)
+        {
+            _settings.Update(s => s.WithDialogFolder(purpose, folder));
+        }
+
+        return path;
     }
 
     /// <summary>A diagram's page has nothing around it: no cover, contents or header.</summary>
