@@ -141,6 +141,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public event EventHandler? Ready;
 
+    /// <summary>The first document is on screen, painted; raised once per shell. See app.js, announceFirstDocumentShown.</summary>
+    public event EventHandler? FirstDocumentShown;
+
     public event EventHandler? FontsResolved;
 
     public event EventHandler<EditorTextChangedEventArgs>? EditorTextChanged;
@@ -1490,6 +1493,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         {
             case "ready":
                 OnShellReady(payload);
+                break;
+
+            case "firstDocumentShown":
+                FirstDocumentShown?.Invoke(this, EventArgs.Empty);
                 break;
 
             case "fontsResolved":

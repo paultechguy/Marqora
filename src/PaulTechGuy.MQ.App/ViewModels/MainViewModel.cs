@@ -196,7 +196,120 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(CanRedo))]
     [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
     [NotifyPropertyChangedFor(nameof(IsOutlineRailVisible))]
+    [NotifyPropertyChangedFor(nameof(ShowsLandingPage))]
+    [NotifyPropertyChangedFor(nameof(ShowsStartupMessage))]
     public partial bool HasDocument { get; set; }
+    /// <summary>
+    /// True once startup has opened what it was going to open - a restored session, files
+    /// named on the command line, the welcome document or a blank tab - or knows it will open
+    /// nothing.
+    ///
+    /// False until then, so the landing page is held back from the first frame. Without it the
+    /// landing page - the drop target and the recent files - showed for the moment before the
+    /// session came back, then vanished under it. False is the property's own default rather
+    /// than an initializer, so there is nothing for the generator to drop.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsLandingPage))]
+    [NotifyPropertyChangedFor(nameof(ShowsStartupMessage))]
+    public partial bool IsStartupSettled { get; set; }
+
+    /// <summary>
+    /// The landing page: no document open, and none on its way. A launch that opens nothing
+    /// shows it at once; one that is restoring a session never shows it at all.
+    /// </summary>
+    public bool ShowsLandingPage => !HasDocument && IsStartupSettled;
+
+    /// <summary>
+    /// Called once the settings are read. Settles startup at once when it will open nothing,
+    /// so the landing page shows now; otherwise leaves it for <see cref="EndStartup"/>.
+    /// </summary>
+    /// <param name="filesNamed">Whether files were named on the command line.</param>
+    public void BeginStartup(bool filesNamed)
+    {
+        AppSettings current = _settings.Current;
+
+        bool opensSomething = filesNamed
+            || WelcomeWasRequested
+            || current.Startup != StartupBehavior.RestoreSession
+            || current.DocumentsToRestore.Count > 0;
+
+        if (!opensSomething)
+        {
+            IsStartupSettled = true;
+            return;
+        }
+
+        _ = RevealStartupMessageAsync();
+    }
+
+    /// <summary>
+    /// How long startup may take before it says what it is doing. A start that finishes inside
+    /// this never shows the message, so a fast machine does not see it flicker.
+    /// </summary>
+    private static readonly TimeSpan StartupMessageDelay = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>Lets the startup message show once startup has taken longer than <see cref="StartupMessageDelay"/>.</summary>
+    private async Task RevealStartupMessageAsync()
+    {
+        await Task.Delay(StartupMessageDelay).ConfigureAwait(true);
+
+        IsStartupSlow = true;
+
+        // A bound on the message, so a shell that never says the document is up cannot leave
+        // it over the document for good. Well past the second and a half startup takes.
+        await Task.Delay(StartupMessageLimit).ConfigureAwait(true);
+
+        FirstDocumentShown();
+    }
+
+    /// <summary>The longest the startup message stays up, whatever the shell says.</summary>
+    private static readonly TimeSpan StartupMessageLimit = TimeSpan.FromSeconds(10);
+
+    /// <summary>True once startup has run past <see cref="StartupMessageDelay"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsStartupMessage))]
+    public partial bool IsStartupSlow { get; set; }
+
+    /// <summary>True once the first document is on screen - painted, not merely active.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsStartupMessage))]
+    public partial bool IsFirstDocumentShown { get; set; }
+
+    /// <summary>The preview has painted its first document; the startup message can go.</summary>
+    public void FirstDocumentShown() => IsFirstDocumentShown = true;
+
+    /// <summary>
+    /// "Opening your documents…", muted, in the middle of the window, while startup is still
+    /// bringing the first document up and has taken long enough to be noticed. Until the
+    /// preview has painted it - the document is active about a second before it is drawn, and
+    /// taking the message down at activation left that second as a blank window. Never over the
+    /// landing page: a startup whose documents all failed to open has nothing coming.
+    /// </summary>
+    public bool ShowsStartupMessage => IsStartupSlow && !IsFirstDocumentShown && !ShowsLandingPage;
+
+    /// <summary>
+    /// Startup has opened what it was going to, or given up; the landing page may show.
+    ///
+    /// Unless the workspace holds documents none of which is active yet. A restored document
+    /// is open the moment it is read, but becomes the active one only once the preview shell
+    /// is ready, about half a second later - and settling in that gap showed the landing page
+    /// for exactly that half second. So it waits for the first active document instead
+    /// (<see cref="UpdateActiveDocumentState"/>).
+    /// </summary>
+    public void EndStartup()
+    {
+        if (_workspace.HasDocuments && !HasDocument)
+        {
+            _settleWhenActive = true;
+            return;
+        }
+
+        IsStartupSettled = true;
+    }
+
+    /// <summary>Startup ended with documents open but none active yet; see <see cref="EndStartup"/>.</summary>
+    private bool _settleWhenActive;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
@@ -3870,6 +3983,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         MarkdownDocument? document = _workspace.Active;
 
         HasDocument = document is not null;
+
+        // Startup was waiting for this: the first active document, or the last document
+        // gone before any became active. Either way the landing page may now decide.
+        if (_settleWhenActive && (HasDocument || !_workspace.HasDocuments))
+        {
+            _settleWhenActive = false;
+            IsStartupSettled = true;
+        }
 
         // The menu is global and the count is per document, so switching tab has to move it.
         RefreshBlockedImagesMenuText();

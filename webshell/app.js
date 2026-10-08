@@ -5798,6 +5798,26 @@
     emitStats();
     emitCaretState();
     reportLayout('activateTab');
+    announceFirstDocumentShown();
+  }
+
+  /*
+    Tells the host, once, that the first document is on screen - two frames after its tab was
+    brought up, the first for layout and the second for the paint that follows it. The host
+    keeps "Opening your documents…" up until then: the document becomes the active one about a
+    second before the preview has drawn it, and taking the message down at activation left that
+    second as a blank window.
+  */
+  function announceFirstDocumentShown() {
+    if (state.firstDocumentShown) { return; }
+
+    state.firstDocumentShown = true;
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        post('firstDocumentShown', {});
+      });
+    });
   }
 
   /// Captures the outgoing tab's cursor, scroll and preview position.

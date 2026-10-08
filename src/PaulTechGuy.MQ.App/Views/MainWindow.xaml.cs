@@ -739,6 +739,10 @@ public sealed partial class MainWindow : Window
         try
         {
             await ViewModel.InitializeAsync();
+
+            // The landing page waits while startup has documents to open, so it does not show
+            // for a moment and vanish under the restored session.
+            ViewModel.BeginStartup(_pendingFiles.Count > 0);
             RestoreWindowPlacement();
 
             if (!_assets.IsAvailable)
@@ -750,6 +754,7 @@ public sealed partial class MainWindow : Window
                     + string.Join(", ", _assets.MissingAssets));
 
                 _logger.LogError("Startup aborted: web assets unavailable.");
+                ViewModel.EndStartup();
                 return;
             }
 
@@ -761,6 +766,7 @@ public sealed partial class MainWindow : Window
                 _loggerFactory.CreateLogger<WebViewPreviewHost>());
 
             _previewHost.Ready += OnPreviewReady;
+            _previewHost.FirstDocumentShown += (_, _) => ViewModel.FirstDocumentShown();
             _previewHost.RecoveryFailed += OnPreviewRecoveryFailed;
             _previewHost.StatsChanged += OnStatsChanged;
             _previewHost.CaretStateChanged += OnCaretStateChanged;
@@ -822,11 +828,13 @@ public sealed partial class MainWindow : Window
             await ViewModel.ApplyStartupBehaviorAsync(pending.Length > 0);
 
             _startupDocumentsOpen = true;
+            ViewModel.EndStartup();
             PlaceStartupFocus();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Window initialization failed.");
+            ViewModel.EndStartup();
             await _dialogs.ShowMessageAsync("Marqora could not start cleanly", ex.Message);
         }
     }

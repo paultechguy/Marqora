@@ -2818,15 +2818,31 @@
             </Border>
 
             <!--
+                Startup's word for the blank window: muted, centered, and only once startup has
+                taken long enough to notice (ShowsStartupMessage). The preview shell takes about
+                a second and a half to bring the first document up, and the window said nothing
+                meanwhile. Gone the moment the first document is active.
+            -->
+            <TextBlock Grid.Column="0"
+                       Grid.ColumnSpan="4"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Text="Opening your documents…"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Visibility="{x:Bind VisibleWhen(ViewModel.ShowsStartupMessage), Mode=OneWay}" />
+
+            <!--
                 Empty state: the drop target and the way back into recent work.
 
                 Spans all three columns. With no document open the outline and its handle are
                 both collapsed, so the drop target has the row to itself and stays centered in
-                the window rather than in whatever is left beside a panel.
+                the window rather than in whatever is left beside a panel. Held back while
+                startup is still opening documents (ShowsLandingPage), so it does not show for
+                a moment and vanish under a restored session.
             -->
             <ScrollViewer Grid.Column="0"
                           Grid.ColumnSpan="4"
-                          Visibility="{x:Bind CollapsedWhen(ViewModel.HasDocument), Mode=OneWay}"
+                          Visibility="{x:Bind VisibleWhen(ViewModel.ShowsLandingPage), Mode=OneWay}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel MaxWidth="660"
