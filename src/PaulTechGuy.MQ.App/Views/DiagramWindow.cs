@@ -94,6 +94,9 @@ public sealed partial class DiagramWindow : Window
     private bool _isRemoved;
     private bool _isInvalid;
 
+    /// <summary>The presenter's state when the window last changed; see <see cref="OnWindowChanged"/>.</summary>
+    private OverlappedPresenterState _lastState = OverlappedPresenterState.Restored;
+
     public DiagramWindow(
         IWebAssetProvider assets,
         IThemeService theme,
@@ -141,6 +144,7 @@ public sealed partial class DiagramWindow : Window
         ConfigurePresenter();
 
         AppWindow.Closing += OnClosing;
+        AppWindow.Changed += OnWindowChanged;
         _theme.EffectiveThemeChanged += OnEffectiveThemeChanged;
     }
 
@@ -367,6 +371,30 @@ public sealed partial class DiagramWindow : Window
         }
     }
 
+    /// <summary>
+    /// Refits the diagram when the window comes back down from maximized. A diagram zoomed
+    /// to read across a full screen was left at that zoom in a window a fraction of the size,
+    /// with most of it out of view. The same message as <see cref="MaximizeAndFit"/>, for the
+    /// same reason: the page refits on the resize when it lands, not to the size it is leaving.
+    /// </summary>
+    private void OnWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (!args.DidPresenterChange && !args.DidSizeChange
+            || sender.Presenter is not OverlappedPresenter presenter)
+        {
+            return;
+        }
+
+        OverlappedPresenterState state = presenter.State;
+
+        if (_lastState == OverlappedPresenterState.Maximized && state == OverlappedPresenterState.Restored)
+        {
+            Send("command", new { name = "zoomFit" });
+        }
+
+        _lastState = state;
+    }
+
     /// <summary>Brings the window forward, restoring it first if it was minimized.</summary>
     public void Raise()
     {
@@ -384,6 +412,7 @@ public sealed partial class DiagramWindow : Window
     public void Shutdown()
     {
         AppWindow.Closing -= OnClosing;
+        AppWindow.Changed -= OnWindowChanged;
         _theme.EffectiveThemeChanged -= OnEffectiveThemeChanged;
 
         ReleaseWebView();
@@ -418,6 +447,7 @@ public sealed partial class DiagramWindow : Window
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         AppWindow.Closing -= OnClosing;
+        AppWindow.Changed -= OnWindowChanged;
         _theme.EffectiveThemeChanged -= OnEffectiveThemeChanged;
 
         ReleaseWebView();
