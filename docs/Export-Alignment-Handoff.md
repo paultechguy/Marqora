@@ -51,8 +51,8 @@ mhchem, in both columns, which the fixture expects.
 - **After any `.cs` edit:** `pwsh ./build/Add-FileHeaders.ps1 -Check`. Also run
   `Set-AmericanSpelling.ps1 -Check`, `Test-NetworkClaim.ps1 -Check`, `Test-ButtonStandards.ps1
   -Check`, `Test-WebShell.ps1`, `Update-PaperDesign.ps1 -Check`, and every test project. A
-  dictionary key or string literal that is a British spelling (`"grey"`) will be rewritten by the
-  spelling script: leave it out.
+  dictionary key or string literal spelled the British way - a CSS color name, say - will be
+  rewritten by the spelling script, so leave it out rather than add it.
 - **Webshell edits** (`webshell/*.js|css|html`) only reach the build Paul rebuilds; tell him to
   rebuild Debug.
 - **Never format `docs/UltimateMarkdownContent.md`** (its mistakes are its tests, and its byte
