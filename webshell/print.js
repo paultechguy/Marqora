@@ -246,6 +246,26 @@
 
     Returns the per-note rules, and how many notes were moved, for the 'rendered' answer.
   */
+  /*
+    The notes left where Markdig put them: a numbered list at the end of the document. The
+    host asks for this when a first layout could not place every note at the foot of its page
+    (plan O4): the whole document then takes endnotes, one model and never a mix, and the
+    report says why. The back-link arrows still go - paper has nowhere to go back to.
+  */
+  function notesAsEndnotes(root) {
+    var group = Array.prototype.find.call(root.querySelectorAll('div.footnotes'), function (candidate) {
+      return candidate.querySelector(':scope > ol > li[id]') !== null;
+    }) || null;
+
+    if (!group) { return { rules: '', moved: 0, found: 'endnotes, no group' }; }
+
+    Array.prototype.forEach.call(group.querySelectorAll('.footnote-back-ref'), function (back) {
+      back.remove();
+    });
+
+    return { rules: '', moved: group.querySelectorAll(':scope > ol > li[id]').length, found: 'endnotes' };
+  }
+
   function notesToFloats(root) {
     var rules = [];
     var moved = 0;
@@ -669,7 +689,7 @@
 
       var root = template.content.firstElementChild;
       var furniture = p.furniture || {};
-      var notes = notesToFloats(root);
+      var notes = p.endnotes ? notesAsEndnotes(root) : notesToFloats(root);
 
       // Contents first, then the cover in front of it, so the contents lists only the
       // document's own headings. Page numbers are written after layout (labelPages).

@@ -91,7 +91,8 @@ internal sealed record PagedPrintResult(
     IReadOnlyDictionary<string, bool> Faces,
     int NotesMoved,
     int NotesPlaced,
-    int ContentsEntries);
+    int ContentsEntries,
+    bool NotesAsEndnotes = false);
 
 /// <summary>
 /// Lays a document out into pages with Paged.js in a WebView2 that is never shown, then prints
@@ -371,6 +372,25 @@ internal static class PagedPrintHost
 
             JsonElement measured = await LayOutAsync(core, assets, printMarkup, page, title, furniture, pageRanges).ConfigureAwait(true);
 
+            // Plan O4: a note Paged.js could not place at the foot of its page means the whole
+            // document takes endnotes - one model per document, never some notes at the foot
+            // and one at the end - and the result says so for the report. Laid out again rather
+            // than patched: a note moved after layout would leave a page measured for it.
+            int moved = Count(measured, "notesMoved");
+            int placedAtFoot = Count(measured, "notesPlaced");
+            bool asEndnotes = placedAtFoot < moved;
+
+            if (asEndnotes)
+            {
+                logger.LogWarning(
+                    "Paged {Output}: {Placed} of {Moved} footnotes reached the foot of their page; laying the document out again with every note at the end.",
+                    output,
+                    placedAtFoot,
+                    moved);
+
+                measured = await LayOutAsync(core, assets, printMarkup, page, title, furniture, pageRanges, endnotes: true).ConfigureAwait(true);
+            }
+
             // Step by step, because a print that stalls says nothing else: the first printer run
             // logged the dialog and then silence, which could have been either step.
             logger.LogInformation(
@@ -422,7 +442,8 @@ internal static class PagedPrintHost
                 faces,
                 Count(measured, "notesMoved"),
                 Count(measured, "notesPlaced"),
-                Count(measured, "contentsEntries"));
+                Count(measured, "contentsEntries"),
+                asEndnotes);
 
             logger.LogInformation(
                 "Paged {Output} ({Mode}): {Pages} pages, layout {Layout} ms, output {Emitted} ms, {Bytes} bytes, tagged {Tagged}, outline {Outline}, page {Visibility}, faces {Faces}, footnotes {Placed} of {Moved} at the page foot, contents {Entries} entries, cover {Cover}.",
@@ -591,7 +612,8 @@ internal static class PagedPrintHost
         PagedPage page,
         string title,
         PaperFurniture furniture,
-        string? pageRanges)
+        string? pageRanges,
+        bool endnotes = false)
     {
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var rendered = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -643,6 +665,10 @@ internal static class PagedPrintHost
                 kind = m.TryGetProperty("kind", out JsonElement kind) ? kind.GetString() : null,
                 title,
                 pages = pageRanges ?? string.Empty,
+
+                // Every note at the end rather than at its page foot: the second layout, when the
+                // first could not place them all (plan O4).
+                endnotes,
                 page = new
                 {
                     widthInches = page.WidthInches,

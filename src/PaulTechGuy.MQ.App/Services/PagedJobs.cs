@@ -29,12 +29,13 @@ namespace PaulTechGuy.MQ.App.Services;
 /// either.</item>
 /// </list>
 /// </summary>
+
 internal static class PagedJobs
 {
-    /// <summary>A PDF file. Answers which engine wrote it.</summary>
+    /// <summary>A PDF file. Answers which engine wrote it, and whether its notes are endnotes.</summary>
     /// <param name="requestMarkup">The page's print markup, or null when it did not answer.</param>
     /// <param name="exportClassic">The page printed as it stands, through its print stylesheet.</param>
-    public static async Task<PrintEngine> ExportPdfAsync(
+    public static async Task<PdfJob> ExportPdfAsync(
         IntPtr parentWindow,
         IWebAssetProvider assets,
         Func<Task<string?>> requestMarkup,
@@ -62,11 +63,11 @@ internal static class PagedJobs
             {
                 try
                 {
-                    await PagedPrintHost.ExportAsync(
+                    PagedPrintResult result = await PagedPrintHost.ExportAsync(
                         parentWindow, assets, markup, setup, title, furniture, path,
                         PagedHostMode.OffScreen, documentAssets, logger).ConfigureAwait(true);
 
-                    return PrintEngine.Paged;
+                    return new PdfJob(PrintEngine.Paged, result.NotesAsEndnotes ? result.NotesMoved : 0);
                 }
                 catch (PagedOutputException ex) when (ex.InnerException is IOException or UnauthorizedAccessException)
                 {
@@ -82,7 +83,7 @@ internal static class PagedJobs
 
         await exportClassic().ConfigureAwait(true);
 
-        return PrintEngine.Classic;
+        return new PdfJob(PrintEngine.Classic, 0);
     }
 
     /// <summary>A printout. Answers which engine printed it.</summary>
@@ -152,3 +153,10 @@ internal static class PagedJobs
             or COMException
             or JsonException;
 }
+
+/// <summary>
+/// What a PDF job did: the engine that wrote the file, and how many notes went to the end of
+/// the document because Paged.js could not place them all at the page foot (plan O4) - zero
+/// when they are footnotes, as they should be.
+/// </summary>
+internal sealed record PdfJob(PrintEngine Engine, int NotesAsEndnotes);

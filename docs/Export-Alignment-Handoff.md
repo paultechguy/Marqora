@@ -22,8 +22,8 @@ match, the difference must be known and reported.
 | Spike | Paged.js engine proven (S1–S6) | **Committed** `9db875a` |
 | 1 | Paper spec: one statement of type and space read by Word and the PDF | **Committed** `c47b469` |
 | 2 | Paged engine behind PDF and Print, shared furniture, PDF report, gate | **Gate passed 2026-10-08, committed** |
-| 3 | Word fidelity: math, diagrams, raw HTML | Not started |
-| 4 | Footnote fallback reporting | Not started |
+| 3 | Word fidelity: math, diagrams, raw HTML | **Gate passed 2026-10-08, committed** `9eb28a5` (shell fixes `f68c4ef`) |
+| 4 | Footnote fallback reporting | **Built 2026-10-08**: a note Paged.js cannot place sends the whole PDF to endnotes, with an advisory report row. Not yet seen in the app: the fixture's notes all fit |
 
 **Phase 2 passed its gate on 2026-10-08** (§6 steps 1–4 done; the rerun scorecard is §2 of `docs/WordVsPdf-Comparison.md`). Next is phase 3, §6 step 5.
 

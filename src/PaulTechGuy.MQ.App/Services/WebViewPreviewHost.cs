@@ -1247,7 +1247,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         // Kept for the report: the markup also lists the diagrams that would not draw.
         string? markup = null;
 
-        PrintEngine engine = await PagedJobs.ExportPdfAsync(
+        PdfJob job = await PagedJobs.ExportPdfAsync(
             ParentWindow(),
             _assets,
             async () => markup = await RequestPrintMarkupAsync().ConfigureAwait(true),
@@ -1259,7 +1259,27 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             _logger,
             () => ExportClassicPdfAsync(core, path, setup, title)).ConfigureAwait(true);
 
-        return new PdfExportOutcome(engine, DiagramIssues(markup));
+        IReadOnlyList<ExportIssue> issues = DiagramIssues(markup);
+
+        // Plan O4: every note is still in the PDF, only at the end rather than at its page foot,
+        // so the row is worth knowing rather than a loss - and it says why, because a reader
+        // who expected footnotes will otherwise think the export got them wrong.
+        if (job.NotesAsEndnotes > 0)
+        {
+            issues =
+            [
+                new ExportIssue
+                {
+                    Line = 0,
+                    IsAdvisory = true,
+                    Problem = "The footnotes are endnotes in this PDF: one could not be placed at the foot of its page, and a document takes one kind or the other",
+                    Item = job.NotesAsEndnotes == 1 ? "1 footnote" : $"{job.NotesAsEndnotes} footnotes",
+                },
+                .. issues,
+            ];
+        }
+
+        return new PdfExportOutcome(job.Engine, issues);
     }
 
     /// <summary>
