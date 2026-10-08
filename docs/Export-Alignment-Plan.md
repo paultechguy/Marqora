@@ -340,7 +340,7 @@ The row wording is shared with Word's. `CLAUDE.md`'s description of the window i
     and KaTeX is all web fonts.
   - The TeX goes in the alt text, and the export report gets a row.
 - **Tests.** `MathCorpusTests` gains the fixture's equations.
-- **Open: line 1119 of the fixture.** A Word export on 2026-10-07 reported the `\textcolor` … `\colorbox` equation as "Could not be converted", where the first export (2026-10-06) wrote it without its colors. Nothing on the math path changed in between, and `MathCorpusTests` converts the same equation from KaTeX's own MathML, so the preview handed the export different MathML for that line. Capture the preview's markup for it in the real app to find out what.
+- **Solved 2026-10-08: line 1119 of the fixture.** The equation was sometimes written as its source. The log line added for it caught the preview's markup: a second pass of KaTeX's auto-render had found the `\(...\)` inside the TeX annotation of `\colorbox{yellow}{\(\text{...}\)}` and drawn an equation inside the annotation, so the export cut the equation at the inner `</math>`. Only after such a pass, which is why it came and went. `renderMath` now passes `ignoredClasses: ['katex']`, in the preview and the cheatsheet.
 
 ### 7.2 Diagrams (D7)
 

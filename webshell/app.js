@@ -2223,14 +2223,45 @@
           { left: '\\[', right: '\\]', display: true },
           { left: '\\(', right: '\\)', display: false }
         ],
+        // Never into math already drawn. Each equation keeps its TeX in a hidden MathML
+        // annotation, and a second pass over the preview found the "\(...\)" inside
+        // \colorbox{yellow}{\(\text{...}\)} there and drew a whole equation inside the
+        // annotation. The Word export then cut the equation at the inner </math>, could not
+        // read it, and wrote line 1119 of the fixture as its source - only on the exports that
+        // came after such a pass, which is why it came and went.
+        ignoredClasses: ['katex'],
         throwOnError: false,
         errorColor: 'var(--mq-danger)'
       });
       shadeMathBackgrounds(root);
+      numberEquations(root);
       state.lineMapDirty = true;
     }).catch(function (err) {
       report('warning', 'KaTeX failed to load', err && err.message);
     });
+  }
+
+  /*
+    The numbers of numbered equations - each line of an align, each equation - written as text
+    rather than left to KaTeX's CSS counter.
+
+    KaTeX numbers through a counter it resets on body and steps on each .eqn-num::before. The
+    preview printed "(1)" on every line, because each display is set inside boxes that scope
+    the counter afresh, and the paged PDF printed "(0)", because Paged.js rewrites counter rules
+    as it splits the document into pages. Counted here in document order, across the whole
+    document as AMS numbers them, and put on the element itself, so every copy of the markup -
+    the print, the PDF, an HTML export - carries the number with it. app.css shows the
+    attribute in place of the counter.
+
+    `root` is always a whole document - the preview, or the copy an export renders - so the
+    count is the document's, never a fragment's.
+  */
+  function numberEquations(root) {
+    var numbers = root.querySelectorAll('.katex .eqn-num');
+
+    for (var i = 0; i < numbers.length; i++) {
+      numbers[i].setAttribute('data-mq-eqn', '(' + (i + 1) + ')');
+    }
   }
 
   // --- code highlighting ---------------------------------------------------

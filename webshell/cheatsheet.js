@@ -329,6 +329,8 @@
           { left: '\\[', right: '\\]', display: true },
           { left: '\\(', right: '\\)', display: false }
         ],
+        // Never into math already drawn - see renderMath in app.js.
+        ignoredClasses: ['katex'],
         throwOnError: false,
         errorColor: 'var(--mq-danger)'
       });

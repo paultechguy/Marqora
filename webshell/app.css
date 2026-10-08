@@ -1338,6 +1338,16 @@ a.mq-blocked-media {
 .mq-preview .katex-display > .katex > .katex-html > .katex-tag .vlist-t2 { margin-right: 0; }
 
 /*
+  An equation's number is the text app.js wrote onto it (numberEquations), not KaTeX's counter,
+  which printed "(1)" on every line in the preview and "(0)" in the paged PDF. Only where the
+  number was written: anything else keeps KaTeX's own rule.
+*/
+.mq-preview .katex .eqn-num[data-mq-eqn]::before {
+  content: attr(data-mq-eqn);
+  counter-increment: none;
+}
+
+/*
   highlight.js themes paint their own surface on the code element. The Marqora pre already
   supplies the surface, so only the token colors from the theme are wanted here.
 */
