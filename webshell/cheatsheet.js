@@ -173,11 +173,52 @@
     return theme === 'Dark' || exportThemeId !== screenThemeId;
   }
 
+  /*
+    Every diagram drawing in flight, and every light drawing for print, so a print can wait
+    for the lot (requestPrintHtml). It did not wait before: a cheatsheet printed while a light
+    drawing was still being made went out with the screen's drawing in its place
+    (Architecture.md, Screen and output). Errors are caught where the work is made, so this
+    only ever settles.
+  */
+  var outputWork = Promise.resolve();
+
+  function track(work) {
+    outputWork = Promise.all([outputWork, work]);
+    return work;
+  }
+
+  /* The page's content, drawn: set by setContent, null before it arrives. */
+  var contentShown = null;
+
+  /// Resolves once the content is in and every drawing it set off is done - or after a bound,
+  /// because a print in the screen's colors beats a print that never happens.
+  function whenOutputReady() {
+    var done = (contentShown || Promise.resolve()).then(function () { return outputWork; });
+    var bound = new Promise(function (resolve) { setTimeout(resolve, 10000); });
+
+    return Promise.race([done, bound]);
+  }
+
+  /// The light drawings in place of the screen's, in a copy for print: as outputMarkup in
+  /// app.js, which a print and every export from the preview go through.
+  function outputMarkup(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('.mq-diagram-output'), function (copy) {
+      var light = copy.querySelector('svg');
+      var screen = copy.parentNode ? copy.parentNode.querySelector(':scope > svg') : null;
+
+      if (light && screen) { screen.replaceWith(light); }
+
+      copy.remove();
+    });
+
+    return root;
+  }
+
   function renderDiagrams() {
     var nodes = els.article.querySelectorAll('pre.mermaid:not([data-processed])');
     if (nodes.length === 0) { return Promise.resolve(); }
 
-    return ensureMermaid().then(function (mermaid) {
+    return track(ensureMermaid().then(function (mermaid) {
       var chain = Promise.resolve();
 
       // One at a time: mermaid keeps a single working area per document.
@@ -188,7 +229,7 @@
       return chain;
     }).catch(function (err) {
       report('warning', 'Mermaid failed to load', err && err.message);
-    });
+    }));
   }
 
   function renderOneLater(mermaid, node) {
@@ -201,8 +242,9 @@
         node.setAttribute('data-processed', 'true');
         node.setAttribute('data-drawing', id);
 
-        // Not waited on: the next diagram need not sit behind this one's light drawing.
-        attachOutputCopy(node, source, id);
+        // Not waited on here: the next diagram need not sit behind this one's light drawing.
+        // A print waits on it instead, through outputWork.
+        track(attachOutputCopy(node, source, id));
       }).catch(function (err) {
         var message = document.createElement('span');
         message.className = 'mq-mermaid-error';
@@ -447,7 +489,7 @@
       els.article.innerHTML = p.html || '';
       decorate();
 
-      Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
+      contentShown = Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
         // Only now is the layout final, so this is the first moment at which a saved
         // offset lands where it did when it was recorded.
         applyScroll(pendingScrollTop);
@@ -510,6 +552,27 @@
       if (redraw) { redrawDiagrams(); }
     },
 
+    /*
+      The cheatsheet for the paged engine, in the shape the preview's requestPrintHtml gives:
+      its markup with the light drawings, and the color theme it is drawn in. No paper spec of
+      its own; the host supplies it.
+    */
+    requestPrintHtml: function () {
+      whenOutputReady().then(function () {
+        var themeSheet = document.getElementById('mq-theme');
+
+        post('printHtml', {
+          data: JSON.stringify({
+            html: outputMarkup(els.article.cloneNode(true)).innerHTML,
+            themeCss: themeSheet ? themeSheet.textContent : '',
+            paperCss: '',
+            kind: 'cheatsheet',
+            rootStyle: document.documentElement.getAttribute('style') || ''
+          })
+        });
+      });
+    },
+
     restoreScroll: function (p) {
       pendingScrollTop = p.top || 0;
 
@@ -543,6 +606,20 @@
     off in CheatsheetWindow: it was drawn by Edge and so followed Edge's dark mode rather
     than the app's theme, and it offered browser commands this page has no use for.
   */
+  /*
+    Ctrl+P is Marqora's Print, not Chromium's. The browser's own shortcuts are left on in this
+    window for find and reload, and Ctrl+P was one of them: it opened Chromium's print preview,
+    which prints the date, the page title and https://marqora.assets/cheatsheet.html around
+    every page and goes round the paged engine entirely. Stopped here, which the browser
+    honors for print, and handed to the host's Print.
+  */
+  window.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      post('print', {});
+    }
+  }, true);
+
   window.addEventListener('contextmenu', function (e) {
     e.preventDefault();
 

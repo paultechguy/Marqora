@@ -13,9 +13,10 @@ namespace PaulTechGuy.MQ.App.Services;
 public sealed class ExportDialogService(WindowContext window, ILogger<ExportDialogService> logger)
     : IExportDialogService
 {
-    public async Task<DocxExportSetup?> RequestDocxSetupAsync(
+    public async Task<ExportChoice<DocxExportSetup>?> RequestDocxSetupAsync(
         string documentName,
         DocxExportSetup current,
+        ExportLayout layout,
         CancellationToken cancellationToken = default)
     {
         if (window.XamlRoot is null)
@@ -26,9 +27,9 @@ public sealed class ExportDialogService(WindowContext window, ILogger<ExportDial
 
         try
         {
-            var dialog = new WordExportDialog(documentName, current).AnchorTo(window.Root);
+            var dialog = new WordExportDialog(documentName, current, layout).AnchorTo(window.Root);
 
-            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Setup : null;
+            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Choice : null;
         }
         catch (Exception ex)
         {
@@ -37,9 +38,10 @@ public sealed class ExportDialogService(WindowContext window, ILogger<ExportDial
         }
     }
 
-    public async Task<PdfPageSetup?> RequestPdfSetupAsync(
+    public async Task<ExportChoice<PdfPageSetup>?> RequestPdfSetupAsync(
         string documentName,
         PdfPageSetup current,
+        ExportLayout layout,
         CancellationToken cancellationToken = default)
     {
         if (window.XamlRoot is null)
@@ -50,9 +52,9 @@ public sealed class ExportDialogService(WindowContext window, ILogger<ExportDial
 
         try
         {
-            var dialog = new PdfExportDialog(documentName, current).AnchorTo(window.Root);
+            var dialog = new PdfExportDialog(documentName, current, layout).AnchorTo(window.Root);
 
-            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Setup : null;
+            return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Choice : null;
         }
         catch (Exception ex)
         {

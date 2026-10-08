@@ -134,7 +134,7 @@ public class ImageTests : IDisposable
     /// to a plain run even though it would otherwise qualify for one of its own.
     /// </summary>
     [Fact]
-    public async Task A_remote_image_labelling_an_outer_link_does_not_nest_hyperlinks()
+    public async Task A_remote_image_labeling_an_outer_link_does_not_nest_hyperlinks()
     {
         using var exported = await ExportAsync(
             "[![Remote](https://example.com/x.png)](https://example.com/page)\n");

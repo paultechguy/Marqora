@@ -632,7 +632,7 @@ you did not edit.
 | Export                                      | What you get                                                                                                             |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `Edit > Copy as Rich Text` (`Ctrl+Shift+C`) | The preview on the clipboard, formatting intact, for pasting into Word, Outlook or Confluence                            |
-| `Tools > Export to PDF...`                  | The preview, printed. A page-setup dialog offers paper size, orientation, margins, and whether to keep background colors |
+| `Tools > Export to PDF...`                  | The document laid out into pages at true size: page numbers, footnotes at the foot of each page, and optionally a title page and contents shared with Word. The dialog also offers paper size, orientation, margins, and whether to shade code, tables and callouts |
 | `Tools > Export to HTML...`                 | One self-contained `.html` file                                                                                          |
 | `Tools > Export to Word...`                 | A real `.docx`: Word's own heading styles, numbering, tables, footnotes and equations, with page setup of your choosing  |
 | `Tools > Share as Folio...`                 | Every open document, and every image they use, as one thing to send                                                      |

@@ -220,12 +220,13 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly ComboBox _orientation;
     private readonly ComboBox _margin;
     private readonly CheckBox _backgrounds;
+    private readonly CheckBox _classicPdf;
     private readonly ComboBox _wordPaper;
     private readonly ComboBox _wordOrientation;
     private readonly ComboBox _wordMargin;
-    private readonly CheckBox _wordHeaderFooter;
-    private readonly CheckBox _wordContents;
-    private readonly CheckBox _wordCoverPage;
+    private readonly CheckBox _layoutHeaderFooter;
+    private readonly CheckBox _layoutContents;
+    private readonly CheckBox _layoutCoverPage;
 
     private readonly NumberBox _logRetention;
     private readonly NumberBox _updateReminder;
@@ -533,8 +534,11 @@ internal sealed class PreferencesWindow : PaletteWindow
             Margin = (PageMargin)Math.Max(0, _margin.SelectedIndex),
         }));
 
-        _backgrounds = BuildCheck("Include background colors");
+        _backgrounds = BuildCheck("Shade code, tables and callouts");
         Bind(_backgrounds, v => UpdatePdfAsync(setup => setup with { IncludeBackgrounds = v }));
+
+        _classicPdf = BuildCheck("Use the classic print engine");
+        Bind(_classicPdf, v => UpdatePdfAsync(setup => setup with { UseClassicEngine = v }));
 
         _wordPaper = BuildCombo(["Letter", "A4", "Legal"]);
         _wordPaper.SelectionChanged += (_, _) => ApplyAsync(() => UpdateDocxAsync(setup => setup with
@@ -554,14 +558,14 @@ internal sealed class PreferencesWindow : PaletteWindow
             Margin = (PageMargin)Math.Max(0, _wordMargin.SelectedIndex),
         }));
 
-        _wordHeaderFooter = BuildCheck("Header and page numbers");
-        Bind(_wordHeaderFooter, v => UpdateDocxAsync(setup => setup with { IncludeHeaderAndFooter = v }));
+        _layoutHeaderFooter = BuildCheck("Header and page numbers");
+        Bind(_layoutHeaderFooter, v => UpdateLayoutAsync(layout => layout with { IncludeHeaderAndFooter = v }));
 
-        _wordContents = BuildCheck("Table of contents");
-        Bind(_wordContents, v => UpdateDocxAsync(setup => setup with { IncludeTableOfContents = v }));
+        _layoutContents = BuildCheck("Table of contents");
+        Bind(_layoutContents, v => UpdateLayoutAsync(layout => layout with { IncludeTableOfContents = v }));
 
-        _wordCoverPage = BuildCheck("Title page");
-        Bind(_wordCoverPage, v => UpdateDocxAsync(setup => setup with { IncludeCoverPage = v }));
+        _layoutCoverPage = BuildCheck("Title page");
+        Bind(_layoutCoverPage, v => UpdateLayoutAsync(layout => layout with { IncludeCoverPage = v }));
 
         // ----------------------------------------------------------------- advanced
         // Deferred with the other two, though this one only ever takes effect at the next
@@ -1261,9 +1265,17 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(_backgrounds);
 
         panel.Children.Add(Note(
-            "Where Export to PDF starts from, and what Print uses for the margins and "
-            + "backgrounds its own dialog has no field for. Changing the setup in the export "
-            + "dialog updates these too."));
+            "Where Export to PDF starts from, and what Print uses for the margins its own "
+            + "dialog has no field for. Changing the setup in the export or print dialog "
+            + "updates these too."));
+
+        panel.Children.Add(_classicPdf);
+
+        panel.Children.Add(Note(
+            "Export to PDF and Print lay the document out into pages of its own, at true size, with "
+            + "page numbers, the contents and footnotes at the foot of each page. The classic "
+            + "engine prints the preview as it stands, as every PDF and printout was made before. It is "
+            + "here for one release, in case a document comes out wrong."));
 
         panel.Children.Add(Divider());
 
@@ -1271,14 +1283,24 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Field("Paper", _wordPaper));
         panel.Children.Add(Field("Orientation", _wordOrientation));
         panel.Children.Add(Field("Margins", _wordMargin));
-        panel.Children.Add(_wordHeaderFooter);
-        panel.Children.Add(_wordContents);
-        panel.Children.Add(_wordCoverPage);
 
         panel.Children.Add(Note(
             "Kept apart from the PDF setup on purpose: a document meant to be edited and one "
             + "meant to be printed want different margins. The presets themselves are the "
             + "same on both, and are Word's own - Normal is a whole inch."));
+
+        panel.Children.Add(Divider());
+
+        panel.Children.Add(Heading("WORD AND PDF"));
+        panel.Children.Add(_layoutHeaderFooter);
+        panel.Children.Add(_layoutContents);
+        panel.Children.Add(_layoutCoverPage);
+
+        panel.Children.Add(Note(
+            "One answer for both exports, so a document comes out with the same title page, "
+            + "contents and page numbers whichever way it leaves. Either export dialog changes "
+            + "these too. The title page is read from the front matter, and a line it does not "
+            + "fill is left out."));
 
         return panel;
     }
@@ -1856,14 +1878,16 @@ internal sealed class PreferencesWindow : PaletteWindow
             _orientation.SelectedIndex = (int)pdf.Orientation;
             _margin.SelectedIndex = (int)pdf.Margin;
             _backgrounds.IsChecked = pdf.IncludeBackgrounds;
+            _classicPdf.IsChecked = pdf.UseClassicEngine;
 
             DocxExportSetup docx = s.DocxDefaults;
             _wordPaper.SelectedIndex = (int)docx.Paper;
             _wordOrientation.SelectedIndex = (int)docx.Orientation;
             _wordMargin.SelectedIndex = (int)docx.Margin;
-            _wordHeaderFooter.IsChecked = docx.IncludeHeaderAndFooter;
-            _wordContents.IsChecked = docx.IncludeTableOfContents;
-            _wordCoverPage.IsChecked = docx.IncludeCoverPage;
+            ExportLayout layout = s.LayoutDefaults;
+            _layoutHeaderFooter.IsChecked = layout.IncludeHeaderAndFooter;
+            _layoutContents.IsChecked = layout.IncludeTableOfContents;
+            _layoutCoverPage.IsChecked = layout.IncludeCoverPage;
 
             UpdateEnabledState();
             RefreshFontHints();
@@ -1926,6 +1950,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
     private Task UpdatePdfAsync(Func<PdfPageSetup, PdfPageSetup> mutate) =>
         _vm.UpdateAsync(s => s with { PdfSetup = mutate(s.PdfDefaults) });
+
+    private Task UpdateLayoutAsync(Func<ExportLayout, ExportLayout> mutate) =>
+        _vm.UpdateAsync(s => s.WithLayout(mutate(s.LayoutDefaults)));
 
     private Task UpdateDocxAsync(Func<DocxExportSetup, DocxExportSetup> mutate) =>
         _vm.UpdateAsync(s => s with { DocxSetup = mutate(s.DocxDefaults) });
@@ -2217,7 +2244,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     /// </summary>
     /// <param name="name">
     /// What the complaint calls this field, when its label alone would not identify it. Both
-    /// font sizes are labelled "Size" under their own heading, which reads correctly on the
+    /// font sizes are labeled "Size" under their own heading, which reads correctly on the
     /// page and not at all in a sentence.
     /// </param>
     private StackPanel NumberField(
@@ -2257,7 +2284,7 @@ internal sealed class PreferencesWindow : PaletteWindow
         return new StackPanel { Children = { Field(label, box, unit), error } };
     }
 
-    /// <summary>A labelled control, with an optional unit after it.</summary>
+    /// <summary>A labeled control, with an optional unit after it.</summary>
     private static Grid Field(string label, FrameworkElement control, string? unit = null)
     {
         var grid = new Grid { ColumnSpacing = 10 };

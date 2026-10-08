@@ -1066,6 +1066,10 @@ internal sealed class BlockRenderer
             // documents actually contain.
             _report.UnsupportedMath(math.Line, unsupported, SourceOf(math));
         }
+        else
+        {
+            _report.MathWithoutPreview(math.Line, SourceOf(math));
+        }
 
         // No equation to be had: the preview has not run, or the expression uses something
         // the converter does not know. The TeX goes in instead - a reader can see what was

@@ -39,6 +39,18 @@ internal sealed class ExportedDocument : IDisposable
     /// </summary>
     public IReadOnlyList<string> Skipped => [.. Issues.Select(i => i.ToString())];
 
+    /// <summary>A document exported with a layout of its own and the default page setup.</summary>
+    public static Task<ExportedDocument> FromAsync(
+        string markdown,
+        ExportLayout layout,
+        HeadingNumbering headingNumbering = HeadingNumbering.Off,
+        string? renderedPreviewHtml = null,
+        string? sourceDocumentPath = null,
+        Func<string, Task<byte[]?>>? diagramPng = null,
+        DocumentImages? images = null,
+        ColorTheme? colorTheme = null) =>
+        FromAsync(markdown, setup: null, headingNumbering, renderedPreviewHtml, sourceDocumentPath, diagramPng, images, colorTheme, layout);
+
     public static async Task<ExportedDocument> FromAsync(
         string markdown,
         DocxExportSetup? setup = null,
@@ -47,7 +59,8 @@ internal sealed class ExportedDocument : IDisposable
         string? sourceDocumentPath = null,
         Func<string, Task<byte[]?>>? diagramPng = null,
         DocumentImages? images = null,
-        ColorTheme? colorTheme = null)
+        ColorTheme? colorTheme = null,
+        ExportLayout? layout = null)
     {
         string root = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(), "marqora-tests", Guid.NewGuid().ToString("n"));
@@ -63,6 +76,7 @@ internal sealed class ExportedDocument : IDisposable
             "Test document",
             markdown,
             setup ?? DocxExportSetup.Default,
+            layout ?? ExportLayout.Default,
             headingNumbering,
             sourceDocumentPath,
             renderedPreviewHtml,

@@ -19,7 +19,7 @@ public class ImageInsertTests
     public void The_alt_text_is_left_empty_rather_than_carrying_a_placeholder()
     {
         // A placeholder word would be a non-empty alt text, so the check that looks for a
-        // missing one would stay quiet and the document would ship labelled "alt".
+        // missing one would stay quiet and the document would ship labeled "alt".
         Edits.RunImages(Edits.Caret("", 0, 0), "shot.png").ShouldBe("![](shot.png)");
     }
 

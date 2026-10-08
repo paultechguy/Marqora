@@ -16,6 +16,7 @@ using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Themes;
 using Windows.Graphics;
 
 namespace PaulTechGuy.MQ.App.Views;
@@ -58,6 +59,9 @@ public sealed partial class DiagramWindow : Window
     /// <summary>Only for the page setup a print starts from; a diagram window stores nothing.</summary>
     private readonly ISettingsService _settings;
 
+    /// <summary>For the export theme's palette a print carries; see <see cref="PrintMarkup"/>.</summary>
+    private readonly ThemeCatalog _colorThemes;
+
     private readonly ILogger<DiagramWindow> _logger;
 
     private readonly WebView2 _webView = new();
@@ -94,6 +98,7 @@ public sealed partial class DiagramWindow : Window
         IWebAssetProvider assets,
         IThemeService theme,
         ISettingsService settings,
+        ThemeCatalog colorThemes,
         Guid id,
         Guid documentId,
         string hash,
@@ -108,6 +113,7 @@ public sealed partial class DiagramWindow : Window
         _assets = assets;
         _theme = theme;
         _settings = settings;
+        _colorThemes = colorThemes;
         _logger = logger;
         _svg = svg;
         _outputSvg = outputSvg;
@@ -635,7 +641,7 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
-            var dialog = new PdfExportDialog(_title, _settings.Current.PdfDefaults)
+            var dialog = new PdfExportDialog(_title, _settings.Current.PdfDefaults, layout: null)
                 .AnchorTo(Content as FrameworkElement);
 
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
@@ -662,9 +668,25 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
-            await SetPrintPageRatioAsync(core, PrintArea.Ratio(
-                setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches));
-            await WebViewPrinting.ExportPdfAsync(core, path, setup);
+            // Through the paged engine, as a document's PDF is (docs/Export-Alignment-Plan.md,
+            // §6.6), the light drawing held to one page. No cover, contents or header: a
+            // diagram on its own page is the whole of it.
+            await PagedJobs.ExportPdfAsync(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                _assets,
+                PrintMarkup,
+                path,
+                setup,
+                _title,
+                NoFurniture,
+                documentAssets: null,
+                _logger,
+                async () =>
+                {
+                    await SetPrintPageRatioAsync(core, PrintArea.Ratio(
+                        setup.WidthInches, setup.HeightInches, setup.HorizontalMarginInches, setup.VerticalMarginInches));
+                    await WebViewPrinting.ExportPdfAsync(core, path, setup);
+                }).ConfigureAwait(true);
 
             _logger.LogInformation("Exported a diagram to {Path}.", path);
         }
@@ -744,14 +766,62 @@ public sealed partial class DiagramWindow : Window
                 return;
             }
 
-            await SetPrintPageRatioAsync(core, PrintArea.Ratio(
-                job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches));
-            await WebViewPrinting.PrintAsync(core, job);
+            // The shading box is the same setting Export to PDF uses; answered here, it is
+            // the answer there too.
+            _settings.Update(s => s with { PdfSetup = s.PdfDefaults with { IncludeBackgrounds = job.IncludeBackgrounds } });
+
+            await PagedJobs.PrintAsync(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                _assets,
+                PrintMarkup,
+                job,
+                _title,
+                NoFurniture,
+                _settings.Current.PdfDefaults.UseClassicEngine,
+                documentAssets: null,
+                _logger,
+                async () =>
+                {
+                    await SetPrintPageRatioAsync(core, PrintArea.Ratio(
+                        job.WidthInches, job.HeightInches, job.HorizontalMarginInches, job.VerticalMarginInches));
+                    await WebViewPrinting.PrintAsync(core, job);
+                }).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not print the diagram.");
         }
+    }
+
+    /// <summary>A diagram's page has nothing around it: no cover, contents or header.</summary>
+    private static readonly PaperFurniture NoFurniture = new(null, null, HeaderAndFooter: false);
+
+    /// <summary>
+    /// The pop-out's print markup for the paged engine: its light drawing, which this window
+    /// already holds, as a pre.mermaid - the shape the print block holds to one page. Built
+    /// here rather than asked of the page, because there is nothing the page knows that this
+    /// does not.
+    ///
+    /// With the export theme's light palette, as an exported page carries it: app.css draws the
+    /// diagram's box border from a theme slot and declares none, so without it the border was
+    /// an invalid declaration and the pop-out's PDF had the gray box with no line round it.
+    /// </summary>
+    private Task<string?> PrintMarkup()
+    {
+        if (string.IsNullOrEmpty(_outputSvg))
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        AppSettings current = _settings.Current;
+        ColorTheme export = _colorThemes.Find(
+            _colorThemes.Contains(current.ExportColorTheme) ? current.ExportColorTheme : current.ColorTheme);
+
+        return Task.FromResult<string?>(JsonSerializer.Serialize(new
+        {
+            html = "<pre class=\"mermaid\" data-processed=\"true\">" + _outputSvg + "</pre>",
+            themeCss = ColorThemePayloads.LightDeclarations(export),
+        }));
     }
 
     /// <summary>

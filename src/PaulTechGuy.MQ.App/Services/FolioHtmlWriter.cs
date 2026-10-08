@@ -110,7 +110,7 @@ public sealed class FolioHtmlWriter(RenderedHtmlPackager packager, ILogger<Folio
 
         page.AppendLine("<style>");
         page.AppendLine(packager.ReadStyles(content));
-        page.AppendLine(ExportLayout.PageCss(measurePixels));
+        page.AppendLine(HtmlPageLayout.PageCss(measurePixels));
         page.AppendLine(FolioStyles(measurePixels));
         page.AppendLine(DiagramViewer.CssFor(content));
         page.AppendLine("</style>");

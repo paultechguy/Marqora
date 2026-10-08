@@ -8,7 +8,7 @@ namespace PaulTechGuy.MQ.Editing;
 /// <summary>
 /// Drops an image reference in at the caret, leaving the caret where the alt text goes.
 ///
-/// No placeholder word. Writing "![alt](shot.png)" would leave every untouched image labelled
+/// No placeholder word. Writing "![alt](shot.png)" would leave every untouched image labeled
 /// "alt" - a non-empty alt text, so the check that looks for a missing one stays quiet and the
 /// document ships that way. An empty pair of brackets with the caret inside them is what the
 /// check is looking for, and typing fills it in just as readily.

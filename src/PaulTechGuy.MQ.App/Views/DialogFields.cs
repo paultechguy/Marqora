@@ -10,7 +10,7 @@ using Microsoft.UI.Xaml.Media;
 namespace PaulTechGuy.MQ.App.Views;
 
 /// <summary>
-/// The shapes a code-built dialog's content is made of: a labelled control, a drop-down of
+/// The shapes a code-built dialog's content is made of: a labeled control, a drop-down of
 /// plain strings, and the icon beside a caption that explains what the control will take.
 ///
 /// Shared by <see cref="PdfExportDialog"/> and <see cref="PrintDialog"/>, which ask closely
@@ -52,7 +52,7 @@ internal static class DialogFields
     /// answer has a syntax rather than a value. Most fields do not need one - a drop-down
     /// cannot be filled in wrongly - so it stays off by default.
     /// </param>
-    public static StackPanel Labelled(string label, FrameworkElement control, FrameworkElement? hint = null)
+    public static StackPanel Labeled(string label, FrameworkElement control, FrameworkElement? hint = null)
     {
         ArgumentNullException.ThrowIfNull(control);
 
@@ -86,7 +86,14 @@ internal static class DialogFields
             group.Children.Add(row);
         }
 
-        control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        // Stretched to the column unless it was given a width of its own. A fixed width told to
+        // stretch is centered instead, which put the 140-wide Copies box most of an inch in
+        // from its caption; a control sized on purpose keeps the alignment it was given.
+        if (double.IsNaN(control.Width))
+        {
+            control.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+
         group.Children.Add(control);
 
         return group;
@@ -188,5 +195,57 @@ internal static class DialogFields
         combo.SelectedIndex = options.Count == 0 ? -1 : Math.Clamp(selected, 0, options.Count - 1);
 
         return combo;
+    }
+
+    /// <summary>The width of each column in a two-column dialog.</summary>
+    public const double ColumnWidth = 300;
+
+    /// <summary>One column of a two-column dialog, its fields at the dialogs' usual spacing.</summary>
+    public static StackPanel Column() => new() { Spacing = 14, Width = ColumnWidth };
+
+    /// <summary>
+    /// A dialog's fields in two columns, and the dialog widened to hold them.
+    ///
+    /// Print and both export dialogs are laid out this way. One tall column outgrew the height
+    /// a ContentDialog may take on a laptop screen, and what fell below the fold sat in a scroll
+    /// area whose bar shows only on hover - present, and invisible. Side by side they are about
+    /// half as tall. The default ContentDialog is at most 548 wide, which two columns do not
+    /// fit, so the dialog's own limit is raised; nothing outside the dialog changes.
+    /// </summary>
+    public static Grid TwoColumns(ContentDialog dialog, FrameworkElement left, FrameworkElement right)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+
+        // Two columns, the gap between them, and the dialog's own padding.
+        dialog.Resources["ContentDialogMaxWidth"] = 720.0;
+
+        var columns = new Grid { ColumnSpacing = 24 };
+
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        Grid.SetColumn(right, 1);
+        columns.Children.Add(left);
+        columns.Children.Add(right);
+
+        return columns;
+    }
+
+    /// <summary>
+    /// Checkboxes that belong together, close together: one group, not one field each at the
+    /// spacing between fields.
+    /// </summary>
+    public static StackPanel Group(IEnumerable<CheckBox> boxes)
+    {
+        ArgumentNullException.ThrowIfNull(boxes);
+
+        var group = new StackPanel { Spacing = 0 };
+
+        foreach (CheckBox box in boxes)
+        {
+            group.Children.Add(box);
+        }
+
+        return group;
     }
 }

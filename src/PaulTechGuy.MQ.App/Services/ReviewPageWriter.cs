@@ -66,7 +66,7 @@ internal static class ReviewPageWriter
         builder.AppendLine(ReviewState.MarkerMeta);
         builder.AppendLine("<style>");
         builder.AppendLine(styles);
-        builder.AppendLine(ExportLayout.PageCss(measurePixels));
+        builder.AppendLine(HtmlPageLayout.PageCss(measurePixels));
         builder.AppendLine(DiagramViewer.CssFor(content));
         builder.AppendLine(ReviewPage.Css(measurePixels));
         builder.AppendLine(ReviewPage.HoverCss(commentCount));

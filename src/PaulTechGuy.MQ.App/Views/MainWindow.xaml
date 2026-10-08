@@ -1677,7 +1677,7 @@
 
                     Sheds below 760 effective pixels - see ApplyFormatBarDensity. Unlike every
                     other group here it has no overflow mirror: Open and Save have no business
-                    under a menu labelled "More formatting", so they simply go, and stay
+                    under a menu labeled "More formatting", so they simply go, and stay
                     reachable on the File menu and on Ctrl+O and Ctrl+S.
                 -->
                 <StackPanel x:Name="FileActionsGroup" Orientation="Horizontal" Spacing="2">

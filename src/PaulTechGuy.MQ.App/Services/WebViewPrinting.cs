@@ -7,15 +7,19 @@ using PaulTechGuy.MQ.Domain;
 namespace PaulTechGuy.MQ.App.Services;
 
 /// <summary>
-/// Sends a WebView's pages to a printer the user has already chosen.
+/// The classic engine: a window's live page printed as it stands, to a PDF or to a printer the
+/// user has already chosen.
 ///
-/// Shared by the three windows that print - the preview, the cheatsheet and the diagram
-/// pop-out - so all three printouts agree, which is the same promise print-header.css makes
-/// about the letterhead they draw.
+/// No longer how Marqora prints. Every PDF and printout - the preview's, the cheatsheet's and
+/// a diagram pop-out's - goes through the paged engine (<see cref="PagedPrintHost"/>, by way of
+/// <see cref="PagedJobs"/>), so all three agree by construction rather than by sharing these
+/// settings. This is what <see cref="PagedJobs"/> falls back to when the paged engine cannot
+/// finish, and what "Use the classic print engine" in Preferences asks for. It goes, with that
+/// setting, a release after the paged engine shipped (docs/Export-Alignment-Plan.md, §6.2).
 ///
-/// This is the settings-driven print rather than either dialog the WebView can raise, and
-/// that is the whole point: it is the only route on which the browser's header and footer
-/// can be switched off.
+/// The settings-driven print rather than either dialog the WebView can raise, and that is the
+/// whole point: it is the only route on which the browser's header and footer can be switched
+/// off.
 /// </summary>
 internal static class WebViewPrinting
 {

@@ -100,15 +100,15 @@ Contract and wiring:
 MainViewModel.ExportWordCommand
   -> WriteWordExportAsync()                          MainViewModel.cs
      -> IExportDialogService.RequestDocxSetupAsync()
-        -> WordExportDialog                          returns DocxExportSetup
-     -> _settings.Update(s => s with { DocxSetup = setup })   saved on accept, not on success
+        -> WordExportDialog                          returns ExportChoice<DocxExportSetup>
+     -> _settings.Update(s => s.WithLayout(layout) with { DocxSetup = setup })   saved on accept, not on success
      -> IFileDialogService.PickExportFileAsync()
      -> IPreviewHost.GetRenderedHtmlAsync()          may be empty; never fatal
      -> Task.Run(() => IDocxExporter.WriteAsync(...))          off the UI thread
      -> AnnounceExport(path) + IExportReportService.Show(...)   the report window
 ```
 
-`WriteAsync` takes: output path, title, markdown, `DocxExportSetup`, `HeadingNumbering`, the
+`WriteAsync` takes: output path, title, markdown, `DocxExportSetup`, `ExportLayout`, `HeadingNumbering`, the
 source document path (for relative images), the rendered preview HTML, and a
 `Func<string, Task<byte[]?>>` that turns a diagram hash into PNG bytes.
 
@@ -242,9 +242,11 @@ heading in Word. A contents built from `TC` fields loses the heading numbers as 
 
 ### Title page
 
-A **template**, not a statement. Every line is present whether or not the front matter has
-anything to say, because a page that drops the lines it has no value for is a shrinking list and
-the author never learns that a version number was somewhere they could have put one.
+Read from the front matter, the same cover the paged PDF draws (`docs/Export-Alignment-Plan.md`,
+P4). A line the front matter does not answer is **left out**. It was a template once — every line
+present, the unanswered ones the word itself in gray — so the author would learn there was
+somewhere to put a version number; but a gray "Author" reached paper looking like a mistake that
+nobody handed the printout could fix.
 
 ```
                        (a third of the way down the text column)
@@ -258,7 +260,8 @@ Author                                         front matter `author`
 
 - Flush left, one third down the **text column** (not the paper), so it lands in the same place
   whatever the margins are.
-- Unanswered lines are the word itself in gray `8A8A8A`.
+- Unanswered lines are left out. The title and the date always have an answer, so the block
+  always starts on a line that is there.
 - The date fills itself in as e.g. `September 11, 2026`. **Not** a Word `DATE` field: a report
   that is filed and read a year later should say when it was written, not claim to be current.
 - `version` is the one front-matter key that exists purely for this page — Word has no property
@@ -499,10 +502,10 @@ than copying them, so skipping it drops every footnote body. What to skip is `Ya
 | --- | --- |
 | Menu item | `Views/MainWindow.xaml`, Tools menu, after Export to HTML |
 | Context menu | `Views/MainWindow.ContextMenus.cs`, preview right-click |
-| Dialog | `Views/WordExportDialog.cs` — paper, orientation, margins, three checkboxes |
+| Dialog | `Views/WordExportDialog.cs` — paper, orientation, margins, and the three `ExportLayout` checkboxes from `Views/LayoutFields.cs`, shared with the PDF dialog |
 | Report | `Views/ExportReportWindow.cs`, shown through `IExportReportService` |
-| Preferences | `Views/PreferencesWindow.cs`, *Export & Print* page, WORD section |
-| Settings | `AppSettings.DocxSetup`, with `[JsonIgnore] DocxDefaults => DocxSetup ?? DocxExportSetup.SeededFrom(PdfDefaults)` |
+| Preferences | `Views/PreferencesWindow.cs`, *Export & Print* page, WORD section; the three boxes in WORD AND PDF |
+| Settings | `AppSettings.DocxSetup`, with `[JsonIgnore] DocxDefaults => DocxSetup ?? DocxExportSetup.SeededFrom(PdfDefaults)`; the boxes in `AppSettings.Layout`, read through `LayoutDefaults` (which falls back to the keys an older file wrote on the Word setup) and written through `WithLayout` |
 | Report placement | `AppSettings.ExportReportWindow` / `ExportReportPlacement` |
 
 ### The report
@@ -588,6 +591,7 @@ dotnet test PaulTechGuy.MQ.slnx --no-build -c Debug
 using var exported = await ExportedDocument.FromAsync(
     markdown,                       // required
     setup: null,                    // DocxExportSetup, defaults to DocxExportSetup.Default
+    // ...                          // or FromAsync(markdown, new ExportLayout { ... }, ...)
     headingNumbering: HeadingNumbering.Off,
     renderedPreviewHtml: null,      // the sidecar; null exercises the degraded path
     sourceDocumentPath: null,       // for relative images

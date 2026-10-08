@@ -109,7 +109,7 @@ public sealed partial class MainWindow : Window
         BuildColorThemeChoices();
         RegisterAccelerators();
 #if DEBUG
-        AddPagedPdfSpike();
+        AddDiagramSvgsItem();
 #endif
 
         // Alt accelerators fire on the key-down, but the message loop still translates the
@@ -2195,7 +2195,7 @@ public sealed partial class MainWindow : Window
     /// heading follow only when there is genuinely no room.
     ///
     /// The file group is the one that sheds without a mirror. Open and Save have no business
-    /// under a button labelled "More formatting", so they simply go; the File menu and
+    /// under a button labeled "More formatting", so they simply go; the File menu and
     /// Ctrl+O / Ctrl+S still have them.
     /// </summary>
     private void ApplyFormatBarDensity(double width)

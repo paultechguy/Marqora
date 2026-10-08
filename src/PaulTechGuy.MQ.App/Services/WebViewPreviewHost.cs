@@ -255,7 +255,16 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     {
         await _webView.EnsureCoreWebView2Async();
 
-        CoreWebView2 core = _webView.CoreWebView2;
+        // Null rather than an exception when the browser could not be started: seen when a
+        // browser process left over from an earlier session still held the WebView2 data
+        // folder - a print stuck inside Chromium outlived the app. Said in words the dialog
+        // can show, where the null went on to fail as "Object reference not set".
+        CoreWebView2 core = _webView.CoreWebView2
+            ?? throw new InvalidOperationException(
+                "The preview's browser did not start, so the editor and preview will stay blank. "
+                + "A Marqora browser process left over from an earlier session may still be "
+                + "running: close Marqora, end any msedgewebview2.exe processes left behind (or "
+                + "sign out and back in), and start Marqora again.");
 
         // Chromium's own context menu is off. It offered browser commands the document has
         // no use for - Back, Reload, Save as, Inspect - and it was drawn by Edge, so it
@@ -1224,16 +1233,126 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         await AskShellAsync("prepareForPrint", id => new { requestId = id, pageRatio, title })
             .ConfigureAwait(true);
 
-    public async Task ExportPdfAsync(string path, PdfPageSetup setup, string title)
+    public async Task<PdfExportOutcome> ExportPdfAsync(string path, PdfPageSetup setup, string title, PaperFurniture furniture)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(setup);
+        ArgumentNullException.ThrowIfNull(furniture);
 
         if (_webView.CoreWebView2 is not { } core)
         {
             throw new InvalidOperationException("The preview is not ready to export.");
         }
 
+        // Kept for the report: the markup also lists the diagrams that would not draw.
+        string? markup = null;
+
+        PrintEngine engine = await PagedJobs.ExportPdfAsync(
+            ParentWindow(),
+            _assets,
+            async () => markup = await RequestPrintMarkupAsync().ConfigureAwait(true),
+            path,
+            setup,
+            title,
+            furniture,
+            OnWebResourceRequested,
+            _logger,
+            () => ExportClassicPdfAsync(core, path, setup, title)).ConfigureAwait(true);
+
+        return new PdfExportOutcome(engine, DiagramIssues(markup));
+    }
+
+    /// <summary>
+    /// A report row for every diagram the shell listed as failing to draw. The PDF carries the
+    /// diagram's error where the drawing would be, so the row says that rather than Word's
+    /// "its source is in the document instead".
+    /// </summary>
+    private IReadOnlyList<ExportIssue> DiagramIssues(string? markup)
+    {
+        if (string.IsNullOrEmpty(markup))
+        {
+            return [];
+        }
+
+        try
+        {
+            using JsonDocument parsed = JsonDocument.Parse(markup);
+
+            if (!parsed.RootElement.TryGetProperty("diagramErrors", out JsonElement errors)
+                || errors.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return
+            [
+                .. errors.EnumerateArray().Select(error => new ExportIssue
+                {
+                    // Markdig counts from zero and the editor from one; -1 is "no line known".
+                    Line = ReadInt(error, "line", -1) is int line and >= 0 ? line + 1 : 0,
+                    Problem = "The diagram could not be drawn; the PDF shows its error instead",
+                    Item = OneLine(ReadString(error, "message")) is { Length: > 0 } message
+                        ? (message.Length <= 80 ? message : message[..80].TrimEnd() + "…")
+                        : "A diagram",
+                }),
+            ];
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogDebug(ex, "The print markup's diagram list could not be read.");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// A message on one line. Mermaid's parse errors run over three - the message, the source
+    /// around the fault, a row of dashes pointing at it - and a report row is read in a column.
+    /// </summary>
+    private static string OneLine(string text) =>
+        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// Prints the active document to the printer the user chose: the paged engine, so a
+    /// printout and a PDF are one layout, unless the classic engine is asked for or the paged
+    /// engine fails before sending anything. See <see cref="PagedJobs"/>.
+    /// </summary>
+    public async Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture, bool useClassicEngine)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(furniture);
+
+        if (_webView.CoreWebView2 is not { } core)
+        {
+            throw new InvalidOperationException("The preview is not ready to print.");
+        }
+
+        return await PagedJobs.PrintAsync(
+            ParentWindow(),
+            _assets,
+            RequestPrintMarkupAsync,
+            job,
+            title,
+            furniture,
+            useClassicEngine,
+            OnWebResourceRequested,
+            _logger,
+            () => PrintClassicAsync(core, job, title)).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The shell's print markup for the active document - laid-out math, the light drawings,
+    /// no comment marks - or null when it did not answer within the request's bound.
+    /// </summary>
+    private Task<string?> RequestPrintMarkupAsync() =>
+        AskShellAsync("requestPrintHtml", id => new { requestId = id });
+
+    /// <summary>The window the preview sits in, which a print view's controller is parented to.</summary>
+    private IntPtr ParentWindow() =>
+        Microsoft.UI.Win32Interop.GetWindowFromWindowId(_webView.XamlRoot.ContentIslandEnvironment.AppWindowId);
+
+    /// <summary>The classic engine: the live preview printed as it stands, through the print stylesheet.</summary>
+    private async Task ExportClassicPdfAsync(CoreWebView2 core, string path, PdfPageSetup setup, string title)
+    {
         _logger.LogInformation(
             "Printing to {Path} at {Width}x{Height}in, {Vertical}x{Horizontal}in margins.",
             path,
@@ -1251,62 +1370,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     }
 
     /// <summary>
-    /// The active document as a PDF through the paged engine: Paged.js in a WebView2 of its
-    /// own, then DevTools' Page.printToPDF. See <see cref="PagedPrintHost"/>.
-    ///
-    /// Reached only from a Debug build's File menu for now - the week-one spike in
-    /// docs/Export-Alignment-Plan.md, §4 - while Export to PDF keeps printing this page.
-    /// </summary>
-    internal async Task<PagedPrintResult> ExportPagedPdfAsync(
-        string path,
-        PdfPageSetup setup,
-        string title,
-        PagedFurniture furniture,
-        PagedHostMode mode,
-        IntPtr parentWindow)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        ArgumentNullException.ThrowIfNull(setup);
-
-        if (_webView.CoreWebView2 is not { } core)
-        {
-            throw new InvalidOperationException("The preview is not ready to export.");
-        }
-
-        string markup = await AskShellAsync("requestPrintHtml", id => new { requestId = id }).ConfigureAwait(true)
-            ?? throw new InvalidOperationException("The preview did not hand over the document's markup.");
-
-        return await PagedPrintHost.ExportAsync(
-            core.Environment, parentWindow, _assets, markup, setup, title, furniture, path, mode, _logger).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// The active document to a printer through the paged engine - spike S5, Debug builds only
-    /// for now, while Print keeps printing this page.
-    /// </summary>
-    internal async Task<PagedPrintResult> PrintPagedAsync(
-        PrintJob job,
-        string title,
-        PagedFurniture furniture,
-        PagedHostMode mode,
-        IntPtr parentWindow)
-    {
-        ArgumentNullException.ThrowIfNull(job);
-
-        if (_webView.CoreWebView2 is not { } core)
-        {
-            throw new InvalidOperationException("The preview is not ready to print.");
-        }
-
-        string markup = await AskShellAsync("requestPrintHtml", id => new { requestId = id }).ConfigureAwait(true)
-            ?? throw new InvalidOperationException("The preview did not hand over the document's markup.");
-
-        return await PagedPrintHost.PrintAsync(
-            core.Environment, parentWindow, _assets, markup, job, title, furniture, mode, _logger).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Prints the preview to the printer the user chose, with no dialog of the WebView's own.
+    /// The classic engine: the live preview printed to the printer the user chose, with no
+    /// dialog of the WebView's own.
     ///
     /// Neither dialog the WebView can raise is any use here. Its print preview is a browser
     /// window that prints a browser's band around the page - the date, the page title and the
@@ -1319,15 +1384,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// The same print stylesheet an exported PDF goes through applies, so the editor pane
     /// stays out of it and the window does not visibly change while the job runs.
     /// </summary>
-    public async Task PrintAsync(PrintJob job, string title)
+    private async Task PrintClassicAsync(CoreWebView2 core, PrintJob job, string title)
     {
-        ArgumentNullException.ThrowIfNull(job);
-
-        if (_webView.CoreWebView2 is not { } core)
-        {
-            throw new InvalidOperationException("The preview is not ready to print.");
-        }
-
         _logger.LogInformation(
             "Printing to {Printer}, {Copies} copies, {Width}x{Height}in.",
             job.PrinterName,
@@ -2306,6 +2364,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         _disposed = true;
 
         DetachCore(_webView);
+
+        // A print stuck inside Chromium does not end with the window; see PagedPrintHost.
+        PagedPrintHost.EndBrowser(_logger);
     }
 
     // --------------------------------------------------------------- json helpers

@@ -76,6 +76,7 @@ public interface IDocxExporter
         string title,
         string markdown,
         DocxExportSetup setup,
+        ExportLayout layout,
         HeadingNumbering headingNumbering,
         string? sourceDocumentPath,
         string? renderedPreviewHtml,

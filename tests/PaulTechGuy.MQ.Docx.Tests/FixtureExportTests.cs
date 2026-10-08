@@ -95,7 +95,7 @@ public sealed partial class FixtureExportTests
 
         return await ExportedDocument.FromAsync(
             markdown,
-            new DocxExportSetup { IncludeCoverPage = true, IncludeTableOfContents = true },
+            new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true },
             numbering,
             renderedPreviewHtml: DiagramHarvest(markdown),
             sourceDocumentPath: path,

@@ -26,6 +26,12 @@ All four are correct.
 
 ## 1. The verdict
 
+> **As of the 2026-10-08 rerun (§2), this verdict is history.** The PDF prints at true size
+> with the same cover, contents, header and page numbers as Word, bookmarks, tags and a real
+> title, and it loses nothing it used to. What separates the routes now is Word's fidelity:
+> math, a few raw HTML elements, and nested quotes, which is phase 3. The verdict below is the
+> 2026-10-06 one, kept because it is why the work was done.
+
 The user is right, and mostly for one reason: **the PDF prints the document at about two
 thirds of its intended size.** Body text set at 11pt comes out at roughly 7pt, and code at
 roughly 6pt. Word sets body text at a true 12pt (`DocxStyles.BodyHalfPoints`). Laid next to each other, the Word route reads
@@ -53,94 +59,117 @@ defects below are worth fixing whichever route people take.
 
 ✅ correct · 🟡 degraded but readable · ❌ wrong or lost
 
+**Rerun 2026-10-08, the phase 2 gate.** Debug build of `dev` with phase 2 uncommitted (paged
+engine behind PDF and Print), light mode, default dialogs: Letter, Normal margins, header and
+page numbers on, and contents and title page as the shared layout had them (both on). Files:
+`gate-ultimate2.pdf` from Export to PDF (59 pages: cover, four contents pages, 54 body pages),
+`UltimateMarkdownContent.docx` exported at 05:06, and Word 365's *Save As PDF* of that file (63
+pages: cover, four contents pages, 58 body pages). Word opened the file with no repair prompt.
+The PDF's paper check logged *15 kinds of element match the spec*.
+
+Where a cell changed since the 2026-10-06 run, the note says so. Everything in §3 and §4 is the
+2026-10-06 record of causes; each now carries its status.
+
 ### Element fidelity
 
 | Construct | PDF | Word | Notes |
 | --- | --- | --- | --- |
-| YAML front matter | ✅ hidden | ✅ hidden, feeds the cover page and document properties | |
-| ATX and Setext headings, levels 1–6 | ✅ | ✅ | Word ignores the H1 restart (see §4.7) |
-| Inline emphasis matrix | ✅ | ✅ | Both pass every row of the table |
+| YAML front matter | ✅ hidden, feeds the cover and the PDF title | ✅ hidden, feeds the cover page and document properties | |
+| ATX and Setext headings, levels 1–6 | ✅ | ✅ | Word now restarts H2 numbering after each H1, as the preview does |
+| Inline emphasis matrix | ✅ | ✅ | |
 | Hard breaks (two spaces, backslash, `<br>`) | ✅ | ✅ | |
-| Blockquotes, nested to three levels | ✅ | 🟡 | Word sets every quote in italic; the nested one after a table gains a blank band at its top |
-| GFM callouts | 🟡 | ✅ | PDF splits a callout across a page (§4) and keeps its icons; Word drops the icons |
-| Ordered lists | ✅ | ❌ | **Word continues numbering across every list in the document**: "First item" is numbered 17 (§3.2) |
-| Nested and task lists | ✅ | 🟡 | Word flattens the matryoshka block: the list inside the quote inside the list loses its quote and its depth |
+| Blockquotes, nested to three levels | ✅ | 🟡 | No longer italic. **Nested quotes do not indent**, and adjacent quotes merge into one panel (phase 3) |
+| GFM callouts | ✅ | ✅ | Was 🟡 for the PDF: callouts are kept whole now. Word still has no icons |
+| Ordered lists | ✅ | ✅ | Was ❌ for Word: every list restarts (§3.2 fixed) |
+| Nested and task lists | ✅ | 🟡 | Word still flattens the matryoshka: the list inside the quote inside the list leaves the quote |
 | Inline code | ✅ | ✅ | |
-| Fenced code, syntax colors | ✅ | ✅ | Both color with the theme's syntax palette |
-| Wide code block (141 columns) | ❌ | ✅ | **PDF cuts the line off at the right margin**; Word wraps it, and nothing is lost |
+| Fenced code, syntax colors | ✅ | ✅ | |
+| Wide code block (141 columns) | ✅ wraps | ✅ wraps | Was ❌ for the PDF: wraps on paper, nothing lost (§4.2 fixed) |
 | Long unbroken token or URL | ✅ wraps | ✅ wraps | |
 | Links, external | ✅ clickable | ✅ clickable | |
-| Link with spaces in `<…>` | ✅ | ❌ | Word prints **"Error! Hyperlink reference not valid."** (§3.3) |
-| Undefined reference `[broken][no-such-ref]` | ✅ literal | ❌ | Word drops the opening bracket: `broken][no-such-ref]` (§3.4) |
+| Link with spaces in `<…>` | ✅ | ✅ | Was ❌ for Word (§3.3 fixed) |
+| Undefined reference `[broken][no-such-ref]` | ✅ literal | ✅ literal | Was ❌ for Word (§3.4 fixed) |
 | Empty link text | 🟡 nothing visible | ✅ shows the URL | |
 | Relative link to another `.md` | ✅ text only on paper | ✅ text only | Same by design |
 | Internal anchor link | ✅ | ✅ | |
 | `data:` PNG images | ✅ | ✅ | |
-| Pandoc `{width=64px}` image | ✅ 64px | ❌ 1px | Word ignores the size attribute |
-| Remote image | 🟡 "not shown" chip | 🟡 linked alt text | Both say what is missing; Word also reports it |
-| Missing local image | 🟡 broken-image glyph + alt | ✅ bracketed alt, reported | |
-| Footnotes | 🟡 collected at the end with ↩ back-links | ✅ true footnotes at the page foot | The ↩ links mean nothing on paper |
-| Pipe, aligned, ragged, grid tables | ✅ | ✅ | Identical structure, including the ragged row's fourth cell |
-| HTML table with a merged cell | ✅ | ❌ | **Word dropped the whole table without a report** — the same cause as the `<div>` block (§3.5). Corrected after the first version of this document marked it ✅ |
+| Pandoc `{width=64px}` image | — not rechecked | ❌ 1px | Word still ignores the size attribute. The image is a transparent pixel, so the PDF's size cannot be seen on the page; it was 64px on 2026-10-06 |
+| Remote image | 🟡 "not shown" chip, reported | 🟡 linked alt text, reported | Both reports name it; the PDF's by URL, Word's by alt text |
+| Missing local image | 🟡 broken-image glyph + alt, reported | ✅ bracketed alt, reported | |
+| Footnotes | ✅ at the page foot | ✅ at the page foot | Was 🟡 for the PDF: 3 of 3 placed at the foot, no ↩ links |
+| Pipe, aligned, ragged, grid tables | ✅ | ✅ | |
+| HTML table with a merged cell | ✅ | 🟡 | Was ❌ for Word: its text is in the document and reported, its merge is not |
 | Horizontal rules (all syntaxes) | ✅ | ✅ | |
-| Block HTML `<div>` callout | ✅ | ❌ | **Word drops the whole block, text included, and does not report it** (§3.5) |
-| `<details>` | ❌ | 🟡 | **PDF prints it collapsed: only the summary, content hidden.** Word prints the content and loses the summary |
-| Inline HTML (`<sup>`, `<sub>`, `<mark>`, `<kbd>`, `<var>`, …) | ✅ | 🟡 | Word loses `<q>`'s quotation marks and `<small>`'s size |
-| `<hr />` and `<img>` written inline | ✅ | ❌ | Both silently absent in Word |
-| Definition lists, abbreviations | ✅ | ✅ | Word expands an abbreviation inline; the PDF's dotted underline is a hover hint that paper cannot show |
-| `&shy;` soft hyphen | ✅ invisible | ❌ visible | Word prints `super-calif-ragilistic` (§3.6) |
-| Repeated spaces | ✅ collapsed | 🟡 kept | Word keeps the source's run of spaces |
+| Block HTML `<div>` callout | ✅ | 🟡 | Was ❌ for Word: the sentence is there as plain text, and reported |
+| `<details>` | ✅ printed open | 🟡 | Was ❌ for the PDF (§4.5 fixed). Word keeps summary and content, reported |
+| `<iframe>` | 🟡 "not shown" chip, reported | ❌ | **Word drops it without a report row** (phase 3) |
+| `<form>` | ✅ | 🟡 | Word keeps the button's text, reported |
+| Inline HTML (`<sup>`, `<sub>`, `<mark>`, `<kbd>`, `<var>`, …) | ✅ | 🟡 | Word still loses `<q>`'s quotation marks and `<small>`'s size |
+| `<hr />` and `<img>` written inline | ✅ | ❌ | **Both still absent in Word, and not reported** |
+| Definition lists, abbreviations | ✅ | ✅ | |
+| `&shy;` soft hyphen | ✅ invisible | ✅ invisible | Was ❌ for Word (§3.6 fixed) |
+| Repeated spaces | ✅ collapsed | 🟡 kept | |
 | Inline and display math | ✅ KaTeX, exact | 🟡 | Simple equations convert well |
-| Matrices, `cases`, `\left…\right` | ✅ | ❌ | Word's delimiters do not stretch: a 3×3 matrix sits in single-line parentheses, `\det` bars and the `cases` brace come out short (§3.7) |
-| Several equations on one line (`\qquad`) | ✅ | ❌ | Spacing lost; `= e∏k = n!⋃Aᵢ∮…` runs together |
-| `\text`, `\color`, `\colorbox` in math | ✅ | 🟡 | Word loses the color, the highlight and the spacing around `\text{and}` |
-| `\overbrace` and `\underbrace` | ✅ | 🟡 | Labels survive, braces collapse to small marks |
-| `align` equation numbers | ❌ (1)(1)(1) | 🟡 none | The PDF numbers all three lines "(1)", a preview-side defect; Word drops the numbers |
+| Matrices, `cases`, `\left…\right` | ✅ | ❌ | Unchanged: Word's matrix parentheses and `\det` bars do not stretch, and the `cases` brace is missing (phase 3) |
+| Several equations on one line (`\qquad`) | ✅ | ❌ | Unchanged: the spacing is lost (phase 3) |
+| `\text`, `\color`, `\colorbox` in math | ✅ | ❌ | The line 1119 equation is not converted; its source is in the document, reported (phase 3) |
+| `\overbrace` and `\underbrace` | ✅ | 🟡 | |
+| `align` equation numbers | ❌ (0)(0)(0) | 🟡 none | **Changed for the PDF:** was (1)(1)(1). KaTeX's `katexEqnNo` counter does not survive Paged.js. The preview's own (1)(1)(1) is the older defect underneath |
 | mhchem `\ce{}` | ❌ | ❌ | Not loaded in the preview, so both print raw `\ce` (expected by the fixture) |
-| Mermaid diagrams (24 types) | ✅ vector | 🟡 raster | Word places PNGs at about 750 dpi, but **labels fall back to a serif face** |
-| Broken mermaid | ✅ red parse-error box | ✅ source as code, reported | |
+| Mermaid diagrams (24 types) | ✅ vector | 🟡 raster | Labels are now Segoe UI in Word, not a serif face |
+| Broken mermaid | ✅ red parse-error box, reported | ✅ source as code, reported | |
 
 ### Page layout
 
 | | PDF | Word, then PDF |
 | --- | --- | --- |
 | Page size and margins | Letter, 1 inch | Letter, 1 inch |
-| **Effective text size** | **≈7pt body, ≈6pt code** | 12pt body |
-| Page numbers | **none** | roman in front matter, arabic in body |
-| Running header | none | document title |
-| Cover page | none | yes; the unfilled "Sub-Title" and "Version" placeholders print in gray |
-| Contents with page numbers | none (the document's own linked list only) | Word TOC field, updated on open |
-| Blocks kept off page breaks | code, tables, quotes, images | Word's keep-with-next on headings; tables may split |
-| Callout split across a page | **yes**, the Caution label orphaned at a page foot | no |
+| **Effective text size** | **11pt body**, 9.5pt code, by the paper check | 11pt body, 1.4 line, 8pt after |
+| Page numbers | roman in front matter, arabic in body | roman in front matter, arabic in body |
+| Running header | document title | document title |
+| Cover page | title, date, author; no placeholders | title, date, author; no placeholders |
+| Contents with page numbers | computed at export, dotted leaders | Word TOC field, updated on open |
+| Blocks kept off page breaks | code, tables, quotes, callouts, images | Word's keep-with-next on headings; tables may split |
+| Callout split across a page | no | no |
 | Tall diagrams | held to one page | held to one page |
+| Pages | 59 | 63 |
 
 ### Typography and color
 
 | | PDF | Word |
 | --- | --- | --- |
-| Body face | Segoe UI Variable | Aptos (theme minor font) |
-| Headings | Segoe UI, bold, theme colors | Aptos Light, theme colors |
-| Code | Cascadia Code, theme syntax colors | Cascadia, theme syntax colors |
+| Body face | Segoe UI | Segoe UI (theme minor font) |
+| Headings | Segoe UI Semibold, theme colors | Segoe UI Semibold (theme major font), theme colors |
+| Code | Cascadia Mono, theme syntax colors | Cascadia Mono, theme syntax colors |
 | Light output whatever the screen | ✅ | ✅ |
-| Color theme applied | ✅ Nordic | ✅ Nordic, read through `DocxColors` |
+| Color theme applied | ✅ | ✅ read through `DocxColors` |
 
 ### Navigation and metadata
 
 | | PDF | Word | Word, then PDF |
 | --- | --- | --- | --- |
-| Clickable external links | ✅ (52 annotations) | ✅ | ✅ |
-| Clickable internal links | ✅ (26 destinations) | ✅ bookmarks | ✅ |
-| Bookmarks or outline | **❌ none** | ✅ navigation pane | ✅ from headings |
-| Document title | **❌ `Marqora - C:\Users\…\docs\UltimateMarkdownContent.md`** | ✅ front-matter title | ✅ |
-| Author | ❌ | ✅ front-matter author | ✅ |
-| Tagged for accessibility | **❌ untagged** | ✅ | ✅ when Word's option is on |
-| Report of what was left out | none | ✅ export report window | — |
+| Clickable external links | ✅ | ✅ | ✅ |
+| Clickable internal links | ✅ | ✅ bookmarks | ✅ |
+| Bookmarks or outline | ✅ from headings | ✅ navigation pane | ✅ from headings |
+| Document title | ✅ front-matter title | ✅ front-matter title | ✅ |
+| Language | ✅ `en` | ✅ `en-US` | ✅ `en` |
+| Tagged for accessibility | ✅ | ✅ | ✅ |
+| Report of what was left out | ✅ when something is missing | ✅ always | — |
+
+### What is left
+
+Every ❌ above is in Word's column except two that both exports share or that sit in the
+preview: mhchem (expected) and the `align` numbers. Word's ❌s are phase 3's list: stretchy
+delimiters and spacing in math, the line 1119 color equation, the `<iframe>` and the inline
+`<hr />` and `<img>` that leave no report row, and the Pandoc image size.
 
 ---
 
 ## 3. Word defects, with causes
 
 ### 3.1 The `.docx` fails validation, and Word only opens it with repair
+
+**Status 2026-10-08: fixed.** The fixture validator test is green and Word opens the export with no prompt.
 
 Word 365 refused to open the file without repair ("The file appears to be corrupted"). It
 opened only with *Open and Repair*. `docs/WordExport.md` §11 makes "no unreadable-content
@@ -165,6 +194,8 @@ footnote and a diagram inside a list item.
 
 ### 3.2 Ordered lists number continuously through the whole document
 
+**Status 2026-10-08: fixed.** Every list instance restarts.
+
 Every ordered list after the first continues where the previous one stopped: the "Ordered
 lists" section prints 17, 18, 19 …, the list-item diagram's "second item" prints 27, and the
 matryoshka's "Ordered item" prints 3. In `numbering.xml`, 28 `w:num` instances share 7
@@ -176,6 +207,8 @@ whatever the start is, makes each markdown list restart.
 
 ### 3.3 A link target with spaces becomes a Word field error
 
+**Status 2026-10-08: fixed.**
+
 `[spaces](<https://example.com/a b c>)` produces a relationship with
 `Target="https://example.com/a b c"`. Word cannot resolve it and prints **"Error! Hyperlink
 reference not valid."** in bold where the link text belongs. The target needs escaping
@@ -183,11 +216,15 @@ reference not valid."** in bold where the link text belongs. The target needs es
 
 ### 3.4 An unmatched `[` is dropped
 
+**Status 2026-10-08: fixed.**
+
 `[broken][no-such-ref]` comes out as `broken][no-such-ref]`. The likely cause is that the
 `ContainerInline` fallback in `InlineRenderer.Write` walks a leftover `LinkDelimiterInline`'s
 children without writing the delimiter's own `[`.
 
 ### 3.5 Raw HTML that Word cannot draw disappears without a report
+
+**Status 2026-10-08: mostly fixed.** The `<div>`, `<details>`, merged-cell table and `<form>` keep their text and are reported. The `<iframe>` and the inline `<hr />` and `<img>` are still dropped with no report row (phase 3).
 
 The `<div style="…">` callout in *Block HTML with styling* is gone: heading, then nothing. The
 fixture's own pass condition is that a converter that strips HTML still shows the sentence as
@@ -197,10 +234,14 @@ across."*
 
 ### 3.6 Soft hyphens print as hyphens
 
+**Status 2026-10-08: fixed.**
+
 `&shy;` is written as a literal U+00AD inside `w:t`. Word draws that as a visible hyphen. A
 soft hyphen in WordprocessingML is the `<w:softHyphen/>` run element.
 
 ### 3.7 Math: stretchy delimiters and spacing
+
+**Status 2026-10-08: open (phase 3).** Unchanged, and the line 1119 `	extcolor` equation is not converted (reported).
 
 The MathML-to-OMML conversion turns `\left( … \right)`, `\begin{pmatrix}` and `cases` into
 plain single-height characters instead of `m:d` delimiter objects, so matrices, determinants
@@ -211,6 +252,8 @@ the one part with unbounded scope. These are the cases that showed up most often
 fixture.
 
 ### 3.8 Smaller items
+
+**Status 2026-10-08:** diagram labels are Segoe UI now, quotes are no longer italic, and the cover prints no placeholders. The image size, `<q>`, `<small>` and the matryoshka nesting are open.
 
 - The Pandoc `{width=… height=…}` attribute is ignored, so a 1×1 PNG stays 1px.
 - `<details>` keeps its content but loses its `<summary>` line.
@@ -227,6 +270,8 @@ fixture.
 ## 4. PDF defects, with causes
 
 ### 4.1 Everything prints at about two thirds of its size
+
+**Status 2026-10-08: fixed** by the paged engine. The paper check measures 11pt body and 9.5pt code.
 
 The print stylesheet sets `.mq-preview { font-size: 11pt }` (`webshell/app.css`, the
 `@media print` block). On the page, body line pitch measures 10.9pt; at `line-height: 1.55`
@@ -252,11 +297,15 @@ Two things to try, in order:
 
 ### 4.2 Wide code is cut off
 
+**Status 2026-10-08: fixed.**
+
 On page 35 of the PDF, the log-table fence ends at `padded 2` and the rest of the line is not
 on the page. Nothing in the PDF tells the reader something is missing. Word wraps the same
 block and keeps every character. The fix from §4.1 point 1 covers this too.
 
 ### 4.3 No page numbers, header or footer
+
+**Status 2026-10-08: fixed.** Header, page numbers, cover and contents come from the shared layout, as Word's do.
 
 `ShouldPrintHeaderAndFooter = false` (`src/PaulTechGuy.MQ.App/Services/WebViewPrinting.cs`),
 deliberately, because Chromium's band prints the `https://marqora.assets/` URL. The cost is a
@@ -267,6 +316,8 @@ in place of `PrintToPdfAsync`.
 
 ### 4.4 No bookmarks, no tagging, and the title is a file path
 
+**Status 2026-10-08: fixed.**
+
 The PDF has no `/Outlines`, no `/StructTreeRoot` and no `/Lang`. Its `/Title` is
 `Marqora - C:\Users\pcarver\Documents\…\UltimateMarkdownContent.md`, because `app.js:5879`
 sets `document.title` to the window caption. That puts a local path into metadata that travels
@@ -276,17 +327,23 @@ for the length of the print fixes the title.
 
 ### 4.5 `<details>` prints collapsed
 
+**Status 2026-10-08: fixed.**
+
 Only the summary line prints, so the list and the code block inside are not in the PDF at all.
 `prepareForPrint` could open every `<details>` and close them again afterward. Chromium's
 `::details-content` pseudo-element may also let the print stylesheet do it alone.
 
 ### 4.6 Callouts split across pages
 
+**Status 2026-10-08: fixed.**
+
 The print block's `break-inside: avoid` list (`pre, table, blockquote, img,
 .mq-table-scroll`) does not include `.markdown-alert`, which is a `div`. The *Caution* label
 sits alone at the foot of page 5 and its sentence opens page 6.
 
 ### 4.7 Smaller items
+
+**Status 2026-10-08:** footnotes sit at the page foot and the PDF has a report. The `align` numbers now print (0) on every line under the paged engine, open.
 
 - Footnotes are collected at the end with ↩ back-links, which do nothing on paper.
 - Heading numbers restart after every H1, so the fixture's three H1s give two sections

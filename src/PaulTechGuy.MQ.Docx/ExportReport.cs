@@ -83,6 +83,20 @@ internal sealed class ExportReport
             Shorten(tex) is { Length: > 0 } source ? source : "An equation");
 
     /// <summary>
+    /// An equation written as its TeX source because the preview gave the export no equation
+    /// for it - it had not finished, or did not answer in time.
+    ///
+    /// Reported as a diagram with no picture is. It was silent: the census
+    /// (ContentCensusTests) found every equation in a document exported without the preview
+    /// written as source, and not one row saying so.
+    /// </summary>
+    public void MathWithoutPreview(int sourceLine, string? tex) =>
+        Note(
+            sourceLine,
+            "No equation from the preview; its source is in the document instead",
+            Shorten(tex) is { Length: > 0 } source ? source : "An equation");
+
+    /// <summary>
     /// The first line of something, cut to what a list can show.
     ///
     /// An equation can be twenty lines of TeX and a diagram a hundred of mermaid. The report

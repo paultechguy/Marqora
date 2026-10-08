@@ -55,7 +55,7 @@ public sealed class HtmlExporter(RenderedHtmlPackager packager, ILogger<HtmlExpo
         builder.AppendLine("<meta name=\"generator\" content=\"Marqora\" />");
         builder.AppendLine("<style>");
         builder.AppendLine(styles);
-        builder.AppendLine(ExportLayout.PageCss(measurePixels));
+        builder.AppendLine(HtmlPageLayout.PageCss(measurePixels));
         builder.AppendLine(DiagramViewer.CssFor(body));
         builder.AppendLine("</style>");
         builder.AppendLine("</head>");

@@ -249,7 +249,7 @@ Exporting to HTML keeps everything in one file.
 
 ## Diagrams
 
-A fence labelled `mermaid` is drawn as a diagram rather than shown as code.
+A fence labeled `mermaid` is drawn as a diagram rather than shown as code.
 
 `````text
 ```mermaid

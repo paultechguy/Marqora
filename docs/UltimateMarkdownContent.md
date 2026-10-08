@@ -1223,7 +1223,7 @@ flowchart TD
     B --- C
     C -.-> D
     D ==> E
-    E -->|labelled arrow| F
+    E -->|labeled arrow| F
     F -.dotted label.-> G
     G ==thick label==> H
     H <--> I

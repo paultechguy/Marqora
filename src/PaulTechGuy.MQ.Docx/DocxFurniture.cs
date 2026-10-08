@@ -30,12 +30,14 @@ internal static class DocxFurniture
     public static (string? Header, string? Footer) WriteHeaderAndFooter(
         MainDocumentPart main,
         string title,
-        DocxExportSetup setup)
+        DocxExportSetup setup,
+        ExportLayout layout)
     {
         ArgumentNullException.ThrowIfNull(main);
         ArgumentNullException.ThrowIfNull(setup);
+        ArgumentNullException.ThrowIfNull(layout);
 
-        if (!setup.IncludeHeaderAndFooter || setup.VerticalMarginInches <= 0)
+        if (!layout.IncludeHeaderAndFooter || setup.VerticalMarginInches <= 0)
         {
             return (null, null);
         }
@@ -78,26 +80,23 @@ internal static class DocxFurniture
         return (main.GetIdOfPart(headerPart), main.GetIdOfPart(footerPart));
     }
 
-    /// <summary>Gray, so an unanswered line reads as a blank to fill rather than as text.</summary>
-    private const string PlaceholderInk = "8A8A8A";
-
     /// <summary>
     /// Two blank lines at the body's line height, which is the gap the titles sit above.
     /// </summary>
     private const int TwoLines = 560;
 
     /// <summary>
-    /// A title page, written as a template rather than as a statement.
+    /// A title page, read from the front matter.
     ///
     /// Off by default. It puts content into the document that the markdown did not contain,
     /// and only the author knows whether what they have written is a report or a note.
     ///
-    /// Every line is present whether or not the front matter had anything to say about it.
-    /// That is the point: the page is something to fill in, and one that quietly drops the
-    /// lines it has no value for is not a template but a shrinking list - the author never
-    /// learns that a version number was somewhere they could have put one. A line the front
-    /// matter answered is written as the answer; a line it did not is written as the word
-    /// itself, in gray.
+    /// A line the front matter did not answer is left out, as on the PDF's cover
+    /// (docs/Export-Alignment-Plan.md, P4). It was a template once - every line present, the
+    /// unanswered ones written as the word itself in gray, so the author would learn there was
+    /// somewhere to put a version number. But the two exports now draw one cover, and a gray
+    /// "Author" is the one thing on it that reaches paper looking like a mistake: whoever is
+    /// handed the printout cannot fill it in.
     ///
     /// The block sits a third of the way down the text column, measured against the column
     /// rather than the paper so that it lands in the same place whatever the margins are, and
@@ -113,34 +112,36 @@ internal static class DocxFurniture
         ArgumentNullException.ThrowIfNull(body);
         ArgumentNullException.ThrowIfNull(front);
 
-        // The title is the one line that always has an answer - the document's own name, when
-        // the front matter offers nothing - so it is never a placeholder.
-        body.AppendChild(Line(
-            StyleIds.Title,
-            front.Title ?? title,
-            placeholder: null,
-            before: usableHeightTwips / 3));
+        // The title always has an answer - the document's own name, when the front matter
+        // offers nothing.
+        body.AppendChild(Line(StyleIds.Title, front.Title ?? title, before: usableHeightTwips / 3));
 
-        body.AppendChild(Line(StyleIds.Subtitle, front.Subject, "Sub-Title"));
+        if (front.Subject is { Length: > 0 } subject)
+        {
+            body.AppendChild(Line(StyleIds.Subtitle, subject));
+        }
 
         // The three facts are one block: the air above them is what separates them from the
-        // titles, so they must not also be spaced from each other.
-        body.AppendChild(Line(null, front.CoverDate(), null, before: TwoLines, tight: true));
-        body.AppendChild(Line(null, front.Version, "Version", tight: true));
-        body.AppendChild(Line(null, front.Author, "Author", tight: true));
+        // titles, so they must not also be spaced from each other. The date always has an
+        // answer, so the air always lands on a line that is there.
+        body.AppendChild(Line(null, front.CoverDate(), before: TwoLines, tight: true));
+
+        foreach (string? fact in new[] { front.Version, front.Author })
+        {
+            if (fact is { Length: > 0 })
+            {
+                body.AppendChild(Line(null, fact, tight: true));
+            }
+        }
     }
 
-    /// <summary>
-    /// One line of the title page: what the front matter said, or the word to replace.
-    /// </summary>
+    /// <summary>One line of the title page.</summary>
     private static Paragraph Line(
         string? styleId,
-        string? value,
-        string? placeholder,
+        string value,
         int before = 0,
         bool tight = false)
     {
-        bool answered = value is { Length: > 0 };
         var properties = new ParagraphProperties();
 
         if (styleId is not null)
@@ -163,11 +164,7 @@ internal static class DocxFurniture
             properties.AppendChild(spacing);
         }
 
-        RunFormat format = answered ? default : default(RunFormat).WithColor(PlaceholderInk);
-
-        return new Paragraph(
-            properties,
-            format.ToRun(answered ? value! : placeholder ?? string.Empty));
+        return new Paragraph(properties, default(RunFormat).ToRun(value));
     }
 
     /// <summary>

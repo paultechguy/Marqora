@@ -16,7 +16,7 @@ public sealed class AppPaths : IAppPaths
 
     /// <summary>
     /// The welcome document's name, the same on both sides of the copy and the same for every
-    /// release. It is what the tab is labelled with, so it reads as a title rather than as a
+    /// release. It is what the tab is labeled with, so it reads as a title rather than as a
     /// file name.
     /// </summary>
     private const string WelcomeFileName = "Welcome to Marqora.md";

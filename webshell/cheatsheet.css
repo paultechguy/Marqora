@@ -5,6 +5,12 @@
   a table or a code fence looks exactly the same in the cheatsheet as it does in the
   preview. This file only re-shapes the page around it, because the preview is a pane
   inside a split view and the cheatsheet is a narrow window on its own.
+
+  Two classes, two jobs. .mq-cheatsheet is the window: its padding, its type size and its
+  heading scale, which are about reading on a narrow screen. .mq-cheatsheet-doc is the
+  cheatsheet itself - the syntax-and-result tables, the sample blocks and the jump list - and
+  is all the paged print page gets (print.js, KINDS), so on paper the samples keep their
+  shape and the type is the paper spec's, as every other printout's is.
 */
 
 .mq-cheatsheet-body {
@@ -47,31 +53,31 @@
   Syntax and result sit in a two-column table. The left column holds literal markup, which
   must not wrap mid-token, and the right holds the rendered form.
 */
-.mq-cheatsheet table { font-size: 0.95em; }
-.mq-cheatsheet td:first-child,
-.mq-cheatsheet th:first-child { width: 45%; }
-.mq-cheatsheet td:first-child code { white-space: nowrap; }
+.mq-cheatsheet-doc table { font-size: 0.95em; }
+.mq-cheatsheet-doc td:first-child,
+.mq-cheatsheet-doc th:first-child { width: 45%; }
+.mq-cheatsheet-doc td:first-child code { white-space: nowrap; }
 
 /*
   Blocks that demonstrate syntax are marked by the host as .mq-sample so the pair reads as
   one unit: the markup, then what it produces, joined by a rule down the left.
 */
-.mq-cheatsheet pre.mq-sample {
+.mq-cheatsheet-doc pre.mq-sample {
   background: var(--mq-bg-inset);
   border-color: var(--mq-border);
   margin-bottom: 0.55em;
 }
 
-.mq-cheatsheet .mq-sample-result {
+.mq-cheatsheet-doc .mq-sample-result {
   border-left: 2px solid var(--mq-accent-soft);
   padding: 0.15em 0 0.15em 0.9em;
   margin: 0 0 1.4em;
 }
 
-.mq-cheatsheet .mq-sample-result > *:last-child { margin-bottom: 0; }
+.mq-cheatsheet-doc .mq-sample-result > *:last-child { margin-bottom: 0; }
 
 /* The jump list under the title: a run of links, not a paragraph of prose. */
-.mq-cheatsheet .mq-jumplist {
+.mq-cheatsheet-doc .mq-jumplist {
   color: var(--mq-text-secondary);
   font-size: 0.93em;
   line-height: 2;

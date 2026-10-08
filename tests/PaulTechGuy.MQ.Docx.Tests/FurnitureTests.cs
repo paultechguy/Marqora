@@ -54,7 +54,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "Text.\n",
-            new DocxExportSetup { IncludeHeaderAndFooter = false });
+            new ExportLayout { IncludeHeaderAndFooter = false });
 
         HasHeader(exported.Path).ShouldBeFalse();
         exported.ValidationErrors().ShouldBeEmpty();
@@ -88,7 +88,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n\n## Two\n",
-            new DocxExportSetup { IncludeTableOfContents = true });
+            new ExportLayout { IncludeTableOfContents = true });
 
         string xml = exported.DocumentXml();
 
@@ -116,7 +116,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n",
-            new DocxExportSetup { IncludeTableOfContents = true });
+            new ExportLayout { IncludeTableOfContents = true });
 
         exported.PlainText().ShouldContain("Update Field");
     }
@@ -135,7 +135,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "---\ntitle: Quarterly Report\nauthor: A Person\ndate: 2026-09-11\n---\n\nText.\n",
-            new DocxExportSetup { IncludeCoverPage = true });
+            new ExportLayout { IncludeCoverPage = true });
 
         string text = exported.PlainText();
 
@@ -146,26 +146,25 @@ public class FurnitureTests
     }
 
     /// <summary>
-    /// <summary>
-    /// The page is a template, so every line is on it whether or not the front matter had
-    /// anything to say. A page that drops the lines it has no value for is a shrinking list,
-    /// and the author never learns that a version number was somewhere they could have put
-    /// one.
+    /// A line the front matter did not answer is left out, as on the PDF's cover
+    /// (docs/Export-Alignment-Plan.md, P4). It was a gray placeholder once, and a gray
+    /// "Author" reached paper looking like a mistake nobody handed the printout could fix.
     /// </summary>
     [Fact]
-    public async Task A_title_page_carries_every_line_even_with_nothing_to_fill_them()
+    public async Task A_title_page_leaves_out_the_lines_nothing_filled()
     {
         using var exported = await ExportedDocument.FromAsync(
             "Just a document.\n",
-            new DocxExportSetup { IncludeCoverPage = true });
+            new ExportLayout { IncludeCoverPage = true });
 
         string text = exported.PlainText();
 
-        text.ShouldContain("Sub-Title");
-        text.ShouldContain("Version");
-        text.ShouldContain("Author");
+        text.ShouldNotContain("Sub-Title");
+        text.ShouldNotContain("Version");
+        text.ShouldNotContain("Author");
 
-        // The date is the one line that fills itself in.
+        // The title and the date are the lines that fill themselves in.
+        text.ShouldContain("Test document");
         text.ShouldContain(DateTime.Now.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture));
         exported.ValidationErrors().ShouldBeEmpty();
     }
@@ -176,7 +175,7 @@ public class FurnitureTests
         using var exported = await ExportedDocument.FromAsync(
             "---\ntitle: Quarterly Report\nsubject: Fourth Quarter\nversion: 2.1\n"
             + "author: A Person\n---\n\nText.\n",
-            new DocxExportSetup { IncludeCoverPage = true });
+            new ExportLayout { IncludeCoverPage = true });
 
         string text = exported.PlainText();
 
@@ -190,17 +189,16 @@ public class FurnitureTests
     }
 
     /// <summary>
-    /// A placeholder has to read as a blank to fill rather than as text somebody wrote, or it
-    /// goes out in the document.
+    /// With no lines to fill, nothing on the page is written in the placeholder gray.
     /// </summary>
     [Fact]
-    public async Task An_unanswered_line_is_written_in_gray()
+    public async Task No_line_is_written_in_gray()
     {
         using var exported = await ExportedDocument.FromAsync(
             "Just a document.\n",
-            new DocxExportSetup { IncludeCoverPage = true });
+            new ExportLayout { IncludeCoverPage = true });
 
-        exported.DocumentXml().ShouldContain("8A8A8A");
+        exported.DocumentXml().ShouldNotContain("8A8A8A");
     }
 
     /// <summary>
@@ -212,7 +210,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "Text.\n",
-            new DocxExportSetup { IncludeCoverPage = true });
+            new ExportLayout { IncludeCoverPage = true });
 
         // Letter is 15840 twips tall; an inch of margin top and bottom leaves 12960.
         exported.DocumentXml().ShouldContain("w:before=\"4320\"");
@@ -232,7 +230,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "---\ntitle: A Report\n---\n\n# One\n\nText.\n",
-            new DocxExportSetup { IncludeCoverPage = true, IncludeTableOfContents = true });
+            new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true });
 
         string xml = exported.DocumentXml();
 
@@ -251,7 +249,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n\nText.\n",
-            new DocxExportSetup { IncludeCoverPage = true, IncludeTableOfContents = true });
+            new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true });
 
         string xml = exported.DocumentXml();
 
@@ -292,7 +290,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n\n## Two\n\n### Three\n",
-            new DocxExportSetup { IncludeTableOfContents = true },
+            new ExportLayout { IncludeTableOfContents = true },
             numbering);
 
         exported.DocumentXml().ShouldContain(@"TOC \o """ + range + @"""");
@@ -311,7 +309,7 @@ public class FurnitureTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n\n## Two\n",
-            new DocxExportSetup { IncludeTableOfContents = true },
+            new ExportLayout { IncludeTableOfContents = true },
             HeadingNumbering.FromHeading1);
 
         string style = StyleOf(exported.StylesXml(), "TOCHeading");
@@ -397,7 +395,7 @@ public class FurnitureTests
         using var exported = await ExportedDocument.FromAsync(
             "---\ntitle: The Whole Thing\nauthor: A Person\n---\n\n"
             + "# One\n\nText.[^1]\n\n## Two\n\n- a\n- b\n\n[^1]: A note.\n",
-            new DocxExportSetup
+            new ExportLayout
             {
                 IncludeCoverPage = true,
                 IncludeTableOfContents = true,

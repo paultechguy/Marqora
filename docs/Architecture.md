@@ -540,11 +540,12 @@ app is dark each rendered diagram in the preview carries two drawings: mermaid's
 which the screen shows, and the light one beside it in a hidden `.mq-diagram-output`
 wrapper (`attachOutputCopy` in `app.js`). Then:
 
-- **Print and PDF** print the live page, as they always have. The print block hides the dark
-  drawing and shows the light one, the same way it turns the text light, so nothing on screen
-  moves for a print. The host sends `prepareForPrint` first and waits for the answer: it
-  carries the printable page shape, and the answer waits for the last light drawing, which
-  is made a moment after its dark one.
+- **Print and PDF** take the light drawings through `requestPrintHtml`, which waits for the
+  last of them and hands the paged engine the preview's markup through `outputMarkup` (decision
+  3 below). The classic engine, the fallback, still prints the live page: its print block hides
+  the dark drawing and shows the light one, the same way it turns the text light, so nothing on
+  screen moves, after `prepareForPrint` has sent the page shape and waited for the last light
+  drawing.
 - **On paper a diagram is never taller than one page.** The browser cannot split an SVG
   across pages, so the print block sizes it explicitly: page width at most, no wider than
   mermaid drew it, and no taller than one page. The page is given as a *shape*,
@@ -567,9 +568,10 @@ wrapper (`attachOutputCopy` in `app.js`). Then:
 - **Copy as PNG and Copy as SVG** (and the PNGs Word and Copy as Rich Text put where a diagram
   was) take the light drawing by hash with `outputSvgOf`.
 - **A Folio** renders its documents off-screen with the light mermaid alone.
-- **A diagram pop-out** is handed both drawings, shows the dark one, prints the light one
-  through `diagram.css`, and exports and copies the light one.
-- **The cheatsheet** carries both drawings the same way, and `app.css` prints the light one.
+- **A diagram pop-out** is handed both drawings, shows the dark one, and prints, exports and
+  copies the light one; the paged engine is given the light drawing alone, as a `pre.mermaid`.
+- **The cheatsheet** carries both drawings the same way, and hands the paged engine its markup
+  with the light ones in place (`requestPrintHtml` in `cheatsheet.js`).
 
 In light mode there is usually one drawing, already the light one, and no wrapper. The exception
 is an export theme that differs from the screen's (see *Color themes* below): then the drawing
@@ -595,16 +597,28 @@ Three decisions worth keeping:
    init directive in front of a definition, to give it the theme's colors, but never in
    front of one that names its own theme, and after frontmatter rather than before it,
    because frontmatter has to come first.
-3. **Print is the live page, not the HTML export printed in a hidden view.** That was weighed
-   and rejected. The export deliberately restores remote pictures for its reader's browser, so
-   a view loading it would fetch them, which breaks *offline by default*. It drops the "not
-   shown" chip print relies on, leaves pictures over the embedding limit as links nothing in a
-   hidden view can resolve, overflows `NavigateToString`'s size limit, and sets a 16px body
-   that would repaginate every PDF.
+3. **Print and PDF are a view of their own, laid out by Paged.js, fed the print markup.** This
+   reverses an earlier decision - that print is the live page, not the HTML export printed in
+   a hidden view - and keeps every reason that one was made, because what the hidden view is
+   given is not the HTML export (docs/Export-Alignment-Plan.md, §6.1):
+   - It is fed `requestPrintHtml`: the preview's own markup through `outputMarkup`, with the
+     light drawings, laid-out math and the "not shown" chips. The export's restored remote
+     pictures never reach it, and `print.html` carries the shell's content policy verbatim, so
+     a chip's hidden picture is not fetched. *Offline by default* holds.
+   - Relative pictures are answered by the preview's own `marqora.document` handler, so a
+     picture in the PDF is the one on screen, and nothing is embedded or linked.
+   - It is posted to the page as a message, not navigated to, so `NavigateToString`'s limit
+     never applies; and it is wrapped in `.mq-preview` under the paper spec, so it paginates
+     at the spec's sizes, not a 16px body.
 
-What is not covered: the cheatsheet's Print does not wait for its light drawings, which it
-renders straight after the dark ones at load. Only a print in the moment after switching
-theme could catch one missing, and that diagram would print as shown.
+   What it buys is what the live page could not do: true size, page numbers, a cover and
+   contents, footnotes at the page foot, a tagged PDF with an outline, and one layout for the
+   PDF and the printout. The cheatsheet and a diagram pop-out print through it too, so all
+   three agree by construction. The live page remains as the classic engine, the fallback when
+   the paged one cannot finish and a Preferences switch for one release (`PagedJobs`).
+
+The cheatsheet's print now waits for its light drawings (`whenOutputReady` in `cheatsheet.js`),
+which closes the one gap this section used to record.
 
 ---
 
@@ -707,7 +721,8 @@ in `app.css` overrides it, so print and the clipboard see the author's color.
 
 ### Exports
 
-- **Print and PDF** use the live page's print block, which carries the export theme.
+- **Print and PDF** carry the export theme in the stylesheet the paged engine is handed with the
+  markup; the classic engine's live page has it in its print block.
 - **HTML, Folio, the review page and the clipboard** go through
   `RenderedHtmlPackager.ReadStyles`, which writes the export theme's light palette as a
   column-zero `:root` block. It has to be column zero: that is the only kind of block

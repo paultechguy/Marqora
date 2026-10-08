@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Text.Json.Serialization;
+
 namespace PaulTechGuy.MQ.Domain;
 
 /// <summary>
@@ -9,9 +11,9 @@ namespace PaulTechGuy.MQ.Domain;
 /// Separate from <see cref="PdfPageSetup"/> rather than folded into it, though the first three
 /// members are the same three questions. Two reasons. A Word document and a print-ready PDF
 /// genuinely want different margins, and a reader who sets one should not find the other
-/// changed underneath them. And the four members below the margin are Word-only - there is no
-/// sensible place for a cover page or a table-of-contents field on the PDF dialog, and putting
-/// them on the shared record would mean a dialog that has to know which fields to ignore.
+/// changed underneath them. The cover, contents and header boxes were here too while only Word
+/// could draw them; they are <see cref="ExportLayout"/> now, shared by both exports, and only
+/// the keys an older settings file wrote remain, to be read once.
 ///
 /// The paper, orientation and margin enums <em>are</em> shared, because Letter is Letter and
 /// portrait is portrait in both worlds, and a second set of names for them would be a second
@@ -33,32 +35,49 @@ public sealed record DocxExportSetup
 
     public PageMargin Margin { get; set; } = PageMargin.Normal;
 
-    /// <summary>
-    /// A header carrying the document title and a footer carrying the page number.
-    ///
-    /// On by default, which is the one default here that adds something the markdown did not
-    /// ask for. A Word file is a thing people print and hand round, and one without page
-    /// numbers is the surprising outcome rather than the safe one.
-    /// </summary>
-    public bool IncludeHeaderAndFooter { get; set; } = true;
+    // ------------------------------------------------------------ before ExportLayout
 
     /// <summary>
-    /// A Word table-of-contents field at the top of the document.
-    ///
-    /// Off by default: it puts visible content into the document that the markdown did not
-    /// contain, and Word shows a prompt on open asking to update it. Heading bookmarks are
-    /// written whether this is on or off - they cost nothing, are invisible, and are what
-    /// makes Word's navigation pane work.
+    /// The header-and-footer box as a settings file from before <see cref="ExportLayout"/>
+    /// recorded it, under the key it was written with. Read, never written: null on every setup
+    /// this build makes, and a null key is left out of the file. See <see cref="LegacyLayout"/>.
     /// </summary>
-    public bool IncludeTableOfContents { get; set; }
+    [JsonPropertyName("includeHeaderAndFooter")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyIncludeHeaderAndFooter { get; set; }
+
+    /// <summary>The contents box, from before <see cref="ExportLayout"/>. See <see cref="LegacyIncludeHeaderAndFooter"/>.</summary>
+    [JsonPropertyName("includeTableOfContents")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyIncludeTableOfContents { get; set; }
+
+    /// <summary>The cover box, from before <see cref="ExportLayout"/>. See <see cref="LegacyIncludeHeaderAndFooter"/>.</summary>
+    [JsonPropertyName("includeCoverPage")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyIncludeCoverPage { get; set; }
 
     /// <summary>
-    /// A title page, followed by a section break.
-    ///
-    /// Off by default for the same reason as the contents field. Pleasant for a report,
-    /// wrong for a two-paragraph note, and only the author knows which they have written.
+    /// The layout a settings file from before <see cref="ExportLayout"/> chose, or null when this
+    /// setup carries none of the old keys. A key that is missing takes the default it had then,
+    /// which is the default it has now.
     /// </summary>
-    public bool IncludeCoverPage { get; set; }
+    public ExportLayout? LegacyLayout() =>
+        LegacyIncludeHeaderAndFooter is null && LegacyIncludeTableOfContents is null && LegacyIncludeCoverPage is null
+            ? null
+            : new ExportLayout
+            {
+                IncludeHeaderAndFooter = LegacyIncludeHeaderAndFooter ?? true,
+                IncludeTableOfContents = LegacyIncludeTableOfContents ?? false,
+                IncludeCoverPage = LegacyIncludeCoverPage ?? false,
+            };
+
+    /// <summary>This setup with the old keys dropped, once their answer is held by an <see cref="ExportLayout"/>.</summary>
+    public DocxExportSetup WithoutLegacyLayout() => this with
+    {
+        LegacyIncludeHeaderAndFooter = null,
+        LegacyIncludeTableOfContents = null,
+        LegacyIncludeCoverPage = null,
+    };
 
     public static DocxExportSetup Default => new();
 

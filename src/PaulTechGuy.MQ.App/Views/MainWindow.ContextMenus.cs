@@ -72,7 +72,7 @@ public sealed partial class MainWindow
     private readonly List<MenuFlyoutItem> _writingItems = [];
 
     /// <summary>
-    /// The spelling suggestions, built once and relabelled per click.
+    /// The spelling suggestions, built once and relabeled per click.
     ///
     /// A fixed set of slots rather than items created and destroyed each time, because this file
     /// keeps its menus rather than rebuilding them - see the note at the top. There are always
@@ -93,7 +93,7 @@ public sealed partial class MainWindow
     private SpellingHit? _clickedSpelling;
 
     /// <summary>
-    /// The replacements offered for a dead link, built once and relabelled per click - the same
+    /// The replacements offered for a dead link, built once and relabeled per click - the same
     /// arrangement as the spelling suggestions above, and for the same reason.
     /// </summary>
     private MenuFlyoutItem[]? _linkSuggestionItems;
@@ -324,7 +324,7 @@ public sealed partial class MainWindow
     /// Fits the dead-link block to whatever is under the pointer, or hides it entirely.
     ///
     /// Same arrangement as the spelling block: nothing is created or destroyed, the slots are
-    /// relabelled, and the suggestions are fetched now rather than in advance because working
+    /// relabeled, and the suggestions are fetched now rather than in advance because working
     /// them out costs a folder listing.
     ///
     /// Browsing for a replacement image and pasting one from the clipboard both belong here too.

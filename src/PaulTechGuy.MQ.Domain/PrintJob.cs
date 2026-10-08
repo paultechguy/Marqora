@@ -68,7 +68,10 @@ public sealed record PrintJob
     /// </summary>
     public double HorizontalMarginInches { get; init; } = 1.0;
 
-    /// <summary>Print the page background colors, which diagram and code surfaces rely on.</summary>
+    /// <summary>
+    /// Print the shaded fills behind code blocks, table headers, callouts, quotes, highlights and
+    /// diagrams. Off saves ink; the text and its colors print either way.
+    /// </summary>
     public bool IncludeBackgrounds { get; init; } = true;
 
     /// <summary>

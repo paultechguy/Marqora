@@ -216,7 +216,7 @@ public class AwkwardDocumentTests
                 | - |
                 | 1 |
             """,
-            new PaulTechGuy.MQ.Domain.DocxExportSetup
+            new PaulTechGuy.MQ.Domain.ExportLayout
             {
                 IncludeTableOfContents = true,
                 IncludeCoverPage = true,

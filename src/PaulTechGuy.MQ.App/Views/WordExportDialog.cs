@@ -4,6 +4,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Views;
@@ -12,28 +13,27 @@ namespace PaulTechGuy.MQ.App.Views;
 /// Page setup for a Word export.
 ///
 /// Built in code rather than XAML for the same reason as <see cref="PdfExportDialog"/>: it has
-/// no bindings and exists only to return a <see cref="DocxExportSetup"/>. It opens on the
-/// setup held in preferences, which the caller saves again afterwards - so exporting several
-/// documents in a row does not mean re-answering the same question.
+/// no bindings and exists only to return a choice. It opens on the setup held in preferences,
+/// which the caller saves again afterwards - so exporting several documents in a row does not
+/// mean re-answering the same question.
 ///
 /// The three page questions are the same three the PDF dialog asks, and the answers are kept
 /// apart from it: a document meant to be edited and one meant to be printed want different
 /// margins, and someone who changes one should not find the other changed underneath them.
-/// What is new here is the lower group, which is Word-only - there is nowhere on a PDF to put
-/// a table of contents field.
+/// The lower group is <see cref="ExportLayout"/>, shared with the PDF dialog: one cover, one
+/// contents, one header, whichever export draws them.
 /// </summary>
 internal sealed class WordExportDialog : ContentDialog
 {
     private readonly ComboBox _paper;
     private readonly ComboBox _orientation;
     private readonly ComboBox _margin;
-    private readonly CheckBox _headerAndFooter;
-    private readonly CheckBox _tableOfContents;
-    private readonly CheckBox _coverPage;
+    private readonly LayoutFields _layout;
 
-    public WordExportDialog(string documentName, DocxExportSetup current)
+    public WordExportDialog(string documentName, DocxExportSetup current, ExportLayout layout)
     {
         ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(layout);
 
         Title = "Export to Word";
         PrimaryButtonText = "Export";
@@ -47,67 +47,54 @@ internal sealed class WordExportDialog : ContentDialog
         // says one inch on two sides at least as readily as it says two inches at the sides.
         _margin = DialogFields.Combo(PageMargins.Labels, (int)current.Margin);
 
-        _headerAndFooter = new CheckBox
-        {
-            Content = "Header and page numbers",
-            IsChecked = current.IncludeHeaderAndFooter,
-        };
-
-        _tableOfContents = new CheckBox
-        {
-            Content = "Table of contents",
-            IsChecked = current.IncludeTableOfContents,
-        };
-
-        _coverPage = new CheckBox
-        {
-            Content = "Title page",
-            IsChecked = current.IncludeCoverPage,
-        };
+        _layout = new LayoutFields(layout);
 
         Content = BuildContent(documentName);
     }
 
     /// <summary>What the user chose. Only meaningful when the dialog returned Primary.</summary>
-    public DocxExportSetup Setup => new()
-    {
-        Paper = (PaperSize)Math.Max(0, _paper.SelectedIndex),
-        Orientation = (PageOrientation)Math.Max(0, _orientation.SelectedIndex),
-        Margin = (PageMargin)Math.Max(0, _margin.SelectedIndex),
-        IncludeHeaderAndFooter = _headerAndFooter.IsChecked ?? true,
-        IncludeTableOfContents = _tableOfContents.IsChecked ?? false,
-        IncludeCoverPage = _coverPage.IsChecked ?? false,
-    };
+    public ExportChoice<DocxExportSetup> Choice => new(
+        new DocxExportSetup
+        {
+            Paper = (PaperSize)Math.Max(0, _paper.SelectedIndex),
+            Orientation = (PageOrientation)Math.Max(0, _orientation.SelectedIndex),
+            Margin = (PageMargin)Math.Max(0, _margin.SelectedIndex),
+        },
+        _layout.Layout);
 
-    private StackPanel BuildContent(string documentName)
+    /// <summary>
+    /// Two columns (<see cref="DialogFields.TwoColumns"/>), the same shape as Print and Export
+    /// to PDF: the page on the left, what is printed around the document on the right.
+    /// </summary>
+    private FrameworkElement BuildContent(string documentName)
     {
-        var panel = new StackPanel { Spacing = 14, Width = 340 };
+        StackPanel page = DialogFields.Column();
 
-        panel.Children.Add(new TextBlock
+        page.Children.Add(new TextBlock
         {
             Text = documentName,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        panel.Children.Add(DialogFields.Labelled("Paper size", _paper));
-        panel.Children.Add(DialogFields.Labelled("Orientation", _orientation));
-        panel.Children.Add(DialogFields.Labelled("Margins", _margin));
+        page.Children.Add(DialogFields.Labeled("Paper size", _paper));
+        page.Children.Add(DialogFields.Labeled("Orientation", _orientation));
+        page.Children.Add(DialogFields.Labeled("Margins", _margin));
 
-        panel.Children.Add(_headerAndFooter);
-        panel.Children.Add(_tableOfContents);
-        panel.Children.Add(_coverPage);
+        StackPanel content = DialogFields.Column();
 
-        panel.Children.Add(new TextBlock
+        content.Children.Add(DialogFields.Group(_layout.Boxes));
+
+        content.Children.Add(new TextBlock
         {
             Text = "Word builds the contents when you open the file and it offers to update "
-                + "fields. A title page is a template: anything the front matter does not "
-                + "fill in is left as a gray word to replace.",
+                + "fields. The title page is read from the front matter. These three "
+                + "choices are shared with Export to PDF.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Opacity = 0.7,
         });
 
-        return panel;
+        return DialogFields.TwoColumns(this, page, content);
     }
 }

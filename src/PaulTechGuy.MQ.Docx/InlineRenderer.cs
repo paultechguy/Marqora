@@ -425,6 +425,10 @@ internal sealed class InlineRenderer
 
             _report.UnsupportedMath(_sourceLine, unsupported, math.Content.ToString());
         }
+        else
+        {
+            _report.MathWithoutPreview(_sourceLine, math.Content.ToString());
+        }
 
         Append(
             paragraph,

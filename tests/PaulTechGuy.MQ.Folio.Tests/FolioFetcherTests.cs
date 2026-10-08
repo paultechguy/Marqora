@@ -138,7 +138,7 @@ public sealed class FolioFetcherTests : IDisposable
     public async Task A_page_served_where_a_picture_was_asked_for_is_refused()
     {
         // The sign-in page case. Sniffed from the bytes, never trusted from the content type,
-        // so a site cannot put HTML inside a Folio by labelling it image/png.
+        // so a site cannot put HTML inside a Folio by labeling it image/png.
         Serve(context => Body(context, "image/png", Encoding.UTF8.GetBytes("<html>Sign in</html>")));
 
         FolioFetchResult result = await FetchAsync("chart.png");

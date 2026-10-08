@@ -1139,7 +1139,7 @@ internal sealed class FolioWindow : PaletteWindow
 
         FrameworkElement[] children =
         [
-            DialogFields.Labelled("Share as", _form),
+            DialogFields.Labeled("Share as", _form),
             BuildListHeader(),
             BuildReorderHint(),
             _list,

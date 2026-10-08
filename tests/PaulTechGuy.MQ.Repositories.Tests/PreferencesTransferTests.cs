@@ -408,6 +408,42 @@ public sealed class PreferencesTransferTests : IDisposable
         absent.Detail.ShouldContain("more");
     }
 
+    /// <summary>
+    /// A file exported before the export layout was shared carries its three boxes on the Word
+    /// setup. Merged key by key it would keep this machine's layout and strand the file's
+    /// answer, so the import moves it across.
+    /// </summary>
+    [Fact]
+    public async Task An_older_files_layout_on_the_Word_setup_is_imported_as_the_layout()
+    {
+        string file = PathFor("layout-from-the-past.json");
+
+        await File.WriteAllTextAsync(
+            file,
+            """
+            {
+              "format": "marqora-preferences",
+              "schemaVersion": 1,
+              "appVersion": "0.0.1",
+              "preferences": {
+                "docxSetup": { "paper": "Legal", "includeCoverPage": true, "includeHeaderAndFooter": false }
+              }
+            }
+            """,
+            TestContext.Current.CancellationToken);
+
+        AppSettings here = AppSettings.Default.WithLayout(new ExportLayout { IncludeTableOfContents = true });
+
+        PreferencesImportResult result = await _transfer.ImportAsync(
+            file, here, TestContext.Current.CancellationToken);
+
+        result.Succeeded.ShouldBeTrue(result.Failure);
+
+        result.Settings!.LayoutDefaults.ShouldBe(new ExportLayout { IncludeCoverPage = true, IncludeHeaderAndFooter = false });
+        result.Settings.DocxDefaults.Paper.ShouldBe(PaperSize.Legal);
+        result.Settings.DocxSetup!.LegacyLayout().ShouldBeNull();
+    }
+
     [Fact]
     public async Task A_value_that_will_not_read_costs_only_itself()
     {

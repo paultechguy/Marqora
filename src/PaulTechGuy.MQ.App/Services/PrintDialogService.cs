@@ -19,8 +19,9 @@ namespace PaulTechGuy.MQ.App.Services;
 public sealed class PrintDialogService(WindowContext window, ILogger<PrintDialogService> logger)
     : IPrintDialogService
 {
-    public async Task<PrintJob?> PickPrinterAsync(
+    public async Task<ExportChoice<PrintJob>?> PickPrinterAsync(
         PdfPageSetup defaults,
+        ExportLayout layout,
         CancellationToken cancellationToken = default)
     {
         if (window.Root is null)
@@ -31,13 +32,13 @@ public sealed class PrintDialogService(WindowContext window, ILogger<PrintDialog
 
         try
         {
-            PrintJob? job = await PrintDialog.ShowAsync(window.Root, defaults);
+            ExportChoice<PrintJob>? choice = await PrintDialog.ShowAsync(window.Root, defaults, layout);
 
             logger.LogInformation(
                 "Print dialog returned {Result}.",
-                job is null ? "(cancelled)" : job.PrinterName);
+                choice is null ? "(cancelled)" : choice.Setup.PrinterName);
 
-            return job;
+            return choice;
         }
         catch (Exception ex)
         {

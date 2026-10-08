@@ -6,6 +6,7 @@ using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Views;
+using PaulTechGuy.MQ.Themes;
 using Windows.Graphics;
 
 namespace PaulTechGuy.MQ.App.Services;
@@ -18,6 +19,7 @@ public sealed class DiagramWindowService(
     IWebAssetProvider assets,
     IThemeService theme,
     ISettingsService settings,
+    ThemeCatalog colorThemes,
     ILoggerFactory loggerFactory,
     ILogger<DiagramWindowService> logger) : IDiagramWindowService
 {
@@ -104,6 +106,7 @@ public sealed class DiagramWindowService(
                 assets,
                 theme,
                 settings,
+                colorThemes,
                 Guid.NewGuid(),
                 documentId,
                 hash,

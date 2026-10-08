@@ -6,9 +6,10 @@
   that way), the page setup and a title. This lays the document out into pages with Paged.js
   and answers 'rendered' with what it measured, or 'failed' with why.
 
-  Week-one spike (docs/Export-Alignment-Plan.md, §4). The furniture - cover page, contents
-  with page numbers, running header and page number - follows the same three choices the
-  Word export makes, which the host sends; footnotes go to the foot of the page they are
+  Every PDF and printout Marqora makes comes through here (docs/Export-Alignment-Plan.md, D2
+  and §6): the document's, the cheatsheet's and a diagram pop-out's. The furniture - cover
+  page, contents with page numbers, running header and page number - is the shared export
+  layout Word reads too, which the host sends; footnotes go to the foot of the page they are
   called on, numbered as the document numbers them.
 */
 
@@ -18,6 +19,18 @@
   /// The sheets the preview uses, in the order shell.html links them. Monaco's is not one:
   /// there is no editor here.
   var SHEETS = ['vendor/katex/katex.min.css', 'app.css', 'syntax.css'];
+
+  /*
+    What each kind of page adds to a document's: its own sheet, and the class its markup is
+    wrapped in beside .mq-preview so that sheet's rules find it. The cheatsheet's sheet keys
+    its paper rules on .mq-cheatsheet-doc and its window's typography on .mq-cheatsheet, so on
+    paper the samples keep their shape and the type is the paper spec's. A diagram pop-out
+    needs nothing: its one drawing comes as a pre.mermaid, which the print block already holds
+    to one page.
+  */
+  var KINDS = {
+    cheatsheet: { sheets: ['cheatsheet.css'], wrapper: 'mq-cheatsheet-doc' }
+  };
 
   /// The paper spec's four face roles, whose family chains arrive as custom properties.
   var FACE_ROLES = ['text', 'display', 'code', 'diagram'];
@@ -487,6 +500,104 @@
     not change what fits on it - only the contents entries' numbers do, and their width is
     taken up by the dotted filler.
   */
+  /*
+    A print of some of the pages: every page outside the range is taken out of the print, so
+    the printer is handed the whole of what is left and never a page range.
+
+    Chromium was handed the range once, and any range that did not start at page 1 hung the
+    job - page 5 alone spooled for ever on an HP LaserJet and on Microsoft Print to PDF alike.
+    Doing it here costs nothing: the pages are already laid out and already labeled, so page 5
+    still says "iv" and its contents entries still point where they did.
+
+    The range reads as the print dialog writes it: page numbers counted from the first sheet,
+    cover included, as "5", "5-6", "1-3, 7" or "9-" for the ninth onward. Answers how many
+    pages are kept: all of them when there is no range, none when it names no page.
+  */
+  function keepPages(spec, total) {
+    if (!spec || !String(spec).trim()) { return total; }
+
+    var wanted = {};
+
+    String(spec).split(',').forEach(function (part) {
+      var m = /^\s*(\d+)\s*(?:-\s*(\d*)\s*)?$/.exec(part);
+
+      if (!m) { return; }
+
+      var from = parseInt(m[1], 10);
+      var to = m[2] === undefined ? from : (m[2] === '' ? total : parseInt(m[2], 10));
+
+      for (var n = Math.max(1, from); n <= Math.min(total, to); n++) { wanted[n] = true; }
+    });
+
+    var kept = 0;
+
+    Array.prototype.forEach.call(document.querySelectorAll('.pagedjs_pages > .pagedjs_page'), function (page, index) {
+      if (wanted[index + 1]) {
+        kept++;
+      } else {
+        page.style.display = 'none';
+      }
+    });
+
+    return kept;
+  }
+
+  /*
+    The paper spec, as the laid-out pages actually draw it: one element of each kind, measured
+    with getComputedStyle (docs/Export-Alignment-Plan.md, §8, the third check). The host holds
+    each against PaperSpec and logs what drifted - a rule in app.css that outranks the spec's
+    custom property, or a property Paged.js rewrote, shows here and nowhere else.
+
+    The first element of a kind on a body page, outside a cover or a contents page, so the
+    contents' own heading is not taken for the document's. A kind the document does not have is
+    left out. Sizes are in CSS pixels, 96 to the inch; the host turns them into points.
+  */
+  var MEASURED = {
+    'body': '.mq-preview > p',
+    'h1': '.mq-preview > h1',
+    'h2': '.mq-preview > h2',
+    'h3': '.mq-preview > h3',
+    'h4': '.mq-preview > h4',
+    'h5': '.mq-preview > h5',
+    'h6': '.mq-preview > h6',
+    // The code, not its pre: the paper rules size the code element, and the pre keeps the
+    // body's size, so measuring the pre reported 11pt against a spec the page already met.
+    'code-block': '.mq-preview pre:not(.mermaid) > code',
+    'code-inline': '.mq-preview p > code',
+    'quote': '.mq-preview > blockquote',
+    'table': '.mq-preview td',
+    'footnote': '.pagedjs_footnote_area .mq-note',
+    'caption': '.mq-preview figcaption',
+    'callout-title': '.markdown-alert-title',
+    'contents-entry': '.mq-contents li',
+    'cover-title': '.mq-cover-title',
+    'cover-subtitle': '.mq-cover-subtitle'
+  };
+
+  function measureStyles() {
+    var measured = {};
+
+    Object.keys(MEASURED).forEach(function (name) {
+      var within = /^(contents|cover)/.test(name)
+        ? '.pagedjs_pages '
+        : '.pagedjs_page:not(.pagedjs_cover_page):not(.pagedjs_contents_page) ';
+      var element = document.querySelector(within + MEASURED[name]);
+
+      if (!element) { return; }
+
+      var style = getComputedStyle(element);
+
+      measured[name] = {
+        size: parseFloat(style.fontSize),
+        weight: parseInt(style.fontWeight, 10),
+        italic: style.fontStyle === 'italic',
+        line: parseFloat(style.lineHeight) || 0
+      };
+    });
+
+    return measured;
+  }
+
   function labelPages() {
     var labels = {};
     var contentsPage = 0;
@@ -552,7 +663,8 @@
       // The preview's class on the wrapper, so every rule in app.css that the preview uses
       // applies here. Paged.js clones the wrapper onto each page it splits it across.
       var template = document.createElement('template');
-      template.innerHTML = '<div class="mq-preview">' + (p.html || '') + '</div>';
+      var kind = KINDS[p.kind] || { sheets: [], wrapper: '' };
+      template.innerHTML = '<div class="mq-preview' + (kind.wrapper ? ' ' + kind.wrapper : '') + '">' + (p.html || '') + '</div>';
       markDiagramsAfterHeadings(template.content);
 
       var root = template.content.firstElementChild;
@@ -569,7 +681,7 @@
         root.insertBefore(buildCover(furniture.cover), root.firstChild);
       }
 
-      var sheets = SHEETS.slice();
+      var sheets = SHEETS.concat(kind.sheets);
 
       if (p.themeCss) { sheets.push(sheet(p.themeCss)); }
       if (p.paperCss) { sheets.push(sheet(p.paperCss)); }
@@ -585,6 +697,12 @@
       var started = performance.now();
       var flow = await previewer.preview(template.content, sheets, document.body);
       var linked = labelPages();
+      var kept = keepPages(p.pages, flow.total);
+
+      if (kept === 0) {
+        post('failed', { message: 'The page range "' + p.pages + '" names none of the ' + flow.total + ' pages.' });
+        return;
+      }
 
       // How many notes reached a page foot, against how many were moved there - plan O4 needs
       // to know when Paged.js could not place one. Counted by note, not by fragment: a note
@@ -599,6 +717,8 @@
 
       post('rendered', {
         pages: flow.total,
+        kept: kept,
+        computed: measureStyles(),
         layoutMs: Math.round(performance.now() - started),
         visibility: document.visibilityState,
         faces: faces(),

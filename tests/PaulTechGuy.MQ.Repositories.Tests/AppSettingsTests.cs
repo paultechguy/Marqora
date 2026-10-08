@@ -151,6 +151,10 @@ public sealed class AppSettingsTests : IDisposable
         settings.PdfSetup.ShouldBeNull();
         settings.PdfDefaults.ShouldBe(PdfPageSetup.Default);
 
+        // The paged engine arrived after the setup did; a file from before it prints with it,
+        // and the classic engine is only ever something somebody asked for.
+        settings.PdfDefaults.UseClassicEngine.ShouldBeFalse();
+
         // The exception to "nothing arrives switched on", and it earns it by changing nothing
         // outside the preview: standing Marqora's numbering down for a document that numbers
         // its own headings is a reading decision, is never written to disk, and is one Alt+5
@@ -168,9 +172,14 @@ public sealed class AppSettingsTests : IDisposable
         // a record of zeroes.
         settings.DocxSetup.ShouldBeNull();
         settings.DocxDefaults.ShouldBe(DocxExportSetup.SeededFrom(PdfPageSetup.Default));
-        settings.DocxDefaults.IncludeHeaderAndFooter.ShouldBeTrue();
-        settings.DocxDefaults.IncludeTableOfContents.ShouldBeFalse();
-        settings.DocxDefaults.IncludeCoverPage.ShouldBeFalse();
+
+        // The export layout arrived after both, shared by the two exports. Header and page
+        // numbers on, the rest off - what the Word setup answered before it moved.
+        settings.Layout.ShouldBeNull();
+        settings.LayoutDefaults.ShouldBe(ExportLayout.Default);
+        settings.LayoutDefaults.IncludeHeaderAndFooter.ShouldBeTrue();
+        settings.LayoutDefaults.IncludeTableOfContents.ShouldBeFalse();
+        settings.LayoutDefaults.IncludeCoverPage.ShouldBeFalse();
     }
 
     [Fact]
@@ -198,7 +207,7 @@ public sealed class AppSettingsTests : IDisposable
             AutoSaveDelaySeconds = 45,
             NewFileLineEnding = LineEndingStyle.Lf,
             WriteUtf8Bom = true,
-            PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape },
+            PdfSetup = new PdfPageSetup { Paper = PaperSize.A4, Orientation = PageOrientation.Landscape, UseClassicEngine = true },
             DocxSetup = new DocxExportSetup
             {
                 Paper = PaperSize.Legal,
@@ -206,9 +215,8 @@ public sealed class AppSettingsTests : IDisposable
                 // Word's own margin presets, not the PDF's - they share some names and none of
                 // their measurements, which is why they are separate enums.
                 Margin = PageMargin.Moderate,
-                IncludeTableOfContents = true,
-                IncludeCoverPage = true,
             },
+            Layout = new ExportLayout { IncludeTableOfContents = true, IncludeCoverPage = true, IncludeHeaderAndFooter = false },
             LogRetentionDays = 30,
             SpellCheckEnabled = false,
             FindSelectFirstResult = true,
@@ -276,6 +284,71 @@ public sealed class AppSettingsTests : IDisposable
             // The answers themselves are still there; it is only the arithmetic that is not.
             json.ShouldContain("\"margin\": \"Wide\"");
             json.ShouldContain("\"paper\": \"A4\"");
+        }
+        finally
+        {
+            repository.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A settings file from before the export layout was shared keeps its answer.
+    ///
+    /// The three boxes were written on the Word setup, and the file a user already has still
+    /// says so. Read whole, it must answer with what it said - a cover page asked for stays
+    /// asked for - and not fall back to the defaults because the new key is absent.
+    /// </summary>
+    [Fact]
+    public async Task The_layout_an_older_file_wrote_on_the_Word_setup_is_the_layout_read()
+    {
+        AppSettings settings = await LoadAsync("""
+            {
+              "docxSetup": {
+                "paper": "A4",
+                "includeHeaderAndFooter": false,
+                "includeCoverPage": true
+              }
+            }
+            """);
+
+        settings.Layout.ShouldBeNull();
+        settings.LayoutDefaults.IncludeHeaderAndFooter.ShouldBeFalse();
+        settings.LayoutDefaults.IncludeCoverPage.ShouldBeTrue();
+
+        // Absent then too, so it takes the default it had then.
+        settings.LayoutDefaults.IncludeTableOfContents.ShouldBeFalse();
+        settings.DocxDefaults.Paper.ShouldBe(PaperSize.A4);
+    }
+
+    /// <summary>
+    /// Once a layout is saved, the Word setup's old copy goes, so the file holds one answer
+    /// rather than a current one and a stale one under keys that look just as current.
+    /// </summary>
+    [Fact]
+    public async Task Saving_a_layout_drops_the_old_keys_from_the_file()
+    {
+        AppSettings old = await LoadAsync("""
+            { "docxSetup": { "paper": "A4", "includeCoverPage": true } }
+            """);
+
+        AppSettings written = old.WithLayout(old.LayoutDefaults with { IncludeTableOfContents = true });
+
+        var repository = new JsonSettingsRepository(_paths, NullLogger<JsonSettingsRepository>.Instance);
+
+        try
+        {
+            await repository.SaveAsync(written, TestContext.Current.CancellationToken);
+
+            string json = await File.ReadAllTextAsync(_paths.SettingsFilePath, TestContext.Current.CancellationToken);
+
+            json.ShouldContain("\"layout\"");
+            json.ShouldContain("\"includeCoverPage\": true");
+            json.Split("\"includeCoverPage\"").Length.ShouldBe(2, "One copy of the answer, under layout.");
+
+            AppSettings read = await repository.LoadAsync(TestContext.Current.CancellationToken);
+
+            read.LayoutDefaults.ShouldBe(new ExportLayout { IncludeCoverPage = true, IncludeTableOfContents = true });
+            read.DocxDefaults.Paper.ShouldBe(PaperSize.A4);
         }
         finally
         {

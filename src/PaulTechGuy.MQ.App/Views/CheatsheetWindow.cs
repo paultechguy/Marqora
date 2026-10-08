@@ -69,6 +69,9 @@ public sealed partial class CheatsheetWindow : PaletteWindow
     private readonly List<string> _pending = [];
 
     private bool _isReady;
+
+    /// <summary>The print markup a print is waiting for, while one is; see RequestPrintMarkupAsync.</summary>
+    private TaskCompletionSource<string?>? _printMarkup;
     private bool _isShuttingDown;
 
     public CheatsheetWindow(
@@ -292,6 +295,14 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                             && selected.ValueKind == JsonValueKind.True);
                     break;
 
+                case "print":
+                    Print();
+                    break;
+
+                case "printHtml":
+                    _printMarkup?.TrySetResult(ReadString(payload, "data"));
+                    break;
+
                 case "selectionCopied":
                     ClipboardText.Set(ReadString(payload, "text"), _logger);
                     break;
@@ -376,11 +387,52 @@ public sealed partial class CheatsheetWindow : PaletteWindow
                 return;
             }
 
-            await WebViewPrinting.PrintAsync(core, job);
+            // The shading box is the same setting Export to PDF uses; answered here, it is
+            // the answer there too.
+            _settings.Update(s => s with { PdfSetup = s.PdfDefaults with { IncludeBackgrounds = job.IncludeBackgrounds } });
+
+            // Through the paged engine, as the document's printout is (docs/Export-Alignment-
+            // Plan.md, §6.6): the paper spec's type, true size, and page numbers. No cover or
+            // contents - the cheatsheet has its own jump list - but the header names it.
+            await PagedJobs.PrintAsync(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                _assets,
+                RequestPrintMarkupAsync,
+                job,
+                Title,
+                new PaperFurniture(null, null, HeaderAndFooter: true),
+                _settings.Current.PdfDefaults.UseClassicEngine,
+                documentAssets: null,
+                _logger,
+                () => WebViewPrinting.PrintAsync(core, job)).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not print the cheatsheet.");
+        }
+    }
+
+    /// <summary>
+    /// The cheatsheet's print markup - its content with the light drawings, once every drawing
+    /// is done - or null when the page does not answer in time, and the print falls back.
+    /// </summary>
+    private async Task<string?> RequestPrintMarkupAsync()
+    {
+        var pending = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _printMarkup = pending;
+
+        try
+        {
+            Send("requestPrintHtml", new { });
+
+            // Past the page's own ten-second wait for its drawings.
+            Task done = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15))).ConfigureAwait(true);
+
+            return done == pending.Task && pending.Task.Result is { Length: > 0 } markup ? markup : null;
+        }
+        finally
+        {
+            _printMarkup = null;
         }
     }
 

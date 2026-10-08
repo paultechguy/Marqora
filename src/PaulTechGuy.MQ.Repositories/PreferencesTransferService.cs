@@ -176,6 +176,21 @@ public sealed class PreferencesTransferService(
         merged = Clamp(merged, adjusted).WithSessionOf(current);
 
         var mentioned = new HashSet<string>(offered.Select(e => e.Key), StringComparer.OrdinalIgnoreCase);
+
+        /*
+            A file from before the export layout was shared has no "layout" key, and carries
+            its three boxes on the Word setup instead. Key by key, the merge would keep this
+            machine's layout and leave the file's answer stranded on a setup nothing reads, so
+            it is moved across here. AppSettings.LayoutDefaults does the same for a settings
+            file read whole; an import is the one reader that lays a file over another.
+        */
+        if (!mentioned.Contains(nameof(AppSettings.Layout))
+            && mentioned.Contains(nameof(AppSettings.DocxSetup))
+            && merged.DocxSetup?.LegacyLayout() is { } legacy)
+        {
+            merged = merged.WithLayout(legacy);
+            mentioned.Add(nameof(AppSettings.Layout));
+        }
         List<string> absent = [.. known.Where(k => !mentioned.Contains(k)).Order(StringComparer.Ordinal)];
 
         logger.LogInformation(

@@ -22,6 +22,12 @@ public interface IPrintDialogService
     /// <summary>
     /// Shows the print dialog. Returns null when the user cancels, which includes the case of
     /// a machine with no printer installed: the dialog says so and offers only Cancel.
+    ///
+    /// For a document, so the dialog shows the cover, contents and header boxes both export
+    /// dialogs show, opened on <paramref name="layout"/> and answered with the job.
     /// </summary>
-    Task<PrintJob?> PickPrinterAsync(PdfPageSetup defaults, CancellationToken cancellationToken = default);
+    Task<ExportChoice<PrintJob>?> PickPrinterAsync(
+        PdfPageSetup defaults,
+        ExportLayout layout,
+        CancellationToken cancellationToken = default);
 }

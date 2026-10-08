@@ -67,6 +67,11 @@ $words = [ordered]@{
     # identifier, string literal or compound such as greyhound for the stem to eat.
     'grey' = 'gray'
 
+    # Covers labelled, labelling and relabelled off the one stem; found in the cheatsheet.
+    # Checked before adding: the one identifier it reaches, DialogFields.Labelled, is C# and
+    # every call to it is in a scanned file, so the method and its callers move together.
+    'labell' = 'label'
+
     'materialis' = 'materializ'
     'maths' = 'math'
 }
@@ -88,6 +93,7 @@ $extensions = @('*.cs', '*.xaml', '*.js', '*.css', '*.html', '*.json', '*.md')
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$utf8Bom = [System.Text.UTF8Encoding]::new($true)
 
 # Generated code, build output, the vendored web bundle and the tooling folders are none of
 # Marqora's business. artifacts holds built release bodies, which are already published.
@@ -174,7 +180,14 @@ foreach ($file in $files | Sort-Object FullName -Unique) {
 
     $updated = $pattern.Replace($text, { param($item) Get-Replacement $item.Value })
 
-    [System.IO.File]::WriteAllText($file.FullName, $updated, $utf8NoBom)
+    # A byte order mark the file had goes back on. ReadAllText drops it, and writing every file
+    # without one took it off docs/UltimateMarkdownContent.md, whose mark ahead of the front
+    # matter is one of the things that fixture tests.
+    $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+    $hadBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+    $encoding = if ($hadBom) { $utf8Bom } else { $utf8NoBom }
+
+    [System.IO.File]::WriteAllText($file.FullName, $updated, $encoding)
 
     $changed += [pscustomobject]@{ File = $relative; Count = $matched.Count }
 }

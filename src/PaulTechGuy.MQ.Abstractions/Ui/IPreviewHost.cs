@@ -314,6 +314,14 @@ public sealed record ReviewMark(Guid Id, int Number, ReviewAnchor Anchor, bool D
 public sealed record ReviewNote(Guid Id, int Number, string Html);
 
 /// <summary>
+/// What a PDF export did: which engine wrote the file, and what the PDF lost that the
+/// document asked for - diagrams the preview could not draw, by line - for the export report
+/// (docs/Export-Alignment-Plan.md, §6.5). Pictures are not here: the host cannot see the
+/// document's links, and the view model checks those itself.
+/// </summary>
+public sealed record PdfExportOutcome(PrintEngine Engine, IReadOnlyList<ExportIssue> Issues);
+
+/// <summary>
 /// The bridge to the WebView-hosted editor and preview surface.
 ///
 /// The shell keeps one editor model and one cached preview per open document, so switching
@@ -841,19 +849,29 @@ public interface IPreviewHost
     Task ReplaceTextAsync(Guid documentId, string text, RenderedMarkdown rendered);
 
     /// <summary>
-    /// Prints the preview to a PDF file. The editor pane is excluded by print styles rather
-    /// than by changing the view, so the window does not visibly change during an export.
+    /// Writes the active document to a PDF file.
+    ///
+    /// Through the paged engine - the document laid out into pages in a view of its own, with
+    /// the cover, contents, running header and page numbers it asks for, and footnotes at the
+    /// page foot - unless the setup asks for the classic engine, or the paged engine cannot
+    /// finish, in which case the preview is printed as it stands, as every PDF was before. The
+    /// window does not visibly change either way. Answers which engine wrote the file.
     /// </summary>
     /// <param name="title">
     /// What the PDF calls itself: the front matter's title, or the file name. It goes into the
     /// file's Title property, and a full path there travels with the file to whoever it is sent.
     /// </param>
-    Task ExportPdfAsync(string path, PdfPageSetup setup, string title);
+    /// <param name="furniture">The cover, contents and header and footer, resolved for this document.</param>
+    Task<PdfExportOutcome> ExportPdfAsync(string path, PdfPageSetup setup, string title, PaperFurniture furniture);
 
     /// <summary>
-    /// Prints the preview, for a paper copy rather than a file. The same print styles that
-    /// keep the editor pane out of an exported PDF apply here, so the window does not
-    /// visibly change while the job runs.
+    /// Prints the active document, for a paper copy rather than a file.
+    ///
+    /// Through the paged engine, so a printout and a PDF of the same document are one layout,
+    /// unless <paramref name="useClassicEngine"/> asks for the preview to be printed as it
+    /// stands, or the paged engine fails before sending anything. A failure after pages may
+    /// have reached the printer throws rather than falling back, which would print twice.
+    /// Answers which engine printed.
     ///
     /// The printer is already chosen: the caller shows the Windows print dialog and passes
     /// the answer in. That is what makes this a settings-driven print rather than one of the
@@ -861,7 +879,8 @@ public interface IPreviewHost
     /// can be switched off.
     /// </summary>
     /// <param name="title">The name the print queue lists the job under, chosen as for a PDF.</param>
-    Task PrintAsync(PrintJob job, string title);
+    /// <param name="furniture">The cover, contents and header and footer, resolved for this document.</param>
+    Task<PrintEngine> PrintAsync(PrintJob job, string title, PaperFurniture furniture, bool useClassicEngine);
 }
 
 /// <summary>An inclusive, zero-based range of editor lines.</summary>

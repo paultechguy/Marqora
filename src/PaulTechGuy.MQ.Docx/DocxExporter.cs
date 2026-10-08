@@ -49,6 +49,7 @@ public sealed class DocxExporter : IDocxExporter
         string title,
         string markdown,
         DocxExportSetup setup,
+        ExportLayout layout,
         HeadingNumbering headingNumbering,
         string? sourceDocumentPath,
         string? renderedPreviewHtml,
@@ -60,6 +61,7 @@ public sealed class DocxExporter : IDocxExporter
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
         ArgumentNullException.ThrowIfNull(markdown);
         ArgumentNullException.ThrowIfNull(setup);
+        ArgumentNullException.ThrowIfNull(layout);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -124,7 +126,7 @@ public sealed class DocxExporter : IDocxExporter
 
             DocxSettings.Write(
                 main.AddNewPart<DocumentSettingsPart>(),
-                updateFieldsOnOpen: setup.IncludeTableOfContents,
+                updateFieldsOnOpen: layout.IncludeTableOfContents,
                 hasFootnotes);
 
             // Only when there is something to number: an empty numbering part is one more
@@ -151,13 +153,13 @@ public sealed class DocxExporter : IDocxExporter
             FrontMatter front = FrontMatter.Read(document);
 
             (string? headerId, string? footerId) =
-                DocxFurniture.WriteHeaderAndFooter(main, front.Title ?? title, setup);
+                DocxFurniture.WriteHeaderAndFooter(main, front.Title ?? title, setup, layout);
 
             // Three sections where there is content for three. Each break is the section's
             // properties riding in the paragraph mark that closes it; the last section's ride
             // on the body itself. A next-page break starts a new page on its own, so neither
             // of these needs the explicit page break it used to end with.
-            if (setup.IncludeCoverPage)
+            if (layout.IncludeCoverPage)
             {
                 DocxFurniture.WriteCoverPage(
                     body,
@@ -169,7 +171,7 @@ public sealed class DocxExporter : IDocxExporter
                     SectionProperties(setup, headerId: null, footerId: null, pageNumbers: null)));
             }
 
-            if (setup.IncludeTableOfContents)
+            if (layout.IncludeTableOfContents)
             {
                 DocxFurniture.WriteTableOfContents(
                     body,

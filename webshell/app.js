@@ -1688,6 +1688,23 @@
     screen one. Only the svg element is exchanged, so whatever else hangs on the block, a
     review's comment numbers among it, comes through untouched.
   */
+  /*
+    Every diagram on the page that would not draw, with the line its source starts on, for the
+    PDF's export report (docs/Export-Alignment-Plan.md, §6.5). The host cannot know: a diagram
+    fails here, in mermaid. The line is Markdig's, counted from zero, as data-src-line carries
+    it; the host turns it into the editor's.
+  */
+  function diagramErrors() {
+    return Array.prototype.map.call(els.preview.querySelectorAll('.mq-mermaid-error'), function (error) {
+      var block = error.closest('[data-src-line]');
+
+      return {
+        line: block ? parseInt(block.getAttribute('data-src-line'), 10) : -1,
+        message: error.textContent || ''
+      };
+    });
+  }
+
   function outputMarkup(root) {
     var copies = root.querySelectorAll('.' + OUTPUT_COPY);
 
@@ -6330,7 +6347,8 @@
             html: outputMarkup(withoutCommentMarks(els.preview.cloneNode(true))).innerHTML,
             themeCss: theme ? theme.textContent : '',
             paperCss: paper ? paper.textContent : '',
-            rootStyle: document.documentElement.getAttribute('style') || ''
+            rootStyle: document.documentElement.getAttribute('style') || '',
+            diagramErrors: diagramErrors()
           })
         });
       });

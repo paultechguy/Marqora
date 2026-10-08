@@ -35,7 +35,7 @@ public class AppearanceTests
     {
         using var exported = await ExportedDocument.FromAsync(
             "# One\n\n## Two\n\n### Three\n",
-            new DocxExportSetup { IncludeTableOfContents = true });
+            new ExportLayout { IncludeTableOfContents = true });
 
         string styles = exported.StylesXml();
 
@@ -69,7 +69,7 @@ public class AppearanceTests
 
         using var exported = await ExportedDocument.FromAsync(
             $"# {Line}\n\n{Line}.\n",
-            new DocxExportSetup { IncludeTableOfContents = true });
+            new ExportLayout { IncludeTableOfContents = true });
 
         using WordprocessingDocument file = WordprocessingDocument.Open(exported.Path, false);
 

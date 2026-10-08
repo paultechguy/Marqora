@@ -4,6 +4,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
 
@@ -25,9 +26,10 @@ namespace PaulTechGuy.MQ.App.Views;
 /// asks the driver what paper it holds and whether it can print in color or on both sides,
 /// and a capability the driver does not claim is not offered at all.
 ///
-/// Margins and backgrounds are not here. They come from the PDF page setup in preferences, so
-/// paper and PDF start from the same idea of what a Marqora page looks like - which is what
-/// the dialog this replaces did, having no field for either.
+/// Margins are not here. They come from the PDF page setup in preferences, so paper and PDF
+/// start from the same idea of what a Marqora page looks like. Shading is here, though it is
+/// that same setting: printing is where the ink is spent, and a choice hidden in Preferences
+/// is no use at the moment it matters. Ticking it here changes it for Export to PDF too.
 /// </summary>
 internal sealed class PrintDialog : ContentDialog
 {
@@ -46,11 +48,17 @@ internal sealed class PrintDialog : ContentDialog
         ["One-sided", "Two-sided, flip on long edge", "Two-sided, flip on short edge"];
 
     private readonly PdfPageSetup _defaults;
+
+    /// <summary>The cover, contents and header boxes, for a document; null for a page that has none.</summary>
+    private readonly LayoutFields? _layout;
     private readonly IReadOnlyList<string> _printers;
 
     private readonly ComboBox _printer;
     private readonly NumberBox _copies;
     private readonly CheckBox _collate;
+
+    /// <summary>The shading box, the same setting Export to PDF and Preferences show.</summary>
+    private readonly CheckBox _shading;
     private readonly TextBox _pages;
     private readonly TextBlock _pagesError;
     private readonly ComboBox _paper;
@@ -66,9 +74,10 @@ internal sealed class PrintDialog : ContentDialog
     /// </summary>
     private PrinterCapabilities _capabilities;
 
-    private PrintDialog(PdfPageSetup defaults)
+    private PrintDialog(PdfPageSetup defaults, ExportLayout? layout)
     {
         _defaults = defaults;
+        _layout = layout is null ? null : new LayoutFields(layout);
         _printers = Win32Printers.Names();
 
         Title = "Print";
@@ -92,6 +101,12 @@ internal sealed class PrintDialog : ContentDialog
             ValidationMode = NumberBoxValidationMode.InvalidInputOverwritten,
             Width = 140,
             HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
+        _shading = new CheckBox
+        {
+            Content = "Shade code, tables and callouts",
+            IsChecked = _defaults.IncludeBackgrounds,
         };
 
         _collate = new CheckBox
@@ -122,8 +137,8 @@ internal sealed class PrintDialog : ContentDialog
         _color = DialogFields.Combo(ColorModes, 0);
         _duplex = DialogFields.Combo(DuplexModes, 0);
 
-        _colorField = DialogFields.Labelled("Color", _color);
-        _duplexField = DialogFields.Labelled("Sides", _duplex);
+        _colorField = DialogFields.Labeled("Color", _color);
+        _duplexField = DialogFields.Labeled("Sides", _duplex);
 
         _printer.SelectionChanged += OnPrinterChanged;
         _copies.ValueChanged += OnCopiesChanged;
@@ -155,7 +170,7 @@ internal sealed class PrintDialog : ContentDialog
                 HeightInches = height,
                 VerticalMarginInches = _defaults.VerticalMarginInches,
                 HorizontalMarginInches = _defaults.HorizontalMarginInches,
-                IncludeBackgrounds = _defaults.IncludeBackgrounds,
+                IncludeBackgrounds = _shading.IsChecked ?? true,
                 ColorMode = SelectedColorMode(),
                 Duplex = SelectedDuplex(),
                 PageRanges = SelectedPageRanges(),
@@ -181,49 +196,113 @@ internal sealed class PrintDialog : ContentDialog
     {
         ArgumentNullException.ThrowIfNull(defaults);
 
+        return await ShowCoreAsync(anchor, defaults, layout: null) is { } dialog ? dialog.Job : null;
+    }
+
+    /// <summary>
+    /// Shows the dialog for a document, with the cover, contents and header boxes both export
+    /// dialogs show. Returns null when the user cancels, as above.
+    /// </summary>
+    public static async Task<ExportChoice<PrintJob>?> ShowAsync(FrameworkElement? anchor, PdfPageSetup defaults, ExportLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(defaults);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        return await ShowCoreAsync(anchor, defaults, layout) is { _layout: { } fields } dialog
+            ? new ExportChoice<PrintJob>(dialog.Job, fields.Layout)
+            : null;
+    }
+
+    /// <summary>The dialog once it was answered with Print, or null.</summary>
+    private static async Task<PrintDialog?> ShowCoreAsync(FrameworkElement? anchor, PdfPageSetup defaults, ExportLayout? layout)
+    {
         if (anchor is null)
         {
             return null;
         }
 
-        var dialog = new PrintDialog(defaults).AnchorTo(anchor);
+        var dialog = new PrintDialog(defaults, layout).AnchorTo(anchor);
 
-        return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog.Job : null;
+        return await dialog.ShowAsync() == ContentDialogResult.Primary ? dialog : null;
     }
 
-    private StackPanel BuildContent()
+    /// <summary>
+    /// The dialog's fields, in two columns (<see cref="DialogFields.TwoColumns"/>): the job on
+    /// the left - which printer, how many, which pages - and the paper on the right - its size
+    /// and way up, ink and sides, and what is printed around the document.
+    /// </summary>
+    private FrameworkElement BuildContent()
     {
-        var panel = new StackPanel { Spacing = 14, Width = 360 };
-
         if (_printers.Count == 0)
         {
-            panel.Children.Add(new TextBlock
+            return new TextBlock
             {
                 Text = "No printers are installed. Add one in Windows Settings, "
                     + "then print again.",
                 TextWrapping = TextWrapping.Wrap,
-            });
-
-            return panel;
+                Width = DialogFields.ColumnWidth,
+            };
         }
 
-        panel.Children.Add(DialogFields.Labelled("Printer", _printer));
-        panel.Children.Add(DialogFields.Labelled("Copies", _copies));
-        panel.Children.Add(_collate);
+        StackPanel job = DialogFields.Column();
+
+        job.Children.Add(DialogFields.Labeled("Printer", _printer));
+        job.Children.Add(DialogFields.Labeled("Copies", _copies));
+        job.Children.Add(_collate);
 
         // The only field in the dialog whose answer has a syntax rather than a value, and so
         // the only one carrying a hint. The placeholder covers the empty case; the icon
         // covers the four it cannot.
-        var pages = DialogFields.Labelled("Pages", _pages, PagesHint());
+        var pages = DialogFields.Labeled("Pages", _pages, PagesHint());
         pages.Children.Add(_pagesError);
-        panel.Children.Add(pages);
+        job.Children.Add(pages);
 
-        panel.Children.Add(DialogFields.Labelled("Paper size", _paper));
-        panel.Children.Add(DialogFields.Labelled("Orientation", _orientation));
-        panel.Children.Add(_colorField);
-        panel.Children.Add(_duplexField);
+        StackPanel paper = DialogFields.Column();
 
-        return panel;
+        paper.Children.Add(DialogFields.Labeled("Paper size", _paper));
+        paper.Children.Add(DialogFields.Labeled("Orientation", _orientation));
+        paper.Children.Add(Pair(_colorField, _duplexField));
+
+        // The shading box with the three layout boxes, one group: all four say what goes on
+        // the page. Shading is the same setting Export to PDF and Preferences show - here,
+        // where the ink is actually spent, as well. The layout three are the shared answer
+        // both export dialogs show, and the classic engine prints the preview as it stands,
+        // with none of them.
+        paper.Children.Add(DialogFields.Group(
+            new[] { _shading }.Concat((_layout?.Boxes ?? []).Select(box =>
+            {
+                box.IsEnabled = !_defaults.UseClassicEngine;
+                return box;
+            }))));
+
+        return DialogFields.TwoColumns(this, job, paper);
+    }
+
+    /// <summary>
+    /// Two fields side by side in equal columns, each control stretched to its column. A field
+    /// the printer does not offer is collapsed and leaves its column empty rather than moving
+    /// the other one.
+    /// </summary>
+    private static Grid Pair(FrameworkElement left, FrameworkElement right)
+    {
+        var grid = new Grid { ColumnSpacing = 12 };
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        foreach ((FrameworkElement field, int column) in new[] { (left, 0), (right, 1) })
+        {
+            Grid.SetColumn(field, column);
+
+            foreach (ComboBox combo in (field as Panel)?.Children.OfType<ComboBox>() ?? [])
+            {
+                combo.HorizontalAlignment = HorizontalAlignment.Stretch;
+            }
+
+            grid.Children.Add(field);
+        }
+
+        return grid;
     }
 
     /// <summary>

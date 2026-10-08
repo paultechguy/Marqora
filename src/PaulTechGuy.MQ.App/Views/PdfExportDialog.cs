@@ -4,6 +4,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 
 namespace PaulTechGuy.MQ.App.Views;
@@ -12,7 +13,7 @@ namespace PaulTechGuy.MQ.App.Views;
 /// Page setup for a PDF export.
 ///
 /// Built in code rather than XAML because it has no bindings and exists only to return a
-/// <see cref="PdfPageSetup"/>. It opens on the setup held in preferences, which the caller
+/// choice. It opens on the setup held in preferences, which the caller
 /// saves again afterwards - so exporting several documents in a row does not mean
 /// re-answering the same question, and neither does coming back tomorrow.
 /// </summary>
@@ -22,10 +23,25 @@ internal sealed class PdfExportDialog : ContentDialog
     private readonly ComboBox _orientation;
     private readonly ComboBox _margin;
     private readonly CheckBox _backgrounds;
+    private readonly LayoutFields? _layout;
 
-    public PdfExportDialog(string documentName, PdfPageSetup current)
+    /// <summary>
+    /// The setup the dialog opened on. The answer starts from it, so a choice the dialog does not
+    /// show - the classic engine, which lives in preferences - comes through untouched rather
+    /// than being reset by every export.
+    /// </summary>
+    private readonly PdfPageSetup _current;
+
+    /// <param name="layout">
+    /// The shared layout boxes to show, or null for a page that has none to offer - a diagram
+    /// popped out on its own has no cover, contents or running header.
+    /// </param>
+    public PdfExportDialog(string documentName, PdfPageSetup current, ExportLayout? layout)
     {
         ArgumentNullException.ThrowIfNull(current);
+
+        _current = current;
+        _layout = layout is null ? null : new LayoutFields(layout);
 
         Title = "Export to PDF";
         PrimaryButtonText = "Export";
@@ -41,15 +57,20 @@ internal sealed class PdfExportDialog : ContentDialog
 
         _backgrounds = new CheckBox
         {
-            Content = "Include background colors",
+            Content = "Shade code, tables and callouts",
             IsChecked = current.IncludeBackgrounds,
         };
 
         Content = BuildContent(documentName);
     }
 
-    /// <summary>The page setup the user chose. Only meaningful when the dialog returned Primary.</summary>
-    public PdfPageSetup Setup => new()
+    /// <summary>What the user chose. Only meaningful when the dialog returned Primary.</summary>
+    public ExportChoice<PdfPageSetup> Choice => new(
+        Setup,
+        _layout?.Layout ?? throw new InvalidOperationException("This dialog was opened without the layout boxes."));
+
+    /// <summary>The page setup the user chose.</summary>
+    public PdfPageSetup Setup => _current with
     {
         Paper = (PaperSize)Math.Max(0, _paper.SelectedIndex),
         Orientation = (PageOrientation)Math.Max(0, _orientation.SelectedIndex),
@@ -57,31 +78,51 @@ internal sealed class PdfExportDialog : ContentDialog
         IncludeBackgrounds = _backgrounds.IsChecked ?? true,
     };
 
-    private StackPanel BuildContent(string documentName)
+    /// <summary>
+    /// Two columns (<see cref="DialogFields.TwoColumns"/>), the same shape as Print: the page
+    /// on the left - its size, way up and margins - and what is printed on it on the right.
+    /// </summary>
+    private FrameworkElement BuildContent(string documentName)
     {
-        var panel = new StackPanel { Spacing = 14, Width = 340 };
+        StackPanel page = DialogFields.Column();
 
-        panel.Children.Add(new TextBlock
+        page.Children.Add(new TextBlock
         {
             Text = documentName,
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        panel.Children.Add(DialogFields.Labelled("Paper size", _paper));
-        panel.Children.Add(DialogFields.Labelled("Orientation", _orientation));
-        panel.Children.Add(DialogFields.Labelled("Margins", _margin));
-        panel.Children.Add(_backgrounds);
+        page.Children.Add(DialogFields.Labeled("Paper size", _paper));
+        page.Children.Add(DialogFields.Labeled("Orientation", _orientation));
+        page.Children.Add(DialogFields.Labeled("Margins", _margin));
 
-        panel.Children.Add(new TextBlock
+        StackPanel content = DialogFields.Column();
+
+        // The shading box with the layout boxes, one group: all four say what goes on the page.
+        // The classic engine prints the preview as it stands, with none of the layout three.
+        content.Children.Add(DialogFields.Group(
+            new[] { _backgrounds }.Concat((_layout?.Boxes ?? []).Select(box =>
+            {
+                box.IsEnabled = !_current.UseClassicEngine;
+                return box;
+            }))));
+
+        content.Children.Add(new TextBlock
         {
-            Text = "Diagrams, code blocks and tables rely on their background colors. "
-                + "Turning them off saves ink but flattens those blocks.",
+            Text = "Unticked saves ink: code, table headers, callouts, quotes and diagrams "
+                + "print without their gray or colored fill, and the text prints as before."
+                + (_layout is null
+                    ? string.Empty
+                    : " The header, contents and title page are shared with Export to Word"
+                        + (_current.UseClassicEngine
+                            ? ", and the classic print engine set in Preferences draws none of them."
+                            : ".")),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
             Opacity = 0.7,
         });
 
-        return panel;
+        return DialogFields.TwoColumns(this, page, content);
     }
 }

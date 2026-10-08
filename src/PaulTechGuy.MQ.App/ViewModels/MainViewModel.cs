@@ -1984,7 +1984,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     ///
     /// Moves nothing itself. The workspace raises PinChanged, and the case handling it does the
     /// reposition - so the tab arrives at its new place already wearing the glyph, rather than
-    /// sliding first and being relabelled a moment later.
+    /// sliding first and being relabeled a moment later.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanToggleTabPin))]
     private async Task ToggleTabPinAsync()
@@ -8352,19 +8352,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        DocxExportSetup? setup = await _exportDialogs
-            .RequestDocxSetupAsync(document.DisplayName, _settings.Current.DocxDefaults)
-            .ConfigureAwait(true);
-
-        if (setup is null)
+        if (await _exportDialogs
+                .RequestDocxSetupAsync(document.DisplayName, _settings.Current.DocxDefaults, _settings.Current.LayoutDefaults)
+                .ConfigureAwait(true) is not { } choice)
         {
             return;
         }
 
+        DocxExportSetup setup = choice.Setup;
+        ExportLayout layout = choice.Layout;
+
         // Saved on accepting the dialog rather than on a successful write, the same rule the
         // PDF path follows: the answer is what the user chose, and a failed export does not
         // make it the wrong choice.
-        _settings.Update(s => s with { DocxSetup = setup });
+        _settings.Update(s => s.WithLayout(layout) with { DocxSetup = setup });
 
         string? path = await _fileDialogs
             .PickExportFileAsync(SuggestedExportName(document, ".docx"), "Word document", [".docx"])
@@ -8414,6 +8415,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     title,
                     markdown,
                     setup,
+                    layout,
                     numbering,
                     source,
                     rendered,
@@ -8518,18 +8520,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        PdfPageSetup? setup = await _exportDialogs
-            .RequestPdfSetupAsync(document.DisplayName, _settings.Current.PdfDefaults)
-            .ConfigureAwait(true);
-
-        if (setup is null)
+        if (await _exportDialogs
+                .RequestPdfSetupAsync(document.DisplayName, _settings.Current.PdfDefaults, _settings.Current.LayoutDefaults)
+                .ConfigureAwait(true) is not { } choice)
         {
             return;
         }
 
+        PdfPageSetup setup = choice.Setup;
+
         // Saved on accepting the dialog rather than on a successful write: the answer is
         // what the user chose, and a failed export does not make it the wrong choice.
-        _settings.Update(s => s with { PdfSetup = setup });
+        _settings.Update(s => s.WithLayout(choice.Layout) with { PdfSetup = setup });
 
         string? path = await _fileDialogs
             .PickExportFileAsync(SuggestedExportName(document, ".pdf"), "PDF document", [".pdf"])
@@ -8545,8 +8547,47 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = "Exporting PDF...";
 
-            await _host.ExportPdfAsync(path, setup, PrintTitleOf(document)).ConfigureAwait(true);
+            // The text the PDF was made from, kept for the report: it is how the report notices
+            // the document moving on beneath it, and what its picture rows are checked against.
+            string markdown = document.Text;
+
+            PdfExportOutcome outcome = await _host
+                .ExportPdfAsync(path, setup, PrintTitleOf(document), FurnitureFor(document))
+                .ConfigureAwait(true);
+
             AnnounceExport(path);
+
+            // Said when it happens, because the reader asked for the paged engine and the file
+            // they got has none of what it adds - no page numbers, no contents - at a smaller
+            // size. The log says why.
+            if (outcome.Engine == PrintEngine.Classic && !setup.UseClassicEngine)
+            {
+                StatusText += " (with the classic engine; the paged engine could not finish)";
+            }
+
+            IReadOnlyList<ExportIssue> issues =
+            [
+                .. outcome.Issues,
+                .. await PdfPictureIssuesAsync(markdown, document.Path).ConfigureAwait(true),
+            ];
+
+            // Only when something is missing, as the Folio's report is: a PDF that came out
+            // whole is announced in the status bar, and a window saying so would be noise.
+            if (issues.Count > 0)
+            {
+                _exportReports.Show(
+                    new ExportIssueReport
+                    {
+                        DocumentName = PrintTitleOf(document),
+                        ExportedText = new Dictionary<Guid, string> { [document.Id] = markdown },
+                        OutputPath = path,
+                        Outcome = "PDF exported",
+                        Issues = [.. issues
+                            .Select(i => i with { DocumentId = document.Id })
+                            .OrderBy(i => i.Line)],
+                    },
+                    GoToExportedLine);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -8577,31 +8618,49 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task SendToPrinterAsync()
     {
-        if (_host is null)
+        if (_host is null || _workspace.Active is not { } document)
         {
             return;
         }
 
-        // Paper and orientation come from the dialog; margins and backgrounds have no field
-        // in it, so they come from the same page setup a PDF export starts on - which is now
-        // the one held in preferences, so paper chosen once applies to both.
-        PrintJob? job = await _printDialogs
-            .PickPrinterAsync(_settings.Current.PdfDefaults)
-            .ConfigureAwait(true);
+        // Paper and orientation come from the dialog; margins have no field in it, so they come
+        // from the same page setup a PDF export starts on - which is now the one
+        // held in preferences, so paper chosen once applies to both. The cover, contents and
+        // header boxes are the shared layout, shown in the dialog and saved on Print the way
+        // the export dialogs save theirs.
+        PdfPageSetup setup = _settings.Current.PdfDefaults;
 
-        if (job is null)
+        if (await _printDialogs
+                .PickPrinterAsync(setup, _settings.Current.LayoutDefaults)
+                .ConfigureAwait(true) is not { } choice)
         {
             return;
         }
+
+        PrintJob job = choice.Setup;
+
+        // The layout boxes and the shading box are the shared answers the export dialogs show;
+        // answered here, they are the answer there too.
+        _settings.Update(s => s.WithLayout(choice.Layout) with
+        {
+            PdfSetup = s.PdfDefaults with { IncludeBackgrounds = job.IncludeBackgrounds },
+        });
 
         try
         {
             IsBusy = true;
             StatusText = $"Printing to {job.PrinterName}...";
 
-            await _host.PrintAsync(job, _workspace.Active is { } active ? PrintTitleOf(active) : string.Empty).ConfigureAwait(true);
+            PrintEngine engine = await _host
+                .PrintAsync(job, PrintTitleOf(document), FurnitureFor(document), setup.UseClassicEngine)
+                .ConfigureAwait(true);
 
             StatusText = $"Sent to {job.PrinterName}";
+
+            if (engine == PrintEngine.Classic && !setup.UseClassicEngine)
+            {
+                StatusText += " (with the classic engine; the paged engine could not lay it out)";
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)
         {
@@ -8632,6 +8691,92 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         FrontMatter.Read(document.Text).Title is { Length: > 0 } title
             ? title
             : document.DisplayName;
+
+    /// <summary>
+    /// The pictures a PDF of this text leaves out, as export report rows: the ones addressed on
+    /// the web, which the preview never fetches; the ones not found; and the ones kept outside
+    /// the document's folder, which the preview will not serve (docs/Export-Alignment-Plan.md,
+    /// §6.5).
+    ///
+    /// The editor's own link check, run once more over the exported text with only the picture
+    /// rules on - so the report and the underlines in the editor agree about what is missing.
+    /// The wording is Word's where Word has the same row.
+    /// </summary>
+    private async Task<IReadOnlyList<ExportIssue>> PdfPictureIssuesAsync(string markdown, string? documentPath)
+    {
+        try
+        {
+            AnalysisResult found = await Task.Run(() =>
+            {
+                RenderedMarkdown rendered = _renderer.Render(markdown);
+
+                return _analyzer.Analyze(new AnalysisRequest
+                {
+                    Text = markdown,
+                    DocumentPath = documentPath,
+                    Links = rendered.Links,
+                    Outline = rendered.Outline,
+                    Anchors = rendered.Anchors,
+                    CheckImageAltText = false,
+                    CheckBlockedImages = true,
+                });
+            }).ConfigureAwait(true);
+
+            return
+            [
+                .. found.LinkFindings
+                    .Where(f => f.Kind is LinkFindingKind.MissingImage
+                        or LinkFindingKind.RemoteMedia
+                        or LinkFindingKind.OutsideFolder)
+                    .Select(f => new ExportIssue
+                    {
+                        Line = f.Line + 1,
+                        Problem = f.Kind switch
+                        {
+                            LinkFindingKind.MissingImage => "Not found",
+                            LinkFindingKind.RemoteMedia => "Not on this machine",
+                            _ => "Outside the document's folder, so not shown",
+                        },
+                        Item = f.Url.Length <= 80 ? f.Url : f.Url[..80] + "…",
+                    }),
+            ];
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The report is a courtesy; the PDF is already written.
+            _logger.LogWarning(ex, "Could not check the exported PDF's pictures.");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// The paper furniture for a document: the shared <see cref="ExportLayout"/>, as last saved,
+    /// resolved against this document - so a PDF and a .docx of it carry the same furniture
+    /// (docs/Export-Alignment-Plan.md, §6.4).
+    ///
+    /// The cover reads the same front matter and the same date rule as Word's cover; the
+    /// contents lists the same heading levels, from this document's own numbering.
+    /// </summary>
+    private PaperFurniture FurnitureFor(MarkdownDocument document)
+    {
+        ExportLayout layout = _settings.Current.LayoutDefaults;
+        FrontMatter front = FrontMatter.Read(document.Text);
+
+        PaperCover? cover = layout.IncludeCoverPage
+            ? new PaperCover(front.Title ?? document.DisplayName, front.Subject, front.CoverDate(), front.Version, front.Author)
+            : null;
+
+        PaperContents? contents = null;
+
+        if (layout.IncludeTableOfContents)
+        {
+            (int first, int last) = ContentsListing.Levels(NumberingFor(document.Id));
+
+            contents = new PaperContents(ContentsListing.Title, first, last);
+        }
+
+        return new PaperFurniture(cover, contents, layout.IncludeHeaderAndFooter);
+    }
 
     /// <summary>
     /// Puts an export on the status line, and stops there. What was written is deliberately

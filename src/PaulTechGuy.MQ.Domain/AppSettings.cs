@@ -585,6 +585,36 @@ public sealed record AppSettings
     [System.Text.Json.Serialization.JsonIgnore]
     public DocxExportSetup DocxDefaults => DocxSetup ?? DocxExportSetup.SeededFrom(PdfDefaults);
 
+    /// <summary>
+    /// The cover, contents and header boxes both export dialogs open on. Nullable for the same
+    /// reason as <see cref="PdfSetup"/>; read it through <see cref="LayoutDefaults"/>, and write
+    /// it through <see cref="WithLayout"/>.
+    /// </summary>
+    public ExportLayout? Layout { get; set; }
+
+    /// <summary>
+    /// The export layout, safe to use whatever the settings file held.
+    ///
+    /// A file written before the layout was shared has no <see cref="Layout"/>, and carries the
+    /// three boxes on the Word setup instead; that answer is the one read until a new one is
+    /// saved. Migrating here, at the one place every reader goes through, rather than in a
+    /// loader means both JSON contexts - the settings file and a preferences import - migrate
+    /// without either having to remember to.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ExportLayout LayoutDefaults => Layout ?? DocxSetup?.LegacyLayout() ?? ExportLayout.Default;
+
+    /// <summary>
+    /// These settings with a new export layout, and the Word setup's old copy of the boxes
+    /// dropped, so the file holds one answer rather than a current one and a stale one.
+    /// </summary>
+    public AppSettings WithLayout(ExportLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        return this with { Layout = layout, DocxSetup = DocxSetup?.WithoutLegacyLayout() };
+    }
+
     // ------------------------------------------------------------------- advanced
 
     /// <summary>Days a log file is kept before it is swept up. Zero keeps them indefinitely.</summary>
