@@ -35,11 +35,6 @@ at 25%, and others were sometimes measured before the window had reached its siz
 now opens with the whole diagram in view, however wide it is, and keeps it fitted as you resize
 the window until you choose a zoom of your own.
 
-**PDF and Word exports are now near identical.** The same document exported both ways has the
-same line spacing, page count and contents page, and the last visible differences - nested
-quotes, bullets beside task items, equations in table cells, the cover title and the title
-page - are gone.
-
 **File dialogs remember where you were.** Open, Save As, Open Folder, Share Review, each kind
 of export and each kind of import keep their own last folder, so a Word export opens where the
 last Word export went, not where the last PDF or opened file did.
