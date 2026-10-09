@@ -275,4 +275,3 @@ None of it blocks a release. Paul picks; do not start one unasked.
   Markdig, so the preview would show it too. Unchecked.
 - **The endnote fallback (phase 4) has never been triggered.** Nothing tried could make it
   fire (§6.2); the code stays as the safety net.
-- **`cheatsheet.md` line 19** says `~~strikc through~~`.

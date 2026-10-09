@@ -14,7 +14,7 @@ Jump to: [Text](#text) · [Headings](#headings) · [Lists](#lists) · [Links](#l
 | `*italic*` or `_italic_` | *italic* |
 | `**bold**` or `__bold__` | **bold** |
 | `***bold italic***` | ***bold italic*** |
-| `~~strike through~~` | ~~strikc through~~ |
+| `~~strike through~~` | ~~strike through~~ |
 | `==highlighted==` | ==highlighted== |
 | `` `inline code` `` | `inline code` |
 | `H~2~O` | H~2~O |
