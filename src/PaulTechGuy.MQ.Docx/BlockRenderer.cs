@@ -66,6 +66,21 @@ internal sealed class BlockRenderer
     /// <summary>How many quotes the walker is inside while it writes a quote's children.</summary>
     private int _quoteDepth;
 
+    /// <summary>
+    /// Where the text of the list item being written starts, in twips, or zero outside a list.
+    /// A quote in the item takes it as its own text edge; see <see cref="WriteQuote"/>.
+    /// </summary>
+    private int _listTextIndent;
+
+    /// <summary>
+    /// The depth of the quote that styled each quote paragraph, for a nested quote's table
+    /// (<see cref="WrapNestedQuote"/>) to tell its own paragraphs from the inner quote's.
+    /// </summary>
+    private readonly Dictionary<Paragraph, int> _quoteDepthOf = [];
+
+    /// <summary>The caption on a nested quote's table, which marks it as a quote's box.</summary>
+    private const string QuoteTableCaption = "Block quote";
+
     /// <summary>Fence languages the preview draws as pictures rather than as code.</summary>
     private static readonly string[] DiagramLanguages = ["mermaid"];
 
@@ -323,8 +338,8 @@ internal sealed class BlockRenderer
 
         foreach (HtmlParagraph paragraph in paragraphs)
         {
-            RunFormat format = paragraph.IsSummary ? default(RunFormat).WithBold() : default;
-            var written = new Paragraph(format.ToRun(paragraph.Text));
+            var written = new Paragraph(
+                paragraph.Runs.Select(run => (paragraph.IsSummary ? run.Format.WithBold() : run.Format).ToRun(run.Text)));
 
             if (box is not null)
             {
@@ -341,8 +356,8 @@ internal sealed class BlockRenderer
         _report.Note(
             block.Line,
             box is null
-                ? "Raw HTML: its text is in the document, its styling is not"
-                : "Raw HTML: its text and its box are in the document, its other styling is not",
+                ? "Raw HTML: its text and inline formatting are in the document, its other styling is not"
+                : "Raw HTML: its text, inline formatting and box are in the document, its other styling is not",
             HtmlBlockText.SourceOf(block));
     }
 
@@ -534,8 +549,18 @@ internal sealed class BlockRenderer
                 }
 
                 int before = _body.ChildElements.Count;
+                int outerTextIndent = _listTextIndent;
 
-                Write(content);
+                _listTextIndent = (placement.Level + 1) * NumberingPlan.IndentPerLevel;
+
+                try
+                {
+                    Write(content);
+                }
+                finally
+                {
+                    _listTextIndent = outerTextIndent;
+                }
 
                 for (int i = before; i < _body.ChildElements.Count; i++)
                 {
@@ -945,6 +970,14 @@ internal sealed class BlockRenderer
 
         int before = _body.ChildElements.Count;
 
+        // Where this quote's own paragraphs will start: the style's step at the first level,
+        // or the text of the list item holding it, which the list puts them at afterwards
+        // (ApplyListFormatting); one more step per level below that. Taken before the children
+        // are written, since a list inside the quote sets the field for its own items.
+        int textEdge = _quoteDepth > 0
+            ? DocxStyles.QuoteIndentTwips * (_quoteDepth + 1)
+            : _listTextIndent > 0 ? _listTextIndent : DocxStyles.QuoteIndentTwips;
+
         _quoteDepth++;
 
         try
@@ -979,12 +1012,20 @@ internal sealed class BlockRenderer
             // A paragraph that already carries a style came from something with a stronger
             // claim to it - a heading or a code line inside the quote - and keeps it. A list
             // inside the quote is the exception: List Paragraph is only the list's default
-            // dress, and the item keeps its numbering and indent as direct formatting, so it
-            // can wear the quote's bar and ink like the quote's other paragraphs.
-            if (properties.ParagraphStyleId is null
-                || properties.ParagraphStyleId.Val?.Value == StyleIds.ListParagraph)
+            // dress, and the item keeps its numbering, so it can wear the quote's bar and ink
+            // like the quote's other paragraphs - moved across to stand inside the quote.
+            bool listed = properties.ParagraphStyleId?.Val?.Value == StyleIds.ListParagraph;
+
+            if (properties.ParagraphStyleId is null || listed)
             {
                 properties.ParagraphStyleId = new ParagraphStyleId { Val = StyleIds.Quote };
+                _quoteDepthOf[paragraph] = depth;
+
+                if (listed)
+                {
+                    StandInsideQuote(properties, textEdge);
+                    continue;
+                }
 
                 // A nested quote stands in one more step per level, as the preview indents it.
                 // Not over an indent already there: a list item keeps its own.
@@ -993,11 +1034,136 @@ internal sealed class BlockRenderer
                     properties.Indentation = new Indentation
                     {
                         Left = (DocxStyles.QuoteIndentTwips * depth).ToString(CultureInfo.InvariantCulture),
-                        Right = DocxStyles.QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
                     };
                 }
             }
         }
+
+        // The outermost of a set of nested quotes becomes a table; see WrapNestedQuote. Asked
+        // after the styling above, which is what the table's paragraphs are measured from.
+        if (_quoteDepth == 0 && quote.Descendants<QuoteBlock>().Any(inner => inner is not AlertBlock))
+        {
+            WrapNestedQuote(before, textEdge);
+        }
+    }
+
+    /// <summary>
+    /// A quote holding another quote, as a one-cell table: the cell's left border is the outer
+    /// bar and its shading the outer fill, and the inner quote keeps its own bar inside it.
+    ///
+    /// A Word paragraph has one left border. Written as paragraphs, the inner quote's lines
+    /// could show their own bar or the outer one, never both as the preview draws them; Word
+    /// starts a new border box wherever the indent changes, so the outer bar broke off beside
+    /// the inner quote, and with a fill the three boxes stood apart with white bands between
+    /// them (the cheatsheet's "Nested one level deeper"). A cell is the box HTML draws: one
+    /// bar down the whole quote, one fill behind it, and anything inside it in its own box.
+    /// A quote with nothing nested in it stays a run of paragraphs, as it always was.
+    ///
+    /// The paragraphs are moved into the cell once written, rather than written there: every
+    /// block writer appends to the body. Measured from the cell's text edge rather than the
+    /// page's, each loses the quote's text edge from its indent; the outer quote's own
+    /// paragraphs drop their bar, which the cell now draws.
+    /// </summary>
+    private void WrapNestedQuote(int before, int textEdge)
+    {
+        List<OpenXmlElement> content = [.. _body.ChildElements.Skip(before)];
+
+        if (content.Count == 0)
+        {
+            return;
+        }
+
+        foreach (OpenXmlElement element in content)
+        {
+            element.Remove();
+
+            if (element is not Paragraph paragraph || !_quoteDepthOf.TryGetValue(paragraph, out int depth))
+            {
+                continue;
+            }
+
+            ParagraphProperties properties = EnsureProperties(paragraph);
+
+            if (depth == 1)
+            {
+                properties.ParagraphBorders = new ParagraphBorders(new LeftBorder { Val = BorderValues.Nil });
+            }
+
+            int left = properties.Indentation?.Left?.Value is { } written
+                && int.TryParse(written, NumberStyles.Integer, Invariant, out int twips)
+                ? twips
+                : textEdge;
+
+            var indent = new Indentation
+            {
+                Left = Math.Max(0, left - textEdge).ToString(Invariant),
+                Right = "0",
+            };
+
+            if (properties.Indentation?.Hanging?.Value is { } hanging)
+            {
+                indent.Hanging = hanging;
+            }
+
+            properties.Indentation = indent;
+        }
+
+        // The cell's text starts where a plain quote's does, so the bar stands where its bar
+        // stands: the gap between bar and text is the style's, and the bar's own width.
+        int gap = (int)DocxStyles.QuoteBarSpacePoints * 20;
+        const int barTwips = 45;
+        int indentTwips = Math.Max(0, textEdge - gap - barTwips);
+        int width = _usableWidthTwips - indentTwips;
+
+        var cellProperties = new TableCellProperties(
+            new TableCellWidth { Width = width.ToString(Invariant), Type = TableWidthUnitValues.Dxa },
+            new TableCellBorders(
+                new LeftBorder { Val = BorderValues.Single, Size = 18U, Space = 0U, Color = _colors.QuoteBar }));
+
+        if (_colors.QuoteFill is { } fill)
+        {
+            cellProperties.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Color = "auto", Fill = fill });
+        }
+
+        cellProperties.AppendChild(new TableCellMargin(
+            new TopMargin { Width = "0", Type = TableWidthUnitValues.Dxa },
+            new LeftMargin { Width = gap.ToString(Invariant), Type = TableWidthUnitValues.Dxa },
+            new BottomMargin { Width = "0", Type = TableWidthUnitValues.Dxa },
+            new RightMargin { Width = "0", Type = TableWidthUnitValues.Dxa }));
+
+        var cell = new TableCell(cellProperties);
+
+        foreach (OpenXmlElement element in content)
+        {
+            cell.AppendChild(element);
+        }
+
+        // A cell ends in a paragraph, or Word calls the file unreadable.
+        if (cell.LastChild is not Paragraph)
+        {
+            cell.AppendChild(new Paragraph());
+        }
+
+        var table = new WordTable(
+            new TableProperties(
+                new TableWidth { Width = width.ToString(Invariant), Type = TableWidthUnitValues.Dxa },
+                new TableIndentation { Width = indentTwips, Type = TableWidthUnitValues.Dxa },
+                new TableLayout { Type = TableLayoutValues.Fixed },
+
+                // What the table is, for a screen reader - and for anything counting the
+                // document's tables, which this one is not.
+                new TableCaption { Val = QuoteTableCaption }),
+            new TableGrid(new GridColumn { Width = width.ToString(Invariant) }),
+            new TableRow(cell));
+
+        _body.AppendChild(table);
+
+        // Two tables in a row are one table to Word; a hairline paragraph keeps the quote its
+        // own, as FollowsQuote's does between two quotes.
+        _body.AppendChild(new Paragraph(
+            new ParagraphProperties(
+                new ParagraphStyleId { Val = StyleIds.Normal },
+                new SpacingBetweenLines { Before = "0", After = "0", Line = "20", LineRule = LineSpacingRuleValues.Exact })));
     }
 
     /// <summary>
@@ -1008,6 +1174,69 @@ internal sealed class BlockRenderer
         quote.Parent is { } parent
         && parent.IndexOf(quote) is > 0 and var at
         && parent[at - 1] is QuoteBlock and not AlertBlock;
+
+    /// <summary>
+    /// Moves a list paragraph inside a quote across by the quote's text edge, so the list
+    /// stands inside the quote as the preview draws it.
+    ///
+    /// A list's indents are measured from the margin - a numbered item's from its numbering
+    /// level, anything else from the indent the list wrote - and a list in a quote starts again
+    /// at level zero, so the fixture's matryoshka set its inner list's numbers at the margin.
+    /// Word draws a paragraph's left bar at its leftmost point, the hanging number included,
+    /// so the bar went out to the margin with it. A numbered item takes its level's indent as
+    /// direct formatting to be moved, the same left and hang the numbering would give it.
+    /// </summary>
+    private void StandInsideQuote(ParagraphProperties properties, int textEdge)
+    {
+        int left;
+        string? hanging;
+
+        if (properties.NumberingProperties?.NumberingLevelReference?.Val?.Value is int level)
+        {
+            left = (level + 1) * NumberingPlan.IndentPerLevel;
+            hanging = NumberingPlan.IndentPerLevel.ToString(Invariant);
+        }
+        else if (properties.Indentation is { } indent
+            && int.TryParse(indent.Left?.Value, NumberStyles.Integer, Invariant, out int written))
+        {
+            left = written;
+            hanging = indent.Hanging?.Value;
+        }
+        else
+        {
+            return;
+        }
+
+        var moved = new Indentation
+        {
+            Left = (textEdge + left).ToString(Invariant),
+        };
+
+        // Only when there is one: a null assigned here is written as an empty attribute, which
+        // the schema refuses.
+        if (hanging is not null)
+        {
+            moved.Hanging = hanging;
+        }
+
+        properties.Indentation = moved;
+
+        // A nested level stands further in than the quote's text, and its bar would step in
+        // with it. A wider gap puts the bar back on the quote's line, as far as Word's widest
+        // gap reaches - one level; a deeper one steps.
+        int further = left - (int.TryParse(hanging, NumberStyles.Integer, Invariant, out int hang) ? hang : 0);
+
+        if (further > 0)
+        {
+            uint space = DocxStyles.QuoteBarSpacePoints + (uint)(further / 20);
+
+            if (space <= DocxStyles.MaxBorderSpacePoints)
+            {
+                properties.ParagraphBorders = DocxStyles.QuoteBar(_colors, space);
+            }
+        }
+    }
+
 
     /// <summary>
     /// A fenced or indented code block.

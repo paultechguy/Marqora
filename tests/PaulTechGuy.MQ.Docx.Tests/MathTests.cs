@@ -53,6 +53,26 @@ public class MathTests
     }
 
     /// <summary>
+    /// An inline equation alone in its paragraph - the cheatsheet's math table has one in each
+    /// cell - stays inline. Word displays an equation that is the only thing in a paragraph,
+    /// centered and at display size, so a zero-width space keeps it company.
+    /// </summary>
+    [Fact]
+    public async Task An_inline_equation_alone_in_its_paragraph_stays_inline()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "$x^2$\n",
+            renderedPreviewHtml: Paragraph(0, Mathml("<msup><mi>x</mi><mn>2</mn></msup>", "x^2")));
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("sSup");
+        xml.ShouldNotContain("oMathPara");
+        xml.ShouldContain("</m:oMath><w:r><w:t>\u200B</w:t></w:r>");
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// Several equations can share a paragraph, and all carry its line. They are told apart by
     /// the order they appear in - which means the ordinal has to restart with each block, or
     /// the second paragraph's equations would be looked up past the end of the first's.

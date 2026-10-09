@@ -467,6 +467,13 @@ internal static class PagedPrintHost
                 output,
                 measured.TryGetProperty("notesFound", out JsonElement found) ? found.GetString() : "not reported");
 
+            // The document's first element after the contents, which once printed on the
+            // contents page (print.js, bodyStart).
+            logger.LogInformation(
+                "Paged {Output}: the body starts {BodyStart}.",
+                output,
+                measured.TryGetProperty("bodyStart", out JsonElement start) ? start.GetString() : "not reported");
+
             return result;
         }
         catch (Exception ex) when (ex is TimeoutException || ex.InnerException is TimeoutException)

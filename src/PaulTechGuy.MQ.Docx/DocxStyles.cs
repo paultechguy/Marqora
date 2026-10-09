@@ -61,7 +61,7 @@ internal static class DocxStyles
         styles.AppendChild(TableNormalStyle());
         styles.AppendChild(NoListStyle());
 
-        styles.AppendChild(TitleStyle());
+        styles.AppendChild(TitleStyle(colors));
         styles.AppendChild(SubtitleStyle());
 
         for (int level = 1; level <= 6; level++)
@@ -223,7 +223,11 @@ internal static class DocxStyles
         Default = true,
     };
 
-    private static Style TitleStyle() => new(
+    /// <summary>
+    /// The cover's title, in the theme's first heading color - the print cover's color, so the
+    /// two covers no longer differ by Word's being black.
+    /// </summary>
+    private static Style TitleStyle(DocxColors colors) => new(
         new StyleName { Val = "Title" },
         new BasedOn { Val = StyleIds.Normal },
         new NextParagraphStyle { Val = StyleIds.Normal },
@@ -234,6 +238,7 @@ internal static class DocxStyles
             new ContextualSpacing()),
         new StyleRunProperties(
             FontOf(PaperSpec.CoverTitle),
+            new Color { Val = colors.Heading(1) },
             SizeOf(PaperSpec.CoverTitle),
             ComplexSizeOf(PaperSpec.CoverTitle)))
     {
@@ -352,21 +357,35 @@ internal static class DocxStyles
         };
     }
 
+    /// <summary>The gap between a quote's bar and its text, in points.</summary>
+    public const uint QuoteBarSpacePoints = 8U;
+
+    /// <summary>
+    /// Word's widest gap between a border and the text, in points. A wider one is refused.
+    /// </summary>
+    public const uint MaxBorderSpacePoints = 31U;
+
+    /// <summary>
+    /// A quote's bar, at the style's gap or a wider one. A paragraph standing further in than
+    /// the quote's text - a nested list item in the quote - takes the wider gap, so its bar
+    /// stays on the quote's line rather than stepping in with it.
+    /// </summary>
+    public static ParagraphBorders QuoteBar(DocxColors colors, uint spacePoints = QuoteBarSpacePoints) =>
+        new(new LeftBorder
+        {
+            Val = BorderValues.Single,
+            Size = 18U,
+            Space = spacePoints,
+            Color = colors.QuoteBar,
+        });
+
     /// <summary>
     /// A blockquote: the theme's bar down the left, its quote ink, and its fill behind when
     /// the theme gives one - a fill equal to the page is left out rather than painted white.
     /// </summary>
     private static Style QuoteStyle(DocxColors colors)
     {
-        var paragraph = new StyleParagraphProperties(
-            new ParagraphBorders(
-                new LeftBorder
-                {
-                    Val = BorderValues.Single,
-                    Size = 18U,
-                    Space = 8U,
-                    Color = colors.QuoteBar,
-                }));
+        var paragraph = new StyleParagraphProperties(QuoteBar(colors));
 
         // Shading after the borders and before the spacing: w:pPr runs pBdr, shd, ..., spacing.
         if (colors.QuoteFill is { } fill)
@@ -375,10 +394,11 @@ internal static class DocxStyles
         }
 
         paragraph.AppendChild(SpacingOf(PaperSpec.Quote));
+        // No right indent: the preview's quote box runs to the right edge of the text, and a
+        // fill stopped a third of an inch short of the PDF's.
         paragraph.AppendChild(new Indentation
         {
             Left = QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
-            Right = QuoteIndentTwips.ToString(CultureInfo.InvariantCulture),
         });
 
         // Upright, as the preview sets a quote: the bar, the fill and the ink already mark it
@@ -806,6 +826,11 @@ internal static class DocxStyles
     /// A definition list's term. Word has no such construct, so the shape is carried by two
     /// ordinary paragraph styles: a bold term, and its definition indented beneath it.
     /// </summary>
+    /// <summary>
+    /// A definition list's term, in the body's own weight: the preview gives a term no style
+    /// of its own, so the browser's regular weight is what the screen and the PDF show, and a
+    /// bold term was Word's alone.
+    /// </summary>
     private static Style DefinitionTermStyle() => new(
         new StyleName { Val = "Marqora Term" },
         new BasedOn { Val = StyleIds.Normal },
@@ -814,13 +839,17 @@ internal static class DocxStyles
         new PrimaryStyle(),
         new StyleParagraphProperties(
             new KeepNext(),
-            new SpacingBetweenLines { Before = "160", After = "0" }),
-        new StyleRunProperties(new Bold()))
+            new SpacingBetweenLines { Before = "160", After = "0" }))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.DefinitionTerm,
     };
 
+    /// <summary>
+    /// A definition, set in as the browser sets a dd - forty CSS pixels, thirty points - with no
+    /// gap between two definitions of one term and the body's gap after the last, as the
+    /// preview spaces them. Contextual spacing drops the gap only between definitions.
+    /// </summary>
     private static Style DefinitionItemStyle() => new(
         new StyleName { Val = "Marqora Definition" },
         new BasedOn { Val = StyleIds.Normal },
@@ -828,8 +857,9 @@ internal static class DocxStyles
         new UIPriority { Val = 99 },
         new PrimaryStyle(),
         new StyleParagraphProperties(
-            new SpacingBetweenLines { Before = "0", After = "80" },
-            new Indentation { Left = "432" }))
+            new SpacingBetweenLines { Before = "0", After = Twips(PaperSpec.Body.AfterPoints) },
+            new Indentation { Left = "600" },
+            new ContextualSpacing()))
     {
         Type = StyleValues.Paragraph,
         StyleId = StyleIds.DefinitionItem,
@@ -958,12 +988,25 @@ internal static class DocxStyles
     /// An element's line height and the space around it. Points become twips, twenty to the
     /// point; a line height of 1.4 is Word's "auto" spacing of 336, 240 being single.
     /// </summary>
+    /// <summary>
+    /// An element's space above and below, and its line height in points.
+    ///
+    /// The line height is written as a distance, at least the size times the spec's multiple,
+    /// because that is what CSS's line-height means. Word's own "multiple" spacing (lineRule
+    /// auto) multiplies something else: the face's natural line height, which for Segoe UI is
+    /// already about 1.33 times the size. Written as a multiple, the spec's 1.4 set every
+    /// line near 1.86 times the size - a third taller than the PDF's - and the cheatsheet ran
+    /// a page longer in Word, its contents numbers a page late from the second section on.
+    ///
+    /// At least rather than exactly: a line holding an inline equation or picture taller than
+    /// the type still grows to hold it, as a browser's line box does, instead of clipping it.
+    /// </summary>
     private static SpacingBetweenLines SpacingOf(PaperElement element) => new()
     {
         Before = Twips(element.BeforePoints),
         After = Twips(element.AfterPoints),
-        Line = Text((int)Math.Round(element.LineHeight * 240)),
-        LineRule = LineSpacingRuleValues.Auto,
+        Line = Twips(element.SizePoints * element.LineHeight),
+        LineRule = LineSpacingRuleValues.AtLeast,
     };
 
     private static string Twips(double points) => Text((int)Math.Round(points * 20));

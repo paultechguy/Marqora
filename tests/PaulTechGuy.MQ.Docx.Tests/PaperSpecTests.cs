@@ -271,18 +271,24 @@ public sealed partial class PaperSpecTests
     private static double HalfPoints(XElement size) =>
         int.Parse((string)size.Attribute(W + "val")!, CultureInfo.InvariantCulture) / 2.0;
 
-    private static (int Before, int After, int Line) Spacing(XElement spacing) =>
+    private static (int Before, int After, int Line, string? Rule) Spacing(XElement spacing) =>
     (
         int.Parse((string?)spacing.Attribute(W + "before") ?? "0", CultureInfo.InvariantCulture),
         int.Parse((string?)spacing.Attribute(W + "after") ?? "0", CultureInfo.InvariantCulture),
-        int.Parse((string?)spacing.Attribute(W + "line") ?? "0", CultureInfo.InvariantCulture)
+        int.Parse((string?)spacing.Attribute(W + "line") ?? "0", CultureInfo.InvariantCulture),
+        (string?)spacing.Attribute(W + "lineRule")
     );
 
-    private static (int Before, int After, int Line) Expected(PaperElement element) =>
+    // The line as a distance - the size times the spec's multiple, in twips - at least that
+    // tall. A multiple of 240 with lineRule auto is Word's "multiple" spacing, which scales
+    // the face's natural line height rather than its size and set body text a third taller
+    // than the PDF.
+    private static (int Before, int After, int Line, string? Rule) Expected(PaperElement element) =>
     (
         (int)Math.Round(element.BeforePoints * 20),
         (int)Math.Round(element.AfterPoints * 20),
-        (int)Math.Round(element.LineHeight * 240)
+        (int)Math.Round(element.SizePoints * element.LineHeight * 20),
+        "atLeast"
     );
 
     [GeneratedRegex(@"/\*[\s\S]*?\*/")]

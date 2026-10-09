@@ -705,6 +705,17 @@ a.mq-blocked-media {
 .mq-preview ul.contains-task-list { list-style: none; padding-left: 0.2em; }
 
 /*
+  A plain item in a list that also holds tasks keeps its bullet. Markdig marks the whole list
+  as a task list when any item is one, so the cheatsheet's "Fruit" and "Vegetables" lost their
+  bullets above two tasks - on screen and in the PDF, while Word, which asks each item, kept
+  them. The margin puts its text on the tasks' text, with the bullet hung out to the left of
+  it, as an ordinary list's is. :not() rather than :has(): the print path hands this sheet to
+  Paged.js, whose CSS parser predates relative selectors.
+*/
+.mq-preview ul.contains-task-list > li:not(.task-list-item) { list-style-type: disc; margin-left: 1.6em; }
+.mq-preview :is(ul, ol) ul.contains-task-list > li:not(.task-list-item) { list-style-type: circle; }
+
+/*
   A task item hangs its text off the box rather than laying the two out as a flex row.
 
   Flex was the obvious way to put a box on the first line's baseline and keep wrapped text out

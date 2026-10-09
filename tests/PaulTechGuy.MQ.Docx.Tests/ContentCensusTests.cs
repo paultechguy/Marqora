@@ -110,7 +110,10 @@ public sealed class ContentCensusTests
 
         return new Census(
             footnotes,
-            everywhere.Sum(part => part.Descendants<WordTable>().Count()),
+            // A nested quote is written as a one-cell table captioned as a quote; it is the
+            // quote's box, not one of the document's tables.
+            everywhere.Sum(part => part.Descendants<WordTable>().Count(
+                t => t.GetFirstChild<TableProperties>()?.GetFirstChild<TableCaption>()?.Val?.Value != "Block quote")),
             everywhere.Sum(part => part.Descendants<Paragraph>().Count(p => p.ParagraphProperties?.NumberingProperties is not null)),
             everywhere.Sum(part => part.Descendants<OfficeMath>().Count()) + report.Count(IsEquationRow),
             drawings - embeddedPictures + report.Count(IsDiagramRow));

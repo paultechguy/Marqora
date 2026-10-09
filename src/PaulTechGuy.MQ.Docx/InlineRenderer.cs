@@ -148,6 +148,26 @@ internal sealed class InlineRenderer
         {
             Write(inline, paragraph, format);
         }
+
+        KeepEquationsInline(paragraph);
+    }
+
+    /// <summary>
+    /// An inline equation with nothing else in its paragraph stays inline.
+    ///
+    /// Word sets an equation that is the only thing in its paragraph as a displayed one -
+    /// centered, and at display size - whatever the markup says. The cheatsheet's math table
+    /// holds <c>$\frac{a}{b}$</c> alone in a cell, which the preview sets small, at the left,
+    /// in the line; Word set it large and centered. A zero-width space beside it is text, so
+    /// Word keeps the equation in the line, and it neither shows nor takes any room.
+    /// </summary>
+    private static void KeepEquationsInline(Paragraph paragraph)
+    {
+        if (paragraph.Elements<DocumentFormat.OpenXml.Math.OfficeMath>().Any()
+            && !paragraph.Descendants<Text>().Any(text => text.Text.Length > 0))
+        {
+            paragraph.AppendChild(new Run(new Text("\u200B")));
+        }
     }
 
     private void Write(Inline inline, Paragraph paragraph, RunFormat format)

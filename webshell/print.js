@@ -120,12 +120,19 @@
         + 'font-style: var(' + p + 'style); text-transform: var(' + p + 'transform); line-height: var(' + p + 'line);';
     }
 
-    return '.mq-cover { page: cover; break-after: page; padding-top: ' + third + '; }\n'
+    return '.mq-cover { page: cover; padding-top: ' + third + '; }\n'
       + '.mq-cover-title { ' + set('cover-title') + ' color: var(--mq-theme-heading-1); }\n'
       + '.mq-cover-subtitle { ' + set('cover-subtitle') + ' margin-top: 0.3em; color: #595959; }\n'
       + '.mq-cover-facts { margin-top: 2.2em; }\n'
       + '.mq-cover-facts > div { margin: 0; }\n'
-      + '.mq-contents { page: contents; break-after: page; }\n'
+      // Each part opens its own page with a break-before rather than the part before it
+      // closing one with a break-after. Paged.js places a break-after on the next element it
+      // counts as displayed, skipping any it has marked undisplayed, and the cheatsheet's H1
+      // title was skipped: the break landed on the paragraph after it, so the title printed at
+      // the foot of the contents page, and when the body was given its own break as well, alone
+      // on a page of its own. A break-before is set on the element that asks for it.
+      + '.mq-contents { page: contents; break-before: page; }\n'
+      + '.mq-body-start { break-before: page; }\n'
       + '.mq-contents-title { ' + set('h1') + ' color: var(--mq-theme-heading-1); margin: 0 0 0.6em; }\n'
       + '.mq-contents ol { list-style: none; margin: 0; padding: 0; }\n'
       + '.mq-contents li { ' + set('contents-entry') + ' margin: 0.3em 0; }\n'
@@ -133,7 +140,11 @@
       + '.mq-contents li.mq-toc-3 { padding-left: 2.8em; }\n'
       + '.mq-contents a { display: flex; align-items: baseline; color: inherit; text-decoration: none; border: 0; }\n'
       + '.mq-contents .mq-toc-fill { flex: 1; margin: 0 0.4em; border-bottom: 1px dotted #9a9a9a; }\n'
-      + '.mq-note { float: footnote; ' + set('footnote') + ' }\n'
+      // text-align-last is stated because Paged.js's footnote handler marks a note it splits
+      // across two page feet to justify its last line whenever the value is auto - without
+      // asking, as its main chunker does, whether the text was justified at all. A long note
+      // printed every line of its first part stretched across the page, code included.
+      + '.mq-note { float: footnote; text-align-last: start; ' + set('footnote') + ' }\n'
       + '.mq-note .mq-note-block { display: block; margin: 0.3em 0 0; }\n'
       + '.mq-note .mq-note-code { display: block; white-space: pre-wrap; font-family: var(--mq-face-code); font-size: 0.9em; margin: 0.3em 0 0; padding: 0.4em 0.6em; border: 1px solid var(--mq-theme-code-block-border); background: var(--mq-theme-code-block-fill); }\n'
       + 'sup.mq-note-again { font-size: 65%; vertical-align: super; line-height: normal; }\n'
@@ -209,7 +220,7 @@
 
       item.className = 'mq-toc-' + (level - contents.first + 1);
       link.setAttribute('href', '#' + heading.id);
-      text.textContent = heading.textContent.replace(/\s+/g, ' ').trim();
+      text.textContent = headingText(heading);
       fill.className = 'mq-toc-fill';
       link.appendChild(text);
       link.appendChild(fill);
@@ -223,6 +234,22 @@
     });
 
     return nav;
+  }
+
+  /*
+    A heading's words for its contents line, without a footnote it calls. By the time the
+    contents is built the note has moved into the heading, at its call, so the heading's text
+    was the note's as well: "A call inside a headingA note called from inside a heading."
+    The call itself goes too - a contents line carries no note number, as Word's does not.
+  */
+  function headingText(heading) {
+    var copy = heading.cloneNode(true);
+
+    Array.prototype.forEach.call(copy.querySelectorAll('.mq-note, .mq-note-again, .footnote-ref'), function (note) {
+      note.remove();
+    });
+
+    return copy.textContent.replace(/\s+/g, ' ').trim();
   }
 
   /*
@@ -654,6 +681,31 @@
     return Object.keys(labels).length;
   }
 
+  /*
+    Where the body's first element landed, for the log: alone at the top of a page of its
+    own, or sharing a page with the cover or the contents - the fault the forced break exists
+    for - and whether Paged.js counted it as undisplayed, which is what sent the old
+    break-after past it. Paged.js copies the class onto each piece of a split element, so the
+    first piece is the one asked about.
+  */
+  function bodyStart() {
+    var first = document.querySelector('.pagedjs_pages .mq-body-start');
+
+    if (!first) { return 'with no cover or contents before it'; }
+
+    var page = first.closest('.pagedjs_page');
+    var shared = page && (page.classList.contains('pagedjs_contents_page') || page.classList.contains('pagedjs_cover_page'));
+    var next = first.nextElementSibling;
+    var nextPage = next ? next.closest('.pagedjs_page') : page;
+
+    return (shared ? 'on the cover or contents page' : 'on a page of its own')
+      + (nextPage === page ? '' : ', with the next element pushed to the page after')
+      + ' (' + first.tagName.toLowerCase()
+      + (first.dataset.undisplayed ? ', counted undisplayed by Paged.js' : '')
+      + (first.hasAttribute('style') ? ', with a style attribute' : '')
+      + ')';
+  }
+
   /// Every diagram that directly follows a heading, at any depth. See pageSheet for why.
   function markDiagramsAfterHeadings(root) {
     Array.prototype.forEach.call(root.querySelectorAll('pre.mermaid'), function (diagram) {
@@ -698,6 +750,12 @@
       // "No table of contents entries found." Neither export writes one now.
       var contentsNav = furniture.contents ? buildContents(furniture.contents, root) : null;
 
+      // The body's first element, before anything is put in front of it: it opens a page of
+      // its own when a cover or a contents comes first (pageSheet, .mq-body-start). Whether it
+      // did is reported after layout (bodyStart), so the log says rather than a reader having
+      // to look.
+      var bodyFirst = root.firstElementChild;
+
       if (contentsNav && contentsNav.querySelector('li')) {
         root.insertBefore(contentsNav, root.firstChild);
       } else {
@@ -706,6 +764,10 @@
 
       if (furniture.cover) {
         root.insertBefore(buildCover(furniture.cover), root.firstChild);
+      }
+
+      if (bodyFirst && (furniture.contents || furniture.cover)) {
+        bodyFirst.classList.add('mq-body-start');
       }
 
       var sheets = SHEETS.concat(kind.sheets);
@@ -752,6 +814,7 @@
         notesMoved: notes.moved,
         notesFound: notes.found,
         notesPlaced: Object.keys(placed).length,
+        bodyStart: bodyStart(),
         contentsEntries: furniture.contents ? linked : 0
       });
     } catch (error) {

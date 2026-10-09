@@ -11,8 +11,12 @@ here is settled. Do not reopen it, re-derive it, or re-ask it.**
 A Marqora user said Word export beat PDF export, so they exported to Word and then to PDF. The
 goal was for **Export to PDF, Print and Export to Word to look the same**: same fonts, sizes and
 spacing; the same cover, contents and page-number furniture; the same content, with anything
-that cannot be carried named in a report rather than silently dropped. That is done. What is
-left is six smaller items (§6).
+that cannot be carried named in a report rather than silently dropped. That is done.
+
+**Closed 2026-10-08.** §6.1 to §6.4 are done, and a comparison on an ordinary document (§10)
+found and fixed seven more differences. What is left is a backlog (§11) that Paul picks from;
+nothing on it blocks a release. **Do not hunt for new differences**: the fixture is a torture
+test and will always show something. Judge a change on the baseline document (§10).
 
 ## 2. Where it stands
 
@@ -108,7 +112,7 @@ mhchem, in both columns, which the fixture expects.
   with PowerShell or the Write tool and check its size from a second process before giving Paul
   the path.
 
-## 6. The six remaining items
+## 6. The six items left when the plan finished
 
 Do them in this order unless Paul says otherwise. None blocks a release.
 
@@ -119,6 +123,8 @@ restore it: the diagram should refit to the smaller window. Code: `DiagramWindow
 sends the page `zoomFit` when the presenter goes from Maximized to Restored, as `MaximizeAndFit`
 does. If it fails to refit, the likely cause is the order of `AppWindow.Changed` events (size
 before presenter); log `presenter.State` there and look.
+
+**Confirmed in the app 2026-10-08:** the diagram refits on restore.
 
 ### 6.2 See the endnote fallback (phase 4) happen once
 
@@ -131,6 +137,14 @@ notes as a numbered list at the end, and the report's advisory row "The footnote
 this PDF". Code: `print.js` `notesAsEndnotes`, `PagedPrintHost.RunAsync`, the row in
 `WebViewPreviewHost.ExportPdfAsync`. If no document can trigger it, say so and leave it.
 
+**Tried 2026-10-08: not triggered.** A note holding a table, a 75-line code block or a nested
+list, a call from a table cell and one from a heading were all placed; the code block ran on
+across two page feet. Left as it is. The test found two print bugs, fixed in `print.js` and
+uncommitted: a heading's contents line carried the text of the note it calls (`headingText`),
+and a note split across two feet had every line of its first part justified - Paged.js's footnote
+handler, fixed by stating `text-align-last` on `.mq-note`. Open: the PDF bookmarks run the
+heading number into the title ("1A note"), the number span's trailing spaces lost.
+
 ### 6.3 Inline formatting inside a raw HTML block, in Word
 
 The fixture's styled callout (line 871) keeps its box in Word but loses its `<strong>`: a raw HTML
@@ -140,6 +154,10 @@ inline tags the walker already understands into runs - `InlineHtml.Parse`/`Apply
 keep the paragraph splitting and the summary-in-bold as they are. Unit-testable; the report row
 then becomes "its text and its box are in the document" with less to say it lost.
 
+**Built 2026-10-08, uncommitted.** `HtmlBlockText.Paragraphs` returns runs, read with the
+inline walker's rules; a tag Word has no form of still stands for a space, except `<a>`. The
+report row says "its text, inline formatting and box". Awaits the fixture's Word export.
+
 ### 6.4 The matryoshka's nesting, in Word
 
 Fixture §16.1: a list item holding a blockquote holding a list. In Word the inner list leaves the
@@ -148,6 +166,12 @@ inside a quote with the Quote style but leaves its indent alone (a list keeps it
 indent), so the quote's bar and step are lost on exactly those paragraphs. Work out the indent
 the list needs inside the quote (quote step plus list indent) and test it with the fixture's
 shape. Check Word's rendering with the conversion script.
+
+**Built 2026-10-08, uncommitted.** `WriteQuote` moves a list paragraph across by the quote's
+text edge (`StandInsideQuote`): the style's step, or the holding item's text (`_listTextIndent`).
+Word draws the bar at a paragraph's leftmost point, so a level further in widens the bar's gap
+(`DocxStyles.QuoteBar`); Word's 31 pt limit reaches one level, and a third steps in. Checked in
+Word through the conversion script on the fixture's shape; awaits the fixture's Word export.
 
 ### 6.5 Word equation numbers at the right margin
 
@@ -197,3 +221,58 @@ Recreate these in the new session's scratchpad.
 - Release notes: `build/release-notes-vnext.md`.
 - Claude project memory: `export-alignment-handoff`, `commits-bear-pauls-name`,
   `no-desktop-input-automation`, `hp-paged-print-stall`.
+
+## 10. The baseline: the cheatsheet
+
+`webshell/cheatsheet.md` is the reference document for this work - an ordinary document Paul
+wrote for readers, using every feature once and plainly. Export it to Word and to PDF with the
+same cover and contents settings, convert the Word file through a hidden Word (§7), and compare
+page by page. Sort every difference into one of three groups: **wrong** (content missing or
+incorrect - fix it), **noticeable** (a reader would see it - backlog, Paul picks), **hairline**
+(seen only side by side - accept and write down).
+
+Where it stood on 2026-10-08, after the fixes below: both 11 pages, the content identical, the
+contents page numbers equal for 10 of 13 sections and one page apart for the other three
+(where long blocks happen to break). Fixed in that round, each checked in Word or in the app:
+
+- Word's line height: the paper spec's 1.4 was written as Word's "multiple", which multiplies
+  the face's own line height (Segoe UI's is about 1.33 em), so Word's lines were a third taller
+  than the PDF's. Now a distance in points, at least (`DocxStyles.SpacingOf`).
+- The PDF's title printed at the foot of the contents page. Paged.js counts the H1 as
+  undisplayed and its break-after skipped past it; the cover and contents now break before
+  themselves and the body's first element (`.mq-body-start`), and the log says where the body
+  started (`bodyStart`).
+- A list mixing tasks and plain items dropped the plain items' bullets on screen and in the
+  PDF (`app.css`, `ul.contains-task-list`).
+- A nested quote in Word is a one-cell table: one bar and one fill, the inner quote inside it
+  (`WrapNestedQuote`). Quotes no longer stop short of the right margin.
+- An equation alone in its paragraph (a table cell) stayed inline in Word (`KeepEquationsInline`).
+- Word's cover title takes the theme's heading color; a definition term is regular weight, as
+  the preview sets it.
+
+Hairline, accepted: inline code and keys have a border in the PDF and only shading in Word;
+Word's callouts have no icons; Word splits a long code block across pages where the PDF keeps
+it whole; Word expands an abbreviation on first use where the PDF underlines it; diagram labels
+in Word are part of the picture, not searchable text; the contents indent and leaders differ.
+
+## 11. Backlog
+
+None of it blocks a release. Paul picks; do not start one unasked.
+
+- **6.5 Word equation numbers at the right margin** and **6.6 remove the classic engine's
+  code** - as written in §6, both need Paul's go-ahead.
+- **Paged.js counts headings as undisplayed.** Its UndisplayedFilter splits a `display: none`
+  selector list at every comma, including those inside `:is()`, so the rule in `app.css`
+  hiding the active-block marks (`.mq-active-block:not(:is(h1, ...))::before, ...`) marks
+  h2-h5 as undisplayed; what marks the H1 was not found. Breaks placed after a heading skip it.
+  The cover and contents no longer depend on it; other heading breaks might. Rewriting that rule
+  without commas inside parentheses is the likely fix.
+- **PDF bookmarks run the heading number into the title** ("1A note holding a table"): the
+  number span's trailing spaces are lost in Chromium's outline. Every numbered heading. The fix
+  belongs in `HeadingNumberPass` (non-breaking spaces, say), which also feeds HTML export and
+  the clipboard.
+- **Adjacent footnote calls** - `[^a][^b][^c]` - came out as fewer notes than called; probably
+  Markdig, so the preview would show it too. Unchecked.
+- **The endnote fallback (phase 4) has never been triggered.** Nothing tried could make it
+  fire (§6.2); the code stays as the safety net.
+- **`cheatsheet.md` line 19** says `~~strikc through~~`.

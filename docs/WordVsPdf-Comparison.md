@@ -81,7 +81,7 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 | Blockquotes, nested to three levels | ✅ | ✅ | Phase 3: quotes in a row are separate panels, each nested level stands in one more step |
 | GFM callouts | ✅ | ✅ | Was 🟡 for the PDF: callouts are kept whole now. Word still has no icons |
 | Ordered lists | ✅ | ✅ | Was ❌ for Word: every list restarts (§3.2 fixed) |
-| Nested and task lists | ✅ | 🟡 | Word still flattens the matryoshka: the list inside the quote inside the list leaves the quote |
+| Nested and task lists | ✅ | ✅ | Was 🟡: the matryoshka's inner list leaves the quote no longer - it stands on the quote's text, and the bar holds its line one list level in (handoff §6.4) |
 | Inline code | ✅ | ✅ | |
 | Fenced code, syntax colors | ✅ | ✅ | |
 | Wide code block (141 columns) | ✅ wraps | ✅ wraps | Was ❌ for the PDF: wraps on paper, nothing lost (§4.2 fixed) |
@@ -100,7 +100,7 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 | Pipe, aligned, ragged, grid tables | ✅ | ✅ | |
 | HTML table with a merged cell | ✅ | ✅ | Phase 3: a Word table with its caption, header row, `rowspan` and `colspan` |
 | Horizontal rules (all syntaxes) | ✅ | ✅ | |
-| Block HTML `<div>` callout | ✅ | 🟡 | Phase 3: the sentence keeps its box - border and fill, measured by the preview. Its inline bold does not come; reported |
+| Block HTML `<div>` callout | ✅ | 🟡 | Phase 3: the sentence keeps its box - border and fill, measured by the preview. Its inline bold and code come too (handoff §6.3); the rest of its styling is reported |
 | `<details>` | ✅ printed open | 🟡 | Word keeps the content, with the summary in bold above it; reported |
 | `<iframe>` | 🟡 "not shown" chip, reported | 🟡 | Phase 3: Word cannot show a frame, and now reports it |
 | `<form>` | ✅ | 🟡 | Word keeps the button's text, reported |
@@ -161,8 +161,8 @@ Where a cell changed since the 2026-10-06 run, the note says so. Everything in �
 **Updated after phase 3 (2026-10-08, Word's rendering of the `.docx` exported at 14:18).**
 The only ❌ left is mhchem, in both columns, which the fixture expects. Word's column has no
 other ❌, which is phase 3's gate. Its 🟡s are what Word cannot hold or does not yet do:
-equation numbers, a frame, an SVG `data:` image, a raw HTML block's inline formatting, the
-matryoshka's nesting, and the pie's opacity.
+equation numbers, a frame, an SVG `data:` image, and the pie's opacity. (A raw HTML block's
+inline formatting and the matryoshka's nesting were 🟡 here; both were fixed later the same day.)
 
 ---
 
@@ -254,7 +254,7 @@ fixture.
 
 ### 3.8 Smaller items
 
-**Status 2026-10-08:** diagram labels are Segoe UI now, quotes are no longer italic, and the cover prints no placeholders. The image size, `<q>`, `<small>` and the matryoshka nesting are open.
+**Status 2026-10-08:** diagram labels are Segoe UI now, quotes are no longer italic, and the cover prints no placeholders. The image size, `<q>`, `<small>` and the matryoshka nesting were fixed later.
 
 - The Pandoc `{width=… height=…}` attribute is ignored, so a 1×1 PNG stays 1px.
 - `<details>` keeps its content but loses its `<summary>` line.

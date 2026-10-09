@@ -123,22 +123,41 @@ public class BlockTests
     }
 
     /// <summary>
-    /// Each level of a nested quote stands in one more step, as the preview indents it. The
-    /// style's bar is drawn once whatever the depth, so without the step three levels read as
-    /// one.
+    /// A nested quote is one box: a one-cell table whose left border is the outer bar, holding
+    /// the inner quotes one step further in each, with their own bars. Written as paragraphs,
+    /// the outer bar broke off beside each inner level and a fill stood in separate boxes.
+    /// The outer quote's own paragraph gives its bar to the cell.
     /// </summary>
     [Fact]
-    public async Task A_nested_quote_stands_in_one_step_per_level()
+    public async Task A_nested_quote_is_one_box_with_each_level_a_step_further_in()
     {
         using var exported = await ExportedDocument.FromAsync(
             "> Level one.\n>\n> > Level two.\n> >\n> > > Level three.\n");
 
         string xml = exported.DocumentXml();
 
-        xml.ShouldContain("<w:ind w:left=\"864\" w:right=\"432\" />");
-        xml.ShouldContain("<w:ind w:left=\"1296\" w:right=\"432\" />");
+        Regex.Count(xml, "<w:tbl>").ShouldBe(1);
+        xml.ShouldContain("<w:tblCaption w:val=\"Block quote\" />");
+        xml.ShouldContain("<w:tcBorders><w:left w:val=\"single\"");
+
+        // Measured from the cell: level one at its edge with no bar, two and three a step in.
+        xml.ShouldContain("<w:pBdr><w:left w:val=\"nil\" /></w:pBdr>");
+        xml.ShouldContain("<w:ind w:left=\"432\" w:right=\"0\" />");
+        xml.ShouldContain("<w:ind w:left=\"864\" w:right=\"0\" />");
         Regex.Count(xml, "w:val=\"Quote\"").ShouldBe(3);
         exported.ValidationErrors().ShouldBeEmpty();
+    }
+
+    /// <summary>A quote with nothing nested in it stays a run of paragraphs.</summary>
+    [Fact]
+    public async Task A_plain_quote_is_paragraphs_rather_than_a_table()
+    {
+        using var exported = await ExportedDocument.FromAsync("> One.\n>\n> Two.\n");
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldNotContain("<w:tbl>");
+        Regex.Count(xml, "w:val=\"Quote\"").ShouldBe(2);
     }
 
     [Fact]

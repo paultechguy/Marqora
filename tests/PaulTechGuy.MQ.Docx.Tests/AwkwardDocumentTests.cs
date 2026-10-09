@@ -373,7 +373,7 @@ public class AwkwardDocumentTests
         // 4px is 3pt, 24 eighths; 12px of padding is 9pt.
         Regex.Count(xml, "<w:left w:val=\"single\" w:color=\"6366F1\" w:sz=\"24\" w:space=\"9\" /></w:pBdr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"EEF2FF\" />")
             .ShouldBe(2);
-        exported.Issues.ShouldContain(i => i.Problem.Contains("its box are in the document", StringComparison.Ordinal));
+        exported.Issues.ShouldContain(i => i.Problem.Contains("inline formatting and box are in the document", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -422,6 +422,86 @@ public class AwkwardDocumentTests
 
         exported.ValidationErrors().ShouldBeEmpty();
         exported.DocumentXml().ShouldContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">Click to expand");
+    }
+
+    /// <summary>
+    /// A raw HTML block keeps its inline formatting. The fixture's styled callout opens with a
+    /// <c>&lt;strong&gt;</c> sentence, and every tag in the block used to be stripped, so Word
+    /// had it in body text. An inline tag joins words rather than separating them; the block
+    /// tags around them still separate.
+    /// </summary>
+    [Fact]
+    public async Task A_raw_HTML_block_keeps_its_inline_formatting()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "<div style=\"border-left: 4px solid #6366f1;\">\n"
+            + "  <strong>A styled callout.</strong>\n"
+            + "  Then <em>emphasis</em>, <code>code</code>, a <a href=\"https://example.com\">link</a>"
+            + " and a <q>quote</q>.<div>Next</div>\n"
+            + "</div>\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">A styled callout.</w:t>");
+        xml.ShouldContain("<w:i /></w:rPr><w:t xml:space=\"preserve\">emphasis</w:t>");
+        xml.ShouldContain("<w:rStyle w:val=\"MarqoraCodeChar\" /></w:rPr><w:t xml:space=\"preserve\">code</w:t>");
+        exported.PlainText().ShouldContain(
+            "A styled callout. Then emphasis, code, a link and a \u201Cquote\u201D. Next");
+    }
+
+    /// <summary>
+    /// The fixture's matryoshka: a list item holding a quote holding a list. The inner list
+    /// starts again at level zero, and its numbers were set at the margin, outside the quote,
+    /// with the quote's bar drawn out there beside them. It stands inside the quote now - its
+    /// numbers on the quote's text, which is the outer item's - and the task list one level
+    /// under it widens the bar's gap so the bar stays on the quote's line.
+    /// </summary>
+    [Fact]
+    public async Task A_list_in_a_quote_in_a_list_item_stands_inside_the_quote()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "1. **Ordered item** containing everything below.\n\n"
+            + "   > A blockquote inside the list item.\n   >\n"
+            + "   > 1. An ordered list inside the blockquote.\n   >\n"
+            + "   >    - [ ] An unstarted task inside that.\n   >\n"
+            + "   > 2. Second inner item.\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        // The quote's text at the outer item's text, 360; the inner numbers there too.
+        xml.ShouldContain("<w:pStyle w:val=\"Quote\" /><w:ind w:left=\"360\" /></w:pPr>");
+        Regex.Count(
+            xml,
+            "<w:pStyle w:val=\"Quote\" /><w:numPr><w:ilvl w:val=\"0\" /><w:numId w:val=\"\\d+\" /></w:numPr>"
+            + "<w:ind w:left=\"720\" w:hanging=\"360\" />").ShouldBe(2);
+
+        // The task, a level further in, keeps the bar on the line with a gap 18 points wider.
+        xml.ShouldContain("<w:left w:val=\"single\" w:color=\"");
+        xml.ShouldContain("w:sz=\"18\" w:space=\"26\" /></w:pBdr><w:ind w:left=\"1080\" w:hanging=\"360\" />");
+    }
+
+    /// <summary>
+    /// A summary whose own words are wrapped in <c>&lt;strong&gt;</c>, as the fixture's is, is
+    /// bold once, and a tag left open does not run past the end of the block.
+    /// </summary>
+    [Fact]
+    public async Task A_bold_summary_inside_a_strong_is_bold_and_the_block_ends_its_tags()
+    {
+        using var exported = await ExportedDocument.FromAsync(
+            "<details>\n<summary><strong>Click to expand</strong></summary>\n\nHidden content.\n\n</details>\n\n"
+            + "<p>Open <b>bold\n\nAfter the block.\n");
+
+        exported.ValidationErrors().ShouldBeEmpty();
+
+        string xml = exported.DocumentXml();
+
+        xml.ShouldContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">Click to expand</w:t>");
+        xml.ShouldContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">bold</w:t>");
+        xml.ShouldNotContain("<w:b /></w:rPr><w:t xml:space=\"preserve\">After the block.");
     }
 
     /// <summary>

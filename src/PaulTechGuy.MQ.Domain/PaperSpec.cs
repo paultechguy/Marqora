@@ -13,7 +13,7 @@ namespace PaulTechGuy.MQ.Domain;
 /// <param name="Name">The element's name in the stylesheet: <c>--mq-paper-&lt;name&gt;-size</c>.</param>
 /// <param name="Description">What it is, for docs/Paper-Design.md.</param>
 /// <param name="SizePoints">Type size. Word stores half-points, so a size is a whole or half point.</param>
-/// <param name="LineHeight">Line height as a multiple of the size, as CSS and Word's "auto" spacing both mean it.</param>
+/// <param name="LineHeight">Line height as a multiple of the size, as CSS means it. Word's "multiple" spacing means something else (a multiple of the face's natural line height), so Word is given the same distance in points.</param>
 /// <param name="BeforePoints">Space above, in points.</param>
 /// <param name="AfterPoints">Space below, in points.</param>
 public sealed record PaperElement(

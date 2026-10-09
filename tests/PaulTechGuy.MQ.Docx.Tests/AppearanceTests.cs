@@ -286,4 +286,30 @@ public class AppearanceTests
         // 160 twentieths of a point is 8pt.
         exported.StylesXml().ShouldContain("w:after=\"160\"");
     }
+
+    /// <summary>
+    /// The cover's title wears the theme's first heading color, as the print cover's does, and
+    /// a definition list's term is in the body's weight, as the preview sets it. Word had a
+    /// black title and a bold term, the only output with either.
+    /// </summary>
+    [Fact]
+    public async Task The_cover_title_and_a_term_are_set_as_the_preview_sets_them()
+    {
+        using var exported = await ExportedDocument.FromAsync("Term\n: Its definition.\n");
+
+        System.Xml.Linq.XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var styles = System.Xml.Linq.XElement.Parse(exported.StylesXml());
+
+        System.Xml.Linq.XElement Style(string id) =>
+            styles.Elements(w + "style").Single(s => (string?)s.Attribute(w + "styleId") == id);
+
+        string? titleColor = (string?)Style("Title").Element(w + "rPr")?.Element(w + "color")?.Attribute(w + "val");
+        string? headingColor = (string?)Style("Heading1").Element(w + "rPr")?.Element(w + "color")?.Attribute(w + "val");
+
+        titleColor.ShouldNotBeNull();
+        titleColor.ShouldBe(headingColor);
+
+        Style("MarqoraTerm").Element(w + "rPr")?.Element(w + "b").ShouldBeNull();
+        exported.ValidationErrors().ShouldBeEmpty();
+    }
 }
