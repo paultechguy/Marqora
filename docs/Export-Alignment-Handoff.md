@@ -218,7 +218,7 @@ Recreate these in the new session's scratchpad.
 
 - Plan: `docs/Export-Alignment-Plan.md` (§6 phase 2, §7 phase 3, §8 paper spec, §11 gates).
 - Comparison and scorecard: `docs/WordVsPdf-Comparison.md`. Paper table: `docs/Paper-Design.md`.
-- Release notes: `build/release-notes-vnext.md`.
+- Release notes: `docs/releases/vNext.md`.
 - Claude project memory: `export-alignment-handoff`, `commits-bear-pauls-name`,
   `no-desktop-input-automation`, `hp-paged-print-stall`.
 

@@ -53,7 +53,7 @@ Changes exactly three things in your working tree and stops:
 ```
 Directory.Build.props        <Version> set to 0.3.0
 docs/releases/v0.3.0.md      the notes from vNext.md, titled "Marqora v0.3.0 - What's New"
-docs/releases/vNext.md       reset to the stub in build/release-notes-vnext.md
+docs/releases/vNext.md       reset to the empty stub the script carries
 ```
 
 On the way it drops any heading with nothing under it — the stub's `## Fixes`, in a release

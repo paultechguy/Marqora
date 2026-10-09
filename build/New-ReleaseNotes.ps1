@@ -10,7 +10,7 @@
 
         Directory.Build.props        <Version> set to the number you passed
         docs\releases\v<version>.md  the notes from docs\releases\vNext.md, titled for this version
-        docs\releases\vNext.md       reset to the stub in build\release-notes-vnext.md
+        docs\releases\vNext.md       reset to the empty stub this script carries
 
     vNext.md is where the notes are written as each change lands, so by now the release's notes
     already exist; this moves them rather than leaving you to copy them. Any heading with nothing
@@ -80,7 +80,6 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildProps = Join-Path $repoRoot 'Directory.Build.props'
-$vNextStub = Join-Path $PSScriptRoot 'release-notes-vnext.md'
 $vNextRelative = 'docs/releases/vNext.md'
 $vNextPath = Join-Path $repoRoot ($vNextRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
 $notesRelative = "docs/releases/v$Version.md"
@@ -105,11 +104,23 @@ try {
     Test-GateNotesAbsent -NotesPath $notesPath -Force:$Force
     $vNext = Test-GateVNext -RepoRoot $repoRoot -VNextRelative $vNextRelative
 
-    # Read before anything is written, so a missing stub fails the preflight, not halfway through.
-    if (-not (Test-Path -LiteralPath $vNextStub -PathType Leaf)) {
-        throw "The vNext stub is missing: '$vNextStub'."
-    }
-    $stub = [System.IO.File]::ReadAllText($vNextStub)
+    # What vNext.md goes back to once its notes have moved. Held here rather than in a file of
+    # its own: a separate stub file looked like the place to write the notes, and a release's
+    # worth of them were written there instead of in vNext.md.
+    $stub = @"
+# Marqora vNext - What's New
+
+<!--
+    Notes for the next release, written as each change lands: a ## section per feature, and a
+    paragraph with a bold lead per fix under ## Fixes. Write for someone deciding whether to
+    download the release, not for someone reading the diff.
+
+    build\New-ReleaseNotes.ps1 moves everything here into docs\releases\v<version>.md, drops
+    any heading with nothing under it, and puts this stub back.
+-->
+
+## Fixes
+"@.Replace("`r`n", "`n") + "`n"
 
     Write-Host ''
 
