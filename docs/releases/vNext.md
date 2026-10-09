@@ -11,23 +11,15 @@
 
 ## PDF, Print and Word Now Match
 
-Export to PDF, Print and Export to Word used to disagree: the PDF came out at about two thirds
-of its size with no page numbers, so the better route to a PDF was through Word. Now all three
-start from one statement of the page - the same faces, sizes and spacing - and the same choices
-in their dialogs. PDF and Print lay the document out into real pages at true size, with a
-running header, page numbers, and an optional title page and contents page with page numbers,
-the very ones Export to Word offers and shares with them. Footnotes sit at the foot of their
-page, wide code wraps instead of running off the edge, a collapsed `<details>` prints open,
-and callouts and tables are kept off page breaks. The PDF carries bookmarks, tagging for screen
-readers and the document's own title rather than a file path. Word catches up on the other side:
-matrices, cases and `\left( … \right)` brackets grow with what they hold, `\color` and
-`\colorbox` keep their colors, `align` lines are numbered, an equation Word has no form for goes
-in as a picture of it, quotes in a row stay separate and nested ones step in, raw HTML tables
-become real tables, a styled HTML block keeps its border and fill, and diagrams of the types
-Word draws well go in as sharp vectors. Whatever an export cannot carry is named in its report
-rather than dropped in silence, and the PDF now has a report too, shown only when something is
-missing. Print is a two-column dialog that fits a laptop screen, and `Ctrl+P` in the cheatsheet
-opens it rather than the browser's own.
+The PDF used to come out at about two thirds of its size with no page numbers, so the better
+route to a PDF was through Word. Now PDF, Print and Word share one page design - the same
+faces, sizes and spacing - and the same dialog choices: a running header, page numbers, and an
+optional title page and contents page. Footnotes sit at the foot of their page, wide code
+wraps, and callouts and tables are kept off page breaks. The PDF carries bookmarks, tagging
+for screen readers and the document's own title. Word gains better math, raw HTML tables,
+styled HTML blocks and sharp vector diagrams. Anything an export cannot carry is named in its
+report rather than dropped in silence, and Print is a two-column dialog that fits a laptop
+screen.
 
 ## A margin around diagrams copied as PNG
 
