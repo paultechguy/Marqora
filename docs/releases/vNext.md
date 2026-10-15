@@ -48,3 +48,8 @@ now count 1, 2, 3, in the preview and in every export.
 
 **A diagram's PDF keeps its frame.** Export to PDF from a diagram window lost the thin rounded
 border round the diagram; it has it again.
+
+**The source pane's Find bar stands out.** The find and replace bar at the top right of the
+source pane was nearly the color of the page behind it, especially in light mode. It now has a
+gray panel, a border and a shadow, its search box reads as a box, and Match Case, Whole Word
+and Regular Expression show clearly when they are on.

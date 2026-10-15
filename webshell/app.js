@@ -3864,11 +3864,39 @@
     */
     var accent = token('--mq-accent') || token('--mq-text-tertiary');
 
+    /*
+      The find/replace bar, the same in both themes because every value is a token app.css
+      re-points for dark.
+
+      Monaco's own answer was #f3f3f3 on our white page and #252526 on our #1f1f1f - a
+      panel within a few percent of what it floats over, with no border, so the bar was lost
+      in light mode and not much better in dark. It now sits on the inset gray with the
+      strong border round it, and its input takes the page color back, so the field reads as
+      a field inside the panel rather than more panel. The shadow is not here: Monaco draws it
+      from a variable the standalone editor never defines, so app.css gives it one.
+
+      The Aa / ab / .* toggles take Marqora's teal when on, the color the app's other find
+      marks already wear, rather than Monaco's blue - and a fill as well as the outline, so on
+      and off can be told apart at a glance. soften leaves the fallback gray alone until the
+      accent arrives, as it does everything that is not plain hex.
+    */
+    function findWidgetColors(target) {
+      target['editorWidget.background'] = token('--mq-bg-inset');
+      target['editorWidget.border'] = token('--mq-border-strong');
+      target['widget.border'] = token('--mq-border-strong');
+      target['input.background'] = token('--mq-bg');
+      target['input.border'] = token('--mq-border-strong');
+      target['inputOption.activeBorder'] = accent;
+      target['inputOption.activeBackground'] = soften(accent, '33');
+      target['inputOption.activeForeground'] = token('--mq-text');
+      return target;
+    }
+
     monaco.editor.defineTheme('marqora-light', {
       base: 'vs',
       inherit: true,
       rules: [],
-      colors: {
+      colors: findWidgetColors({
         'editor.background': token('--mq-bg'),
         'editor.foreground': token('--mq-text'),
         'editorLineNumber.foreground': token('--mq-text-tertiary'),
@@ -3949,7 +3977,7 @@
         */
         'editor.selectionBackground': token('--mq-selection-light'),
         'editor.inactiveSelectionBackground': token('--mq-selection-light')
-      }
+      })
     });
 
     var dark = {
@@ -4024,7 +4052,7 @@
       base: 'vs-dark',
       inherit: true,
       rules: [],
-      colors: dark
+      colors: findWidgetColors(dark)
     });
   }
 
