@@ -83,7 +83,7 @@ Facts that shape the work, each checked in the source. Each one is acted on in t
 |   # | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Consequence                                                                                                                                                                                                                                                                                                                                                                 | WP           |
 | --: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 |  F1 | A controller with `IsVisible = false` never lays out. Chromium stops animation frames for a hidden page, so only `PagedHostMode.OffScreen` works (`PagedPrintHost.cs:27-44`). A message-only parent may fail the same way.                                                                                                                                                                                                                                                                                | The spike tries three parent kinds in order and records which one lays out.                                                                                                                                                                                                                                                                                                 | M0-01        |
-|  F2 | The paged engine is written against WebView2's **WinRT projection** (`IAsyncOperation`, `TypedEventHandler`, `CoreWebView2ControllerWindowReference`, `Windows.Foundation.Rect`). The package picks that projection by `WebView2UseWinRT` / `WebView2EnableCsWinRTProjection`, which it sets only for UAP or Windows App SDK projects (`Common.targets:88-107`). The target framework does not decide it. Without them a project gets the Win32 .NET API, which has different types under the same names. | `WebRender` and `Cli` set `WebView2UseWinRT=true` explicitly. The spike's first question is whether the native WinRT component activates in a console process with no Windows App SDK, either manifest-free or through an `activatableClass` manifest. If neither works, falling back to the Win32 API means rewriting the paged engine, and that is Paul's decision (§10). | M0-01        |
+|  F2 | The paged engine is written against WebView2's **WinRT projection** (`IAsyncOperation`, `TypedEventHandler`, `CoreWebView2ControllerWindowReference`, `Windows.Foundation.Rect`). The package picks that projection by `WebView2EnableCsWinRTProjection` (not `WebView2UseWinRT`, which is for native and WinMD consumers), which it sets only for UAP or Windows App SDK projects (`Common.targets:88-107`). The target framework does not decide it. Without them a project gets the Win32 .NET API, which has different types under the same names. | `WebRender` and `Cli` set `WebView2EnableCsWinRTProjection=true` explicitly. The spike's first question is whether the native WinRT component activates in a console process with no Windows App SDK, either manifest-free or through an `activatableClass` manifest. If neither works, falling back to the Win32 API means rewriting the paged engine, and that is Paul's decision (§10). | M0-01        |
 |  F3 | `PagedPrintHost` keeps a **static environment of its own** in `<WEBVIEW2_USER_DATA_FOLDER>-Print`, read from the variable `App/Program.cs:49` sets.                                                                                                                                                                                                                                                                                                                                                       | When it moves, the environment (or folder) is injected. The CLI passes `HeadlessRenderHost`'s environment, so a run has one browser tree and one data folder. The app keeps `-Print`.                                                                                                                                                                                       | M2-03        |
 |  F4 | HTML and PDF export use the **live** preview: `GetRenderedHtmlAsync` and the private `RequestPrintMarkupAsync` (`WebViewPreviewHost.cs:1389`). Word takes the live markup if there is any, and asks for diagrams by hash and math by line. Folio uses `RenderForExportAsync` / `requestExportHtml`, which needs no tab. Word with no markup still exports, without pictures.                                                                                                                              | The headless host loads `shell.html` and opens each document as its one tab, then uses the same messages as the preview. That makes HTML, PDF and Word equal by construction rather than by keeping two renders in step. Folio's single form uses `requestExportHtml` as the app does.                                                                                      | M0-01, M2-05 |
 |  F5 | The export orchestration lives in `MainViewModel` (`WriteHtmlExportAsync` :7566, `WriteFolioCoreAsync` :7690, `WriteWordExportAsync` :8348, `WritePdfExportAsync` :8580; `PdfPictureIssuesAsync`). PDF falls back to a **classic engine** (`ExportClassicPdfAsync`) when the paged one cannot finish.                                                                                                                                                                                                     | It is lifted into `Exporting` as jobs over an `IDocumentRenderer`. `MainViewModel` keeps the dialogs and the report window. The CLI keeps the classic fallback too, reported as an advisory finding, so CLI and app make the same file.                                                                                                                                     | M2-06        |
@@ -149,7 +149,7 @@ build/
   WebAssets.targets               M0   the MarqoraWebAsset copy, imported by App and Cli
 ```
 
-`WebRender` and `Cli` set `WebView2UseWinRT=true` (F2).
+`WebRender` and `Cli` set `WebView2EnableCsWinRTProjection=true` (F2).
 
 Dependency rule, enforced by `ArchitectureTests`:
 
@@ -200,7 +200,7 @@ Actions runner fails, M2 still goes ahead and that environment is documented as 
 - **Depends on**: none.
 - **Changes**:
   - **Project.** New `src/PaulTechGuy.MQ.WebRender/`, targeting `net10.0-windows10.0.19041.0`, with
-    `WebView2UseWinRT=true`. It references `Microsoft.Web.WebView2`, `Rendering`, `Domain` and
+    `WebView2EnableCsWinRTProjection=true`. It references `Microsoft.Web.WebView2`, `Rendering`, `Domain` and
     `Abstractions`, and is added to `PaulTechGuy.MQ.slnx`.
   - **Activation.** Native WinRT activation is tried manifest-free (CsWinRT probing
     `Microsoft.Web.WebView2.Core.dll`) and, failing that, through an app manifest with
@@ -232,7 +232,7 @@ Actions runner fails, M2 still goes ahead and that environment is documented as 
 - **Depends on**: M0-01.
 - **Changes**:
   - New `src/PaulTechGuy.MQ.Cli/`: a console Exe with `AssemblyName` `marqora-cli`, the same
-    target framework, and `WebView2UseWinRT=true`.
+    target framework, and `WebView2EnableCsWinRTProjection=true`.
   - Under `#if MQ_SPIKE`, `Program.Main` runs `marqora-cli __spike-pdf <in.md…> -o <dir>`. It
     renders through `HeadlessRenderHost`, prints through the linked `PagedPrintHost.ExportAsync`,
     and exits.
@@ -991,9 +991,9 @@ serves the ID, owner first. *Verified by* names the test class or the §9 record
 
 | ID             | Title                                 |   M   |  Pri   | WPs                        | Verified by                                               | Status |
 | -------------- | ------------------------------------- | :---: | :----: | -------------------------- | --------------------------------------------------------- | ------ |
-| CLI-SP-01      | Console renders and prints headlessly |  M0   |  Must  | M0-02, M0-01               | §9.1                                                      | todo   |
-| CLI-SP-02      | Cold start measured                   |  M0   |  Must  | M0-03                      | §9.1                                                      | todo   |
-| CLI-SP-03      | Non-interactive sessions tried        |  M0   |  Must  | M0-04                      | §9.1 (Actions: Paul, A3)                                  | todo   |
+| CLI-SP-01      | Console renders and prints headlessly |  M0   |  Must  | M0-02, M0-01               | §9.1                                                      | wip: every box met, uncommitted |
+| CLI-SP-02      | Cold start measured                   |  M0   |  Must  | M0-03                      | §9.1                                                      | wip: recorded, uncommitted |
+| CLI-SP-03      | Non-interactive sessions tried        |  M0   |  Must  | M0-04                      | §9.1 (Actions: Paul, A3)                                  | blocked: Actions by Paul (SSH recorded) |
 | CLI-CMD-01     | Verb shape                            |  M1   |  Must  | M1-01                      | `CommandTreeTests`                                        | todo   |
 | CLI-CMD-02     | Aliases                               |  M1   |  Must  | M1-01                      | `AliasTests`                                              | todo   |
 | CLI-CMD-03     | Help with examples                    |  M1   |  Must  | M1-01, M1-19               | `HelpExamplesTests`, `ManualCoverageTests`                | todo   |
@@ -1093,20 +1093,25 @@ here is complete.
 
 ### 9.1 Spike (M0)
 
-| Item                                                                             | Result | Date |
-| -------------------------------------------------------------------------------- | ------ | ---- |
-| WinRT activation without the Windows App SDK: manifest-free / manifest / neither |        |      |
-| App files the linked paged engine needed beyond the three named                  |        |      |
-| Parent window kind that lays out (a / b / c)                                     |        |      |
-| PDF shows light diagram, equation, colored code                                  |        |      |
-| Exit 0, no `msedgewebview2.exe` left                                             |        |      |
-| Ctrl+C → 130, no browser left                                                    |        |      |
-| `\| Out-Null` does not hang                                                      |        |      |
-| Start → first document rendered (ms)                                             |        |      |
-| Start → second document rendered (ms)                                            |        |      |
-| Over SSH                                                                         |        |      |
-| Actions runner (Paul, scratch repo; log link)                                    |        |      |
-| Go / unsupported decision per environment                                        |        |      |
+| Item | Result | Date |
+| --- | --- | --- |
+| WinRT activation without the Windows App SDK: manifest-free / manifest / neither | **Manifest-free.** With `WebView2EnableCsWinRTProjection=true` the package copies the native `Microsoft.Web.WebView2.Core.dll` beside the executable and C#/WinRT activates it from there; no manifest was added. Mid-run, the process had loaded that DLL and the projection from its own folder and not one module from a Windows App SDK package, although several runtimes are installed on this machine. Windows Sandbox (§9.3, NF-05) is the confirming run on a machine with none. | 2026-10-16 |
+| App files the linked paged engine needed beyond the three named | **Fewer, not more:** `PagedPrintHost.cs` and `ColorThemePayloads.cs` only. `PagedJobs` and `WebViewPrinting` were not needed: the spike calls `PagedPrintHost.ExportAsync` directly, without the classic fallback | 2026-10-16 |
+| Parent window kind that lays out (a / b / c) | **(a) message-only**, first try, with Chromium's throttling left on. (b) and (c) were not needed; both remain in `ParentWindowKind`, and `--no-throttle` (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`) was not needed either | 2026-10-16 |
+| PDF shows light diagram, equation, colored code | **Yes.** `cheatsheet.md` → 9 pages: flowchart and sequence diagram drawn light, inline and display math typeset by KaTeX, the C# block highlighted, header and page numbers from the paged engine. Pages rendered with `build/ConvertTo-PdfPages.ps1` and inspected | 2026-10-16 |
+| Exit 0, no `msedgewebview2.exe` left | **Yes.** Counted by command line (`Marqora-cli` in the user data path): peak 13 browser processes during a two-document run (two trees, render and print, F3), 0 after; run folder removed | 2026-10-16 |
+| Ctrl+C → 130, no browser left | **The cancel path, yes:** canceled mid-render and mid-print through the `--cancel-after` hook, which cancels the same token the signal handler does: exit 130, 0 browsers, 0 run folders, no partial PDF. **A real Ctrl+C keystroke, by Paul in his own terminal during a run of `UltimateMarkdownContent.md`: exit 130, no browser left** | 2026-10-16 |
+| `\| Out-Null` does not hang | **Yes:** exit 0 in 2.7 s, nothing left | 2026-10-16 |
+| Start → first document rendered (ms) | **1,166–1,202 ms warm; 2,018 ms on the first run after a build** (shell ready at ~700 ms warm, 1,411 ms cold). `cheatsheet.md`, Debug build, dev machine | 2026-10-16 |
+| Start → second document rendered (ms) | **2,404 ms** for `cheatsheet.md` a second time: 48 ms after the first finished printing, so the browser is reused. Printing it took 0.9 s against 1.2 s the first time. A large second document (`UltimateMarkdownContent.md`, 72 KB, 28 diagrams, 35 equations) took 3.5 s to render and 3.9 s to print, 54 pages | 2026-10-16 |
+| Over SSH | **Fails: browser verbs are unsupported over SSH.** Run by Paul over OpenSSH Server into this machine (installed for the test with `dism`, since `Add-WindowsCapability` fails under PowerShell 7 with "Class not registered", then removed). The CLI starts, but WebView2 refuses the controller: `Invalid window handle (0x80070578)` with the message-only and the hidden-popup parent alike, at `CreateCoreWebView2ControllerAsync`. An SSH session runs on a non-interactive desktop, which WebView2 cannot attach to. Exit 5, no browser left. The data folder outlived the run's cleanup because the failed start never ended its browser; `HeadlessRenderHost.StartAsync` now ends it, and the next run swept the folder anyway | 2026-10-16 |
+| Actions runner (Paul, scratch repo; log link) | Not run (A3) | |
+| Go / unsupported decision per environment | **Developer machine: go.** M2 may proceed as designed (gate passed). **SSH: unsupported for the browser verbs** (export and the single-file Folio); M2 goes ahead with that documented in `docs/CLI.md`, and the text verbs, which never start a browser, are unaffected. **Actions: undecided until run** | 2026-10-16 |
+
+Also from the spike, for M2:
+
+- **The shell had no "render settled" message.** It records the moment (`state.renderSettled`) but never told the host, because a person prints a preview they have already watched settle. `webshell/app.js` gained `requestRenderSettled` / `renderSettled`, which answers once the current render and the output drawings are done. The app never sends it. WP-M2-04's `ShellBridge` must carry it.
+- **`build/WebAssets.targets`** now holds the shell copy for both executables; `App.csproj` imports it. The App builds and its `Assets\web` is unchanged.
 
 ### 9.2 Timings
 

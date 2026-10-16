@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    marqora-cli.exe: Marqora's document commands without a window (docs/CLI.md, once written;
+    docs/CLI-Implementation-Plan.md until then).
+
+    A console executable. It never references the app, and the app never references it; both
+    call the same libraries. The same target framework as WebRender, with WebView2's WinRT
+    projection asked for by name, because the package only switches it on for Windows App SDK
+    projects and this one has no Windows App SDK on purpose (CLI-NF-05).
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>PaulTechGuy.MQ.Cli</RootNamespace>
+    <AssemblyName>marqora-cli</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
+
+    <!--
+      M0: the spike command, and only it (WP-M0-02). Compiled out entirely once export pdf
+      replaces it in WP-M2-10, so it never ships as an undocumented PDF export.
+    -->
+    <DefineConstants>$(DefineConstants);MQ_SPIKE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.WebRender\PaulTechGuy.MQ.WebRender.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <Import Project="..\..\build\WebAssets.targets" />
+
+</Project>
