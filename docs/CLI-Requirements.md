@@ -98,6 +98,26 @@ Two changes to the study's verb table follow from the code:
   `WriteZipAsync` are in the headless `Folio` library. Only the single-file form renders. The
   two source forms are therefore M1.
 
+### 2.1 Amendments of 2026-10-16
+
+Made while writing `docs/CLI-Implementation-Plan.md`, which checked each requirement against the
+code. The plan's §3 has the finding behind each one. No ID was added, removed or renumbered.
+
+| Requirement | Change |
+| --- | --- |
+| `CLI-SP-01`, `CLI-ARC-01` | The parent window is the spike's to choose; WebView2's WinRT projection is switched on and must activate without the Windows App SDK; target `net10.0-windows10.0.19041.0` |
+| `CLI-ARC-01`, `CLI-ARC-02` | A fourth project, `PaulTechGuy.MQ.Imaging`, behind `IImageResizer`; `Exporting` exists from M1 to receive `FolioShrinker` |
+| `CLI-SP-03`, `CLI-DOC-02` | The Actions runs are made by Paul in a scratch repository |
+| `CLI-VB-UNP-01` | Single-file Folios only; a non-empty target is refused and `unpack` takes no `--overwrite` (the proposal to empty it first was rejected) |
+| `CLI-VB-REN-01` | `--style sequential\|ones\|zeros`; the app's per-list suggestion by default |
+| `CLI-OUT-06` | `format` decides line endings and the final newline through its own options |
+| `CLI-SET-03` | A raw `settings.json` is accepted too |
+| `CLI-EX-05` | Only the CLI fails a timed-out file; the app's degrade is unchanged |
+| `CLI-ARC-07` | The app's Word export uses the same headless host the CLI uses |
+| `CLI-VB-VER-01` | Compared with the shared `ProductVersion`, which replaces `AppVersion` |
+| `CLI-ARC-05` | One suite runs over the shared bridge and transport |
+| `CLI-VB-CHK-01` | Web images and pictures outside the folder stay errors; `--ignore-external-images` turns them into information (the proposal to demote them by default was rejected) |
+
 ---
 
 ## 3. Scope
@@ -129,12 +149,19 @@ Verbs: `format`, `number`, `unnumber`, `replace`, `renumber-lists`, `diagram-lay
 
 #### CLI-SP-01: A console process renders and prints headlessly
 
-**Requirement.** A console executable opens a hidden WebView2 on an STA thread with a
-message-only parent window, loads the webshell, renders a document containing a mermaid diagram,
-a KaTeX equation and a highlighted code block, writes a PDF, and exits cleanly.
+**Requirement.** A console executable opens a hidden WebView2 on an STA thread with a parent
+window the spike chooses, loads the webshell, renders a document containing a mermaid diagram,
+a KaTeX equation and a highlighted code block, writes a PDF, and exits cleanly. The plan records
+which parent window kind laid out: a message-only window, or an off-screen one if Chromium will
+not lay out against a message-only window (`PagedPrintHost` found that a hidden controller never
+does).
 **Why.** The highest risk in the study (§8); `PagedPrintHost` suggests it works but has not
-proved it outside a window.
+proved it outside a window. It is also written against WebView2's WinRT projection, which a
+project gets only when it asks for it, and the CLI must not need the Windows App SDK
+(`CLI-NF-05`).
 **Acceptance.**
+- [ ] WebView2's WinRT projection activates in the console process with no Windows App SDK
+  installed
 - [ ] The PDF shows the diagram (light drawing), the equation and colored code
 - [ ] The process exits with code 0 and leaves no `msedgewebview2.exe` behind
 - [ ] Ctrl+C during the render exits 130 and leaves no browser process behind
@@ -153,8 +180,9 @@ and to the second, on a developer machine.
 
 #### CLI-SP-03: Non-interactive sessions are tried
 
-**Requirement.** The spike runs on a GitHub Actions Windows runner and over SSH, and records
-whether each works.
+**Requirement.** The spike runs over SSH on the developer machine, and on a GitHub Actions
+Windows runner in a scratch repository, and records whether each works. The Actions run is made
+by Paul: this repository has no workflow and does not get one for this.
 **Why.** "CI-ready" is not claimed anywhere until this passes (`CLI-DOC-02`).
 **Acceptance.**
 - [ ] Result for the Actions runner recorded, with the log
@@ -337,11 +365,13 @@ there is at least one.
 **Requirement.** `--write` keeps each file's byte order mark (present or absent), its line endings
 (CRLF or LF; a mixed file keeps the majority ending and says so with `--verbose`), and whether it
 ends with a newline. Only changes the verb makes reach the file. stdout is UTF-8 without a BOM,
-with the input's line endings.
+with the input's line endings. A verb whose own options rewrite line endings or the final newline
+(`format`, through `LineEndings` and `EofNewline`) decides them itself; the preservation applies
+to everything else.
 **Why.** A CI gate on a repository with mixed endings must not report every file as changed.
 **Acceptance.**
 - [ ] A CRLF file with BOM, formatted with `--write`, is still CRLF with BOM
-- [ ] An LF file without a final newline keeps it that way
+- [ ] An LF file without a final newline keeps it that way under `number --write`
 - [ ] `format --check` on a formatted CRLF file exits 0
 
 **M1 · Must**
@@ -503,8 +533,9 @@ heading numbering, export layout and themes. The CLI never writes to them.
 #### CLI-SET-03: `--settings <file>`
 
 **Requirement.** `--settings <file.json>` adopts an exported Preferences file, read through
-`PreferencesDocument`. A missing or malformed file, or one naming a theme that does not exist, is
-a usage error (exit 2) before any work starts.
+`PreferencesDocument`. A raw `settings.json` is accepted too, as the app's Import accepts one. A
+missing or malformed file, or one naming a theme that does not exist, is a usage error (exit 2)
+before any work starts.
 **Acceptance.**
 - [ ] A file exported from Preferences gives the same output as `--settings app` on that machine
 - [ ] A malformed file exits 2 naming the file and the problem
@@ -627,8 +658,12 @@ exactly as the app's Replace All treats it. The summary gives the count per file
 #### CLI-VB-REN-01: `renumber-lists`
 
 **Requirement.** `renumber-lists` applies `ListRenumber` to every ordered list in the document.
+`--style sequential|ones|zeros` picks the numbering; without it each list takes the numbering
+the app would suggest for that list. A list that cannot take `zeros` (the app only allows it for
+a list that follows a break) is left alone and reported.
 **Acceptance.**
 - [ ] Output equals the app's Renumber List applied to each list in turn
+- [ ] `--style` overrides the suggestion, and a list that cannot take `zeros` is reported
 
 **M1 · Must**
 
@@ -647,9 +682,16 @@ to the n-th diagram.
 
 **Requirement.** `check` runs `MarkdownAnalyzer`'s link and image checks: dead local links and
 anchors, missing images. Each finding is an error with file, line and column, and any error exits
-1. Web links are listed as *not checked* under `--verbose`, never contacted.
+1. Web links are listed as *not checked* under `--verbose`, never contacted. A picture loaded from
+a web address, and a picture outside the document's folder, are errors like the rest, as the
+source pane reports them. `--ignore-external-images` turns both off: they no longer fail the run
+and are shown only under `--verbose`, as information.
+**Why.** The app blocks remote pictures, so the squiggle is right; but a README with badge images
+would otherwise fail every run with no way to accept it.
 **Acceptance.**
 - [ ] A dead anchor, a missing image and a dead relative link are each found
+- [ ] A document with a web image exits 1, and exits 0 with `--ignore-external-images`, which
+  lists it as information under `--verbose`
 - [ ] Findings match the source pane's squiggles for the same document
 - [ ] No socket is opened during a run (`CLI-NF-03`)
 
@@ -687,10 +729,17 @@ level, text, anchor and line per heading.
 
 #### CLI-VB-UNP-01: `unpack`
 
-**Requirement.** `unpack <folio> --out-dir <folder>` takes a Folio apart into its markdown and
-images through the `Folio` unpacker, as File > Open Folio does, subject to `--overwrite`.
+**Requirement.** `unpack <folio> --out-dir <folder>` takes a single-file Folio apart into its
+markdown and images through the `Folio` unpacker, as File > Open Folio does. The target folder
+must be missing or empty: a non-empty one is refused with exit 4, and `unpack` takes no
+`--overwrite`.
+**Why.** A Folio arrives from someone else, and the unpacker never writes over anything already
+there. The folder and zip forms are already plain files, and the app's Open Folio reads only the
+single-file form.
 **Acceptance.**
-- [ ] Single-file, folder and zip Folios all unpack
+- [ ] A single-file Folio unpacks; a folder or a `.zip` given to `unpack` exits 3 with a message
+  saying it is already files, or to unzip it
+- [ ] A non-empty target exits 4 and nothing in it is touched
 - [ ] Unpacking a Folio made by the app gives the files the app would open
 
 **M1 · Must**
@@ -700,7 +749,8 @@ images through the `Folio` unpacker, as File > Open Folio does, subject to `--ov
 **Requirement.** `version` and `--version` print the version, which is the app's version from the
 same build.
 **Acceptance.**
-- [ ] Equals `AppVersion.Current` in `Marqora.exe` from the same build
+- [ ] Equals the product version `Marqora.exe` reports from the same build (the shared
+  `ProductVersion`, which replaces the app-private `AppVersion`)
 
 **M1 · Must**
 
@@ -750,7 +800,8 @@ from the markdown (missing images, unresolved local links).
 #### CLI-EX-05: Render timeout
 
 **Requirement.** A render that does not finish within a timeout (default 60 seconds per document,
-`--timeout <seconds>` to change it) fails that file with exit 5 and moves on.
+`--timeout <seconds>` to change it) fails that file with exit 5 and moves on. The app's own render
+timeout and its degrade to unfinished markup are unchanged; only the CLI fails the file.
 **Acceptance.**
 - [ ] A document that never finishes rendering (test hook) fails with exit 5 and a message
 
@@ -866,21 +917,27 @@ outside links, the estimated size, the form and the theme, as the app's prefligh
 
 #### CLI-ARC-01: Projects and the dependency rule
 
-**Requirement.** New projects `PaulTechGuy.MQ.Cli` (console exe, `net10.0-windows`),
-`PaulTechGuy.MQ.Exporting` (`net10.0`) and `PaulTechGuy.MQ.WebRender` (`net10.0-windows`,
-WebView2 Core only). `Cli` never references `App`; `App` never references `Cli`; neither
-`Exporting` nor `WebRender` references WinUI.
+**Requirement.** New projects `PaulTechGuy.MQ.Cli` (console exe) and `PaulTechGuy.MQ.WebRender`
+(WebView2 Core only), both `net10.0-windows10.0.19041.0` with WebView2's WinRT projection
+switched on; `PaulTechGuy.MQ.Imaging` (the same target, no WinUI), which holds the Windows
+Imaging resizer behind an `IImageResizer` interface in `Abstractions`; and
+`PaulTechGuy.MQ.Exporting` (`net10.0`). `Cli` never references `App`; `App` never references
+`Cli`; none of `Exporting`, `WebRender` and `Imaging` references WinUI.
+**Why.** The paged engine is written against the WinRT projection, which the package enables
+only on request. `FolioShrinker` resizes through Windows Imaging, so a `net10.0` project cannot
+hold it without that seam.
 **Acceptance.**
 - [ ] An architecture test fails on a forbidden reference
 
-**M1 (Cli) / M2 (Exporting, WebRender) · Must**
+**M0 (WebRender seed) / M1 (Cli, Exporting, Imaging) / M2 (WebRender completed) · Must**
 
 #### CLI-ARC-02: Move the export assembly out of the app
 
 **Requirement.** `HtmlExporter`, `HtmlPageLayout`, `FolioHtmlWriter`, `FolioShrinker`,
 `DiagramHtmlDocument`, `ColorThemePayloads`, `RenderedHtmlPackager` and the export report model
 move to `Exporting`. Moved, not rewritten; `RenderedHtmlPackager` loses its `Windows.UI` color.
-`FolioShrinker` may move ahead in M1 for `CLI-FO-03`.
+`FolioShrinker` moves in M1 for `CLI-FO-03`, resizing through `IImageResizer`
+(`CLI-ARC-01`), so `Exporting` exists from M1.
 **Acceptance.**
 - [ ] The app's exports are unchanged (`CLI-ARC-06`)
 - [ ] `Exporting` builds with no Windows reference
@@ -913,7 +970,7 @@ the headless host both implement it.
 `WebRender` and is used by both implementations. The webshell gains at most a render-only entry
 page, not a second pipeline.
 **Acceptance.**
-- [ ] One test suite runs over both implementations
+- [ ] One test suite runs over the shared bridge and transport that both implementations use
 - [ ] No message shape is defined twice
 
 **M2 · Must**
@@ -932,7 +989,8 @@ timestamps and generated ids masked where a format embeds them.
 #### CLI-ARC-07: The app's Word export uses the detached render
 
 **Requirement.** The app's Word export harvests from a detached render, as the CLI does, instead
-of the live preview. It no longer depends on what the preview last painted.
+of the live preview: through the same headless host the CLI uses, in a data folder of the app's
+own. It no longer depends on what the preview last painted.
 **Why.** Decision 11.4; study §4.3. This is a behavior change in the app.
 **Acceptance.**
 - [ ] App and CLI give identical Word content for the same input (`CLI-EX-WORD-01`)
@@ -1067,7 +1125,7 @@ and examples, pipes and globs, dry-run/check/write, settings, themes, the exit-c
 **Requirement.** The manual has a GitHub Actions recipe and a pre-commit hook for `format --check`
 and `check`. Exports in CI are documented only as far as `CLI-SP-03` showed them to work.
 **Acceptance.**
-- [ ] The Actions recipe runs green in this repository
+- [ ] The Actions recipe runs green in a scratch repository (this one has no workflow)
 
 **M1 · Should**
 
