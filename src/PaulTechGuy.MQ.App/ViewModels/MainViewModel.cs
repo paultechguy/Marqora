@@ -1153,15 +1153,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _host.SetZoomAsync(EditorPane.Source, new ZoomLevel(current.SourceZoomPercent)).ConfigureAwait(true);
         await _host.SetZoomAsync(EditorPane.Preview, new ZoomLevel(current.PreviewZoomPercent)).ConfigureAwait(true);
 
-        // A shell that restarted after a crash has forgotten which documents it was told not to
-        // take typing for, so what was sent is forgotten here too and each is told again.
-        _editorReadOnly.Clear();
+        // A shell that restarted after a crash has forgotten its tabs, and which documents it was
+        // told not to take typing for, so what was sent is forgotten here too and each is told
+        // again. See ForgetLostPage.
+        ForgetLostPage();
 
-        // Documents opened before the shell was ready still need their tabs created.
+        // Documents the page does not have yet need their tabs created: every one, after a
+        // crash, and any opened before the host was attached.
+        //
+        // Not the ones already sent to this page. The restored session is opened before the
+        // first page is ready, so its tabs wait in the host's queue and arrive just ahead of
+        // this - and opening them all again here rendered every restored document a second
+        // time, ran its spelling and link checks a second time, and redrew the front tab's
+        // diagrams while the first drawing was still under way.
         foreach (MarkdownDocument document in _workspace.Documents)
         {
+            if (_shellTabs.Contains(document.Id))
+            {
+                continue;
+            }
+
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
-            await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
+            await OpenShellTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
             await ApplyEditorReadOnlyAsync(document).ConfigureAwait(true);
         }
@@ -2099,6 +2112,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// the answer moves. Edited fires on every keystroke and the answer almost never changes.
     /// </summary>
     private readonly Dictionary<Guid, bool> _editorReadOnly = [];
+
+    /// <summary>
+    /// The documents the shell's current page has been sent a tab for, and which page that is.
+    /// A tab sent to a page a crash has since lost is not on the page in front of us.
+    /// </summary>
+    private readonly HashSet<Guid> _shellTabs = [];
+
+    private int _shellTabsPage;
+
+    /// <summary>
+    /// Drops what was sent to a page the shell no longer has. Everything sent to the current
+    /// page is still there, including what waited in the host's queue for it to be ready.
+    /// </summary>
+    private void ForgetLostPage()
+    {
+        if (_host is null || _host.PageGeneration == _shellTabsPage)
+        {
+            return;
+        }
+
+        _shellTabsPage = _host.PageGeneration;
+        _shellTabs.Clear();
+        _editorReadOnly.Clear();
+    }
+
+    /// <summary>Creates the document's tab in the shell, and remembers that this page has it.</summary>
+    private async Task OpenShellTabAsync(Guid documentId, string text, RenderedMarkdown rendered)
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        ForgetLostPage();
+
+        await _host.OpenTabAsync(documentId, text, rendered).ConfigureAwait(true);
+        _shellTabs.Add(documentId);
+    }
 
     /// <summary>
     /// Tells the editor whether to take typing for this document.
@@ -3506,6 +3557,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     _pastedImages.Forget(e.DocumentId);
                     _blockedImageCounts.Remove(e.DocumentId);
                     _editorReadOnly.Remove(e.DocumentId);
+                    _shellTabs.Remove(e.DocumentId);
                     await RemoveTabAsync(e.DocumentId).ConfigureAwait(true);
                     RefreshExternalNotice();
                     break;
@@ -3731,7 +3783,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_host is not null)
         {
             RenderedMarkdown rendered = await RenderAsync(document.Id, document.Text).ConfigureAwait(true);
-            await _host.OpenTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
+            await OpenShellTabAsync(document.Id, document.Text, rendered).ConfigureAwait(true);
             await PublishChecksAsync(document.Id, document.Text, document.Path, rendered).ConfigureAwait(true);
         }
 

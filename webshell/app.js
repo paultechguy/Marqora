@@ -161,6 +161,10 @@
     tabs: {},
     activeTabId: null,
 
+    // The file the active tab was last shown from. See activateTab: a move to another folder
+    // is the one reason to redraw a tab that is already showing.
+    activeTabPath: null,
+
     /*
       A Find command asked for while only the preview was showing, held until the source
       pane is back on screen. The widget cannot open on a pane that is display:none, so the
@@ -1576,6 +1580,39 @@
   var mermaidCache = {};
   var mermaidSeq = 0;
 
+  // Screen drawings still on their way, by definition, and the line they wait in.
+  var mermaidInFlight = new Map();
+  var mermaidQueue = Promise.resolve();
+
+  /*
+    Resolves with the screen drawing of a definition; rejects when it will not parse.
+
+    Two render passes can be walking the page at once - each preview update starts one, and
+    the cache only fills when a drawing is finished - so the second used to miss the cache for
+    every diagram the first had not finished, and draw it again. A definition already being
+    drawn is now waited on rather than drawn twice, the way diagram-output.js does for the
+    light drawings. And one render at a time across both passes, because mermaid keeps a
+    single working area per document: the passes are each in order, but not with each other.
+  */
+  function drawForScreen(mermaid, definition) {
+    if (mermaidInFlight.has(definition)) { return mermaidInFlight.get(definition); }
+
+    var job = mermaidQueue.then(function () {
+      return mermaid.render('mq-diagram-' + (++mermaidSeq), definition);
+    }).then(function (result) {
+      mermaidCache[definition] = result.svg;
+      return result.svg;
+    });
+
+    mermaidQueue = job.catch(function () { /* the caller has it */ });
+    mermaidInFlight.set(definition, job);
+
+    var settle = function () { mermaidInFlight.delete(definition); };
+    job.then(settle, settle);
+
+    return job;
+  }
+
   function mermaidTheme() {
     return state.theme === 'Dark' ? 'dark' : 'default';
   }
@@ -2339,6 +2376,11 @@
 
   /// `source` is passed when the block's own text is already a drawing - a redraw in place.
   function renderOneDiagram(mermaid, node, output, source) {
+    // A block a newer render has already thrown out of the page. Its pass is still walking
+    // the blocks it found, but nobody will see this one: drawing it would only hold up the
+    // newer pass's mermaid work behind it.
+    if (!output && !node.isConnected) { return Promise.resolve(); }
+
     if (source === undefined) { source = node.textContent; }
     var key = diagramKey(source);
 
@@ -2369,9 +2411,8 @@
       attachOutputCopy(node, source, key);
       return Promise.resolve();
     } else {
-      rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), definition).then(function (result) {
-        mermaidCache[definition] = result.svg;
-        place(result.svg);
+      rendering = drawForScreen(mermaid, definition).then(function (svg) {
+        place(svg);
         darkenLightBands(node, source);
         attachOutputCopy(node, source, key);
       });
@@ -6076,7 +6117,7 @@
     applyReadOnly(tab.readOnly, !!(tab.review && tab.review.active));
   }
 
-  function activateTab(id) {
+  function activateTab(id, documentPath) {
     var tab = state.tabs[id];
 
     // Being asked for a tab that was never opened means the host sent activate before open.
@@ -6090,7 +6131,19 @@
     if (!state.editor) { return; }
 
     if (state.activeTabId === id) {
-      // Still refresh the preview: the folder mapping may have changed underneath it.
+      /*
+        The tab already showing, asked for again. Redrawn only when it has moved: a Save As
+        into another folder changes where its relative pictures come from, and the preview
+        has to fetch them again.
+
+        Otherwise nothing. At startup the restored session's activate is queued until the
+        page is ready, and the ready handler then pushes every tab again for a page rebuilt
+        after a crash - so the tab in front was asked for twice, and the second rebuilt the
+        preview while the first was still drawing its diagrams, drawing every one twice.
+      */
+      if (documentPath === state.activeTabPath && state.lastHtml === tab.html) { return; }
+
+      state.activeTabPath = documentPath;
       state.lastHtml = null;
       applyPreviewHtml(tab.html, false);
       return;
@@ -6099,6 +6152,7 @@
     rememberActiveTab();
 
     state.activeTabId = id;
+    state.activeTabPath = documentPath;
     state.suppressEditorEvents = true;
     state.editor.setModel(tab.model);
     state.suppressEditorEvents = false;
@@ -6337,7 +6391,7 @@
     activateTab: function (p) {
       state.documentBaseUrl = p.documentBaseUrl || '';
       setPrintSource(p.documentPath || '');
-      activateTab(p.id);
+      activateTab(p.id, p.documentPath || '');
     },
 
     closeTab: function (p) {
