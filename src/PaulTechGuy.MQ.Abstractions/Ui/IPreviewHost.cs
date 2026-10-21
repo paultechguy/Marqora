@@ -334,6 +334,17 @@ public interface IPreviewHost
     /// <summary>True once the shell document has loaded and the bridge handshake completed.</summary>
     bool IsReady { get; }
 
+    /// <summary>
+    /// Which page the shell is: zero for the first, one more each time a crash lost the page
+    /// and everything that had been sent to it.
+    ///
+    /// Something sent while this reads N reaches page N, whether it went straight in or waited
+    /// in the queue for the page to be ready. So a caller that remembers what it sent, and to
+    /// which page, knows what the page in front of it already has, and what a rebuilt one has
+    /// lost.
+    /// </summary>
+    int PageGeneration { get; }
+
     event EventHandler? Ready;
 
     event EventHandler<EditorTextChangedEventArgs>? EditorTextChanged;

@@ -216,6 +216,16 @@ body {
 }
 
 /*
+  The find/replace bar's shadow. Monaco draws it as var(--vscode-shadow-lg), which only VS
+  Code's workbench defines - in the standalone editor the variable is unset and the bar has no
+  shadow at all. --mq-shadow is the one the app's other floating panels wear, and dark already
+  re-points it heavier. The bar's colors are in defineThemes in app.js.
+*/
+.monaco-editor .find-widget {
+  box-shadow: var(--mq-shadow);
+}
+
+/*
   Misspellings, and links that lead nowhere.
 
   Both are drawn as our own decorations rather than as Monaco markers, and that is the point. A

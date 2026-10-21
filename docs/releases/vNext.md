@@ -27,6 +27,14 @@ screen.
 touch the edge of the picture you paste. This applies in the preview and in a diagram's own
 window.
 
+## Flowchart labels no longer pile up
+
+Mermaid puts each label in a flowchart at the middle of its line, so where two lines ran close
+together their labels could land on top of each other and neither could be read. Marqora now
+slides one along its own line until both are clear, in the preview and in every print and
+export. Only the drawing changes; your document is never touched. Preferences > Preview has a
+switch to turn it off.
+
 ## Fixes
 
 **A diagram opened in its own window fits the window.** Double-clicking a diagram could open
@@ -34,6 +42,10 @@ it too wide for its window, with its right side cut off. A very wide diagram sto
 at 25%, and others were sometimes measured before the window had reached its size. The window
 now opens with the whole diagram in view, however wide it is, and keeps it fitted as you resize
 the window until you choose a zoom of your own.
+
+**Faster startup with diagrams.** Reopening your last session prepared every document twice
+and drew the diagrams in the front tab twice. Each is now done once, so a document full of
+diagrams is ready in about half the time.
 
 **File dialogs remember where you were.** Open, Save As, Open Folder, Share Review, each kind
 of export and each kind of import keep their own last folder, so a Word export opens where the
@@ -48,3 +60,8 @@ now count 1, 2, 3, in the preview and in every export.
 
 **A diagram's PDF keeps its frame.** Export to PDF from a diagram window lost the thin rounded
 border round the diagram; it has it again.
+
+**The source pane's Find bar stands out.** The find and replace bar at the top right of the
+source pane was nearly the color of the page behind it, especially in light mode. It now has a
+gray panel, a border and a shadow, its search box reads as a box, and Match Case, Whole Word
+and Regular Expression show clearly when they are on.

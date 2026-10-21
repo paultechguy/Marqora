@@ -131,6 +131,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     public bool IsReady { get; private set; }
 
+    public int PageGeneration { get; private set; }
+
     public string? DefaultSourceFont { get; private set; }
 
     public string? DefaultPreviewFont { get; private set; }
@@ -661,6 +663,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 continueLists = preferences.ContinueLists,
                 repeatListNumbers = preferences.RepeatListNumbers,
                 autoCloseBrackets = preferences.AutoCloseBrackets,
+                separateDiagramLabels = preferences.SeparateDiagramLabels,
 
                 // Heading numbering is deliberately not here. The numbers are written into
                 // the HTML by the renderer, so the shell has nothing to do with them: see
@@ -2240,6 +2243,10 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         // made of: the window went on accepting Select All and Find for hours and filed
         // every one of them behind a page that no longer existed.
         _pending.Clear();
+
+        // Everything sent before this point is gone with the page, and the next one starts
+        // with nothing. See PageGeneration.
+        PageGeneration++;
 
         if (_disposed || _recovering || _abandoned)
         {

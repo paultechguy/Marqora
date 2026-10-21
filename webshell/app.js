@@ -145,6 +145,7 @@
     sourceFontBase: SOURCE_BASE_FONT_PX,
     continueLists: true,
     repeatListNumbers: false,
+    separateDiagramLabels: true,
 
     /*
       One entry per open tab, keyed by the host's document id:
@@ -159,6 +160,10 @@
     */
     tabs: {},
     activeTabId: null,
+
+    // The file the active tab was last shown from. See activateTab: a move to another folder
+    // is the one reason to redraw a tab that is already showing.
+    activeTabPath: null,
 
     /*
       A Find command asked for while only the preview was showing, held until the source
@@ -1575,6 +1580,39 @@
   var mermaidCache = {};
   var mermaidSeq = 0;
 
+  // Screen drawings still on their way, by definition, and the line they wait in.
+  var mermaidInFlight = new Map();
+  var mermaidQueue = Promise.resolve();
+
+  /*
+    Resolves with the screen drawing of a definition; rejects when it will not parse.
+
+    Two render passes can be walking the page at once - each preview update starts one, and
+    the cache only fills when a drawing is finished - so the second used to miss the cache for
+    every diagram the first had not finished, and draw it again. A definition already being
+    drawn is now waited on rather than drawn twice, the way diagram-output.js does for the
+    light drawings. And one render at a time across both passes, because mermaid keeps a
+    single working area per document: the passes are each in order, but not with each other.
+  */
+  function drawForScreen(mermaid, definition) {
+    if (mermaidInFlight.has(definition)) { return mermaidInFlight.get(definition); }
+
+    var job = mermaidQueue.then(function () {
+      return mermaid.render('mq-diagram-' + (++mermaidSeq), definition);
+    }).then(function (result) {
+      mermaidCache[definition] = result.svg;
+      return result.svg;
+    });
+
+    mermaidQueue = job.catch(function () { /* the caller has it */ });
+    mermaidInFlight.set(definition, job);
+
+    var settle = function () { mermaidInFlight.delete(definition); };
+    job.then(settle, settle);
+
+    return job;
+  }
+
   function mermaidTheme() {
     return state.theme === 'Dark' ? 'dark' : 'default';
   }
@@ -1672,9 +1710,15 @@
     var holder = document.createElement('div');
     holder.className = OUTPUT_COPY;
     holder.setAttribute('aria-hidden', 'true');
-    holder.innerHTML = svg;
+    holder.innerHTML = tidyDiagram(svg);
 
     screen.after(holder);
+  }
+
+  /// A drawing with its overlapping flowchart labels moved apart, when Preferences asks for
+  /// it - see diagram-labels.js. Both drawings of a diagram come through here.
+  function tidyDiagram(svg) {
+    return state.separateDiagramLabels ? window.mqDiagramLabels.separate(svg) : svg;
   }
 
   /// The drawing of a rendered block that is fit to leave the app.
@@ -2332,6 +2376,11 @@
 
   /// `source` is passed when the block's own text is already a drawing - a redraw in place.
   function renderOneDiagram(mermaid, node, output, source) {
+    // A block a newer render has already thrown out of the page. Its pass is still walking
+    // the blocks it found, but nobody will see this one: drawing it would only hold up the
+    // newer pass's mermaid work behind it.
+    if (!output && !node.isConnected) { return Promise.resolve(); }
+
     if (source === undefined) { source = node.textContent; }
     var key = diagramKey(source);
 
@@ -2343,7 +2392,7 @@
     var cached = mermaidCache[definition];
 
     function place(svg) {
-      node.innerHTML = svg;
+      node.innerHTML = tidyDiagram(svg);
       diagramSources.set(node, source);
       node.setAttribute('data-processed', 'true');
       node.setAttribute('data-mq-diagram', key);
@@ -2362,9 +2411,8 @@
       attachOutputCopy(node, source, key);
       return Promise.resolve();
     } else {
-      rendering = mermaid.render('mq-diagram-' + (++mermaidSeq), definition).then(function (result) {
-        mermaidCache[definition] = result.svg;
-        place(result.svg);
+      rendering = drawForScreen(mermaid, definition).then(function (svg) {
+        place(svg);
         darkenLightBands(node, source);
         attachOutputCopy(node, source, key);
       });
@@ -3872,11 +3920,39 @@
     */
     var accent = token('--mq-accent') || token('--mq-text-tertiary');
 
+    /*
+      The find/replace bar, the same in both themes because every value is a token app.css
+      re-points for dark.
+
+      Monaco's own answer was #f3f3f3 on our white page and #252526 on our #1f1f1f - a
+      panel within a few percent of what it floats over, with no border, so the bar was lost
+      in light mode and not much better in dark. It now sits on the inset gray with the
+      strong border round it, and its input takes the page color back, so the field reads as
+      a field inside the panel rather than more panel. The shadow is not here: Monaco draws it
+      from a variable the standalone editor never defines, so app.css gives it one.
+
+      The Aa / ab / .* toggles take Marqora's teal when on, the color the app's other find
+      marks already wear, rather than Monaco's blue - and a fill as well as the outline, so on
+      and off can be told apart at a glance. soften leaves the fallback gray alone until the
+      accent arrives, as it does everything that is not plain hex.
+    */
+    function findWidgetColors(target) {
+      target['editorWidget.background'] = token('--mq-bg-inset');
+      target['editorWidget.border'] = token('--mq-border-strong');
+      target['widget.border'] = token('--mq-border-strong');
+      target['input.background'] = token('--mq-bg');
+      target['input.border'] = token('--mq-border-strong');
+      target['inputOption.activeBorder'] = accent;
+      target['inputOption.activeBackground'] = soften(accent, '33');
+      target['inputOption.activeForeground'] = token('--mq-text');
+      return target;
+    }
+
     monaco.editor.defineTheme('marqora-light', {
       base: 'vs',
       inherit: true,
       rules: [],
-      colors: {
+      colors: findWidgetColors({
         'editor.background': token('--mq-bg'),
         'editor.foreground': token('--mq-text'),
         'editorLineNumber.foreground': token('--mq-text-tertiary'),
@@ -3957,7 +4033,7 @@
         */
         'editor.selectionBackground': token('--mq-selection-light'),
         'editor.inactiveSelectionBackground': token('--mq-selection-light')
-      }
+      })
     });
 
     var dark = {
@@ -4032,7 +4108,7 @@
       base: 'vs-dark',
       inherit: true,
       rules: [],
-      colors: dark
+      colors: findWidgetColors(dark)
     });
   }
 
@@ -6049,7 +6125,7 @@
     applyReadOnly(tab.readOnly, !!(tab.review && tab.review.active));
   }
 
-  function activateTab(id) {
+  function activateTab(id, documentPath) {
     var tab = state.tabs[id];
 
     // Being asked for a tab that was never opened means the host sent activate before open.
@@ -6063,7 +6139,19 @@
     if (!state.editor) { return; }
 
     if (state.activeTabId === id) {
-      // Still refresh the preview: the folder mapping may have changed underneath it.
+      /*
+        The tab already showing, asked for again. Redrawn only when it has moved: a Save As
+        into another folder changes where its relative pictures come from, and the preview
+        has to fetch them again.
+
+        Otherwise nothing. At startup the restored session's activate is queued until the
+        page is ready, and the ready handler then pushes every tab again for a page rebuilt
+        after a crash - so the tab in front was asked for twice, and the second rebuilt the
+        preview while the first was still drawing its diagrams, drawing every one twice.
+      */
+      if (documentPath === state.activeTabPath && state.lastHtml === tab.html) { return; }
+
+      state.activeTabPath = documentPath;
       state.lastHtml = null;
       applyPreviewHtml(tab.html, false);
       return;
@@ -6072,6 +6160,7 @@
     rememberActiveTab();
 
     state.activeTabId = id;
+    state.activeTabPath = documentPath;
     state.suppressEditorEvents = true;
     state.editor.setModel(tab.model);
     state.suppressEditorEvents = false;
@@ -6310,7 +6399,7 @@
     activateTab: function (p) {
       state.documentBaseUrl = p.documentBaseUrl || '';
       setPrintSource(p.documentPath || '');
-      activateTab(p.id);
+      activateTab(p.id, p.documentPath || '');
     },
 
     closeTab: function (p) {
@@ -6581,6 +6670,13 @@
 
       state.continueLists = p.continueLists !== false;
       state.repeatListNumbers = p.repeatListNumbers === true;
+
+      // Only on a change: a redraw is from the cache, but it still walks every diagram.
+      var separateLabels = p.separateDiagramLabels !== false;
+      if (separateLabels !== state.separateDiagramLabels) {
+        state.separateDiagramLabels = separateLabels;
+        redrawDiagrams();
+      }
       state.sourceFontBase = p.sourceFontSize || SOURCE_BASE_FONT_PX;
 
       if (state.editor) {
