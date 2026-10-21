@@ -661,6 +661,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 continueLists = preferences.ContinueLists,
                 repeatListNumbers = preferences.RepeatListNumbers,
                 autoCloseBrackets = preferences.AutoCloseBrackets,
+                separateDiagramLabels = preferences.SeparateDiagramLabels,
 
                 // Heading numbering is deliberately not here. The numbers are written into
                 // the HTML by the renderer, so the shell has nothing to do with them: see

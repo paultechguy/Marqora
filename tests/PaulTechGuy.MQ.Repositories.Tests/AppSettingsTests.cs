@@ -131,6 +131,10 @@ public sealed class AppSettingsTests : IDisposable
         // Repeating a list number changes what Enter types, so a settings file written before
         // it existed must come back with Enter behaving the way it always did.
         settings.RepeatListNumbers.ShouldBeFalse();
+
+        // Moving overlapping diagram labels apart changes the drawing and nothing else, so it
+        // arrives on, and a settings file written before it existed comes back with it on.
+        settings.SeparateDiagramLabels.ShouldBeTrue();
         // Nothing that alters a document or a file may arrive switched on.
         settings.HeadingNumbering.ShouldBe(HeadingNumbering.Off);
         settings.AutoSave.ShouldBe(AutoSaveMode.Off);
@@ -196,6 +200,7 @@ public sealed class AppSettingsTests : IDisposable
             RepeatListNumbers = true,
             AutoCloseBrackets = false,
             ShowBlockedImages = false,
+            SeparateDiagramLabels = false,
             HeadingNumbering = HeadingNumbering.FromHeading2,
             Startup = StartupBehavior.EmptyTab,
             RecentFilesLimit = 30,

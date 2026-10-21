@@ -145,6 +145,7 @@
     sourceFontBase: SOURCE_BASE_FONT_PX,
     continueLists: true,
     repeatListNumbers: false,
+    separateDiagramLabels: true,
 
     /*
       One entry per open tab, keyed by the host's document id:
@@ -1672,9 +1673,15 @@
     var holder = document.createElement('div');
     holder.className = OUTPUT_COPY;
     holder.setAttribute('aria-hidden', 'true');
-    holder.innerHTML = svg;
+    holder.innerHTML = tidyDiagram(svg);
 
     screen.after(holder);
+  }
+
+  /// A drawing with its overlapping flowchart labels moved apart, when Preferences asks for
+  /// it - see diagram-labels.js. Both drawings of a diagram come through here.
+  function tidyDiagram(svg) {
+    return state.separateDiagramLabels ? window.mqDiagramLabels.separate(svg) : svg;
   }
 
   /// The drawing of a rendered block that is fit to leave the app.
@@ -2343,7 +2350,7 @@
     var cached = mermaidCache[definition];
 
     function place(svg) {
-      node.innerHTML = svg;
+      node.innerHTML = tidyDiagram(svg);
       diagramSources.set(node, source);
       node.setAttribute('data-processed', 'true');
       node.setAttribute('data-mq-diagram', key);
@@ -6601,6 +6608,13 @@
 
       state.continueLists = p.continueLists !== false;
       state.repeatListNumbers = p.repeatListNumbers === true;
+
+      // Only on a change: a redraw is from the cache, but it still walks every diagram.
+      var separateLabels = p.separateDiagramLabels !== false;
+      if (separateLabels !== state.separateDiagramLabels) {
+        state.separateDiagramLabels = separateLabels;
+        redrawDiagrams();
+      }
       state.sourceFontBase = p.sourceFontSize || SOURCE_BASE_FONT_PX;
 
       if (state.editor) {

@@ -199,6 +199,7 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _blockedImages;
     private readonly CheckBox _spellCheck;
     private readonly CheckBox _maximizeDiagrams;
+    private readonly CheckBox _separateDiagramLabels;
     private readonly ComboBox _localLinks;
     private readonly ComboBox _headingNumbers;
 
@@ -434,6 +435,9 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _maximizeDiagrams = BuildCheck("Maximize opened diagrams");
         Bind(_maximizeDiagrams, v => _vm.UpdateAsync(s => s with { MaximizeDiagramWindows = v }));
+
+        _separateDiagramLabels = BuildCheck("Move overlapping flowchart labels apart");
+        Bind(_separateDiagramLabels, v => _vm.UpdateAsync(s => s with { SeparateDiagramLabels = v }));
 
         _localLinks = BuildCombo(["Open with its default app", "Show it in its folder"]);
         _localLinks.SelectionChanged += (_, _) => ApplyAsync(() =>
@@ -1178,6 +1182,16 @@ internal sealed class PreferencesWindow : PaletteWindow
             + "Right-clicking a diagram offers both outright, as Open in Window and Open "
             + "Maximized. Those items ignore this setting: each one does what it says."));
 
+        panel.Children.Add(_separateDiagramLabels);
+
+        panel.Children.Add(Note(
+            "Mermaid puts each label in a flowchart at the middle of its line, and does not "
+            + "check whether another label is already there. Where two lines run close "
+            + "together, their labels can land on top of each other and neither can be read.\n\n"
+            + "With this on, Marqora slides one of them along its own line until both are "
+            + "clear. Only the drawing changes, never your document, and prints and exports "
+            + "show the same drawing. Turn it off to see a diagram exactly as mermaid drew it."));
+
         panel.Children.Add(Divider());
         panel.Children.Add(Heading("LINKS"));
         panel.Children.Add(Field("Links to other files", _localLinks));
@@ -1831,6 +1845,7 @@ internal sealed class PreferencesWindow : PaletteWindow
             _blockedImages.IsChecked = s.ShowBlockedImages;
             _spellCheck.IsChecked = s.SpellCheckEnabled;
             _maximizeDiagrams.IsChecked = s.MaximizeDiagramWindows;
+            _separateDiagramLabels.IsChecked = s.SeparateDiagramLabels;
             _localLinks.SelectedIndex = (int)s.LocalLinks;
 
             // Grayed out, with the reason, when Windows has no dictionary for this language.

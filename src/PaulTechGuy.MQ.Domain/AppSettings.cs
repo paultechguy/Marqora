@@ -538,6 +538,20 @@ public sealed record AppSettings
     public bool MaximizeDiagramWindows { get; set; }
 
     /// <summary>
+    /// Move a flowchart's edge labels apart where mermaid drew one on top of another.
+    ///
+    /// Mermaid puts each label at the middle of its edge and never checks what is already
+    /// there, so two edges that pass close together get their labels stacked. With this on,
+    /// the preview slides one along its own edge until both can be read - in the drawing only;
+    /// the document is never touched. Exports take the same drawing.
+    ///
+    /// On by default: it changes no file, and readable labels are what anyone drawing the
+    /// diagram meant. Its own switch for someone who wants mermaid's drawing exactly as
+    /// mermaid made it - to compare with another viewer, say.
+    /// </summary>
+    public bool SeparateDiagramLabels { get; set; } = true;
+
+    /// <summary>
     /// What clicking a link to a local file that is not markdown does. A link to markdown
     /// always opens in Marqora and is not governed by this.
     /// </summary>

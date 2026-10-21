@@ -238,7 +238,9 @@
       var id = 'mq-cheatsheet-diagram-' + (++diagramSeq);
 
       return mermaid.render(id, screenDefinition(source)).then(function (result) {
-        node.innerHTML = result.svg;
+        // Always: these are Marqora's own diagrams, not the preview's, and the preference
+        // is about the documents. See diagram-labels.js.
+        node.innerHTML = window.mqDiagramLabels.separate(result.svg);
         node.setAttribute('data-processed', 'true');
         node.setAttribute('data-drawing', id);
 
@@ -276,7 +278,7 @@
       var holder = document.createElement('div');
       holder.className = 'mq-diagram-output';
       holder.setAttribute('aria-hidden', 'true');
-      holder.innerHTML = svg;
+      holder.innerHTML = window.mqDiagramLabels.separate(svg);
       screen.after(holder);
     }).catch(function (err) {
       report('warning', 'A diagram could not be drawn for printing', err && err.message);

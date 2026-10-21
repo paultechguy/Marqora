@@ -27,6 +27,14 @@ screen.
 touch the edge of the picture you paste. This applies in the preview and in a diagram's own
 window.
 
+## Flowchart labels no longer pile up
+
+Mermaid puts each label in a flowchart at the middle of its line, so where two lines ran close
+together their labels could land on top of each other and neither could be read. Marqora now
+slides one along its own line until both are clear, in the preview and in every print and
+export. Only the drawing changes; your document is never touched. Preferences > Preview has a
+switch to turn it off.
+
 ## Fixes
 
 **A diagram opened in its own window fits the window.** Double-clicking a diagram could open

@@ -62,6 +62,9 @@ public sealed record PreviewPreferences
     /// <summary>Close a bracket, quote or emphasis marker as it is typed.</summary>
     public bool AutoCloseBrackets { get; init; } = true;
 
+    /// <inheritdoc cref="AppSettings.SeparateDiagramLabels"/>
+    public bool SeparateDiagramLabels { get; init; } = true;
+
     /// <summary>Everything the web surface needs, read off the settings record.</summary>
     public static PreviewPreferences FromSettings(AppSettings settings)
     {
@@ -81,6 +84,7 @@ public sealed record PreviewPreferences
             ContinueLists = settings.ContinueLists,
             RepeatListNumbers = settings.RepeatListNumbers,
             AutoCloseBrackets = settings.AutoCloseBrackets,
+            SeparateDiagramLabels = settings.SeparateDiagramLabels,
         };
     }
 
