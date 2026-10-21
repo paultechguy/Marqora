@@ -981,6 +981,7 @@ and A13b, also applied. The table keeps the rejected rows so the reasoning stays
 | A5b | CLI-VB-UNP-01          | The target must be missing or empty; a non-empty one exits 4, and `unpack` takes no `--overwrite`. Follows the app's own rule, which never writes over what is already there. | F9 |
 | A13b | CLI-VB-CHK-01         | Web images and pictures outside the folder stay errors. One flag, `--ignore-external-images`, makes both information, shown only under `--verbose`. | F16 |
 | A13 | CLI-VB-CHK-01          | **Rejected, replaced by A13b.** Add: "Web images and pictures outside the folder are information, shown with `--verbose`; they do not fail the run."                                                                                                                                                                 | F16                                                                                             |
+| A14 | CLI-SP-03, CLI-DOC-02 | **Proposed 2026-10-16, not yet decided.** SP-03: the Actions-runner box becomes "Not run, by decision; exports on CI are documented as untested". DOC-02: "runs green in a scratch repository" becomes "each command in the recipe runs green locally; the workflow file itself is untested, and the manual says so". | No Actions minutes are to be spent, and a public repository would leave a permanent public record |
 
 ---
 
@@ -991,9 +992,9 @@ serves the ID, owner first. *Verified by* names the test class or the §9 record
 
 | ID             | Title                                 |   M   |  Pri   | WPs                        | Verified by                                               | Status |
 | -------------- | ------------------------------------- | :---: | :----: | -------------------------- | --------------------------------------------------------- | ------ |
-| CLI-SP-01      | Console renders and prints headlessly |  M0   |  Must  | M0-02, M0-01               | §9.1                                                      | wip: every box met, uncommitted |
-| CLI-SP-02      | Cold start measured                   |  M0   |  Must  | M0-03                      | §9.1                                                      | wip: recorded, uncommitted |
-| CLI-SP-03      | Non-interactive sessions tried        |  M0   |  Must  | M0-04                      | §9.1 (Actions: Paul, A3)                                  | blocked: Actions by Paul (SSH recorded) |
+| CLI-SP-01      | Console renders and prints headlessly |  M0   |  Must  | M0-02, M0-01               | §9.1                                                      | verified |
+| CLI-SP-02      | Cold start measured                   |  M0   |  Must  | M0-03                      | §9.1                                                      | verified |
+| CLI-SP-03      | Non-interactive sessions tried        |  M0   |  Must  | M0-04                      | §9.1 (Actions: Paul, A3)                                  | blocked: A14 pending (SSH recorded) |
 | CLI-CMD-01     | Verb shape                            |  M1   |  Must  | M1-01                      | `CommandTreeTests`                                        | todo   |
 | CLI-CMD-02     | Aliases                               |  M1   |  Must  | M1-01                      | `AliasTests`                                              | todo   |
 | CLI-CMD-03     | Help with examples                    |  M1   |  Must  | M1-01, M1-19               | `HelpExamplesTests`, `ManualCoverageTests`                | todo   |
@@ -1105,8 +1106,8 @@ here is complete.
 | Start → first document rendered (ms) | **1,166–1,202 ms warm; 2,018 ms on the first run after a build** (shell ready at ~700 ms warm, 1,411 ms cold). `cheatsheet.md`, Debug build, dev machine | 2026-10-16 |
 | Start → second document rendered (ms) | **2,404 ms** for `cheatsheet.md` a second time: 48 ms after the first finished printing, so the browser is reused. Printing it took 0.9 s against 1.2 s the first time. A large second document (`UltimateMarkdownContent.md`, 72 KB, 28 diagrams, 35 equations) took 3.5 s to render and 3.9 s to print, 54 pages | 2026-10-16 |
 | Over SSH | **Fails: browser verbs are unsupported over SSH.** Run by Paul over OpenSSH Server into this machine (installed for the test with `dism`, since `Add-WindowsCapability` fails under PowerShell 7 with "Class not registered", then removed). The CLI starts, but WebView2 refuses the controller: `Invalid window handle (0x80070578)` with the message-only and the hidden-popup parent alike, at `CreateCoreWebView2ControllerAsync`. An SSH session runs on a non-interactive desktop, which WebView2 cannot attach to. Exit 5, no browser left. The data folder outlived the run's cleanup because the failed start never ended its browser; `HeadlessRenderHost.StartAsync` now ends it, and the next run swept the folder anyway | 2026-10-16 |
-| Actions runner (Paul, scratch repo; log link) | Not run (A3) | |
-| Go / unsupported decision per environment | **Developer machine: go.** M2 may proceed as designed (gate passed). **SSH: unsupported for the browser verbs** (export and the single-file Folio); M2 goes ahead with that documented in `docs/CLI.md`, and the text verbs, which never start a browser, are unaffected. **Actions: undecided until run** | 2026-10-16 |
+| Actions runner (Paul, scratch repo; log link) | **Not run, by decision:** no Actions minutes are to be spent, and a public scratch repository would leave a permanent public record of itself. Exports on CI are untested, and `docs/CLI.md` says so. Proposed as A14 | 2026-10-16 |
+| Go / unsupported decision per environment | **Developer machine: go.** M2 may proceed as designed (gate passed). **SSH: unsupported for the browser verbs** (export and the single-file Folio); M2 goes ahead with that documented in `docs/CLI.md`, and the text verbs, which never start a browser, are unaffected. **Actions: not run (A14); exports on CI are untested** | 2026-10-16 |
 
 Also from the spike, for M2:
 
@@ -1126,7 +1127,7 @@ Also from the spike, for M2:
 
 | Check                                                                                     | Result | Date |
 | ----------------------------------------------------------------------------------------- | ------ | ---- |
-| M0-05 baseline captured: file list and hashes                                             |        |      |
+| M0-05 baseline captured: file list and hashes | Tooling ready: the checklist in `tests/baselines/cli/README.md` (20 exports), the input `inputs/pictures.md`, and `build/Get-BaselineHashes.ps1` to record and `-Check` it. Waiting on the exports | |
 | Folio "reduce pictures" equals baseline after M1-15                                       |        |      |
 | Folio folder and zip, CLI vs baseline (M1-16)                                             |        |      |
 | Globs from bash give the same list (IN-01)                                                |        |      |

@@ -37,3 +37,10 @@ desktop.ini
 # Local AI assistant instructions (kept on disk, not published)
 CLAUDE.md
 .claude/
+
+# The CLI export baseline: exports made from the app, kept out of git and proved unchanged by the
+# committed MANIFEST.sha256 (tests/baselines/cli/README.md).
+tests/baselines/cli/*
+!tests/baselines/cli/README.md
+!tests/baselines/cli/MANIFEST.sha256
+!tests/baselines/cli/inputs/
