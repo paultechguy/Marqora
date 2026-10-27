@@ -107,6 +107,12 @@ $allowed = @(
 $skipDirectories = @('.git', '.claude', 'bin', 'obj', 'node_modules', 'vendor', 'artifacts', 'releases')
 $skipFiles = @('Test-NetworkClaim.ps1', 'UltimateMarkdownContent.md')
 
+# The CLI export baseline: what the app exported, kept byte for byte as evidence
+# (tests/baselines/cli/README.md). An export carries its document's text, so the HTML made from
+# UltimateMarkdownContent.md says whatever that file says, and the file is skipped above for a
+# reason. Only the README and inputs/ in that folder are written by hand, and those are scanned.
+$baselineExports = '^tests[\\/]baselines[\\/]cli[\\/](?!README\.md$|inputs[\\/])'
+
 function Test-Allowed {
     param([string]$Relative, [string]$Line)
 
@@ -127,7 +133,8 @@ $files = Get-ChildItem -Path $repo -Recurse -File -Include '*.md', '*.html', '*.
         $parts = $relative -split '[\\/]'
 
         -not ($parts | Where-Object { $skipDirectories -contains $_ }) -and
-        -not ($skipFiles -contains $_.Name)
+        -not ($skipFiles -contains $_.Name) -and
+        $relative -notmatch $baselineExports
     }
 
 foreach ($file in $files) {

@@ -16,9 +16,10 @@
     cannot disagree about it. A folder - the Folio's folder form - is hashed file by file.
 
     Without -Check it writes the manifest, after making sure every expected export is there,
-    and prints the line for the plan's §9.3 record: the commit, the app version, the count,
-    the size and a hash of the manifest itself. It refuses to replace a manifest that already
-    exists unless -Force is given, because replacing it is choosing a new baseline.
+    and prints the line for the plan's §9.3 record: the version of the app that made the
+    exports and the commit it was built from, the count, the size and a hash of the manifest
+    itself. It refuses to replace a manifest that already exists unless -Force is given,
+    because replacing it is choosing a new baseline.
 
 .PARAMETER Check
     Compare what is on disk with MANIFEST.sha256 and exit non-zero on any file changed,
@@ -26,6 +27,11 @@
 
 .PARAMETER Force
     Replace an existing MANIFEST.sha256.
+
+.PARAMETER App
+    The Marqora.exe the exports were made with, read for its version and the commit it was
+    built from. Defaults to the Release build in the baseline worktree the README sets up,
+    ..\PaulTechGuy.Marqora-baseline, and failing that to this checkout's own Release build.
 
 .EXAMPLE
     pwsh ./build/Get-BaselineHashes.ps1
@@ -35,7 +41,8 @@
 [CmdletBinding()]
 param(
     [switch]$Check,
-    [switch]$Force
+    [switch]$Force,
+    [string]$App
 )
 
 Set-StrictMode -Version Latest
@@ -153,32 +160,35 @@ $lines = foreach ($entry in $current) { "$($entry.Hash)  $($entry.Path)" }
 # LF and no BOM, the way sha256sum writes one, so `sha256sum -c` reads it too.
 [IO.File]::WriteAllText($manifest, (($lines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
 
-$commit = (& git -C $repo rev-parse --short HEAD 2>$null)
 $bytes = ($current | Measure-Object -Property Length -Sum).Sum
 $sealed = (Get-FileHash -LiteralPath $manifest -Algorithm SHA256).Hash.ToLowerInvariant()
 
-# The Release build the exports were presumably made with. Its product version carries the
-# commit it was built from after a plus sign, which is worth more here than the version number:
-# a build older than the checkout is a baseline of older code.
-$exe = Join-Path $repo 'src/PaulTechGuy.MQ.App/bin/Release/net10.0-windows10.0.19041.0/win-x64/Marqora.exe'
+# The app that made the exports. Its product version carries the commit it was built from after
+# a plus sign, and that commit - not this checkout's - is the baseline's: the README has the
+# exports made by a build of a release, from a worktree beside this one.
+$release = 'src/PaulTechGuy.MQ.App/bin/Release/net10.0-windows10.0.19041.0/win-x64/Marqora.exe'
+
+if (-not $App) {
+    $worktree = Join-Path (Split-Path -Parent $repo) "PaulTechGuy.Marqora-baseline/$release"
+    $App = if (Test-Path -LiteralPath $worktree) { $worktree } else { Join-Path $repo $release }
+}
+
 $version = 'unknown'
 $builtFrom = 'unknown'
 
-if (Test-Path -LiteralPath $exe) {
-    $product = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+if (Test-Path -LiteralPath $App) {
+    $product = (Get-Item -LiteralPath $App).VersionInfo.ProductVersion
     $version, $revision = $product -split '\+', 2
 
     if ($revision) {
         $builtFrom = $revision.Substring(0, [Math]::Min(7, $revision.Length))
     }
 }
+else {
+    Write-Host "No app at $App, so its version is not recorded. Pass -App with the Marqora.exe that made the exports." -ForegroundColor Yellow
+}
 
 Write-Host "Wrote $manifest."
 Write-Host ""
 Write-Host "For the plan's section 9.3 record:"
-Write-Host ("  {0} files, {1:N0} bytes; Release app {2} built from {3}; checkout at {4}; MANIFEST.sha256 {5}" -f $current.Count, $bytes, $version, $builtFrom, $commit, $sealed.Substring(0, 16))
-
-if ($builtFrom -ne 'unknown' -and $commit -and -not $commit.StartsWith($builtFrom) -and -not $builtFrom.StartsWith($commit)) {
-    Write-Host ""
-    Write-Host "  The Release build is from $builtFrom, not the checkout at $commit. If the exports came from that build, record its commit as the baseline's." -ForegroundColor Yellow
-}
+Write-Host ("  {0} files, {1:N0} bytes; made with Marqora {2} built from {3}; MANIFEST.sha256 {4}" -f $current.Count, $bytes, $version, $builtFrom, $sealed.Substring(0, 16))

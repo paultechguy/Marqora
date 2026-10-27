@@ -597,8 +597,8 @@ Actions runner fails, M2 still goes ahead and that environment is documented as 
   - **Wiring.** App DI is updated.
 - **Tests**: a new `FolioShrinkTests` in `Folio.Tests` or `Exporting`: an oversized PNG is reduced,
   a JPEG that would grow is kept, and the same input and width give the same bytes.
-- **Done when**: the tests pass, and the app's Folio "reduce pictures" output equals the M0-05
-  baseline (§9.3).
+- **Done when**: the tests pass, including a reduction that really happens, which the baseline
+  cannot show (§9.3), and the app's Folio "reduce pictures" output equals the M0-05 baseline.
 
 #### WP-M1-16: `folio`, folder and zip forms
 
@@ -1127,9 +1127,9 @@ Also from the spike, for M2:
 
 | Check                                                                                     | Result | Date |
 | ----------------------------------------------------------------------------------------- | ------ | ---- |
-| M0-05 baseline captured: file list and hashes | Tooling ready: the checklist in `tests/baselines/cli/README.md` (20 exports), the input `inputs/pictures.md`, and `build/Get-BaselineHashes.ps1` to record and `-Check` it. Waiting on the exports | |
-| Folio "reduce pictures" equals baseline after M1-15                                       |        |      |
-| Folio folder and zip, CLI vs baseline (M1-16)                                             |        |      |
+| M0-05 baseline captured: file list and hashes | **Done.** Made by Paul with Marqora 1.0.13 (tag `v1.0.13`, `0568b2c`) from a detached worktree, `preferences.json` confirming the version: 20 exports, 30 files, 20,650,958 bytes, `MANIFEST.sha256` `4af2b21e0c999d77`; `Get-BaselineHashes.ps1 -Check` passes. **Two gaps, kept by decision** (README, *Known gaps*): no picture keeps its path, because `inputs/images/logo.png` is byte-identical to `docs/assets/marqora-logo.png` and the Folio de-duplicated them; and shrinking never happens, because the 1888-pixel screenshot's reduced copy was no smaller, so the shrunk Folios equal the plain ones | 2026-10-26 |
+| Folio "reduce pictures" equals baseline after M1-15 | Proves only that the declined path is unchanged (see the M0-05 row); a picture actually being reduced is `FolioShrinkTests`' to prove | |
+| Folio folder and zip, CLI vs baseline (M1-16) | No kept-path case in the baseline (see the M0-05 row); `FolioPlanner`'s tests carry that | |
 | Globs from bash give the same list (IN-01)                                                |        |      |
 | Every verb under a firewall outbound block (M1: text verbs; M2: exports)                  |        |      |
 | Release output: two executables, one set of shared files, equal versions                  |        |      |
@@ -1170,3 +1170,8 @@ Out of v1, or turned up while planning. Paul picks from these. None is done alon
 - `print`, `check --spelling`, `watch`, and a recipe file.
 - Moving the app's HTML and PDF exports to the headless host too, if M2-09..M2-13 find the live
   and headless markup differ.
+- **The app's HTML export leaves pictures outside the document's folder as relative links**
+  (`../../../../docs/assets/...` in `pictures.default.html`), while it embeds the one beside the
+  document. The file shows them only where it was saved; moved or sent, they break. Seen in the
+  M0-05 baseline, 2026-10-26. Possibly intended, and an app question rather than a CLI one; the
+  CLI's `export html` matches whatever the app does.
