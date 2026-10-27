@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    How Marqora's two executables publish: Marqora.exe and marqora-cli.exe, imported by both
+    project files. One copy, because New-Release.ps1 publishes them into the same app\ folder
+    and fails if any file they share differs - and the libraries they share come out as the same
+    bytes only when both are compiled the same way (docs/CLI-Implementation-Plan.md, F19).
+    Moved here from the app's project file.
+  -->
+
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!--
+      The .NET runtime is only bundled for Release. Debug stays framework-dependent so
+      the inner loop does not pay to copy the runtime on every build.
+    -->
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">false</PublishSingleFile>
+
+    <!--
+      Precompiling IL to native code takes the time to first window from about 600ms to
+      about 390ms, measured on this publish, and costs roughly 45 MB of output. Release
+      only: it adds a crossgen2 pass the inner loop has no use for.
+
+      Single file stays off above. The Windows App SDK bundles its native DLLs into the
+      executable, and WinRT needs them on disk to build an activation factory, so the
+      first Windows App SDK call fails with 0x8007007E and the process dies before a
+      window appears. The CLI shares the folder, so it shares the choice.
+    -->
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+  </PropertyGroup>
+
+</Project>

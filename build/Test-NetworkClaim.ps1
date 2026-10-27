@@ -76,6 +76,12 @@ $surfaces = @(
     'build/release-notes-template.md'
     'build/New-Release.ps1'
     'src/PaulTechGuy.MQ.App/Views/AboutDialog.cs'
+    'docs/CLI.md'
+    'docs/CLI-Recipes.md'
+    'src/PaulTechGuy.MQ.Cli/Commands/CommandTree.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/CommandShared.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/GlobalOptions.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/ExamplesHelpAction.cs'
 )
 
 # Still true, and must not be "fixed". Each is a file plus the phrase that is allowed in it.

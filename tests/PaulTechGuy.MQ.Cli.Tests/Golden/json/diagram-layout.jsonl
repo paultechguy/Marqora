@@ -1,0 +1,1 @@
+{"schemaVersion":1,"path":"guide.md","verb":"diagram-layout","outcome":"wouldChange","outputs":[],"findings":[{"line":8,"column":0,"code":"no-direction","severity":"info","message":"Diagram 1 is a kind with no direction to set, so it was left alone."}]}

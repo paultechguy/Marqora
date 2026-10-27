@@ -1148,7 +1148,8 @@ Also from the spike, for M2:
 | Install with PATH; `marqora-cli version` in a new shell; uninstall restores PATH          |        |      |
 | CLI starts in Windows Sandbox (no Windows App SDK)                                        |        |      |
 | DOC-02 pre-commit hook passes clean, blocks a bad commit (A14) | **Passed in a scratch repository**, not this one: the hook copied out of `docs/CLI.md`, with a Release publish on PATH. A formatted file with good links committed; an unformatted list (exit 1, "would change") and a dead link (exit 1, `broken-link`) were refused; a commit with no markdown, and a file named with a space, went through. Installing it in this repository is for Paul. `ManualCoverageTests` holds the manual to no CI workflow | 2026-10-27 |
-| `docs/CLI-Recipes.md`, added at Paul's request after M1-19: the shell code run by hand | **Run, with four exceptions.** Every recipe was run in a scratch Git repository with a Debug build on PATH: in PowerShell 7.6, in Windows PowerShell 5.1 (after the UTF-8 line the page gives), in cmd and in Git Bash. Each gave what its text says, including accented headings, CRLF files, a file name with a space, an empty file list, and exit 4 on a second dated Folio the same day. **Not run:** WSL, which is not installed here (the `marqora-cli.exe` link, `wslpath -w`); the clipboard recipes (`Get-Clipboard`, `Set-Clipboard`), because clipboard access was refused in the session; `chcp 65001` changing what cmd shows on screen; and the Task Scheduler steps. `ManualCommandTests` parses every marqora-cli command in the page's shell blocks; three options broken on purpose were each caught | 2026-10-27 |
+| `docs/CLI-Recipes.md`, added at Paul's request after M1-19: the shell code run by hand | **Run, with three exceptions.** Every recipe was run in a scratch Git repository with a Debug build on PATH: in PowerShell 7.6, in Windows PowerShell 5.1 (after the UTF-8 line the page gives), in cmd and in Git Bash. Each gave what its text says, including accented headings, CRLF files, a file name with a space, an empty file list, and exit 4 on a second dated Folio the same day. **WSL, run 2026-10-27** (Ubuntu, WSL 2, Debug build on the Windows PATH): the `marqora-cli.exe` link ran by the short name and inside `xargs`; on `/mnt/c`, a quoted `**` pattern, bash's own glob, pipes into `grep`, standard input, exit codes, LF output, an accented heading, the git-and-`xargs` recipe on a name with a space, the `awk` contents recipe and a reading order from a CRLF file all as the page says; `folio -o "$(wslpath -w ...)"` wrote to `\\wsl.localhost\Ubuntu\...`, and documents kept on the Linux side worked by relative path. One sentence was wrong: a Linux absolute path is not meaningless but read as a Windows one, so `/tmp/x.zip` was written to `C:\tmp\x.zip` without an error; the page now says so (§11). **Not run:** the clipboard recipes
+ (`Get-Clipboard`, `Set-Clipboard`), because clipboard access was refused in the session; `chcp 65001` changing what cmd shows on screen; and the Task Scheduler steps. `ManualCommandTests` parses every marqora-cli command in the page's shell blocks; three options broken on purpose were each caught | 2026-10-27 |
 | M2-02: HTML and Folio vs baseline                                                         |        |      |
 | M2-03: PDF vs baseline; one print to Microsoft Print to PDF                               |        |      |
 | M2-06: all four app exports vs baseline (before ARC-07)                                   |        |      |
@@ -1206,6 +1207,10 @@ Out of v1, or turned up while planning. Paul picks from these. None is done alon
   "--write" in place of each match, so nothing is lost but the run did not do what was asked. The recipes
   give `'""'` for 5.1; refusing an option-shaped value for `--with`, or `--with=` with nothing
   after it, would close it. Seen while writing the recipes, 2026-10-27.
+  **Done 2026-10-27:** `--with=` (any option written `--name=`) is now an empty value, and an
+  option that needs a value followed by one of the command's own options as a separate word stops
+  with exit 2 and says to write `--with=--write` if that text is meant. Tried in Windows
+  PowerShell 5.1: `--with ''` is refused, `--with=` deletes. The recipes now give `--with=`.
 - **`check` reports every link that leaves the document's folder as broken**, `../README.md`
   included, because the app's own link check (`LinkChecks.Exists`, through
   `PathContainment.ResolveWithin`) only looks inside the folder. The source pane underlines the
@@ -1213,3 +1218,12 @@ Out of v1, or turned up while planning. Paul picks from these. None is done alon
   them reports each such link, so it cannot gate a commit there. An app question first; the CLI
   follows whatever the app decides. The manual and the recipes say so. Seen while writing the
   recipes, 2026-10-27.
+  **Done 2026-10-27, in the app:** a link (not a picture) is checked wherever it leads, as the
+  preview follows it there, so `../README.md` is fine when the file is there, in the source pane
+  and in `check` alike. Pictures keep the folder rule and their `outside-folder` finding.
+- **From WSL, a Linux absolute path is written on the Windows drive without a word.**
+  `folio -o /tmp/x/Linux.zip`, run from a folder under `/mnt/c`, made `C:\tmp\x\Linux.zip` and
+  exited 0, because to Windows `/tmp/...` is a path from the root of the current drive. The
+  recipes now say so and give `wslpath -w`. Refusing a path that starts with a single `/` would
+  catch it, but `\folder\file` is a real, if rare, Windows form, so it is a question for Paul
+  rather than a fix. Seen in the WSL run, 2026-10-27.

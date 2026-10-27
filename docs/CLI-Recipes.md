@@ -30,9 +30,9 @@ The recipes assume marqora-cli is on your PATH, and that you are in the folder t
   [Accented letters](#accented-letters).
 - **cmd** works for everything but the recipes that read JSON; for those, it says so and shows
   how to run the PowerShell recipe from cmd.
-- **bash** means bash in WSL, or Git Bash. In WSL, a Windows program is run by its full name,
-  `marqora-cli.exe`; [Using WSL](#using-wsl) sets it up so the recipes work as written. Git Bash
-  runs `marqora-cli` as it is.
+- **bash** means bash in WSL, or Git Bash: in either, follow the recipes marked **bash:**. In WSL,
+  a Windows program is run by its full name, `marqora-cli.exe`; [Using WSL](#using-wsl) sets it
+  up so the bash recipes work as written. Git Bash runs `marqora-cli` as it is.
 
 ### Quoting
 
@@ -100,9 +100,9 @@ marqora-cli check "docs/**/*.md" > link-report.txt
 The same line works in cmd and bash. Under each file's name come its problems, then a blank line.
 The exit code says whether there were any: 1 if so, 0 if not.
 
-A link that leaves the document's folder, such as `../README.md`, is reported as broken, as the
-app's source pane underlines it. A folder of documents that link to each other in one folder
-checks clean; one whose documents link up and across folders reports each of those links.
+A link that leaves the document's folder, such as `../README.md`, is checked like any other: it is
+fine when the file is there. Pictures are different: one from outside the document's folder is
+reported, because it would not appear for anyone else.
 
 ### Show one kind of problem
 
@@ -511,13 +511,14 @@ marqora-cli replace --find "DRAFT: " --with "" --match-case --write "docs/**/*.m
 ```
 
 That line works in PowerShell 7, cmd and bash. **Windows PowerShell 5.1 drops an empty argument**
-before marqora-cli sees it, and `--with` then takes the next option as its text. There, write the
-empty text as `'""'`:
+before marqora-cli sees it; marqora-cli then finds `--with` followed by `--match-case`, and stops
+with exit 2 rather than guess. `--with=`, with nothing after the `=`, is empty text in every
+shell, 5.1 included:
 
 <!-- cli-example: no-output -->
 
 ```powershell
-marqora-cli replace --find "DRAFT: " --with '""' --match-case --write "docs/**/*.md"
+marqora-cli replace --find "DRAFT: " --with= --match-case --write "docs/**/*.md"
 ```
 
 ## Folios
@@ -693,6 +694,11 @@ Then `mq format --write notes.md` formats with your Preferences. A global option
 
 ## Using WSL
 
+In WSL, use the recipes marked **bash:**, as they are written. The PowerShell and cmd ones are for
+those Windows shells and do not run in WSL. The commands themselves are the same in every shell;
+what differs is the quoting, the redirection and the pipes around them, and in WSL those are
+bash's.
+
 marqora-cli is a Windows program, and WSL runs it, but by its full name: `marqora-cli.exe`. WSL
 finds it on the Windows PATH, which it adds to its own unless that has been turned off.
 
@@ -709,10 +715,11 @@ open a new terminal.
 
 Three more things are different from a Linux program:
 
-- **Keep the documents on a Windows drive**, under `/mnt/c` and the like, and give marqora-cli
-  relative paths. Relative paths and patterns mean the same thing to both sides.
-- **A Linux absolute path means nothing to marqora-cli.** Turn it into a Windows one with
-  `wslpath -w`: `marqora-cli folio -o "$(wslpath -w ~/Handbook.zip)" "docs/*.md"`.
+- **Give marqora-cli relative paths.** Relative paths and patterns mean the same thing to both
+  sides, whether the documents are on a Windows drive, under `/mnt/c`, or in your Linux home.
+- **A Linux absolute path is read as a Windows one.** From a folder on drive C:,
+  `/tmp/Handbook.zip` becomes `C:\tmp\Handbook.zip`, with no error. Turn it into the right Windows path with `wslpath -w`:
+  `marqora-cli folio -o "$(wslpath -w ~/Handbook.zip)" "docs/*.md"`.
 - **Its output is UTF-8 with Unix line endings**, so `grep`, `sed` and `awk` read it as they read
   any program's.
 

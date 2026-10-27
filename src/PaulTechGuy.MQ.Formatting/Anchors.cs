@@ -30,14 +30,14 @@ internal static class Anchors
     /// is left alone.
     /// </param>
     /// <param name="uncertain">
-    /// How many headings were changed but had to be skipped because their anchor could not be
-    /// worked out from the source alone. Links pointing at those are left exactly as they are and
-    /// the caller says so — see <see cref="IsDerivable"/>.
+    /// The headings, by index, that were changed but had to be skipped because their anchor could
+    /// not be worked out from the source alone. Links pointing at those are left exactly as they
+    /// are and the caller says so — see <see cref="IsDerivable"/>.
     /// </param>
     public static Dictionary<string, string> Renamed(
         IReadOnlyList<HeadingScanner.ScannedHeading> headings,
         string?[] rewritten,
-        out int uncertain)
+        out IReadOnlyList<int> uncertain)
     {
         // Matched without case, which is what the dead-anchor check in Analysis does: a
         // hand-written "#Scope" reaches a heading slugged "scope", so a rewrite has to move it
@@ -47,7 +47,8 @@ internal static class Anchors
         var before = new Dictionary<string, int>(StringComparer.Ordinal);
         var after = new Dictionary<string, int>(StringComparer.Ordinal);
 
-        uncertain = 0;
+        var skipped = new List<int>();
+        uncertain = skipped;
 
         for (int i = 0; i < headings.Count; i++)
         {
@@ -75,7 +76,7 @@ internal static class Anchors
                 // untouched one keeps whatever anchor it had, however hard that is to work out.
                 if (!string.Equals(old, now, StringComparison.Ordinal))
                 {
-                    uncertain++;
+                    skipped.Add(i);
                 }
 
                 continue;

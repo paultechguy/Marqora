@@ -66,6 +66,28 @@ public sealed class SafeFileWriterTests : IDisposable
         Leftovers().ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// Bytes go down as given: a byte order mark and CRLF endings survive, which the text overload
+    /// would drop. What marqora-cli --write needs to leave a file as it found it (CLI-OUT-06).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Bytes_are_written_exactly_on_either_drive(bool otherDrive)
+    {
+        byte[] contents = [0xEF, 0xBB, 0xBF, (byte)'#', (byte)' ', (byte)'T', (byte)'\r', (byte)'\n'];
+
+        await SafeFileWriter.WriteAsync(
+            Page,
+            contents,
+            NullLogger.Instance,
+            otherDrive ? OtherDrive : Scratch,
+            TestContext.Current.CancellationToken);
+
+        File.ReadAllBytes(Page).ShouldBe(contents);
+        Leftovers().ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task An_existing_file_is_replaced_whole()
     {

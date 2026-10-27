@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.Logging;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// Reduces the pictures that are wider than the author asked for, and hands back a plan pointing
@@ -19,7 +20,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// The copies live in a scratch folder the caller owns and deletes. Nothing is written back over
 /// the author's own images; a share must not edit what it is sharing.
 /// </summary>
-public sealed class FolioShrinker(ILogger<FolioShrinker> logger)
+public sealed class FolioShrinker(ILogger<FolioShrinker> logger, IImageResizer resizer)
 {
     /// <summary>
     /// The plan with oversized images repointed at reduced copies under
@@ -75,7 +76,7 @@ public sealed class FolioShrinker(ILogger<FolioShrinker> logger)
             byte[] original = await File.ReadAllBytesAsync(asset.SourcePath, cancellationToken)
                 .ConfigureAwait(false);
 
-            byte[]? smaller = await ClipboardImage.ResizeForFileAsync(original, maxWidth, logger)
+            byte[]? smaller = await resizer.ResizeForFileAsync(original, maxWidth, cancellationToken)
                 .ConfigureAwait(false);
 
             /*

@@ -393,6 +393,10 @@ marqora-cli replace --find "Marqora 1.0" --with "Marqora 1.1" --match-case --wri
 marqora-cli replace --find "colou?r" --with color --regex --dry-run README.md
 ```
 
+An empty `--with` can be written `--with ""` or `--with=`, which works in every shell. An option
+that needs a value and is followed by another option, as in `--with --write`, is refused with exit
+2 rather than taking `--write` as its text; to replace with that text, write `--with=--write`.
+
 ### `renumber-lists`
 
 Renumbers every numbered list in the document, as **Renumber List** does for one.
@@ -462,7 +466,8 @@ By default a picture from the web, or from outside the document's folder, is an 
 on your machine and not on anyone else's. `--ignore-external-images` is for documents where that
 is intended. Links to web pages are never checked, because checking them would mean going to the
 web; `--verbose` lists them as not checked. A link that leaves the document's folder, such as
-`../README.md`, is reported as broken, as the source pane underlines it.
+`../README.md`, is fine when the file is there, as clicking it in the preview opens it. Only a
+picture has to be inside the folder.
 
 | Code                   | Severity | Meaning                                                                               |
 | ---------------------- | -------- | ------------------------------------------------------------------------------------- |

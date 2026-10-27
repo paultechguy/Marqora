@@ -30,10 +30,28 @@ public static partial class SafeFileWriter
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>Text, written as UTF-8 without a byte order mark.</summary>
+    /// <param name="scratchRoot">Where scratch folders go; the temp folder's own unless a test says otherwise.</param>
+    public static Task WriteAsync(
+        string path,
+        string contents,
+        ILogger logger,
+        string? scratchRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(contents);
+
+        return WriteAsync(path, Utf8NoBom.GetBytes(contents), logger, scratchRoot, cancellationToken);
+    }
+
+    /// <summary>
+    /// Bytes, exactly as given. For a writer that has to keep what a file already was - its byte
+    /// order mark, its line endings - which text through a fixed encoding cannot promise.
+    /// </summary>
     /// <param name="scratchRoot">Where scratch folders go; the temp folder's own unless a test says otherwise.</param>
     public static async Task WriteAsync(
         string path,
-        string contents,
+        byte[] contents,
         ILogger logger,
         string? scratchRoot = null,
         CancellationToken cancellationToken = default)
@@ -51,7 +69,7 @@ public static partial class SafeFileWriter
 
             string temporary = Path.Combine(scratch.Path, Path.GetFileName(full));
 
-            await File.WriteAllTextAsync(temporary, contents, Utf8NoBom, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(temporary, contents, cancellationToken).ConfigureAwait(false);
             SwapIn(temporary, full);
 
             return;
@@ -125,7 +143,7 @@ public static partial class SafeFileWriter
         && candidate.StartsWith("." + fileName + ".", StringComparison.OrdinalIgnoreCase)
         && TemporarySuffix().IsMatch(candidate[(fileName.Length + 2)..]);
 
-    private static async Task WriteBesideAsync(string full, string contents, ILogger logger, CancellationToken cancellationToken)
+    private static async Task WriteBesideAsync(string full, byte[] contents, ILogger logger, CancellationToken cancellationToken)
     {
         string folder = Path.GetDirectoryName(full) ?? throw new IOException($"{full} has no folder.");
         string temporary = Path.Combine(folder, TemporaryNameFor(Path.GetFileName(full)));
@@ -139,8 +157,7 @@ public static partial class SafeFileWriter
             {
                 File.SetAttributes(temporary, File.GetAttributes(temporary) | FileAttributes.Hidden);
 
-                byte[] bytes = Utf8NoBom.GetBytes(contents);
-                await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(contents, cancellationToken).ConfigureAwait(false);
             }
 
             SwapIn(temporary, full);

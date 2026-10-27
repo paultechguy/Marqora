@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
@@ -133,7 +134,7 @@ internal static class ClipboardImage
 
                 if (downscaleFiles && maxWidth is { } limit)
                 {
-                    bytes = await EncodeAsync(bytes, limit, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger).ConfigureAwait(true) ?? bytes;
+                    bytes = await WicImaging.EncodeAsync(bytes, limit, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger).ConfigureAwait(true) ?? bytes;
                 }
 
                 images.Add(new PastedImage
@@ -173,7 +174,7 @@ internal static class ClipboardImage
                 return null;
             }
 
-            byte[] bytes = await ToArrayAsync(stream).ConfigureAwait(true);
+            byte[] bytes = await WicImaging.ToArrayAsync(stream).ConfigureAwait(true);
 
             // Whatever it claimed, it is only taken if it really is a PNG. Otherwise the tier
             // below re-encodes the bitmap, which is the safer answer anyway.
@@ -184,7 +185,7 @@ internal static class ClipboardImage
 
             if (maxWidth is { } limit)
             {
-                bytes = await EncodeAsync(bytes, limit, ClipboardImageTiers.MustReencode(ClipboardImageTier.Png), logger).ConfigureAwait(true) ?? bytes;
+                bytes = await WicImaging.EncodeAsync(bytes, limit, ClipboardImageTiers.MustReencode(ClipboardImageTier.Png), logger).ConfigureAwait(true) ?? bytes;
             }
 
             return new PastedImage { Bytes = bytes, Source = PastedImageSource.Png };
@@ -207,8 +208,8 @@ internal static class ClipboardImage
 
             using IRandomAccessStream source = await reference.OpenReadAsync();
 
-            byte[] bytes = await ToArrayAsync(source).ConfigureAwait(true);
-            byte[]? encoded = await EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Bitmap), logger).ConfigureAwait(true);
+            byte[] bytes = await WicImaging.ToArrayAsync(source).ConfigureAwait(true);
+            byte[]? encoded = await WicImaging.EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Bitmap), logger).ConfigureAwait(true);
 
             return encoded is null
                 ? null
@@ -228,7 +229,7 @@ internal static class ClipboardImage
     /// the caller treats as "use the original".
     /// </summary>
     public static Task<byte[]?> ResizeForFileAsync(byte[] bytes, int maxWidth, ILogger logger) =>
-        EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger);
+        WicImaging.EncodeAsync(bytes, maxWidth, ClipboardImageTiers.MustReencode(ClipboardImageTier.Files), logger);
 
     /// <summary>
     /// Puts a diagram on the clipboard as one picture: a bitmap, composited onto white.
@@ -345,7 +346,7 @@ internal static class ClipboardImage
 
             destination.Seek(0);
 
-            return await ToArrayAsync(destination).ConfigureAwait(true);
+            return await WicImaging.ToArrayAsync(destination).ConfigureAwait(true);
         }
         // InvalidOperationException among them: a SoftwareBitmap is not always writable, and
         // a failure here has to stay a failure of this one flavor. Letting it reach the
@@ -362,101 +363,5 @@ internal static class ClipboardImage
 
         static byte OverWhite(byte channel, byte alpha) =>
             (byte)(((channel * alpha) + (byte.MaxValue * (byte.MaxValue - alpha))) / byte.MaxValue);
-    }
-
-    /// <summary>
-    /// Decodes, optionally scales, and encodes as PNG.
-    /// </summary>
-    /// <param name="mustReencode">
-    /// True when the bytes are not a format worth keeping and have to come out as PNG whatever
-    /// their size.
-    ///
-    /// This is the whole difference between the two callers, and getting it wrong is not subtle:
-    /// what <c>GetBitmapAsync</c> hands back for a clipboard DIB is a <em>BMP</em>, so skipping
-    /// the encode for an image that needed no resizing wrote screenshots to disk as
-    /// uncompressed .bmp files - which is most screenshots, since most are narrower than the
-    /// default cap and never reached the scaling path at all.
-    ///
-    /// False for a PNG or a picked file, where the bytes already are what they should be and
-    /// re-encoding one that needs no resizing would throw away the original for nothing.
-    /// </param>
-    /// <returns>Null when the bytes will not decode.</returns>
-    private static async Task<byte[]?> EncodeAsync(
-        byte[] bytes,
-        int? maxWidth,
-        bool mustReencode,
-        ILogger logger)
-    {
-        try
-        {
-            using var source = new InMemoryRandomAccessStream();
-
-            await source.WriteAsync(bytes.AsBuffer());
-            source.Seek(0);
-
-            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(source);
-
-            // The decision is made in Domain, where a test can reach it. Both of this file's
-            // bugs were in these few lines of arithmetic, and none of it needs an imaging stack
-            // to be right - so what is left here is only the decoding and encoding, which do.
-            ImageEncodeStep step = ImageScaling.Plan(
-                decoder.PixelWidth, decoder.PixelHeight, maxWidth, mustReencode);
-
-            if (!step.Encode)
-            {
-                return bytes;
-            }
-
-            var transform = new BitmapTransform
-            {
-                ScaledWidth = step.Width,
-                ScaledHeight = step.Height,
-
-                // Fant is the slow one and the only one that does not turn text in a screenshot
-                // into fringes, which is most of what gets pasted here.
-                InterpolationMode = BitmapInterpolationMode.Fant,
-            };
-
-            using SoftwareBitmap scaled = await decoder.GetSoftwareBitmapAsync(
-                BitmapPixelFormat.Bgra8,
-                BitmapAlphaMode.Premultiplied,
-                transform,
-                ExifOrientationMode.RespectExifOrientation,
-                ColorManagementMode.ColorManageToSRgb);
-
-            using var destination = new InMemoryRandomAccessStream();
-
-            BitmapEncoder encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, destination);
-
-            // SetSoftwareBitmap wants straight alpha; the decode above asked for premultiplied
-            // because that is what the scaler works in.
-            encoder.SetSoftwareBitmap(SoftwareBitmap.Convert(
-                scaled, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight));
-
-            await encoder.FlushAsync();
-
-            destination.Seek(0);
-
-            return await ToArrayAsync(destination).ConfigureAwait(true);
-        }
-        catch (Exception ex) when (ex is COMException or ArgumentException or NotSupportedException)
-        {
-            logger.LogWarning(ex, "Could not decode the pasted image.");
-
-            return null;
-        }
-    }
-
-    private static async Task<byte[]> ToArrayAsync(IRandomAccessStream stream)
-    {
-        stream.Seek(0);
-
-        var buffer = new Windows.Storage.Streams.Buffer((uint)stream.Size);
-
-        await stream.ReadAsync(buffer, (uint)stream.Size, InputStreamOptions.None);
-
-        // Named rather than called as an extension: IBuffer.ToArray and Linq's ToArray are both
-        // in scope here and the compiler picks the wrong one.
-        return WindowsRuntimeBufferExtensions.ToArray(buffer);
     }
 }

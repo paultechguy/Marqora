@@ -9,7 +9,7 @@ internal static class Program
 {
     /// <summary>
     /// STA, because WebView2 belongs to the thread that creates it and that thread must pump
-    /// messages. The text verbs will never need it, and do no harm on it.
+    /// messages. The text verbs never need it, and do no harm on it.
     /// </summary>
     [STAThread]
     private static int Main(string[] args)
@@ -21,7 +21,6 @@ internal static class Program
         }
 #endif
 
-        Console.Error.WriteLine("marqora-cli: this build has no commands yet.");
-        return 2;
+        return CliApp.Run(args);
     }
 }

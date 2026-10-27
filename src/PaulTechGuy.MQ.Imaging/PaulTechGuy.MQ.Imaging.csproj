@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Pictures through Windows Imaging: decoded, scaled and encoded, for the app and marqora-cli
+    alike (docs/CLI-Implementation-Plan.md, WP-M1-15).
+
+    The Windows SDK target and nothing of WinUI: Windows.Graphics.Imaging comes with the target
+    framework, so neither executable needs the Windows App SDK for it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>PaulTechGuy.MQ.Imaging</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

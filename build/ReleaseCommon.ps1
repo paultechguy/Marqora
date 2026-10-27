@@ -1039,7 +1039,7 @@ function New-StagedRelease {
     $installDir = Join-Path $root 'install'
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 
-    foreach ($file in @('Install.ps1', 'Uninstall.ps1')) {
+    foreach ($file in @('Install.ps1', 'Uninstall.ps1', 'UserPath.ps1')) {
         Copy-Item -LiteralPath (Join-Path $InstallerSource $file) -Destination $installDir -Force
     }
 

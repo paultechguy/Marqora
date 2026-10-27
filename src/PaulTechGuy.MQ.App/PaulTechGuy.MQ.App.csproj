@@ -22,33 +22,21 @@
       no developer certificate.
     -->
     <WindowsPackageType>None</WindowsPackageType>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <!-- Carrying the Windows App SDK in the output removes the runtime prerequisite. -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
     <!--
-      The .NET runtime is only bundled for Release. Debug stays framework-dependent so
-      the inner loop does not pay to copy the runtime on every build.
+      The runtime identifier, self-contained Release and ReadyToRun live in build\Publish.props,
+      imported below and by marqora-cli, which publishes into the same folder.
     -->
-    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
-    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">false</PublishSingleFile>
-
-    <!--
-      Precompiling IL to native code takes the time to first window from about 600ms to
-      about 390ms, measured on this publish, and costs roughly 45 MB of output. Release
-      only: it adds a crossgen2 pass the inner loop has no use for.
-
-      Single file stays off above. The Windows App SDK bundles its native DLLs into the
-      executable, and WinRT needs them on disk to build an activation factory, so the
-      first Windows App SDK call fails with 0x8007007E and the process dies before a
-      window appears.
-    -->
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
 
     <!-- The WinUI XAML compiler emits its own entry point; Program.cs replaces it. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
+
+  <!-- How it publishes, shared with marqora-cli: runtime identifier, self-contained, ReadyToRun. -->
+  <Import Project="..\..\build\Publish.props" />
 
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
@@ -56,9 +44,11 @@
     <ProjectReference Include="..\PaulTechGuy.MQ.Analysis\PaulTechGuy.MQ.Analysis.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Docx\PaulTechGuy.MQ.Docx.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Exporting\PaulTechGuy.MQ.Exporting.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Finding\PaulTechGuy.MQ.Finding.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Formatting\PaulTechGuy.MQ.Formatting.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Imaging\PaulTechGuy.MQ.Imaging.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Markdown\PaulTechGuy.MQ.Markdown.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />

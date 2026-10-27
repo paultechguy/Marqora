@@ -16,7 +16,6 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>PaulTechGuy.MQ.Cli</RootNamespace>
     <AssemblyName>marqora-cli</AssemblyName>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
     <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
 
@@ -27,11 +26,22 @@
     <DefineConstants>$(DefineConstants);MQ_SPIKE</DefineConstants>
   </PropertyGroup>
 
+  <!-- How it publishes, shared with the app it ships beside: runtime identifier, self-contained, ReadyToRun. -->
+  <Import Project="..\..\build\Publish.props" />
+
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Analysis\PaulTechGuy.MQ.Analysis.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Exporting\PaulTechGuy.MQ.Exporting.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Finding\PaulTechGuy.MQ.Finding.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Formatting\PaulTechGuy.MQ.Formatting.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Imaging\PaulTechGuy.MQ.Imaging.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Services\PaulTechGuy.MQ.Services.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.WebRender\PaulTechGuy.MQ.WebRender.csproj" />
   </ItemGroup>
@@ -39,6 +49,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PaulTechGuy.MQ.Cli.Tests" />
   </ItemGroup>
 
   <Import Project="..\..\build\WebAssets.targets" />

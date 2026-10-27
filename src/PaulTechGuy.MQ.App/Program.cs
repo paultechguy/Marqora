@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Dispatching;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Spelling;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
@@ -15,8 +16,10 @@ using PaulTechGuy.MQ.Analysis;
 using PaulTechGuy.MQ.Docx;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
+using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
+using PaulTechGuy.MQ.Imaging;
 using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Services;
@@ -168,6 +171,7 @@ public static class Program
         builder.Services.AddSingleton<RenderedHtmlPackager>();
         builder.Services.AddSingleton<IHtmlExporter, HtmlExporter>();
         builder.Services.AddSingleton<FolioHtmlWriter>();
+        builder.Services.AddSingleton<IImageResizer, WicImageResizer>();
         builder.Services.AddSingleton<FolioShrinker>();
         builder.Services.AddSingleton(sp => new FolioFetcher(
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FolioFetcher>>(),

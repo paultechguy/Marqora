@@ -1,0 +1,1 @@
+{"schemaVersion":1,"path":"guide.md","verb":"replace","outcome":"printed","outputs":[],"findings":[],"text":"# Guide\n\n## Install\n\n1. ONE\n2. two\n\n```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n\n```mermaid\nflowchart TB\n  A-->B\n```\n"}

@@ -15,6 +15,7 @@ using PaulTechGuy.MQ.Abstractions.Spelling;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Finding;
 using PaulTechGuy.MQ.Folio;
@@ -6696,53 +6697,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// length would be a guess. The caret lands at the start of the line and the pane scrolls
     /// to it, which is what "take me there" means.
     /// </summary>
-    /// <summary>
-    /// A Folio warning as the report's left-hand phrase: what went wrong, in a form somebody can
-    /// act on, sentence case because it reads as a heading of its own.
-    ///
-    /// Deliberately not the warning's own message. That sentence is written for the preflight,
-    /// where it argues for a decision the author has not made yet; by the time this window is up
-    /// the decision is made and the file is written, so the row says what the artifact lacks.
-    /// </summary>
-    private static string FolioProblem(FolioWarningKind kind) => kind switch
-    {
-        FolioWarningKind.MissingImage => "Not on this machine",
-        FolioWarningKind.OutsideLink => "Points outside the Folio",
-        FolioWarningKind.NotRewritable => "Reference could not be repointed",
-        FolioWarningKind.WillBeShrunk => "Sent smaller than the original",
-        FolioWarningKind.RemoteImageNotIncluded => "Left on the web",
-        FolioWarningKind.RemoteImageFailed => "Could not be fetched",
-        // Names the person and the consequence, because the earlier wording - "loads from the
-        // web when opened" - left both to be guessed at: loads what, opened by whom. A reader
-        // of this report is deciding whether to send the file to somebody, and the thing they
-        // need to know is that the somebody will end up fetching from that site.
-        FolioWarningKind.RemoteMediaNotIncluded => "Whoever opens this fetches it from the web",
-        _ => "Not carried across",
-    };
-
-    /// <summary>
-    /// What it happened to. The address for anything on the web, because that is the thing a
-    /// reader has to go and look at - and unlike a Word export these are never data URIs, so
-    /// they are short enough to read.
-    /// </summary>
-    private static string ExportReportItem(FolioWarning warning) =>
-        warning.Kind == FolioWarningKind.RemoteImageFailed
-            ? $"{warning.Url} - {FailureReason(warning.Message)}"
-            : warning.Url;
-
-    /// <summary>
-    /// The tail of a fetch failure's message, which is the half that says why.
-    ///
-    /// The message is built for a list read on its own and leads with the address; repeating it
-    /// beside the address column would be noise.
-    /// </summary>
-    private static string FailureReason(string message)
-    {
-        int colon = message.IndexOf(": ", StringComparison.Ordinal);
-
-        return colon > 0 && colon + 2 < message.Length ? message[(colon + 2)..] : message;
-    }
-
     private void GoToExportedLine(Guid documentId, int line)
     {
         if (line <= 0 || _workspace.Find(documentId) is null)
@@ -7994,8 +7948,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     DocumentName = built.Documents.Count > 1
                         ? NameOf(warning.DocumentPath)
                         : string.Empty,
-                    Problem = FolioProblem(warning.Kind),
-                    Item = ExportReportItem(warning),
+                    Problem = FolioReportWording.Problem(warning.Kind),
+                    Item = FolioReportWording.Item(warning),
                     IsAdvisory = warning.IsAdvisory,
                 });
             }
