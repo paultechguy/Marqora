@@ -107,7 +107,7 @@ code. The plan's §3 has the finding behind each one. No ID was added, removed o
 | --- | --- |
 | `CLI-SP-01`, `CLI-ARC-01` | The parent window is the spike's to choose; WebView2's WinRT projection is switched on and must activate without the Windows App SDK; target `net10.0-windows10.0.19041.0` |
 | `CLI-ARC-01`, `CLI-ARC-02` | A fourth project, `PaulTechGuy.MQ.Imaging`, behind `IImageResizer`; `Exporting` exists from M1 to receive `FolioShrinker` |
-| `CLI-SP-03`, `CLI-DOC-02` | The Actions runs are made by Paul in a scratch repository |
+| `CLI-SP-03`, `CLI-DOC-02` | No GitHub Actions is used: the spike's Actions run is recorded as not run, by decision, and the manual has a pre-commit hook and no Actions recipe. Amended again on 2026-10-26; the version of 2026-10-16 had the runs made by Paul in a scratch repository |
 | `CLI-VB-UNP-01` | Single-file Folios only; a non-empty target is refused and `unpack` takes no `--overwrite` (the proposal to empty it first was rejected) |
 | `CLI-VB-REN-01` | `--style sequential\|ones\|zeros`; the app's per-list suggestion by default |
 | `CLI-OUT-06` | `format` decides line endings and the final newline through its own options |
@@ -180,12 +180,13 @@ and to the second, on a developer machine.
 
 #### CLI-SP-03: Non-interactive sessions are tried
 
-**Requirement.** The spike runs over SSH on the developer machine, and on a GitHub Actions
-Windows runner in a scratch repository, and records whether each works. The Actions run is made
-by Paul: this repository has no workflow and does not get one for this.
-**Why.** "CI-ready" is not claimed anywhere until this passes (`CLI-DOC-02`).
+**Requirement.** The spike runs over SSH on the developer machine and records whether it works.
+A GitHub Actions runner is not tried: no GitHub Actions is used for this work, in this
+repository or any other, so exports on CI stay untested and the manual says so.
+**Why.** "CI-ready" is not claimed anywhere until it has been shown (`CLI-DOC-02`).
 **Acceptance.**
-- [ ] Result for the Actions runner recorded, with the log
+- [ ] Result for the Actions runner recorded: **not run, by decision** (no GitHub Actions is used
+  for this work), and exports on CI documented in the manual as untested
 - [ ] Result over SSH recorded
 - [ ] If either fails, the plan records whether M2 goes ahead with that environment documented
   as unsupported
@@ -1120,12 +1121,15 @@ and examples, pipes and globs, dry-run/check/write, settings, themes, the exit-c
 
 **M1 (text verbs), M2 (exports) · Must**
 
-#### CLI-DOC-02: CI recipes
+#### CLI-DOC-02: A pre-commit hook recipe
 
-**Requirement.** The manual has a GitHub Actions recipe and a pre-commit hook for `format --check`
-and `check`. Exports in CI are documented only as far as `CLI-SP-03` showed them to work.
+**Requirement.** The manual has a pre-commit hook for `format --check` and `check`. It has no
+GitHub Actions recipe, or any other CI service's: none is used for this work, so none is
+published. Exports in CI are documented only as far as `CLI-SP-03` showed them to work.
 **Acceptance.**
-- [ ] The Actions recipe runs green in a scratch repository (this one has no workflow)
+- [ ] The hook, installed in this repository, passes on a clean tree and blocks a commit with an
+  unformatted file or a dead link
+- [ ] The manual contains no GitHub Actions workflow
 
 **M1 · Should**
 
@@ -1278,7 +1282,7 @@ The implementation plan copies this table and adds a *Code changes* column.
 | CLI-RULE-03 | The network claim | M1 | Must |
 | CLI-RULE-04 | Release notes | M1/M2 | Must |
 | CLI-DOC-01 | The manual | M1/M2 | Must |
-| CLI-DOC-02 | CI recipes | M1 | Should |
+| CLI-DOC-02 | A pre-commit hook recipe | M1 | Should |
 | CLI-DOC-03 | The rest of the docs | M1/M2 | Must |
 | CLI-TST-01 | CLI tests | M1 | Must |
 | CLI-TST-02 | Export tests | M2 | Must |
