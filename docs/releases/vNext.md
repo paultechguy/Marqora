@@ -75,6 +75,11 @@ diagrams is ready in about half the time.
 of export and each kind of import keep their own last folder, so a Word export opens where the
 last Word export went, not where the last PDF or opened file did.
 
+**Links to other folders are no longer marked broken.** A link such as `../README.md`, to a file
+outside the document's own folder, was underlined as broken even though clicking it
+in the preview opened the file. A link is now checked wherever it leads. Pictures are still
+expected beside the document, because that is where the preview loads them from.
+
 **No landing page flash at startup.** Restoring a session no longer shows the landing page for
 a moment before the documents come back, and a slow start says "Opening your documents…"
 until the first one is on screen.

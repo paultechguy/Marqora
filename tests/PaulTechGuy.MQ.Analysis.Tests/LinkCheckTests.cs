@@ -141,11 +141,23 @@ public class LinkCheckTests
     }
 
     [Fact]
-    public void A_link_refusing_to_stay_inside_the_document_folder_is_reported()
+    public void A_link_to_a_file_outside_the_document_folder_that_is_there_is_not_reported()
     {
         using var folder = new DocumentFolder();
+        string link = folder.WithPrefixedSibling("README.md");
 
-        folder.Links("[escape](../../../windows/system32/drivers/etc/hosts)").ShouldHaveSingleItem()
+        // The preview follows a link wherever it leads, so "../README.md" works and is not
+        // broken. Only pictures are held to the document's folder.
+        folder.Links($"See [the readme]({link}).").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_link_outside_the_document_folder_to_nothing_is_reported()
+    {
+        using var folder = new DocumentFolder();
+        string link = folder.WithPrefixedSibling("README.md").Replace("README.md", "nope.md");
+
+        folder.Links($"See [the readme]({link}).").ShouldHaveSingleItem()
             .Kind.ShouldBe(LinkFindingKind.BrokenLink);
     }
 
