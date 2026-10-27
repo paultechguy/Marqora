@@ -766,9 +766,11 @@ shows.
 `globstar` on. Put the pattern in quotes, and marqora-cli expands it.
 
 **Accented letters come out wrong.** marqora-cli reads and writes UTF-8. A file in another
-encoding is refused (exit 3) rather than guessed at. In Windows PowerShell 5.1, piping to or
-from marqora-cli can change the encoding; PowerShell 7, or naming the files instead of piping
-them, avoids that.
+encoding is refused (exit 3) rather than guessed at. In PowerShell, the text marqora-cli prints
+is read in the console's old code page when it is passed to another command or kept in a
+variable, so `é` arrives as `├⌐`. Run `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()`
+first, or put it in your `$PROFILE`; the [recipes](CLI-Recipes.md#accented-letters) have the line
+for Windows PowerShell 5.1 too. Naming the files, and `--write`, avoid the question.
 
 **The result differs from the app's.** Check which settings are in force with `--verbose`. Without
 `--settings`, marqora-cli uses the built-in defaults, not your Preferences; `--settings app` uses

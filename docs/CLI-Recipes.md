@@ -24,10 +24,10 @@ The recipes assume marqora-cli is on your PATH, and that you are in the folder t
 
 ### Which shell
 
-- **PowerShell 7** is the easiest: it passes marqora-cli's text through untouched, and its JSON
-  and object handling make the reporting recipes short.
-- **Windows PowerShell 5.1**, the one built into Windows, works once it is told to use UTF-8. See
-  [Accented letters](#accented-letters).
+- **PowerShell 7** is the easiest: its JSON and object handling make the reporting recipes short.
+  Tell it once to read marqora-cli's text as UTF-8; see [Accented letters](#accented-letters).
+- **Windows PowerShell 5.1**, the one built into Windows, works once it is told to use UTF-8, in
+  the same place.
 - **cmd** works for everything but the recipes that read JSON; for those, it says so and shows
   how to run the PowerShell recipe from cmd.
 - **bash** means bash in WSL, or Git Bash: in either, follow the recipes marked **bash:**. In WSL,
@@ -66,10 +66,20 @@ something", and anything higher is a failure.
 
 marqora-cli reads and writes UTF-8.
 
-- **PowerShell 7** needs nothing. `>` saves exactly what marqora-cli wrote (PowerShell 7.4 and
+- **PowerShell 7** reads marqora-cli's text in the console's old code page whenever it passes the
+  text on to a command or keeps it in a variable: into `Set-Clipboard`, `Select-String`,
+  `ConvertFrom-Json`, or `$toc = marqora-cli toc README.md`. Then `é` arrives as `├⌐`. Run this
+  first, or put it in your `$PROFILE`:
+
+  ```powershell
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
+  ```
+
+  `>` into a file needs nothing: it saves exactly what marqora-cli wrote (PowerShell 7.4 and
   later).
-- **Windows PowerShell 5.1** decodes marqora-cli's output in the console's old code page, so `é`
-  arrives as `├⌐`, and `>` saves the file as UTF-16. Run this first, or put it in your `$PROFILE`:
+
+- **Windows PowerShell 5.1** decodes marqora-cli's output the same way, and `>` saves the file as
+  UTF-16. Run this first, or put it in your `$PROFILE`:
 
   ```powershell
   $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
@@ -555,15 +565,24 @@ To have Windows make it every Friday, save this as `Make-Handbook.ps1` beside th
 ```powershell
 Set-Location $PSScriptRoot
 $name = "Handbook-$(Get-Date -Format yyyy-MM-dd).zip"
-marqora-cli folio --quiet --color never -o $name "docs/handbook/*.md" *>> folio.log
+try {
+    marqora-cli folio --quiet --color never -o $name "docs/handbook/*.md" *>> folio.log
+}
+catch {
+    "$(Get-Date -Format s) $_" >> folio.log
+    exit 1
+}
 exit $LASTEXITCODE
 ```
 
 Then, in Task Scheduler, create a task with a weekly trigger whose action starts `pwsh.exe` with
 the arguments `-NoProfile -File "C:\path\to\Make-Handbook.ps1"`. Warnings and errors go to
-`folio.log`, and marqora-cli's exit code becomes the task's *Last Run Result*. If the task cannot
-find marqora-cli, name it by its full path, as the manual's
-[Install and PATH](CLI.md#install-and-path) shows.
+`folio.log`, and marqora-cli's exit code becomes the task's *Last Run Result*.
+
+The `try` is for the day the task cannot find marqora-cli. Without it, PowerShell reports that
+to no one, and the task's result is 0, as if the Folio had been made. With it, `folio.log` says
+what went wrong and the result is 1. To fix it, name marqora-cli by its full path, as the
+manual's [Install and PATH](CLI.md#install-and-path) shows.
 
 Run twice on the same day, the second run stops with exit 4 rather than replace the first;
 add `--overwrite` if replacing it is what you want.
