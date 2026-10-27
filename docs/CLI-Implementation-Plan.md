@@ -90,12 +90,12 @@ Facts that shape the work, each checked in the source. Each one is acted on in t
 |  F6 | `RenderForExportAsync` (`WebViewPreviewHost.cs:915`) returns the unfinished markup after 30 s.                                                                                                                                                                                                                                                                                                                                                                                                            | The shared bridge returns a typed outcome. The app keeps degrading; the CLI exits 5 (decision).                                                                                                                                                                                                                                                                             | M2-04        |
 |  F7 | `FolioShrinker` resizes through `ClipboardImage.ResizeForFileAsync` (WIC). No test covers `FolioShrinker` today.                                                                                                                                                                                                                                                                                                                                                                                          | An `IImageResizer` seam, a new `Imaging` project, and `FolioShrinker` moved into `Exporting`, which is created in M1. A new shrink test is written.                                                                                                                                                                                                                         | M1-15        |
 |  F8 | `ListRenumber` is `internal` and works on one list in an `EditContext`. `Describe` only ever suggests `Sequential` or `Ones` (`ListRenumber.cs:42`). `Apply` with `Zeros` returns `EditResult.None` unless the list follows a break (:58).                                                                                                                                                                                                                                                                | A public whole-document entry point in `Editing`. `--style zeros` on a list that cannot take it leaves that list alone and reports it.                                                                                                                                                                                                                                      | M1-09        |
-|  F9 | `FolioUnpacker.Unpack` reads only the single-file form and refuses a non-empty target.                                                                                                                                                                                                                                                                                                                                                                                                                    | `unpack` is single-file only and takes no `--overwrite`: a non-empty target exits 4 (A4, A5b).                                                                                                                                                                                                                                                                                            | M1-14        |
+|  F9 | `FolioUnpacker.Unpack` reads only the single-file form and refuses a non-empty target.                                                                                                                                                                                                                                                                                                                                                                                                                    | `unpack` is single-file only; a non-empty target exits 4 unless `--overwrite` replaces its contents (A4, A5c).                                                                                                                                                                                                                                                                                            | M1-14        |
 | F10 | The Folio preflight's figures are private to `FolioWindow`: `Weight(plan)` (:836), `HeavyPageBytes` 50 MB, `MailLimitBytes` 25 MB, `ReducibleBytes` 5 MB, and the advice lines (:850-905).                                                                                                                                                                                                                                                                                                                | A `FolioPreflight` model holding the estimate, the three limits and the advice moves into `Folio`. The window and the CLI both use it.                                                                                                                                                                                                                                      | M1-16        |
 | F11 | `FormatOptions.Default` has `EofNewline = true` and `LineEndings = true` (Detect).                                                                                                                                                                                                                                                                                                                                                                                                                        | With default options, `format` adds a final newline on purpose. Amendment A7.                                                                                                                                                                                                                                                                                               | M1-03        |
 | F12 | `AppVersion` is `internal` to App and reads its own assembly.                                                                                                                                                                                                                                                                                                                                                                                                                                             | It moves to `Services` as `ProductVersion`. Amendment A11 renames the requirement's reference.                                                                                                                                                                                                                                                                              | M1-13        |
 | F13 | There is no GitHub Actions workflow, and none is added (decision).                                                                                                                                                                                                                                                                                                                                                                                                                                        | No GitHub Actions is used for this work, here or elsewhere: the spike's Actions run is not made, and the manual has a pre-commit hook and no Actions recipe (A14, replacing A3).                                                                                                                                                                                                                                                                                                     | M0-04, M1-19 |
-| F14 | `PreferencesTransferService.ImportAsync(path, current)` is already pure: it merges a file over `current`, returns the result, writes nothing, and already accepts a raw `settings.json`. `JsonSettingsRepository` loading never writes.                                                                                                                                                                                                                                                                   | `--settings <file>` is `ImportAsync(path, new AppSettings())`. `--settings app` loads through `JsonSettingsRepository` with `AppPaths`. No refactor is needed.                                                                                                                                                                                                              | M1-05        |
+| F14 | `PreferencesTransferService.ImportAsync(path, current)` is already pure: it merges a file over `current`, returns the result, writes nothing, and already accepts a raw `settings.json`. `JsonSettingsRepository` loading is **not** read-only: its `JsonFileStore` moves a damaged file to `settings.json.corrupt` (`TryQuarantine`) and falls back to defaults. Corrected in M1-05; the plan first said loading never writes.                                                                                                                                                                                                                                                                   | `--settings <file>` is `ImportAsync(path, new AppSettings())`. `--settings app` is `ImportAsync` too, on the app's own `settings.json` from `AppPaths`, never the repository, so a damaged file is reported and left where it is. No refactor is needed.                                                                                                                                                                                                              | M1-05        |
 | F15 | The Folio steps run **Plan → Fetch → Plan again with the fetched files → Shrink** (`MainViewModel.cs:7999`, pinned by `FolioRemoteImageTests.cs:277`).                                                                                                                                                                                                                                                                                                                                                    | The CLI follows that order exactly.                                                                                                                                                                                                                                                                                                                                         | M1-16        |
 | F16 | `MarkdownAnalyzer` takes `AnalysisRequest { Text, DocumentPath, Links, Outline, Anchors, … }`, which a render produces. `CheckBlockedImages` defaults to true, so every web image (`RemoteMedia`) and every picture outside the folder (`OutsideFolder`) becomes a finding. Missing images come from `LinkChecks`; `ImageChecks` only checks alt text.                                                                                                                                                    | `check` renders first (`MarkdigMarkdownRenderer`) and maps finding kinds to severity. Dead local links, dead anchors and missing local images are errors. `RemoteMedia` and `OutsideFolder` are errors too, as the squiggles report them. `--ignore-external-images` turns both into information shown under `--verbose` (A13b), so a README with badges can pass. Alt text goes with `--style`. For stdin, `DocumentPath` is a virtual `<base-dir>\stdin.md`.                  | M1-11        |
 | F17 | `HeadingNumberRewriter.Apply` reports `UncertainHeadings` as a count only. `Read` returns no uncertainty. `LinksMoved` exists.                                                                                                                                                                                                                                                                                                                                                                            | An additive library change: `Result.UncertainLines` (`IReadOnlyList<int>`), filled where the count is.                                                                                                                                                                                                                                                                      | M1-07        |
@@ -117,7 +117,7 @@ In addition to the requirements' §2, settled on 2026-10-09:
 | Spike code               | **Seeds `WebRender`**, reshaped in M2 rather than thrown away. The spike command is compiled only under the `MQ_SPIKE` define, so it never ships in M1                                                                                            |
 | Requirement changes      | **Decided in §7.** Accepted amendments were applied to `CLI-Requirements.md` on 2026-10-16 (its §2.1 records them)                                                                                                                                                                               |
 | `unpack` forms           | **Single-file only** (A4)                                                                                                                                                                                                                         |
-| `unpack --overwrite`     | **None.** `unpack` refuses a non-empty target and takes no `--overwrite` (A5b; the proposal to empty it was rejected)                                                                                                                                                                                            |
+| `unpack --overwrite`     | **Replaces the target's contents**, written beside it first, never for the folders A5 named (A5c, 2026-10-27, reversing A5b)                                                                                                                                                                                    |
 | `renumber-lists`         | **`--style sequential\|ones\|zeros`**, defaulting to the app's suggestion per list (A6)                                                                                                                                                           |
 | Render timeout           | **Typed outcome in the shared bridge**; the app is unchanged, the CLI exits 5 (A9)                                                                                                                                                                |
 | ARC-07 mechanism         | **The app's Word export uses the headless host** (A10)                                                                                                                                                                                            |
@@ -570,16 +570,20 @@ Actions runner fails, M2 still goes ahead and that environment is documented as 
 
 #### WP-M1-14: `unpack`
 
-- **Serves**: CLI-VB-UNP-01 (as amended by A4 and A5b).
+- **Serves**: CLI-VB-UNP-01 (as amended by A4 and A5c).
 - **Depends on**: M1-04.
-- **Changes**: `unpack <folio.html> --out-dir <folder>`. There is no `--overwrite`.
+- **Changes**: `unpack <folio.html> --out-dir <folder> [--overwrite]`.
   - **Not a single-file Folio.** A folder, a `.zip`, or a file where `FolioPayload.TryDecode`
     fails gives exit 3 with guidance.
-  - **Non-empty target.** Exit 4, and nothing in it is touched. A missing or empty target is
-    handed to `FolioUnpacker.Unpack`, which enforces the same rule itself.
+  - **Non-empty target.** Without `--overwrite`, exit 4, and nothing in it is touched. With it
+    (A5c), `FolderReplacement` unpacks into a sibling, moves the old folder aside, moves the new
+    one into its name and only then deletes the old one, putting it back if the move fails. A
+    drive root, the profile folder, the current folder or one holding it, and a folder holding the
+    Folio are refused, exit 4. A missing or empty target is handed to `FolioUnpacker.Unpack`
+    directly, which enforces the empty rule itself.
 - **Tests**: `UnpackVerbTests`, using a single-file Folio **made by the app and committed as a
   fixture** (`FolioHtmlWriter` is still in App in M1). The unpacked files equal the documents the
-  app would open. Also tested: a non-empty target exits 4 and is unchanged, and the folder and zip
+  app would open. Also tested: a non-empty target exits 4 and is unchanged without `--overwrite` and replaced with it, a target holding the Folio is refused, and the folder and zip
   refusals.
 - **Done when**: the tests pass.
 
@@ -964,8 +968,10 @@ M2-01 → { M2-02, M2-03 → M2-04 → M2-05 } → M2-06 → M2-07
 Walked through one at a time with Paul on 2026-10-16. **Accepted** (A1–A4, A6–A12) were applied to
 `docs/CLI-Requirements.md`, whose §2.1 records them. **Rejected** (A5, A13) were replaced by A5b
 and A13b, also applied. **A14**, added on 2026-10-16 and accepted on 2026-10-26, replaces A3: no
-GitHub Actions is used for this work. The table keeps the rejected and superseded rows so the
-reasoning stays findable.
+GitHub Actions is used for this work. **A5c** and **A15** were decided on 2026-10-27, after M1-16
+was built: A5c adopts A5 after all, for `unpack` and for `folio`'s folder form, and A15 makes
+`folio` keep the order its documents were named in. The table keeps the rejected and superseded
+rows so the reasoning stays findable.
 
 |   # | Requirement            | Change                                                                                                                                                                                                                                                                               | Reason                                                                                          |
 | --: | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -973,7 +979,7 @@ reasoning stays findable.
 |  A2 | CLI-ARC-01, CLI-ARC-02 | Add `PaulTechGuy.MQ.Imaging` (Windows TFM, no WinUI), holding the WIC resizer behind `IImageResizer`. `Exporting` is created in M1 to receive `FolioShrinker`.                                                                                                                       | F7                                                                                              |
 |  A3 | CLI-SP-03, CLI-DOC-02  | **Superseded by A14.** The Actions results are manual checks by Paul in a scratch repository. DOC-02's box becomes "runs green in a scratch repository".                                                                                                                                                    | F13                                                                                             |
 |  A4 | CLI-VB-UNP-01          | The first box becomes "A single-file Folio unpacks; a folder or `.zip` exits 3 with guidance."                                                                                                                                                                                       | F9                                                                                              |
-|  A5 | CLI-VB-UNP-01          | **Rejected, replaced by A5b.** Add: "`--overwrite` empties a non-empty target and then unpacks; without it a non-empty target exits 4. Refused even with `--overwrite` for a drive root, the profile folder, the current folder or an ancestor of it, or a folder containing the input."                            | F9                                                                                              |
+|  A5 | CLI-VB-UNP-01          | **Rejected, replaced by A5b; adopted after all as A5c on 2026-10-27.** Add: "`--overwrite` empties a non-empty target and then unpacks; without it a non-empty target exits 4. Refused even with `--overwrite` for a drive root, the profile folder, the current folder or an ancestor of it, or a folder containing the input."                            | F9                                                                                              |
 |  A6 | CLI-VB-REN-01          | Add `--style sequential\|ones\|zeros`, defaulting to the app's suggestion per list. A list that cannot take `zeros` is left alone and reported.                                                                                                                                      | F8                                                                                              |
 |  A7 | CLI-OUT-06             | Add: "A verb whose own options rewrite line endings or the final newline (`format` with `LineEndings`/`EofNewline`) decides them itself." The no-final-newline box names `number` rather than `format`.                                                                              | F11                                                                                             |
 |  A8 | CLI-SET-03             | Add: "A raw `settings.json` is accepted too, as the app's Import accepts one."                                                                                                                                                                                                       | F14; this records behavior that already exists                                                  |
@@ -981,10 +987,12 @@ reasoning stays findable.
 | A10 | CLI-ARC-07             | "…through the same headless host the CLI uses, in a data folder of the app's own."                                                                                                                                                                                                   | Decision                                                                                        |
 | A11 | CLI-VB-VER-01          | "Equals `AppVersion.Current`" becomes "equals the product version `Marqora.exe` reports from the same build" (`ProductVersion`).                                                                                                                                                     | F12                                                                                             |
 | A12 | CLI-ARC-05             | "One test suite runs over both implementations" becomes "one suite runs over the shared bridge and transport that both implementations use".                                                                                                                                         | Hosting the WinUI preview in a test process is not practical; both hosts use the same transport |
-| A5b | CLI-VB-UNP-01          | The target must be missing or empty; a non-empty one exits 4, and `unpack` takes no `--overwrite`. Follows the app's own rule, which never writes over what is already there. | F9 |
+| A5b | CLI-VB-UNP-01          | **Superseded by A5c.** The target must be missing or empty; a non-empty one exits 4, and `unpack` takes no `--overwrite`. Follows the app's own rule, which never writes over what is already there. | F9 |
 | A13b | CLI-VB-CHK-01         | Web images and pictures outside the folder stay errors. One flag, `--ignore-external-images`, makes both information, shown only under `--verbose`. | F16 |
 | A13 | CLI-VB-CHK-01          | **Rejected, replaced by A13b.** Add: "Web images and pictures outside the folder are information, shown with `--verbose`; they do not fail the run."                                                                                                                                                                 | F16                                                                                             |
 | A14 | CLI-SP-03, CLI-DOC-02 | **Accepted 2026-10-26; replaces A3.** SP-03: the Actions-runner box becomes "Not run, by decision; exports on CI are documented as untested". DOC-02: the manual has a pre-commit hook and no GitHub Actions recipe at all; the hook is checked by installing it here. | No Actions minutes are to be spent, and a public repository would leave a permanent public record |
+| A5c | CLI-VB-UNP-01, CLI-OUT-08 | **Accepted 2026-10-27; reverses A5b.** `--overwrite` replaces what is in a non-empty folder, for `unpack` and for `folio`'s folder form; without it the folder exits 4. The new contents are written beside it and swapped in, so a failure never leaves nothing. Refused even with `--overwrite` for a drive root, the profile folder, the current folder or one holding it, and a folder holding anything the run reads (an input, the Folio being unpacked, a picture the Folio collects). | Paul's call: replacing last week's copy with this week's is the common case |
+| A15 | CLI-IN-01              | **Accepted 2026-10-27.** `folio` keeps the order its documents were named in, each pattern's matches sorted where the pattern stands; every other verb keeps the ordinal sort. | §9.3: the order was the only difference from the app's Folios, which keep the ticked order |
 
 ---
 
@@ -998,56 +1006,56 @@ serves the ID, owner first. *Verified by* names the test class or the §9 record
 | CLI-SP-01      | Console renders and prints headlessly |  M0   |  Must  | M0-02, M0-01               | §9.1                                                      | verified |
 | CLI-SP-02      | Cold start measured                   |  M0   |  Must  | M0-03                      | §9.1                                                      | verified |
 | CLI-SP-03      | Non-interactive sessions tried        |  M0   |  Must  | M0-04                      | §9.1 (SSH run; Actions not run, A14) | verified |
-| CLI-CMD-01     | Verb shape                            |  M1   |  Must  | M1-01                      | `CommandTreeTests`                                        | todo   |
-| CLI-CMD-02     | Aliases                               |  M1   |  Must  | M1-01                      | `AliasTests`                                              | todo   |
+| CLI-CMD-01     | Verb shape                            |  M1   |  Must  | M1-01                      | `CommandTreeTests` | verified |
+| CLI-CMD-02     | Aliases                               |  M1   |  Must  | M1-01                      | `AliasTests` | verified |
 | CLI-CMD-03     | Help with examples                    |  M1   |  Must  | M1-01, M1-19               | `HelpExamplesTests`, `ManualCoverageTests`                | todo   |
-| CLI-CMD-04     | Usage errors                          |  M1   |  Must  | M1-01                      | `UsageErrorTests`                                         | todo   |
-| CLI-CMD-05     | Response files off                    |  M1   | Should | M1-01                      | `UsageErrorTests`                                         | todo   |
-| CLI-IN-01      | Files and globs                       |  M1   |  Must  | M1-03                      | `InputSetTests`, `ShellGlobTests`, §9.3 (bash)            | todo   |
-| CLI-IN-02      | Standard input                        |  M1   |  Must  | M1-03                      | `StdinTests`                                              | todo   |
-| CLI-IN-03      | Base folder                           |  M1   |  Must  | M1-11, M1-03               | `CheckVerbTests`                                          | todo   |
-| CLI-IN-04      | Encoding                              |  M1   |  Must  | M1-03                      | `TextFileTests`                                           | todo   |
-| CLI-IN-05      | Read-only refused for writing         |  M1   |  Must  | M1-04                      | `WriteModeTests`                                          | todo   |
-| CLI-IN-06      | Missing and unreadable files          |  M1   |  Must  | M1-03                      | `InputSetTests`                                           | todo   |
-| CLI-OUT-01     | Default leaves file alone             |  M1   |  Must  | M1-04                      | `WriteModeTests`                                          | todo   |
-| CLI-OUT-02     | Several inputs need a mode            |  M1   |  Must  | M1-04                      | `WriteModeTests`                                          | todo   |
-| CLI-OUT-03     | `--write`                             |  M1   |  Must  | M1-04                      | `WriteModeTests`, `KillDuringWriteTests`                  | todo   |
-| CLI-OUT-04     | `--check`                             |  M1   |  Must  | M1-04                      | `WriteModeTests`                                          | todo   |
-| CLI-OUT-05     | `--dry-run` for text verbs            |  M1   |  Must  | M1-04                      | `DryRunDiffTests`                                         | todo   |
-| CLI-OUT-06     | Encoding and line endings preserved   |  M1   |  Must  | M1-03                      | `TextFileTests`                                           | todo   |
-| CLI-OUT-07     | Output files for exports and Folio    | M1/M2 |  Must  | M1-16, M2-08               | `OutputPlanTests`                                         | todo   |
-| CLI-OUT-08     | No overwrite without `--overwrite`    | M1/M2 |  Must  | M1-16, M2-08               | `OutputPlanTests`                                         | todo   |
+| CLI-CMD-04     | Usage errors                          |  M1   |  Must  | M1-01                      | `UsageErrorTests` | verified |
+| CLI-CMD-05     | Response files off                    |  M1   | Should | M1-01                      | `UsageErrorTests` | verified |
+| CLI-IN-01      | Files and globs                       |  M1   |  Must  | M1-03                      | `InputSetTests`, `FolioVerbTests`, `ShellGlobTests`, §9.3 (bash) | todo   |
+| CLI-IN-02      | Standard input                        |  M1   |  Must  | M1-03                      | `StdinTests` | verified |
+| CLI-IN-03      | Base folder                           |  M1   |  Must  | M1-11, M1-03               | `ReportVerbTests` (check) | verified |
+| CLI-IN-04      | Encoding                              |  M1   |  Must  | M1-03                      | `TextFileTests` | verified |
+| CLI-IN-05      | Read-only refused for writing         |  M1   |  Must  | M1-04                      | `WriteModeTests` | verified |
+| CLI-IN-06      | Missing and unreadable files          |  M1   |  Must  | M1-03                      | `InputSetTests` | verified |
+| CLI-OUT-01     | Default leaves file alone             |  M1   |  Must  | M1-04                      | `WriteModeTests` | verified |
+| CLI-OUT-02     | Several inputs need a mode            |  M1   |  Must  | M1-04                      | `WriteModeTests` | verified |
+| CLI-OUT-03     | `--write`                             |  M1   |  Must  | M1-04                      | `WriteModeTests`, `KillDuringWriteTests` | verified |
+| CLI-OUT-04     | `--check`                             |  M1   |  Must  | M1-04                      | `WriteModeTests` | verified |
+| CLI-OUT-05     | `--dry-run` for text verbs            |  M1   |  Must  | M1-04                      | `DryRunDiffTests` | verified |
+| CLI-OUT-06     | Encoding and line endings preserved   |  M1   |  Must  | M1-03                      | `TextFileTests` | verified |
+| CLI-OUT-07     | Output files for exports and Folio    | M1/M2 |  Must  | M1-16, M2-08               | `OutputPlanTests` | verified (M1) |
+| CLI-OUT-08     | No overwrite without `--overwrite`    | M1/M2 |  Must  | M1-16, M2-08               | `OutputPlanTests`, `FolderReplacementTests` | verified (M1) |
 | CLI-OUT-09     | HTML to stdout                        |  M2   | Should | M2-09                      | `ExportHtmlTests`                                         | todo   |
 | CLI-RPT-01     | Exit codes                            |  M1   |  Must  | M1-02, M1-19               | `ExitCodeTests`, `ManualTableTests`                       | todo   |
-| CLI-RPT-02     | Messages                              |  M1   |  Must  | M1-02                      | `OutputDisciplineTests`                                   | todo   |
-| CLI-RPT-03     | Several files, one exit code          |  M1   |  Must  | M1-02                      | `RunAggregatorTests`                                      | todo   |
-| CLI-RPT-04     | `--json`                              |  M1   |  Must  | M1-02                      | `JsonGoldenTests`                                         | todo   |
-| CLI-RPT-05     | Schema versioning                     |  M1   |  Must  | M1-02                      | `JsonGoldenTests`                                         | todo   |
-| CLI-RPT-06     | `--quiet` and `--verbose`             |  M1   | Should | M1-02, M2-08               | `ReporterTests`                                           | todo   |
-| CLI-RPT-07     | Color                                 |  M1   | Should | M1-02                      | `ReporterTests`                                           | todo   |
-| CLI-RPT-08     | Cancellation                          | M1/M2 |  Must  | M1-02, M2-08               | `CancelTests`                                             | todo   |
-| CLI-SET-01     | Hermetic by default                   |  M1   |  Must  | M1-05                      | `SettingsSourceTests`                                     | todo   |
-| CLI-SET-02     | `--settings app`                      |  M1   |  Must  | M1-05                      | `SettingsSourceTests`                                     | todo   |
-| CLI-SET-03     | `--settings <file>`                   |  M1   |  Must  | M1-05                      | `SettingsSourceTests`                                     | todo   |
-| CLI-SET-04     | Flags win over settings               |  M1   |  Must  | M1-05, M2-10               | `SettingsSourceTests`, `ExportPdfTests`                   | todo   |
-| CLI-TH-01      | `--theme`                             | M1/M2 |  Must  | M1-06, M2-08               | `ThemeResolverTests`                                      | todo   |
-| CLI-TH-02      | Which theme wins                      |  M1   |  Must  | M1-06                      | `ThemeResolverTests`                                      | todo   |
-| CLI-TH-03      | Unknown theme fails                   |  M1   |  Must  | M1-06                      | `ThemeResolverTests`                                      | todo   |
+| CLI-RPT-02     | Messages                              |  M1   |  Must  | M1-02                      | `OutputDisciplineTests` | verified |
+| CLI-RPT-03     | Several files, one exit code          |  M1   |  Must  | M1-02                      | `RunAggregatorTests` | verified |
+| CLI-RPT-04     | `--json`                              |  M1   |  Must  | M1-02                      | `JsonGoldenTests` | verified |
+| CLI-RPT-05     | Schema versioning                     |  M1   |  Must  | M1-02                      | `JsonGoldenTests` | verified |
+| CLI-RPT-06     | `--quiet` and `--verbose`             |  M1   | Should | M1-02, M2-08               | `ReporterTests` | verified (M1) |
+| CLI-RPT-07     | Color                                 |  M1   | Should | M1-02                      | `ReporterTests` | verified |
+| CLI-RPT-08     | Cancellation                          | M1/M2 |  Must  | M1-02, M2-08               | `ExitCodeTests`, §9.1 (Ctrl+C) | verified (M1) |
+| CLI-SET-01     | Hermetic by default                   |  M1   |  Must  | M1-05                      | `SettingsSourceTests` | verified |
+| CLI-SET-02     | `--settings app`                      |  M1   |  Must  | M1-05                      | `SettingsSourceTests` | verified |
+| CLI-SET-03     | `--settings <file>`                   |  M1   |  Must  | M1-05                      | `SettingsSourceTests` | verified |
+| CLI-SET-04     | Flags win over settings               |  M1   |  Must  | M1-05, M2-10               | `SettingsSourceTests`, `ExportPdfTests` | verified (M1) |
+| CLI-TH-01      | `--theme`                             | M1/M2 |  Must  | M1-06, M2-08               | `ThemeTests` | verified (M1) |
+| CLI-TH-02      | Which theme wins                      |  M1   |  Must  | M1-06                      | `ThemeTests` | verified |
+| CLI-TH-03      | Unknown theme fails                   |  M1   |  Must  | M1-06                      | `ThemeTests` | verified |
 | CLI-TH-04      | Light palette, one theme per run      |  M2   |  Must  | M2-13, M2-12               | `ExportPaletteTests`                                      | todo   |
-| CLI-TH-05      | `themes list`                         |  M1   |  Must  | M1-06                      | `ThemesListTests`                                         | todo   |
-| CLI-TH-06      | Resolved theme shown                  |  M1   |  Must  | M1-06, M1-16, M2-08        | `ThemeResolverTests`, `FolioDryRunTests`, `ReporterTests` | todo   |
-| CLI-VB-FMT-01  | `format`                              |  M1   |  Must  | M1-07                      | `FormatVerbTests`                                         | todo   |
-| CLI-VB-NUM-01  | `number`                              |  M1   |  Must  | M1-07                      | `NumberVerbTests`                                         | todo   |
-| CLI-VB-UNN-01  | `unnumber`                            |  M1   |  Must  | M1-07                      | `NumberVerbTests`                                         | todo   |
-| CLI-VB-RPL-01  | `replace`                             |  M1   |  Must  | M1-08                      | `ReplaceVerbTests`                                        | todo   |
-| CLI-VB-REN-01  | `renumber-lists`                      |  M1   |  Must  | M1-09                      | `RenumberListsTests`                                      | todo   |
-| CLI-VB-DGL-01  | `diagram-layout`                      |  M1   |  Must  | M1-10                      | `DiagramLayoutVerbTests`                                  | todo   |
-| CLI-VB-CHK-01  | `check`, links and images             |  M1   |  Must  | M1-11, M1-17               | `CheckVerbTests`, `OfflineTests`                          | todo   |
-| CLI-VB-CHK-02  | `check --style`                       |  M1   |  Must  | M1-11                      | `CheckVerbTests`                                          | todo   |
-| CLI-VB-TOC-01  | `toc`                                 |  M1   | Should | M1-12                      | `TocVerbTests`                                            | todo   |
-| CLI-VB-OUT-01  | `outline`                             |  M1   | Should | M1-12                      | `OutlineVerbTests`                                        | todo   |
-| CLI-VB-UNP-01  | `unpack`                              |  M1   |  Must  | M1-14                      | `UnpackVerbTests`                                         | todo   |
-| CLI-VB-VER-01  | `version`                             |  M1   |  Must  | M1-13, M1-18               | `VersionTests`, `New-Release.ps1` assertion               | todo   |
+| CLI-TH-05      | `themes list`                         |  M1   |  Must  | M1-06                      | `ThemeTests` | verified |
+| CLI-TH-06      | Resolved theme shown                  |  M1   |  Must  | M1-06, M1-16, M2-08        | `ThemeTests`, `FolioDryRunTests`, `ReporterTests` | verified (M1) |
+| CLI-VB-FMT-01  | `format`                              |  M1   |  Must  | M1-07                      | `TextVerbTests` | verified |
+| CLI-VB-NUM-01  | `number`                              |  M1   |  Must  | M1-07                      | `TextVerbTests` | verified |
+| CLI-VB-UNN-01  | `unnumber`                            |  M1   |  Must  | M1-07                      | `TextVerbTests` | verified |
+| CLI-VB-RPL-01  | `replace`                             |  M1   |  Must  | M1-08                      | `TextVerbTests` | verified |
+| CLI-VB-REN-01  | `renumber-lists`                      |  M1   |  Must  | M1-09                      | `TextVerbTests` | verified |
+| CLI-VB-DGL-01  | `diagram-layout`                      |  M1   |  Must  | M1-10                      | `TextVerbTests` | verified |
+| CLI-VB-CHK-01  | `check`, links and images             |  M1   |  Must  | M1-11, M1-17               | `ReportVerbTests`, `OfflineTests` | verified |
+| CLI-VB-CHK-02  | `check --style`                       |  M1   |  Must  | M1-11                      | `ReportVerbTests` | verified |
+| CLI-VB-TOC-01  | `toc`                                 |  M1   | Should | M1-12                      | `ReportVerbTests` | verified |
+| CLI-VB-OUT-01  | `outline`                             |  M1   | Should | M1-12                      | `ReportVerbTests` | verified |
+| CLI-VB-UNP-01  | `unpack`                              |  M1   |  Must  | M1-14                      | `UnpackVerbTests`, `FolderReplacementTests` | verified |
+| CLI-VB-VER-01  | `version`                             |  M1   |  Must  | M1-13, M1-18               | `VersionTests`, `New-Release.ps1` assertion               | verified |
 | CLI-EX-01      | One browser per run                   |  M2   |  Must  | M2-08, M2-03               | `RendererFactoryTests`                                    | todo   |
 | CLI-EX-02      | Data folder per process               |  M2   |  Must  | M2-08                      | `DataFolderTests`                                         | todo   |
 | CLI-EX-03      | Export report becomes findings        |  M2   |  Must  | M2-08, M2-06               | `ExportFindingsTests`                                     | todo   |
@@ -1057,36 +1065,36 @@ serves the ID, owner first. *Verified by* names the test class or the §9 record
 | CLI-EX-HTML-01 | `export html`                         |  M2   |  Must  | M2-09                      | `ExportHtmlTests`, §9.3                                   | todo   |
 | CLI-EX-PDF-01  | `export pdf`                          |  M2   |  Must  | M2-10                      | `ExportPdfTests`, §9.3                                    | todo   |
 | CLI-EX-WORD-01 | `export word`                         |  M2   |  Must  | M2-11                      | `ExportWordTests`, §9.3                                   | todo   |
-| CLI-FO-01      | Form from output path                 | M1/M2 |  Must  | M1-16, M2-12               | `FolioFormTests`                                          | todo   |
+| CLI-FO-01      | Form from output path                 | M1/M2 |  Must  | M1-16, M2-12               | `FolioFormTests`, `FolioVerbTests` | verified (M1) |
 | CLI-FO-02      | Single file too large                 |  M2   |  Must  | M2-12                      | `FolioFormTests`                                          | todo   |
-| CLI-FO-03      | Shrinking images                      |  M1   | Should | M1-15, M1-16               | `FolioShrinkTests`, §9.3                                  | todo   |
-| CLI-FO-04      | Web pictures only when asked          |  M1   |  Must  | M1-16, M1-17               | `FolioFetchTests`, `OfflineTests`                         | todo   |
-| CLI-FO-05      | Preflight as `--dry-run`              |  M1   |  Must  | M1-16                      | `FolioDryRunTests`                                        | todo   |
-| CLI-FO-06      | Folio report                          |  M1   |  Must  | M1-16                      | `FolioFindingsTests`                                      | todo   |
-| CLI-ARC-01     | Projects and dependency rule          | M1/M2 |  Must  | M1-17, M0-01, M0-02, M1-15 | `ArchitectureTests`                                       | todo   |
+| CLI-FO-03      | Shrinking images                      |  M1   | Should | M1-15, M1-16               | `FolioShrinkTests`, §9.3 | verified |
+| CLI-FO-04      | Web pictures only when asked          |  M1   |  Must  | M1-16, M1-17               | `FolioFetchTests`, `OfflineTests` | verified |
+| CLI-FO-05      | Preflight as `--dry-run`              |  M1   |  Must  | M1-16                      | `FolioDryRunTests` | verified |
+| CLI-FO-06      | Folio report                          |  M1   |  Must  | M1-16                      | `FolioFindingsTests` | verified |
+| CLI-ARC-01     | Projects and dependency rule          | M1/M2 |  Must  | M1-17, M0-01, M0-02, M1-15 | `ArchitectureTests` | verified (M1) |
 | CLI-ARC-02     | Move export assembly                  |  M2   |  Must  | M2-02, M1-15               | `ArchitectureTests`, §9.3                                 | todo   |
 | CLI-ARC-03     | Move paged engine                     |  M2   |  Must  | M2-03                      | §9.3                                                      | todo   |
 | CLI-ARC-04     | Rendering interface                   |  M2   |  Must  | M2-05, M2-06               | `RendererRouteTests`                                      | todo   |
 | CLI-ARC-05     | One shell bridge                      |  M2   |  Must  | M2-04, M2-13               | `BridgeSuite`, `BridgeShapeTests`                         | todo   |
 | CLI-ARC-06     | App's exports unchanged               |  M2   |  Must  | M0-05, M2-01, M2-13        | §9.3                                                      | todo   |
 | CLI-ARC-07     | App Word via detached render          |  M2   |  Must  | M2-07                      | `ExportWordTests`, §9.3                                   | todo   |
-| CLI-NF-01      | Text verbs fast                       |  M1   | Should | M1-19                      | §9.2                                                      | todo   |
+| CLI-NF-01      | Text verbs fast                       |  M1   | Should | M1-19                      | §9.2                                                      | verified |
 | CLI-NF-02      | Cold start bounded                    |  M2   | Should | M2-14                      | §9.2                                                      | todo   |
 | CLI-NF-03      | Offline by default                    |  M1   |  Must  | M1-17, M1-16, M2-13        | `OfflineTests`, §9.3 firewall                             | todo   |
 | CLI-NF-04      | Missing WebView2 runtime              |  M2   |  Must  | M2-08                      | `MissingRuntimeTests`                                     | todo   |
 | CLI-NF-05      | Platform                              |  M1   |  Must  | M1-18, M1-01, M0-01        | §9.1, §9.3 Sandbox                                        | todo   |
-| CLI-PKG-01     | Beside the app                        |  M1   |  Must  | M1-18                      | `New-Release.ps1` assertion, `AssetLocationTests`         | todo   |
+| CLI-PKG-01     | Beside the app                        |  M1   |  Must  | M1-18                      | `New-Release.ps1` assertion, `AssetLocationTests`         | verified |
 | CLI-PKG-02     | PATH, opt-in                          |  M1   |  Must  | M1-18                      | §9.3                                                      | todo   |
-| CLI-RULE-01    | License headers                       | M1/M2 |  Must  | M1-19, M2-14               | `Add-FileHeaders.ps1 -Check`                              | todo   |
-| CLI-RULE-02    | American spelling                     | M1/M2 |  Must  | M1-19, M2-14               | `Set-AmericanSpelling.ps1 -Check`                         | todo   |
-| CLI-RULE-03    | Network claim                         |  M1   |  Must  | M1-19                      | `Test-NetworkClaim.ps1 -Check`                            | todo   |
+| CLI-RULE-01    | License headers                       | M1/M2 |  Must  | M1-19, M2-14               | `Add-FileHeaders.ps1 -Check`                              | verified (M1) |
+| CLI-RULE-02    | American spelling                     | M1/M2 |  Must  | M1-19, M2-14               | `Set-AmericanSpelling.ps1 -Check`                         | verified (M1) |
+| CLI-RULE-03    | Network claim                         |  M1   |  Must  | M1-19                      | `Test-NetworkClaim.ps1 -Check`                            | verified (M1) |
 | CLI-RULE-04    | Release notes                         | M1/M2 |  Must  | M1-19, M2-07, M2-14        | Review of `vNext.md`                                      | todo   |
-| CLI-DOC-01     | The manual                            | M1/M2 |  Must  | M1-19, M2-14               | `ManualCoverageTests`, `ManualExampleTests`               | todo   |
-| CLI-DOC-02     | A pre-commit hook recipe |  M1   | Should | M1-19                      | §9.3 (hook installed here, A14)                                   | todo   |
+| CLI-DOC-01     | The manual                            | M1/M2 |  Must  | M1-19, M2-14               | `ManualCoverageTests`, `ManualExampleTests`, `ManualTableTests`, `ManualCommandTests` (with `docs/CLI-Recipes.md`) | verified (M1) |
+| CLI-DOC-02     | A pre-commit hook recipe |  M1   | Should | M1-19                      | §9.3 (scratch repository; installed here by Paul), `ManualCoverageTests` | todo   |
 | CLI-DOC-03     | The rest of the docs                  | M1/M2 |  Must  | M1-19, M2-14               | Review                                                    | todo   |
-| CLI-TST-01     | CLI tests                             |  M1   |  Must  | M1-00, M1-17               | `dotnet test`                                             | todo   |
+| CLI-TST-01     | CLI tests                             |  M1   |  Must  | M1-00, M1-17               | `dotnet test` | verified |
 | CLI-TST-02     | Export tests                          |  M2   |  Must  | M2-13                      | `dotnet test`                                             | todo   |
-| CLI-TST-03     | Fixtures untouched                    |  M1   |  Must  | M1-00                      | `FixtureGuardTests`                                       | todo   |
+| CLI-TST-03     | Fixtures untouched                    |  M1   |  Must  | M1-00                      | `FixtureGuard` (assembly fixture) | verified |
 
 ---
 
@@ -1121,8 +1129,8 @@ Also from the spike, for M2:
 
 | Measure                                    | Figure | Bound                      | Date |
 | ------------------------------------------ | ------ | -------------------------- | ---- |
-| `format`, < 100 KB, start to exit (NF-01)  |        | < 1 s                      |      |
-| `check`, < 100 KB, start to exit (NF-01)   |        | < 1 s                      |      |
+| `format`, < 100 KB, start to exit (NF-01)  | **100 ms** median of 15 (98-102), `UltimateMarkdownContent.md` (72 KB), Release publish with ReadyToRun, warm disk, Ryzen 9 5900X; `cheatsheet.md` (8.5 KB) 91 ms | < 1 s                      | 2026-10-27 |
+| `check`, < 100 KB, start to exit (NF-01)   | **144 ms** median of 15 (141-147), same document and machine; `cheatsheet.md` 127 ms | < 1 s                      | 2026-10-27 |
 | First export added cost (NF-02)            |        | M0 figure + max(50 %, 1 s) |      |
 | App's first Word export added cost (M2-07) |        | report only                |      |
 
@@ -1131,14 +1139,16 @@ Also from the spike, for M2:
 | Check                                                                                     | Result | Date |
 | ----------------------------------------------------------------------------------------- | ------ | ---- |
 | M0-05 baseline captured: file list and hashes | **Done.** Made by Paul with Marqora 1.0.13 (tag `v1.0.13`, `0568b2c`) from a detached worktree, `preferences.json` confirming the version: 20 exports, 30 files, 20,650,958 bytes, `MANIFEST.sha256` `4af2b21e0c999d77`; `Get-BaselineHashes.ps1 -Check` passes. **Two gaps, kept by decision** (README, *Known gaps*): no picture keeps its path, because `inputs/images/logo.png` is byte-identical to `docs/assets/marqora-logo.png` and the Folio de-duplicated them; and shrinking never happens, because the 1888-pixel screenshot's reduced copy was no smaller, so the shrunk Folios equal the plain ones | 2026-10-26 |
-| Folio "reduce pictures" equals baseline after M1-15 | Proves only that the declined path is unchanged (see the M0-05 row); a picture actually being reduced is `FolioShrinkTests`' to prove | |
-| Folio folder and zip, CLI vs baseline (M1-16) | No kept-path case in the baseline (see the M0-05 row); `FolioPlanner`'s tests carry that | |
+| Folio "reduce pictures" equals baseline after M1-15 | **Equal.** `folio -o red/ --shrink-images 1600` over the three inputs: every document and picture byte-identical to `folio.default.reduced.folder`, the screenshot declined as in the app. Proves only that the declined path is unchanged (see the M0-05 row); a picture actually being reduced is `FolioShrinkTests`' to prove | 2026-10-27 |
+| Folio folder and zip, CLI vs baseline (M1-16) | **Equal.** Every document and picture in the folder and in the zip is byte-identical to `folio.default.folder` and `folio.default.zip`, and the findings are the app report's rows. First run: the CLI sorted its inputs by path, so the document order differed from the app's ticked order (cheatsheet, UltimateMarkdownContent, pictures). After A15, named in that order, the manifest matches apart from its time stamp, and the zip's entries come in the same order. No kept-path case in the baseline (see the M0-05 row); `FolioPlanner`'s tests carry that | 2026-10-27 |
+| Unpack of the app-made `folio.default.html` (M1-14) | **Equal, two expected differences.** The documents the app packed, back out: `UltimateMarkdownContent.md` differs only by its byte order mark, which the app's Folio drops, and `pictures.md` has its picture links repointed to `media/`, as the Folio rewrote them | 2026-10-27 |
 | Globs from bash give the same list (IN-01)                                                |        |      |
 | Every verb under a firewall outbound block (M1: text verbs; M2: exports)                  |        |      |
-| Release output: two executables, one set of shared files, equal versions                  |        |      |
+| Release output: two executables, one set of shared files, equal versions                  | **Done.** `New-Release.ps1` publishes `marqora-cli` separately and merges it into `app\`: 518 shared files byte-identical, 8 of its own (the exe, its dll, deps, runtimeconfig and pdb, `WebRender`, `System.CommandLine`), and both at v1.0.12 by file version and by `marqora-cli version`. The staged CLI runs from another folder | 2026-10-27 |
 | Install with PATH; `marqora-cli version` in a new shell; uninstall restores PATH          |        |      |
 | CLI starts in Windows Sandbox (no Windows App SDK)                                        |        |      |
-| DOC-02 pre-commit hook passes clean, blocks a bad commit (A14) |        |      |
+| DOC-02 pre-commit hook passes clean, blocks a bad commit (A14) | **Passed in a scratch repository**, not this one: the hook copied out of `docs/CLI.md`, with a Release publish on PATH. A formatted file with good links committed; an unformatted list (exit 1, "would change") and a dead link (exit 1, `broken-link`) were refused; a commit with no markdown, and a file named with a space, went through. Installing it in this repository is for Paul. `ManualCoverageTests` holds the manual to no CI workflow | 2026-10-27 |
+| `docs/CLI-Recipes.md`, added at Paul's request after M1-19: the shell code run by hand | **Run, with four exceptions.** Every recipe was run in a scratch Git repository with a Debug build on PATH: in PowerShell 7.6, in Windows PowerShell 5.1 (after the UTF-8 line the page gives), in cmd and in Git Bash. Each gave what its text says, including accented headings, CRLF files, a file name with a space, an empty file list, and exit 4 on a second dated Folio the same day. **Not run:** WSL, which is not installed here (the `marqora-cli.exe` link, `wslpath -w`); the clipboard recipes (`Get-Clipboard`, `Set-Clipboard`), because clipboard access was refused in the session; `chcp 65001` changing what cmd shows on screen; and the Task Scheduler steps. `ManualCommandTests` parses every marqora-cli command in the page's shell blocks; three options broken on purpose were each caught | 2026-10-27 |
 | M2-02: HTML and Folio vs baseline                                                         |        |      |
 | M2-03: PDF vs baseline; one print to Microsoft Print to PDF                               |        |      |
 | M2-06: all four app exports vs baseline (before ARC-07)                                   |        |      |
@@ -1178,3 +1188,28 @@ Out of v1, or turned up while planning. Paul picks from these. None is done alon
   document. The file shows them only where it was saved; moved or sent, they break. Seen in the
   M0-05 baseline, 2026-10-26. Possibly intended, and an app question rather than a CLI one; the
   CLI's `export html` matches whatever the app does.
+- **`--settings` is not checked by a command that reads no settings.** `check`, `replace` and the
+  others that never consult the settings accept `--settings nosuch.json` and exit 0, so a typo
+  is noticed only on a command that does read them (`format`, `number`, `toc`, `outline`, `folio`), which stops
+  with exit 2. Seen while writing the manual, 2026-10-27. Checking the file on every command
+  would cost each one a read it does not need; the manual says which commands use settings.
+- **"N lines changed" counts by position, not by difference.** `MarkdownFormatter.CountChangedLines`
+  compares line i with line i, so one blank line inserted near the top counts every line after
+  it: formatting `docs/CLI.md` reported "684 lines changed" for about 30 real changes. The app
+  shows the same figure; `format --write` repeats it. A count from the diff the CLI already makes
+  for `--dry-run` would be right in both. Seen while writing the manual, 2026-10-27.
+- **An option whose value goes missing takes the next option as its value.** `--with=` with
+  nothing after the `=`, in any shell, and `--with ''` in Windows PowerShell 5.1, which drops an
+  empty argument, both leave `--with` to take the next token: `replace --find x --with=
+  --dry-run a.md` replaces with the text "--dry-run" and, no longer a dry run, prints the
+  document. With `--write` next, the file is left alone and the document printed with
+  "--write" in place of each match, so nothing is lost but the run did not do what was asked. The recipes
+  give `'""'` for 5.1; refusing an option-shaped value for `--with`, or `--with=` with nothing
+  after it, would close it. Seen while writing the recipes, 2026-10-27.
+- **`check` reports every link that leaves the document's folder as broken**, `../README.md`
+  included, because the app's own link check (`LinkChecks.Exists`, through
+  `PathContainment.ResolveWithin`) only looks inside the folder. The source pane underlines the
+  same links. In a repository whose documents link up and across folders, `check` over all of
+  them reports each such link, so it cannot gate a commit there. An app question first; the CLI
+  follows whatever the app decides. The manual and the recipes say so. Seen while writing the
+  recipes, 2026-10-27.

@@ -398,6 +398,39 @@ for a choice nobody has made yet; the report says what the artifact *lacks* — 
 
 ---
 
+## From the command line
+
+`marqora-cli folio` makes the same Folio without the window, through the same code, and
+`marqora-cli unpack` is Open Folio. `docs/CLI.md` is the manual; what matters here is how each
+part of this document comes out in a terminal.
+
+- **The forms.** The output path decides: `-o Handbook.zip` is the zip, `-o Handbook\` (or a
+  folder that exists) is the folder, `-o Handbook.html` the single page, and `--form` decides a
+  path that says nothing. The folder and zip forms are made now, and every document and picture in
+  them is byte for byte what the app puts in its own; the M0-05 baseline is the proof. The single
+  page needs the preview's renderer, run with no window, and comes with the exports.
+- **The order.** The documents keep the order they are named in on the command line, as the
+  window keeps the order they were ticked in, because that order is the order the Folio is read
+  in. Every other command sorts its files by path.
+- **The preflight is `--dry-run`.** It prints what the window would show, a line for each: the
+  documents, the pictures and how many were collected from elsewhere, what is missing or points
+  outside, the web pictures, the estimate and any advice. `--json` carries the same figures.
+- **The web is still the author's call.** Without `--fetch-web-images` nothing is collected and
+  nothing is contacted. With it, `--dry-run` names the sites and contacts none of them, which is
+  the preflight's list of sites in another form; the run without `--dry-run` collects them. As in
+  the app, the `HttpClient` is built inside the one method that fetches.
+- **Shrinking is `--shrink-images <pixels>`**, the preflight's "Shrink images wider than", with
+  the same declined path: a copy that would come out larger is not used.
+- **The report is findings.** Each row of the report is a warning on its document's own line, in
+  the report's wording, with a code for a script to filter on. A Folio with warnings is still
+  made, and the run still succeeds: what it lacks is reported, not refused.
+- **An output that exists.** There is no save dialog to ask, so the command line refuses a zip
+  or a folder that is already there unless `--overwrite` is given. Then it replaces what is in the
+  folder by writing beside it and swapping the two, and never empties a folder that holds
+  something the run reads. `unpack --overwrite` works the same way.
+
+---
+
 ## Deliberately left out
 
 - **A hosted viewer, an upload, or a share link.** A document would leave the machine on its

@@ -108,7 +108,9 @@ code. The plan's §3 has the finding behind each one. No ID was added, removed o
 | `CLI-SP-01`, `CLI-ARC-01` | The parent window is the spike's to choose; WebView2's WinRT projection is switched on and must activate without the Windows App SDK; target `net10.0-windows10.0.19041.0` |
 | `CLI-ARC-01`, `CLI-ARC-02` | A fourth project, `PaulTechGuy.MQ.Imaging`, behind `IImageResizer`; `Exporting` exists from M1 to receive `FolioShrinker` |
 | `CLI-SP-03`, `CLI-DOC-02` | No GitHub Actions is used: the spike's Actions run is recorded as not run, by decision, and the manual has a pre-commit hook and no Actions recipe. Amended again on 2026-10-26; the version of 2026-10-16 had the runs made by Paul in a scratch repository |
-| `CLI-VB-UNP-01` | Single-file Folios only; a non-empty target is refused and `unpack` takes no `--overwrite` (the proposal to empty it first was rejected) |
+| `CLI-VB-UNP-01` | Single-file Folios only. Amended again on 2026-10-27 (A5c, which reverses A5b): `--overwrite` replaces what is in a non-empty target, except for the folders that are never emptied; without it the target is refused |
+| `CLI-IN-01` | Amended on 2026-10-27 (A15): `folio` keeps the order its documents were named in, because that order is the Folio's reading order |
+| `CLI-OUT-08` | Amended on 2026-10-27 (A5c): for `folio`'s folder form, `--overwrite` replaces what is in the folder, as for `unpack` |
 | `CLI-VB-REN-01` | `--style sequential\|ones\|zeros`; the app's per-list suggestion by default |
 | `CLI-OUT-06` | `format` decides line endings and the final newline through its own options |
 | `CLI-SET-03` | A raw `settings.json` is accepted too |
@@ -252,10 +254,14 @@ message naming the problem and pointing at `--help`.
 
 **Requirement.** Inputs are paths or glob patterns, expanded by the CLI with
 `Microsoft.Extensions.FileSystemGlobbing`, so `*` and `**` behave the same in PowerShell, cmd and
-bash. Matches are processed in a stable, ordinal-sorted order, each file once.
+bash. Matches are processed in a stable, ordinal-sorted order, each file once. `folio` is the
+exception: its documents keep the order they were named in, each pattern's matches sorted where
+the pattern stands, because that order is the Folio's reading order, as the app keeps the order
+documents were ticked in.
 **Acceptance.**
 - [ ] `"docs/**/*.md"` matches the same files from all three shells
 - [ ] A file named twice, or matched by two patterns, is processed once
+- [ ] `folio b.md a.md` makes a Folio whose documents are in the order `b.md`, `a.md`
 - [ ] A pattern matching nothing is an input error (exit 3) naming the pattern
 
 **M1 · Must**
@@ -394,12 +400,15 @@ are an input error before any work starts.
 
 **Requirement.** An output file that already exists is not replaced unless `--overwrite` is
 given; without it the run exits 4 with "Pass --overwrite to replace it". All outputs are checked
-before any work starts.
+before any work starts. A folder output (`folio`'s folder form) with anything in it is treated the
+same way: refused without `--overwrite`, its contents replaced with it, under the rules
+`CLI-VB-UNP-01` gives, and never when it holds an input document or a picture the Folio collects.
 **Why.** The conservative default: the default leaves the user's files alone (11.7).
 **Acceptance.**
 - [ ] Existing output, no flag: exit 4, file unchanged, no render started
 - [ ] With `--overwrite`: replaced
 - [ ] An output path that is an input file is refused even with `--overwrite`
+- [ ] A folder output holding an input or a collected picture is refused even with `--overwrite`
 
 **M1 (folio) / M2 (exports) · Must**
 
@@ -732,15 +741,22 @@ level, text, anchor and line per heading.
 
 **Requirement.** `unpack <folio> --out-dir <folder>` takes a single-file Folio apart into its
 markdown and images through the `Folio` unpacker, as File > Open Folio does. The target folder
-must be missing or empty: a non-empty one is refused with exit 4, and `unpack` takes no
-`--overwrite`.
-**Why.** A Folio arrives from someone else, and the unpacker never writes over anything already
-there. The folder and zip forms are already plain files, and the app's Open Folio reads only the
-single-file form.
+must be missing or empty unless `--overwrite` is given: without it a non-empty one is refused with
+exit 4. With it, what is in the folder is replaced: the Folio is unpacked beside it first, and the
+old contents are deleted only once the new ones are in place. Some folders are never emptied,
+even with `--overwrite`: a drive root, the profile folder, the current folder or one that holds
+it, and a folder holding the Folio being unpacked.
+**Why.** A Folio arrives from someone else, and unpacking a newer copy of it over the last one is
+the common case. The folders that are never emptied are each a slip of the keyboard away from one
+nobody meant to lose. The folder and zip forms are already plain files, and the app's Open Folio
+reads only the single-file form.
 **Acceptance.**
 - [ ] A single-file Folio unpacks; a folder or a `.zip` given to `unpack` exits 3 with a message
   saying it is already files, or to unzip it
-- [ ] A non-empty target exits 4 and nothing in it is touched
+- [ ] Without `--overwrite`, a non-empty target exits 4 and nothing in it is touched
+- [ ] With `--overwrite`, a non-empty target holds exactly the Folio's files afterward, and
+  nothing is left beside it
+- [ ] With `--overwrite`, each folder that is never emptied exits 4 and is left as it was
 - [ ] Unpacking a Folio made by the app gives the files the app would open
 
 **M1 · Must**
