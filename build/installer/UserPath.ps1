@@ -56,9 +56,15 @@ function Add-UserPathEntry {
     }
 
     $current = Read-UserPath
-    $separator = if (-not $current -or $current.EndsWith(';')) { '' } else { ';' }
 
-    Write-UserPath -Value ($current + $separator + $Directory)
+    # A PATH that ends in ";" keeps its ending after the new entry. Taking that ";" as the
+    # separator instead would leave the uninstaller nothing to give back: "A;" became "A;dir",
+    # and removing dir left "A".
+    $value = if (-not $current) { $Directory }
+             elseif ($current.EndsWith(';')) { $current + $Directory + ';' }
+             else { $current + ';' + $Directory }
+
+    Write-UserPath -Value $value
     return $true
 }
 
