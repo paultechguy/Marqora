@@ -9,7 +9,12 @@ using Xunit;
 
 namespace PaulTechGuy.MQ.Cli.Tests.Verbs;
 
-/// <summary>CLI-FO-01: the form comes from the output path, --form decides a path that says nothing, and the two never disagree quietly.</summary>
+/// <summary>
+/// CLI-FO-01 and CLI-FO-02: the form comes from the output path, --form decides a path that says
+/// nothing, and the two never disagree quietly. The single page is made by a real browser, so the
+/// class runs with the other browser tests, one at a time.
+/// </summary>
+[Collection(nameof(BrowserRunsAlone))]
 public sealed class FolioFormTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -66,18 +71,74 @@ public sealed class FolioFormTests
         result.Error.ShouldContain("--form");
     }
 
-    /// <summary>The single page needs the headless browser, which comes with M2 (WP-M2-12).</summary>
+    /// <summary>
+    /// The page is made by a real browser: the diagram drawn, the picture inside the page, and
+    /// unpack gives the documents back, so it is a Folio and not only a page (WP-M2-12).
+    /// </summary>
     [Fact]
-    public async Task The_single_page_exits_2_until_a_later_release()
+    public async Task An_html_path_gives_one_page_that_unpacks_to_its_documents()
     {
         using var workspace = new Workspace();
         FolioSet.WriteTo(workspace);
+        workspace.Text("docs/flow.md", "# Flow\n\n```mermaid\nflowchart LR\n  A --> B\n```\n");
 
-        CliResult result = await CliRunner.RunAsync(["folio", "-o", "Handbook.html", "docs/guide.md"], currentDirectory: workspace.Root, cancellationToken: Ct);
+        CliResult result = await CliRunner.RunAsync(["folio", "-o", "Handbook.html", "docs/guide.md", "docs/flow.md"], currentDirectory: workspace.Root, cancellationToken: Ct);
 
-        result.ExitCode.ShouldBe(2);
-        result.Error.ShouldContain("later release");
+        result.ExitCode.ShouldBe(0, result.ToString());
+
+        string page = await File.ReadAllTextAsync(workspace.At("Handbook.html"), Ct);
+
+        page.ShouldContain("<svg", Case.Sensitive, "the diagram, drawn");
+        page.ShouldContain("data:image/png;base64,", Case.Sensitive, "the logo, inside the page");
+        Directory.GetFiles(workspace.Root, ".Handbook.*").ShouldBeEmpty("the page is written beside its name and moved onto it");
+
+        CliResult unpacked = await CliRunner.RunAsync(["unpack", "Handbook.html", "--out-dir", "back"], currentDirectory: workspace.Root, cancellationToken: Ct);
+
+        unpacked.ExitCode.ShouldBe(0, unpacked.ToString());
+        File.ReadAllText(workspace.At("back/guide.md")).ShouldContain("# Guide");
+        File.ReadAllText(workspace.At("back/flow.md")).ShouldContain("flowchart LR");
+    }
+
+    /// <summary>CLI-FO-02: past the size the app warns at, the run stops before a browser starts or a byte is written, and says what to do.</summary>
+    [Fact]
+    public async Task A_single_page_past_the_limit_exits_4_writes_nothing_and_suggests_the_zip()
+    {
+        using var workspace = new Workspace();
+        workspace.Text("docs/big.md", "# Big\n\n![Photo](photo.png)\n");
+
+        // A real PNG's header and then nothing: the planner reads the width from the header and
+        // the size from the file, and 40 MB is past 50 once a page carries it as base64.
+        using (FileStream photo = File.Create(workspace.At("docs/photo.png")))
+        {
+            photo.Write(FolioSet.Png);
+            photo.SetLength(40L * 1024 * 1024);
+        }
+
+        var fake = new FakeRenderers();
+
+        CliResult result = await CliRunner.RunAsync(["folio", "-o", "Big.html", "docs/big.md"], currentDirectory: workspace.Root, renderers: fake.Make, cancellationToken: Ct);
+
+        result.ExitCode.ShouldBe(4, result.ToString());
+        result.Error.ShouldContain("--form zip");
+        result.Error.ShouldContain("--shrink-images");
+        fake.Made.ShouldBe(0);
+        File.Exists(workspace.At("Big.html")).ShouldBeFalse();
+    }
+
+    /// <summary>CLI-EX-05 for the page: a document whose render never finishes fails the Folio, and nothing is left behind.</summary>
+    [Fact]
+    public async Task A_document_that_never_finishes_rendering_fails_the_page_with_exit_5()
+    {
+        using var workspace = new Workspace();
+        FolioSet.WriteTo(workspace);
+        workspace.Text("docs/stuck.md", $"# Stuck\n\n{FakeRenderers.NeverFinishes}\n");
+
+        CliResult result = await CliRunner.RunAsync(["folio", "-o", "Handbook.html", "docs/guide.md", "docs/stuck.md"], currentDirectory: workspace.Root, renderers: new FakeRenderers().Make, cancellationToken: Ct);
+
+        result.ExitCode.ShouldBe(5, result.ToString());
+        result.Error.ShouldContain("--timeout");
         File.Exists(workspace.At("Handbook.html")).ShouldBeFalse();
+        Directory.GetFiles(workspace.Root, ".Handbook.*").ShouldBeEmpty();
     }
 
     [Fact]

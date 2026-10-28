@@ -29,6 +29,9 @@ internal sealed class FakeRenderers : IRendererFactory
     /// <summary>The text a document carries to have its render never finish.</summary>
     public const string NeverFinishes = "<!-- never finishes -->";
 
+    /// <summary>The text a document carries to be printed by the classic engine, as when the paged one cannot lay it out.</summary>
+    public const string Classic = "<!-- classic engine -->";
+
     public int Made { get; private set; }
 
     public int Runs { get; private set; }
@@ -53,13 +56,20 @@ internal sealed class FakeRenderers : IRendererFactory
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    /// <summary>Renders anything but a document marked <see cref="NeverFinishes"/>, and prints a PDF of a few bytes.</summary>
+    /// <summary>Renders anything but a document marked <see cref="NeverFinishes"/>, attached or detached, and prints a PDF of a few bytes.</summary>
     private sealed class Renderer : IDocumentRenderer
     {
-        public Task<BridgeOutcome<RenderedDocument>> RenderAsync(RenderRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(request.Markdown.Contains(NeverFinishes, StringComparison.Ordinal)
+        private bool _classic;
+
+        public Task<BridgeOutcome<RenderedDocument>> RenderAsync(RenderRequest request, CancellationToken cancellationToken = default)
+        {
+            // The PDF that follows is printed from this render, as the real host prints what it last rendered.
+            _classic = request.Markdown.Contains(Classic, StringComparison.Ordinal);
+
+            return Task.FromResult(request.Markdown.Contains(NeverFinishes, StringComparison.Ordinal)
                 ? BridgeOutcome.TimedOut<RenderedDocument>()
                 : BridgeOutcome.Rendered(new RenderedDocument("<h1>Rendered</h1>")));
+        }
 
         public Task<byte[]?> DiagramPngAsync(string hash, CancellationToken cancellationToken = default) => Task.FromResult<byte[]?>(null);
 
@@ -68,13 +78,15 @@ internal sealed class FakeRenderers : IRendererFactory
         public Task<MathPicture?> MathPngAsync(int line, int ordinal, CancellationToken cancellationToken = default) => Task.FromResult<MathPicture?>(null);
 
         public Task<BridgeOutcome<string>> RenderDetachedAsync(string html, CancellationToken cancellationToken = default) =>
-            Task.FromResult(BridgeOutcome.Rendered(html));
+            Task.FromResult(html.Contains(NeverFinishes, StringComparison.Ordinal)
+                ? BridgeOutcome.TimedOut<string>()
+                : BridgeOutcome.Rendered(html));
 
         public async Task<PdfExportOutcome> PrintPdfAsync(string path, PdfPageSetup setup, string title, PaperFurniture furniture, CancellationToken cancellationToken = default)
         {
             await File.WriteAllBytesAsync(path, Encoding.ASCII.GetBytes($"%PDF-1.7 {title}\n%%EOF\n"), cancellationToken);
 
-            return new PdfExportOutcome(PrintEngine.Paged, []);
+            return new PdfExportOutcome(_classic ? PrintEngine.Classic : PrintEngine.Paged, []);
         }
     }
 }

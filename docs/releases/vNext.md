@@ -14,7 +14,7 @@
 Marqora now comes with `marqora-cli`, its document commands for a terminal. It formats
 documents, numbers or unnumbers their headings, finds and replaces, renumbers lists, sets the
 direction of diagrams, finds dead links and missing pictures, prints a contents list or an
-outline, and shares a set of documents as a Folio in the zip or folder form. It runs the same
+outline, and shares a set of documents as a Folio: a zip, a folder, or a single page. It runs the same
 code as the app, so a document formatted from a terminal is formatted exactly as Format Document
 would have formatted it.
 
@@ -30,8 +30,7 @@ The installer asks whether to put it on your PATH, and the answer is No unless y
 `Install.cmd -AddToPath` adds it without asking. The manual, with a five-minute tour, is
 `docs/CLI.md`, and `docs/CLI-Recipes.md` shows everyday jobs step by step in PowerShell, cmd and
 bash: checking a folder before a release, formatting only what you changed, keeping a contents
-list up to date, a dated Folio every week. The single-page Folio, and exporting HTML, PDF and
-Word, come in a later release.
+list up to date, a dated Folio every week. Exporting HTML, PDF and Word comes in a later release.
 
 ## Word export no longer depends on the preview
 

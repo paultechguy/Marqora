@@ -5,6 +5,7 @@ using System.CommandLine;
 using PaulTechGuy.MQ.Cli.Commands;
 using PaulTechGuy.MQ.Cli.Inputs;
 using PaulTechGuy.MQ.Cli.Outputs;
+using PaulTechGuy.MQ.Cli.Rendering;
 using PaulTechGuy.MQ.Cli.Reporting;
 using PaulTechGuy.MQ.Cli.Settings;
 using PaulTechGuy.MQ.Domain;
@@ -21,7 +22,7 @@ namespace PaulTechGuy.MQ.Cli.Verbs;
 ///
 /// The app's own sequence, read from MainViewModel and followed: plan; fetch the web pictures only
 /// under --fetch-web-images, and plan again with what was fetched; shrink; write. The folder and zip
-/// forms are written here; the single page needs the headless browser and comes with M2.
+/// forms are written here; the single page is rendered by the run's own browser (WP-M2-12).
 ///
 /// Everything that could stop the run is checked before any of it starts - the form, the output,
 /// every input - so a refused run has planned, fetched and written nothing. What is written goes to
@@ -40,6 +41,7 @@ internal static class FolioVerb
         Option<string?> Form,
         Option<string?> Theme,
         Option<int?> ShrinkImages,
+        Option<int?> Timeout,
         Option<bool> FetchWebImages,
         Option<bool> DryRun,
         Option<bool> Overwrite);
@@ -55,20 +57,16 @@ internal static class FolioVerb
         FolioForm form = FormOf(given, output, parse.GetValue(options.Form));
 
         int? shrink = parse.GetValue(options.ShrinkImages);
+        int seconds = parse.GetValue(options.Timeout) ?? ExportVerb.DefaultTimeoutSeconds;
 
         if (shrink is <= 0)
         {
             throw new UsageException("--shrink-images takes a width in pixels, greater than 0.");
         }
 
-        if (form == FolioForm.SingleFile)
+        if (seconds <= 0)
         {
-            const string later = "The single-page Folio comes in a later release of marqora-cli. Share as a .zip or a folder for now.";
-
-            context.Reporter.Error(given, later);
-            context.Results.Json(new JsonLine { Path = given, Verb = context.Verb, Outcome = Outcomes.Failed, Message = later });
-
-            return ExitCode.Usage;
+            throw new UsageException("--timeout takes a number of seconds, greater than 0.");
         }
 
         int width = shrink ?? 0;
@@ -174,12 +172,35 @@ internal static class FolioVerb
             plan = await shrinker.ShrinkAsync(plan, width, scratch.Path, context.CancellationToken).ConfigureAwait(false);
         }
 
+        // Weighed with what was fetched and shrunk, since that is what the page would carry, and
+        // refused before a browser starts or anything is written (CLI-FO-02). Never switched to the
+        // zip on the run's own say: the author named the form.
+        if (form == FolioForm.SingleFile && FolioPreflight.Weight(plan, singleFile: true) is var weight and > FolioPreflight.HeavyPageBytes)
+        {
+            string tooLarge = $"The single page would be about {FolioPreflight.Size(weight)}, past the {FolioPreflight.Size(FolioPreflight.HeavyPageBytes)} the app warns at. "
+                + $"Share it as a zip (--form zip, about {FolioPreflight.Size(plan.TotalBytes)}), or make its pictures smaller with --shrink-images.";
+
+            context.Reporter.Error(given, tooLarge);
+            context.Results.Json(new JsonLine { Path = given, Verb = context.Verb, Outcome = Outcomes.Failed, Message = tooLarge, Theme = Theme(theme) });
+
+            return ExitCode.Output;
+        }
+
         FolioManifest manifest = FolioManifest.For(plan, VersionVerb.Current, System.Environment.MachineName);
         var writer = new FolioWriter(new ReporterLogger<FolioWriter>(context.Reporter));
 
         try
         {
-            if (form == FolioForm.Zip)
+            if (form == FolioForm.SingleFile)
+            {
+                ExitCode page = await WritePageAsync(context, given, output, plan, settings, theme, TimeSpan.FromSeconds(seconds)).ConfigureAwait(false);
+
+                if (page != ExitCode.Success)
+                {
+                    return page;
+                }
+            }
+            else if (form == FolioForm.Zip)
             {
                 await WriteZipAsync(writer, plan, manifest, output, context.CancellationToken).ConfigureAwait(false);
             }
@@ -382,6 +403,81 @@ internal static class FolioVerb
     private static string Code(FolioWarningKind kind) =>
         string.Concat(kind.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? "-" + char.ToLowerInvariant(c) : char.ToLowerInvariant(c).ToString()));
 
+    /// <summary>
+    /// The single page (WP-M2-12): the app's page job, each document finished by the run's own
+    /// browser with RenderDetachedAsync, in the resolved theme's light palette. Written beside its
+    /// name and moved onto it, as the zip is. A document whose render does not finish fails the
+    /// Folio with exit 5 (CLI-EX-05): the app puts that document in unfinished, and a script has
+    /// nobody watching to notice.
+    /// </summary>
+    private static async Task<ExitCode> WritePageAsync(RunContext context, string given, string output, FolioPlan plan, SettingsSource settings, ResolvedTheme theme, TimeSpan timeout)
+    {
+        // The packager writes the export theme's palette into the page, and reads it from the
+        // settings: the theme this run resolved is put there, as export html does.
+        AppSettings fixedSettings = settings.Settings with { ExportColorTheme = theme.Theme.Id };
+
+        var packager = new RenderedHtmlPackager(context.Environment.AppPaths(), context.Environment.Themes(), new FixedSettings(fixedSettings), new ReporterLogger<RenderedHtmlPackager>(context.Reporter));
+        var job = new FolioPageJob(
+            new MarkdigMarkdownRenderer(new ReporterLogger<MarkdigMarkdownRenderer>(context.Reporter)),
+            new FolioHtmlWriter(packager, new ReporterLogger<FolioHtmlWriter>(context.Reporter)),
+            new ReporterLogger<FolioPageJob>(context.Reporter));
+
+        var request = new FolioPageRequest(
+            plan,
+            string.Empty,
+            FolioManifest.SuggestedName(plan, DateTimeOffset.Now),
+            new Dictionary<string, HeadingNumbering>(),
+            fixedSettings.HeadingNumbering,
+            fixedSettings.PreviewMaxWidth,
+            VersionVerb.Current,
+            System.Environment.MachineName);
+
+        var setup = new RenderSetup(
+            context.Environment.AppPaths(),
+            context.Environment.Themes(),
+            theme.Theme.Id,
+            PreviewPreferences.FromSettings(fixedSettings),
+            timeout,
+            context.Reporter);
+
+        string folder = Path.GetDirectoryName(output)!;
+        string pending = Path.Combine(folder, $".{Path.GetFileNameWithoutExtension(output)}.{Guid.NewGuid():n}.tmp.html");
+        IRendererFactory renderers = context.Environment.CreateRenderers(setup);
+        var progress = new DetailLine(line => context.Reporter.Detail(given, line));
+
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            ExportOutcome outcome = await renderers
+                .RunAsync(renderer => job.RunAsync(new StrictRenderer(renderer, timeout), request with { OutputPath = pending }, progress, context.CancellationToken), context.CancellationToken)
+                .ConfigureAwait(false);
+
+            if (!outcome.Written || !File.Exists(pending))
+            {
+                throw new RenderFailedException("The Folio page could not be built: the renderer handed back nothing to write.");
+            }
+
+            File.Move(pending, output, overwrite: true);
+
+            return ExitCode.Success;
+        }
+        catch (Exception ex) when (ex is RenderFailedException or RendererUnavailableException)
+        {
+            context.Reporter.Error(given, ex.Message);
+            context.Results.Json(new JsonLine { Path = given, Verb = context.Verb, Outcome = Outcomes.Failed, Message = ex.Message, Theme = Theme(theme) });
+
+            return ExitCode.Render;
+        }
+        finally
+        {
+            // Ctrl+C included: the browser is ended and its folder removed, and then nothing more
+            // can arrive in the page it was writing.
+            await renderers.DisposeAsync().ConfigureAwait(false);
+            File.Delete(pending);
+        }
+    }
+
     /// <summary>The zip, written beside its name and moved onto it, replacing what is there only because --overwrite was given.</summary>
     private static async Task WriteZipAsync(FolioWriter writer, FolioPlan plan, FolioManifest manifest, string output, CancellationToken cancellationToken)
     {
@@ -399,5 +495,14 @@ internal static class FolioVerb
         {
             File.Delete(pending);
         }
+    }
+
+    /// <summary>
+    /// The page job's progress, said at once under --verbose. Not <see cref="Progress{T}"/>, which
+    /// posts each report for later, and could put "Rendering..." after the line saying it is done.
+    /// </summary>
+    private sealed class DetailLine(Action<string> show) : IProgress<string>
+    {
+        public void Report(string value) => show(value);
     }
 }

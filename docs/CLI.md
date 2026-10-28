@@ -535,12 +535,23 @@ Folios in full.
 | `--theme <theme>`              | The color theme the Folio wears, by id or name. Without it, the theme the settings name for exports, then the settings' theme, then Default                     |
 | `--shrink-images <pixels>`     | Reduce pictures wider than this, as the preflight's "Shrink images wider than" does. A smaller copy goes in the Folio; your pictures are not touched            |
 | `--fetch-web-images`           | Collect the pictures the documents name by web address. The only option that uses the network                                                                   |
+| `--timeout <seconds>`          | For the single page: how long one document's render may take before the Folio fails with exit 5. Default 60                                                     |
 | `--dry-run`                    | Write nothing; print the preflight                                                                                                                              |
-| `--overwrite`                  | Replace an output that already exists: a zip, or what is in a folder                                                                                            |
+| `--overwrite`                  | Replace an output that already exists: a page, a zip, or what is in a folder                                                                                    |
 
-The **single-page form comes in a later release** of marqora-cli; until then `-o Handbook.html`
-stops with exit 2 and says so. In the folder and zip forms, every document and picture is byte
-for byte what the app puts in its own Folio.
+In the folder and zip forms, every document and picture is byte for byte what the app puts in its
+own Folio.
+
+**The single page** is the one the app makes: every document drawn into one `.html` file, its
+diagrams, math and highlighting finished and its pictures inside it, readable in any browser and
+taken apart again with `unpack`. Drawing it needs the WebView2 runtime, as the app does; the
+folder and zip forms do not. A document that does not finish drawing within `--timeout` fails
+the Folio with exit 5 and nothing is written, where the app would put that document in unfinished.
+
+**A single page that would be too large** is refused before anything is drawn or written, with
+exit 4: past about 50 MB, the size the app's preflight warns at, a page is unwieldy to open. The
+message gives the zip's size; share it with `--form zip` (or `-o Handbook.zip`), or make the
+pictures smaller with `--shrink-images`. marqora-cli never changes the form on its own.
 
 **The documents keep the order you name them in**, which is the order the Folio is read in.
 
@@ -549,8 +560,8 @@ stays a web address in the Folio, and the preflight counts it. With it, `--dry-r
 sites the pictures would be collected from and contacts none of them; the run without `--dry-run`
 collects them.
 
-**An output that exists.** A zip that is already there is refused (exit 4) unless `--overwrite`
-is given. A folder with anything in it is refused too, and `--overwrite` replaces what is in it:
+**An output that exists.** A page or zip that is already there is refused (exit 4) unless
+`--overwrite` is given. A folder with anything in it is refused too, and `--overwrite` replaces what is in it:
 the Folio is written beside the folder first, and the old contents are deleted only once the new
 ones are in place, so a run that fails leaves the folder as it was. Some folders are never
 emptied, even with `--overwrite`: a drive root, your profile folder, the folder you are in or one
@@ -564,6 +575,7 @@ collected and written nothing.
 
 ```powershell
 marqora-cli folio -o Handbook.zip docs/handbook/*.md
+marqora-cli folio -o Handbook.html docs/handbook/*.md
 marqora-cli folio -o Handbook/ --shrink-images 1600 docs/handbook/*.md
 marqora-cli folio --dry-run -o Handbook.zip docs/handbook/*.md
 ```
@@ -776,8 +788,10 @@ for Windows PowerShell 5.1 too. Naming the files, and `--write`, avoid the quest
 `--settings`, marqora-cli uses the built-in defaults, not your Preferences; `--settings app` uses
 yours.
 
-**`folio -o Handbook.html` stops with exit 2.** The single-page Folio comes in a later release.
-Share as a zip or a folder for now.
+**`folio -o Handbook.html` stops with exit 5.** The page is drawn by the WebView2 runtime, the
+same one the app uses; the message says whether it is missing or a document did not finish
+drawing in time. Install the runtime, or pass a longer `--timeout`. The zip and folder forms need
+no runtime.
 
 **A settings file is refused.** It has to be a file made with **Export preferences...**, or a
 `settings.json`. A damaged one is refused, never repaired or moved; the app's own file is only

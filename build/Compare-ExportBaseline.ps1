@@ -120,8 +120,10 @@ function Get-MaskedTime([string] $json) {
 # exported twice numbers them from wherever the counter stood: each diagram's own id, and a
 # sequence diagram's actors. The numbers are replaced in the order they first appear, which
 # keeps two apart and still finds one missing. A sequence diagram's stick figure counts its own
-# parts too (found 2026-10-28, WP-M2-09: 6 in the app's session, 0 in the CLI's fresh browser).
-$sessionCounters = 'mq-diagram-', 'actor', 'root-', 'actor-man-torso', 'actor-man-arms'
+# parts too (found 2026-10-28, WP-M2-09: 6 in the app's session, 0 in the CLI's fresh browser),
+# and a diagram's light output drawing has a counter of its own
+# (WP-M2-12: 34 against 1).
+$sessionCounters = 'mq-diagram-', 'mq-output-diagram-', 'actor', 'root-', 'actor-man-torso', 'actor-man-arms'
 
 function Get-RenumberedDiagrams([string] $text) {
     foreach ($prefix in $sessionCounters) {
@@ -133,6 +135,15 @@ function Get-RenumberedDiagrams([string] $text) {
                 "$prefix#$($seen[$n])"
             })
     }
+
+    # A class diagram's class ids put the counter after the class's name (WP-M2-12: classId-Document-8 against -0).
+    $seen = @{}
+    $text = [regex]::Replace($text, '(-classId-[\w]+-)(\d+)\b', {
+            param($m)
+            $n = $m.Groups[2].Value
+            if (-not $seen.ContainsKey($n)) { $seen[$n] = $seen.Count + 1 }
+            "$($m.Groups[1].Value)#$($seen[$n])"
+        })
     $text
 }
 
@@ -149,7 +160,8 @@ function Get-MaskedChance([string] $text) {
     $text = $text -replace "C$n $n, $n $n, ($n $n)", 'C<c>, <c>, $1'
     $text = $text -replace '<line x1="[\d.]+" x2="[\d.]+"( y1="[\d.]+" y2="[\d.]+" class="today")', '<line x1="<today>" x2="<today>"$1'
     $text = $text -replace '\b(\d+)-[0-9a-f]{7}\b', '$1-<commit>'
-    $text = $text -replace 'state-id-[a-z0-9]+-', 'state-id-<r>-'
+    # The divider's random part, and the count of dividers drawn in the session after it (WP-M2-12: 2 against 1).
+    $text = $text -replace 'state-id-[a-z0-9]+-\d+(?=[-_])', 'state-id-<r>-<n>'
 
     $seen = @{}
     [regex]::Replace($text, 'IconifyId[0-9a-f]+', {

@@ -34,4 +34,21 @@ public sealed class ExportFindingsTests
         finding.GetProperty("line").GetInt32().ShouldBe(3);
         finding.GetProperty("code").GetString().ShouldBe("not-found");
     }
+
+    [Fact]
+    public async Task A_pdf_the_classic_engine_printed_says_so_as_advice()
+    {
+        using var workspace = new Workspace();
+        workspace.Text("guide.md", $"# Guide\n\n{FakeRenderers.Classic}\n");
+
+        CliResult result = await CliRunner.RunAsync(
+            ["export", "pdf", "-o", "guide.pdf", "guide.md"],
+            currentDirectory: workspace.Root,
+            renderers: new FakeRenderers().Make,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ExitCode.ShouldBe(0, result.ToString());
+        result.Error.ShouldContain("guide.md: info: Printed by the classic engine: the paged engine could not lay this document out");
+        result.Error.ShouldContain("[printed-by-the-classic-engine]");
+    }
 }

@@ -44,6 +44,17 @@ internal abstract class ExportFormat
     /// <summary>The page setup in force, in a line each, or none for a format without pages.</summary>
     public abstract IReadOnlyList<string> Setup(SettingsSource settings);
 
+    /// <summary>The options this format adds to the ones every export has.</summary>
+    public virtual void AddOptions(Command command)
+    {
+    }
+
+    /// <summary>
+    /// The settings with this format's options laid over them, so the dry run, --verbose and the
+    /// job all see one page setup. The settings source's own for anything not given.
+    /// </summary>
+    public virtual SettingsSource Apply(ParseResult parse, SettingsSource settings) => settings;
+
     /// <summary>Runs the app's own job for this format, writing <paramref name="outputPath"/>.</summary>
     public abstract Task<ExportOutcome> RunAsync(IDocumentRenderer renderer, ExportInput input, string outputPath, ExportContext run, CancellationToken cancellationToken);
 }
@@ -114,7 +125,7 @@ internal static class ExportVerb
             throw new UsageException("--timeout takes a number of seconds, greater than 0.");
         }
 
-        SettingsSource settings = await SettingsSource.LoadAsync(context).ConfigureAwait(false);
+        SettingsSource settings = format.Apply(parse, await SettingsSource.LoadAsync(context).ConfigureAwait(false));
         ResolvedTheme theme = ThemeResolver.Resolve(parse.GetValue(options.Theme), settings, context.Environment.Themes());
 
         (IReadOnlyList<InputFile> files, ExitCode resolved) = Documents.Resolve(context, parse, options.Inputs);
@@ -370,7 +381,7 @@ internal static class ExportVerb
 
         foreach (string line in format.Setup(settings))
         {
-            context.Results.Line($"            {line}");
+            context.Results.Line(line);
         }
 
         for (int index = 0; index < files.Count; index++)
@@ -422,9 +433,18 @@ internal static class ExportVerb
         issue.IsAdvisory ? FindingSeverity.Info : FindingSeverity.Warning,
         $"{issue.Problem}: {issue.Item}");
 
-    /// <summary>"Not on this machine" as not-on-this-machine.</summary>
-    private static string Code(string problem) =>
-        string.Join('-', problem.ToLowerInvariant().Split([' ', '\'', ','], StringSplitOptions.RemoveEmptyEntries));
+    /// <summary>
+    /// "Not on this machine" as not-on-this-machine. The first clause only: "The diagram could not
+    /// be drawn; the PDF shows its error instead" is the-diagram-could-not-be-drawn, and "Raw HTML:
+    /// its text and inline formatting are in the document" is raw-html. An apostrophe joins rather
+    /// than splits (document-s is not a word).
+    /// </summary>
+    private static string Code(string problem)
+    {
+        string clause = problem.Split([';', ':'])[0].Replace("'", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+
+        return string.Join('-', clause.Split([.. clause.Where(c => !char.IsLetterOrDigit(c)).Distinct()], StringSplitOptions.RemoveEmptyEntries));
+    }
 
     private static ExitCode Fail(RunContext context, string path, ExitCode code, string message)
     {

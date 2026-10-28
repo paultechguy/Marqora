@@ -18,12 +18,6 @@
     <AssemblyName>marqora-cli</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
     <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
-
-    <!--
-      M0: the spike command, and only it (WP-M0-02). Compiled out entirely once export pdf
-      replaces it in WP-M2-10, so it never ships as an undocumented PDF export.
-    -->
-    <DefineConstants>$(DefineConstants);MQ_SPIKE</DefineConstants>
   </PropertyGroup>
 
   <!-- How it publishes, shared with the app it ships beside: runtime identifier, self-contained, ReadyToRun. -->

@@ -358,18 +358,25 @@ internal sealed class CommandTree
             Description = "Collect pictures the documents name by web address. The only option that makes marqora-cli use the network; --dry-run names the sites first.",
         };
 
+        var timeout = new Option<int?>("--timeout")
+        {
+            Description = $"For the single page: how long one document's render may take, in seconds, before the Folio fails with exit 5. Default {ExportVerb.DefaultTimeoutSeconds}.",
+            HelpName = "seconds",
+        };
+
         var dryRun = new Option<bool>("--dry-run") { Description = "Write nothing; print what the preflight would show." };
-        var overwrite = new Option<bool>("--overwrite") { Description = "Replace an output that already exists: a zip, or what is in a folder." };
+        var overwrite = new Option<bool>("--overwrite") { Description = "Replace an output that already exists: a page, a zip, or what is in a folder." };
 
         command.Options.Add(output);
         command.Options.Add(form);
         command.Options.Add(theme);
         command.Options.Add(shrink);
         command.Options.Add(fetch);
+        command.Options.Add(timeout);
         command.Options.Add(dryRun);
         command.Options.Add(overwrite);
 
-        shared.SetAction(command, "folio", (context, parse) => FolioVerb.RunAsync(context, parse, new FolioVerb.Options(inputs, output, form, theme, shrink, fetch, dryRun, overwrite)));
+        shared.SetAction(command, "folio", (context, parse) => FolioVerb.RunAsync(context, parse, new FolioVerb.Options(inputs, output, form, theme, shrink, timeout, fetch, dryRun, overwrite)));
 
         return command;
     }
@@ -404,15 +411,15 @@ internal sealed class CommandTree
 
     /// <summary>
     /// The exports, with the options every one of them shares (WP-M2-08). Hidden from help until
-    /// each has been compared with the app's own file: export html and export pdf run through the
-    /// shared export run, and Word still refuses until its package lands (WP-M2-11).
+    /// each has been compared with the app's own file; html, pdf and word all run through the
+    /// shared export run.
     /// </summary>
     private static Command Export(CommandShared shared)
     {
         Command export = shared.Verb("export", "Export documents as HTML, PDF or Word, as File > Export does.", []);
         export.Hidden = true;
 
-        foreach ((string name, string what, ExportFormat? format) in new (string, string, ExportFormat?)[] { ("html", "HTML", new HtmlFormat()), ("pdf", "PDF", new PdfFormat()), ("word", "Word", null) })
+        foreach ((string name, string what, ExportFormat format) in new (string, string, ExportFormat)[] { ("html", "HTML", new HtmlFormat()), ("pdf", "PDF", new PdfFormat()), ("word", "Word", new WordFormat()) })
         {
             Command command = shared.Verb(name, $"Export each document as {what}.", [$"marqora-cli export {name} docs/guide.md", $"marqora-cli export {name} --out-dir dist docs/*.md"]);
             command.Hidden = true;
@@ -421,7 +428,7 @@ internal sealed class CommandTree
 
             var output = new Option<string?>("--output", "-o")
             {
-                Description = format?.WritesStandardOutput == true
+                Description = format.WritesStandardOutput
                     ? "The file to write, for one document, or - for standard output. Without -o or --out-dir, each output is written beside its document."
                     : "The file to write, for one document. Without -o or --out-dir, each output is written beside its document.",
                 HelpName = "file",
@@ -429,7 +436,7 @@ internal sealed class CommandTree
 
             var outDir = new Option<string?>("--out-dir")
             {
-                Description = $"The folder to write into, for any number of documents: each is named after its document, with {format?.Extension ?? "the format's extension"}. Made if it is missing.",
+                Description = $"The folder to write into, for any number of documents: each is named after its document, with {format.Extension}. Made if it is missing.",
                 HelpName = "folder",
             };
 
@@ -449,14 +456,13 @@ internal sealed class CommandTree
             command.Options.Add(timeout);
             command.Options.Add(dryRun);
             command.Options.Add(overwrite);
+            format.AddOptions(command);
 
             export.Subcommands.Add(command);
 
             var options = new ExportVerb.Options(inputs, output, outDir, theme, timeout, dryRun, overwrite);
 
-            shared.SetAction(command, "export " + name, (context, parse) => format is null
-                ? PendingVerb.RunAsync(context, "export " + name)
-                : ExportVerb.RunAsync(context, parse, options, format));
+            shared.SetAction(command, "export " + name, (context, parse) => ExportVerb.RunAsync(context, parse, options, format));
         }
 
         return export;
