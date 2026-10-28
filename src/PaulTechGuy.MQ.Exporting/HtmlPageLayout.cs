@@ -3,7 +3,7 @@
 
 using System.Globalization;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// The layout an exported document takes once it is a page rather than a pane.
@@ -19,7 +19,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// answers to, rather than a number written a third time here. Zero is no limit, which is what
 /// the app ships with.
 /// </summary>
-internal static class HtmlPageLayout
+public static class HtmlPageLayout
 {
     /// <summary>
     /// Side padding echoing the preview's own <c>3em</c>. It is what keeps text off the frame

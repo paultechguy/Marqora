@@ -103,8 +103,8 @@ $excluded = '[\\/](obj|bin|vendor|node_modules|artifacts|\.git|\.vs|\.github|\.c
 # (tests/baselines/cli/README.md). Its text is the documents' and the vendored libraries' -
 # mermaid's own CSS says grey - and rewriting any of it would change the baseline it exists to
 # prove unchanged. Only the README and inputs\ in that folder are written by hand, and those are
-# still scanned.
-$baselineExports = '[\\/]tests[\\/]baselines[\\/]cli[\\/](?!README\.md$|inputs[\\/])'
+# still scanned. The fresh sets compared with it, under fresh\, are evidence the same way.
+$baselineExports = '[\\/]tests[\\/]baselines[\\/](cli[\\/](?!README\.md$|inputs[\\/])|fresh[\\/])'
 
 # A whole-word entry gets a boundary at each end. Everything else stays a stem, matched
 # anywhere in a word, and the order the entries were written in still decides the alternation.

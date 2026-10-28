@@ -117,7 +117,8 @@ $skipFiles = @('Test-NetworkClaim.ps1', 'UltimateMarkdownContent.md')
 # (tests/baselines/cli/README.md). An export carries its document's text, so the HTML made from
 # UltimateMarkdownContent.md says whatever that file says, and the file is skipped above for a
 # reason. Only the README and inputs/ in that folder are written by hand, and those are scanned.
-$baselineExports = '^tests[\\/]baselines[\\/]cli[\\/](?!README\.md$|inputs[\\/])'
+# The fresh sets compared with it, under fresh/, are evidence the same way.
+$baselineExports = '^tests[\\/]baselines[\\/](cli[\\/](?!README\.md$|inputs[\\/])|fresh[\\/])'
 
 function Test-Allowed {
     param([string]$Relative, [string]$Line)

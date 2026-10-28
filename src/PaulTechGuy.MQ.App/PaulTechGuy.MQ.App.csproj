@@ -55,6 +55,7 @@
     <ProjectReference Include="..\PaulTechGuy.MQ.Services\PaulTechGuy.MQ.Services.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Spelling\PaulTechGuy.MQ.Spelling.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.WebRender\PaulTechGuy.MQ.WebRender.csproj" />
   </ItemGroup>
 
   <!--

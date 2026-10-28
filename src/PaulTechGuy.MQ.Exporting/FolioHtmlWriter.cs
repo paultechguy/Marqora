@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Folio;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>One document, rendered and ready to be placed in a Folio.</summary>
 /// <param name="Plan">Its entry in the plan, which is where its name inside the Folio comes from.</param>

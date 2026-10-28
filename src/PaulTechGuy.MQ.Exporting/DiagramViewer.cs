@@ -4,7 +4,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// Click a diagram in an exported page and it opens on its own, clear of the document, with no
@@ -41,7 +41,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// listening for a key. Browser Back does close it, and every open leaves a history entry. Both
 /// are the price of having no script at all.
 /// </summary>
-internal static partial class DiagramViewer
+public static partial class DiagramViewer
 {
     /// <summary>
     /// Wraps every rendered diagram in the self-linking anchor, plus the sheet that closes it.

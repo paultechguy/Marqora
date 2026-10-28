@@ -4,7 +4,7 @@
 using Microsoft.Web.WebView2.Core;
 using PaulTechGuy.MQ.Domain;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.WebRender;
 
 /// <summary>
 /// The classic engine: a window's live page printed as it stands, to a PDF or to a printer the
@@ -21,7 +21,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// whole point: it is the only route on which the browser's header and footer can be switched
 /// off.
 /// </summary>
-internal static class WebViewPrinting
+public static class WebViewPrinting
 {
     /// <summary>
     /// Writes a WebView's pages to a PDF file on the page setup the user chose.

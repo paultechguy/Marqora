@@ -718,12 +718,16 @@ public interface IPreviewHost
     /// </summary>
     Task RequestReferenceAsync();
 
-    // ------------------------------------------------------------------ export
+    // ------------------------------------------------------------------ copying
 
     /// <summary>
     /// The preview's markup exactly as rendered, with mermaid diagrams as inline SVG, math
-    /// laid out by KaTeX and code already highlighted. Export uses this rather than
-    /// re-rendering, so what is exported is what was on screen.
+    /// laid out by KaTeX and code already highlighted, or empty when the shell did not hand it
+    /// over. For Copy as SVG, which finds the diagrams in it.
+    ///
+    /// Exports do not ask here. Everything an export needs of a renderer is on
+    /// <see cref="Rendering.IDocumentRenderer"/>, which the preview also implements, so the app
+    /// and marqora-cli export through the same calls (CLI-ARC-04).
     /// </summary>
     Task<string> GetRenderedHtmlAsync();
 
@@ -777,19 +781,6 @@ public interface IPreviewHost
     Task<string> GetReviewHtmlAsync(Guid documentId, IReadOnlyList<ReviewNote> notes);
 
     /// <summary>
-    /// Finishes markup for a document that is not on screen: mermaid, KaTeX and highlighting
-    /// applied to a fragment Markdig has already produced, returned rather than displayed.
-    ///
-    /// <see cref="GetRenderedHtmlAsync"/> can only answer for the document in front, which is
-    /// one of the twelve a Folio is made of. The work happens in a container of the shell's
-    /// own, so the preview the reader is looking at is not disturbed.
-    ///
-    /// Returns the markup it was given if the shell is not ready or does not answer: a Folio
-    /// with one document's diagrams undrawn beats a Folio with the document missing.
-    /// </summary>
-    Task<string> RenderForExportAsync(string html);
-
-    /// <summary>
     /// One rendered diagram as PNG bytes, or null when it could not be produced.
     ///
     /// Rasterized in the shell, by the same code the pop-out window uses for its own copy, so
@@ -799,19 +790,13 @@ public interface IPreviewHost
     /// setting, and the picture is leaving for somebody's white page. See diagram-output.js.
     ///
     /// <paramref name="forCopy"/> is Copy as PNG asking, which gets a transparent margin around
-    /// the drawing so its outermost shapes do not touch the picture's edge. The Word export
-    /// and rich-text copy pass false and get the tight crop: their document already sets a
+    /// the drawing so its outermost shapes do not touch the picture's edge. Rich-text copy
+    /// passes false and gets the tight crop, as an export does through
+    /// <see cref="Rendering.IDocumentRenderer.DiagramPngAsync"/>: their document already sets a
     /// picture apart from its text.
     /// </summary>
     Task<byte[]?> RequestDiagramPngAsync(string hash, bool forCopy);
 
-    /// <summary>
-    /// One equation drawn as a PNG at twice its size, light, for the Word export's fallback: an
-    /// equation it cannot write as a Word equation goes in as this picture. Found by its
-    /// block's zero-based line and its place among that block's equations. Null when there is
-    /// nothing to draw or the shell did not answer.
-    /// </summary>
-    Task<MathPicture?> RequestMathPngAsync(int line, int ordinal);
     /// <summary>
     /// One rendered diagram as SVG markup, light like <see cref="RequestDiagramPngAsync"/>,
     /// or null when it could not be produced.
@@ -865,22 +850,6 @@ public interface IPreviewHost
     /// is the first thing anyone reaches for when a formatter surprises them.
     /// </summary>
     Task ReplaceTextAsync(Guid documentId, string text, RenderedMarkdown rendered);
-
-    /// <summary>
-    /// Writes the active document to a PDF file.
-    ///
-    /// Through the paged engine - the document laid out into pages in a view of its own, with
-    /// the cover, contents, running header and page numbers it asks for, and footnotes at the
-    /// page foot - unless the setup asks for the classic engine, or the paged engine cannot
-    /// finish, in which case the preview is printed as it stands, as every PDF was before. The
-    /// window does not visibly change either way. Answers which engine wrote the file.
-    /// </summary>
-    /// <param name="title">
-    /// What the PDF calls itself: the front matter's title, or the file name. It goes into the
-    /// file's Title property, and a full path there travels with the file to whoever it is sent.
-    /// </param>
-    /// <param name="furniture">The cover, contents and header and footer, resolved for this document.</param>
-    Task<PdfExportOutcome> ExportPdfAsync(string path, PdfPageSetup setup, string title, PaperFurniture furniture);
 
     /// <summary>
     /// Prints the active document, for a paper copy rather than a file.

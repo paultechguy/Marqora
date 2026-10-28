@@ -7,8 +7,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
-using PaulTechGuy.MQ.App.Services;
+using PaulTechGuy.MQ.Analysis;
+using PaulTechGuy.MQ.Abstractions.Rendering;
+using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Themes;
@@ -96,6 +99,7 @@ internal static class Spike
 
         var renderer = new MarkdigMarkdownRenderer(new StderrLogger<MarkdigMarkdownRenderer>(level));
         ThemeCatalog themes = ThemeCatalog.Load();
+        var pdfJob = new PdfExportJob(renderer, new MarkdownAnalyzer(), new StderrLogger<PdfExportJob>(level));
 
         Mark($"starting, parent window {options.Parent}{(options.NoThrottle ? ", throttling off" : string.Empty)}");
 
@@ -108,7 +112,7 @@ internal static class Spike
         try
         {
             host = await HeadlessRenderHost.StartAsync(
-                parent.Handle, assets, Path.Combine(run, "WebView2-Render"), themes, "default", logger, cancel.Token)
+                parent.Handle, assets, Path.Combine(run, "WebView2-Render"), themes, "default", renderer, options.Timeout, logger, cancel.Token)
                 .ConfigureAwait(true);
 
             Mark($"shell ready, browser process {host.BrowserProcessId}");
@@ -116,34 +120,32 @@ internal static class Spike
             foreach (string input in options.Inputs)
             {
                 string text = await File.ReadAllTextAsync(input, cancel.Token).ConfigureAwait(true);
-                RenderedMarkdown rendered = renderer.Render(text);
                 string name = Path.GetFileNameWithoutExtension(input);
-
-                string markup = await host.PrintMarkupAsync(text, rendered.Html, Path.GetFullPath(input), options.Timeout, cancel.Token)
-                    .ConfigureAwait(true);
-
-                Mark($"{name}: rendered, {markup.Length:N0} characters of print markup");
 
                 writing = Path.Combine(options.OutputFolder, name + ".pdf");
 
-                Task<PagedPrintResult> printing = PagedPrintHost.ExportAsync(
-                    parent.Handle,
-                    assets,
-                    markup,
-                    PdfPageSetup.Default,
-                    name,
-                    new PaperFurniture(null, null, HeaderAndFooter: true),
-                    writing,
-                    PagedHostMode.OffScreen,
-                    documentAssets: null,
-                    logger);
+                // The app's own PDF job (WP-M2-06): rendered, printed, and the pictures it leaves out.
+                Task<ExportOutcome> printing = pdfJob.RunAsync(
+                    host,
+                    new PdfExportRequest(
+                        new RenderRequest(text, Path.GetFullPath(input), HeadingNumbering.Off, "default"),
+                        writing,
+                        name,
+                        PdfPageSetup.Default,
+                        new PaperFurniture(null, null, HeaderAndFooter: true)),
+                    cancel.Token);
 
-                PagedPrintResult printed = await WithinAsync(printing, options.Timeout, $"{name}: the paged engine did not finish.", cancel.Token)
+                ExportOutcome printed = await WithinAsync(printing, options.Timeout, $"{name}: the export did not finish.", cancel.Token)
                     .ConfigureAwait(true);
 
                 writing = null;
 
-                Mark($"{name}: printed, {printed.Pages} pages, {printed.Bytes:N0} bytes, layout {printed.Layout.TotalMilliseconds:N0} ms");
+                Mark($"{name}: printed by the {printed.Engine?.ToString().ToLowerInvariant()} engine, {new FileInfo(printed.Outputs[0]).Length:N0} bytes, {printed.Issues.Count} issues");
+
+                foreach (ExportIssue issue in printed.Issues)
+                {
+                    Mark($"{name}:   {issue}");
+                }
             }
         }
         catch (OperationCanceledException)
@@ -205,9 +207,10 @@ internal static class Spike
 
         Directory.CreateDirectory(run);
 
-        // PagedPrintHost names its own folder from this one, with -Print on the end (F3; WP-M2-03
-        // makes it a parameter). Nothing is created at this path itself.
+        // The paged engine's folder is this one with -Print on the end, as the app's is (F3).
+        // Nothing is created at this path itself.
         Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", Path.Combine(run, "WebView2"));
+        PagedPrintHost.Configure(PagedPrintHost.BesideUserDataFolderAsync);
 
         if (noThrottle)
         {

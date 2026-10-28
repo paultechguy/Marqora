@@ -11,7 +11,7 @@ using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Domain;
 using Windows.Foundation;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.WebRender;
 
 /// <summary>
 /// The paged engine laid the document out, then failed while writing the PDF or sending the
@@ -25,7 +25,7 @@ internal sealed class PagedOutputException(string output, Exception inner)
     : Exception($"The paged engine could not finish the {output}: {inner.Message}", inner);
 
 /// <summary>How the print page's controller is kept out of sight. Spike S1 tried both; only OffScreen lays out.</summary>
-internal enum PagedHostMode
+public enum PagedHostMode
 {
     /// <summary>
     /// <c>IsVisible = false</c>. Tested on 2026-10-06 and it does not work: Chromium treats a
@@ -80,7 +80,7 @@ internal sealed record PagedPage(
 }
 
 /// <summary>What one paged job measured, for the log.</summary>
-internal sealed record PagedPrintResult(
+public sealed record PagedPrintResult(
     int Pages,
     TimeSpan Layout,
     TimeSpan Output,
@@ -108,7 +108,7 @@ internal sealed record PagedPrintResult(
 /// its own (see <see cref="EndBrowser"/>). Paged.js cannot run twice in one page, so a fresh
 /// navigation per job is the design either way.
 /// </summary>
-internal static class PagedPrintHost
+public static class PagedPrintHost
 {
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromSeconds(30);
 
@@ -130,12 +130,29 @@ internal static class PagedPrintHost
     /// <summary>The paged engine's browser process, once a job has started one; 0 before.</summary>
     private static int _browserProcessId;
 
-    /// <summary>The variable Program.cs names the preview's WebView2 data folder with.</summary>
+    /// <summary>Makes the environment a job runs in; see <see cref="Configure"/>.</summary>
+    private static Func<Task<CoreWebView2Environment>>? _createEnvironment;
+
+    /// <summary>The variable the app names the preview's WebView2 data folder with.</summary>
     private const string UserDataVariable = "WEBVIEW2_USER_DATA_FOLDER";
 
     /// <summary>
-    /// The paged engine's environment, made the first time a job needs it, in the folder
-    /// beside the preview's (Program.cs sets that one through WEBVIEW2_USER_DATA_FOLDER).
+    /// Says where the engine's browser comes from, once, before the first job (F3). The app
+    /// passes <see cref="BesideUserDataFolderAsync"/>, its own environment beside the preview's,
+    /// as it always had; marqora-cli passes the headless host's, so a run has one browser tree.
+    /// Called again, the next job uses the new one; a browser already running is not ended.
+    /// </summary>
+    public static void Configure(Func<Task<CoreWebView2Environment>> createEnvironment)
+    {
+        ArgumentNullException.ThrowIfNull(createEnvironment);
+
+        _createEnvironment = createEnvironment;
+        _environment = null;
+    }
+
+    /// <summary>
+    /// The environment made the first time a job needs it, and kept until
+    /// <see cref="EndBrowser"/>.
     /// </summary>
     private static async Task<CoreWebView2Environment> EnvironmentAsync()
     {
@@ -144,6 +161,21 @@ internal static class PagedPrintHost
             return existing;
         }
 
+        Func<Task<CoreWebView2Environment>> create = _createEnvironment
+            ?? throw new InvalidOperationException("PagedPrintHost.Configure has not been called.");
+
+        _environment = await create().ConfigureAwait(true);
+
+        return _environment;
+    }
+
+    /// <summary>
+    /// An environment of the paged engine's own, in the folder beside the preview's: the
+    /// preview's is named by WEBVIEW2_USER_DATA_FOLDER, and this one is the same with -Print on
+    /// the end. Why it is its own is on <see cref="_environment"/>.
+    /// </summary>
+    public static async Task<CoreWebView2Environment> BesideUserDataFolderAsync()
+    {
         string preview = Environment.GetEnvironmentVariable(UserDataVariable)
             ?? throw new InvalidOperationException("The WebView2 data folder is not set.");
 
@@ -172,9 +204,7 @@ internal static class PagedPrintHost
             Environment.SetEnvironmentVariable(UserDataVariable, preview);
         }
 
-        _environment = await creating;
-
-        return _environment;
+        return await creating;
     }
 
     /// <summary>

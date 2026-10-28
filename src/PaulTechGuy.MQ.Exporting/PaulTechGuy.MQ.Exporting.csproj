@@ -9,8 +9,9 @@
     what holds it to that. What needs Windows - resizing a picture - is handed in through an
     Abstractions contract.
 
-    Created in M1 with FolioShrinker alone, for the Folio's "Shrink images wider than"; the rest of
-    the export assembly moves in with M2.
+    Created in M1 with FolioShrinker alone, for the Folio's "Shrink images wider than". The page
+    assembly and packaging moved in with WP-M2-02: HtmlExporter, HtmlPageLayout, FolioHtmlWriter,
+    DiagramHtmlDocument, ColorThemePayloads, DiagramViewer and RenderedHtmlPackager.
   -->
 
   <PropertyGroup>
@@ -21,6 +22,8 @@
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

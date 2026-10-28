@@ -48,28 +48,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'BaselineCommon.ps1')
+
 $repo = Split-Path -Parent $PSScriptRoot
-$root = Join-Path $repo 'tests/baselines/cli'
-$readme = Join-Path $root 'README.md'
+$root = $baselineRoot
+$readme = $baselineReadme
 $manifest = Join-Path $root 'MANIFEST.sha256'
 
 # What the baseline folder holds besides the exports: never hashed.
 $ownFiles = @('README.md', 'MANIFEST.sha256')
 $ownFolders = @('inputs')
-
-function Get-ExpectedNames {
-    $names = foreach ($line in Get-Content -LiteralPath $readme) {
-        if ($line -match '^\s*- \[[ xX]\] `([^`]+)`') {
-            $Matches[1]
-        }
-    }
-
-    if (-not $names) {
-        throw "No checklist items found in $readme."
-    }
-
-    @($names)
-}
 
 function Get-Hashes {
     $files = Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
@@ -133,7 +121,7 @@ if ($Check) {
 }
 
 # Recording. Every expected export first: a baseline with a hole in it is not one.
-$absent = @(Get-ExpectedNames | Where-Object {
+$absent = @(Get-BaselineExportNames | Where-Object {
         $path = Join-Path $root $_
 
         if (Test-Path -LiteralPath $path -PathType Container) {

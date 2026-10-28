@@ -48,13 +48,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IThemeService _themeService;
     private readonly ThemeCatalog _colorThemes;
     private readonly IUiDispatcher _ui;
-    private readonly IHtmlExporter _exporter;
-    private readonly IDocxExporter _docxExporter;
+    private readonly HtmlExportJob _htmlJob;
+    private readonly WordExportJob _wordJob;
+    private readonly PdfExportJob _pdfJob;
     private readonly RenderedHtmlPackager _packager;
     private readonly IExportDialogService _exportDialogs;
     private readonly IFolioDialogService _folioDialogs;
     private readonly FolioWriter _folioWriter;
-    private readonly FolioHtmlWriter _folioHtml;
+    private readonly FolioPageJob _folioPageJob;
     private readonly FolioShrinker _folioShrinker;
     private readonly FolioFetcher _folioFetcher;
     private readonly IPrintDialogService _printDialogs;
@@ -79,6 +80,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ILogger<MainViewModel> _logger;
 
     private IPreviewHost? _host;
+
+    /// <summary>
+    /// What every export renders through: the same preview, seen as the renderer it also is, so
+    /// the exports ask of it only what marqora-cli asks of its headless host (CLI-ARC-04).
+    /// </summary>
+    private IDocumentRenderer? _documentRenderer;
 
     /// <summary>
     /// The welcome document waiting to be opened, or null when this version has already shown
@@ -765,13 +772,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IThemeService theme,
         ThemeCatalog colorThemes,
         IUiDispatcher ui,
-        IHtmlExporter exporter,
-        IDocxExporter docxExporter,
+        HtmlExportJob htmlJob,
+        WordExportJob wordJob,
+        PdfExportJob pdfJob,
         RenderedHtmlPackager packager,
         IExportDialogService exportDialogs,
         IFolioDialogService folioDialogs,
         FolioWriter folioWriter,
-        FolioHtmlWriter folioHtml,
+        FolioPageJob folioPageJob,
         FolioShrinker folioShrinker,
         FolioFetcher folioFetcher,
         IPrintDialogService printDialogs,
@@ -804,13 +812,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _themeService = theme;
         _colorThemes = colorThemes;
         _ui = ui;
-        _exporter = exporter;
-        _docxExporter = docxExporter;
+        _htmlJob = htmlJob;
+        _wordJob = wordJob;
+        _pdfJob = pdfJob;
         _packager = packager;
         _exportDialogs = exportDialogs;
         _folioDialogs = folioDialogs;
         _folioWriter = folioWriter;
-        _folioHtml = folioHtml;
+        _folioPageJob = folioPageJob;
         _folioShrinker = folioShrinker;
         _folioFetcher = folioFetcher;
         _printDialogs = printDialogs;
@@ -1072,9 +1081,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Connects the WebView bridge. Everything the shell needs is pushed once it reports
     /// ready, so state set before the page loaded is not lost.
     /// </summary>
-    public void AttachPreviewHost(IPreviewHost host)
+    public void AttachPreviewHost(IPreviewHost host, IDocumentRenderer renderer)
     {
         _host = host;
+        _documentRenderer = renderer;
 
         // Before the page is up, so the host already knows the theme when it hands the page
         // every palette on ready - the first document is drawn in it rather than in Default.
@@ -7556,6 +7566,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// What an export asks the renderer to render: the document as it stands, numbered as its
+    /// tab is, in the export theme. The live renderer answers for the document on screen, which
+    /// is this one.
+    /// </summary>
+    private RenderRequest RenderRequestFor(MarkdownDocument document) =>
+        new(document.Text, document.Path, NumberingFor(document.Id), ExportColorThemeId);
+
+    /// <summary>
     /// Exports the active document as a self-contained HTML file.
     ///
     /// The markup comes from the live preview rather than a fresh render, so diagrams,
@@ -7571,7 +7589,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task WriteHtmlExportAsync()
     {
-        if (_workspace.Active is not { } document || _host is null || _exporter is null)
+        if (_workspace.Active is not { } document || _documentRenderer is null)
         {
             return;
         }
@@ -7590,9 +7608,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = "Exporting HTML...";
 
-            string rendered = await _host.GetRenderedHtmlAsync().ConfigureAwait(true);
+            // The reader's own width preference, the one the preview answers to, rather than a
+            // measure the export decides for them.
+            ExportOutcome outcome = await _htmlJob
+                .RunAsync(
+                    _documentRenderer,
+                    new HtmlExportRequest(
+                        RenderRequestFor(document),
+                        path,
+                        document.DisplayName,
+                        ImagesFor(document),
+                        _settings.Current.PreviewMaxWidth))
+                .ConfigureAwait(true);
 
-            if (string.IsNullOrWhiteSpace(rendered))
+            if (!outcome.Written)
             {
                 await _dialogs.ShowMessageAsync(
                     "Nothing to export",
@@ -7601,18 +7630,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            // The reader's own width preference, the one the preview answers to, rather than a
-            // measure the export decides for them.
-            IReadOnlyList<string> skipped = await _exporter
-                .WriteAsync(
-                    path,
-                    document.DisplayName,
-                    rendered,
-                    ImagesFor(document),
-                    _settings.Current.PreviewMaxWidth)
-                .ConfigureAwait(true);
-
             AnnounceExport(path);
+
+            IReadOnlyList<string> skipped =
+                [.. outcome.Issues.Where(i => i.Problem == HtmlExportJob.TooLargeToEmbed).Select(i => i.Item)];
 
             if (skipped.Count > 0)
             {
@@ -8088,15 +8109,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Builds the reading copy: every chosen document rendered into one page.
-    ///
-    /// Each document is rendered here rather than taken from the preview, because eleven of
-    /// twelve are not on screen. Markdig runs on the host and the shell finishes the job -
-    /// mermaid, KaTeX, highlighting - in a container of its own, so the preview the user is
-    /// looking at is never disturbed.
-    ///
-    /// One document at a time, deliberately. The shell has a single off-screen mermaid frame
-    /// and concurrent renders would race over it.
+    /// Builds the reading copy, every chosen document rendered into one page, through
+    /// <see cref="FolioPageJob"/>; the shell finishes each document in a container of its own,
+    /// so the preview the user is looking at is never disturbed.
     /// </summary>
     /// <returns>
     /// False when there was no shell to finish the documents with, in which case nothing was
@@ -8112,14 +8127,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         string title,
         IReadOnlyDictionary<string, MarkdownDocument> byPath)
     {
-        if (_host is null)
+        if (_documentRenderer is null)
         {
             _logger.LogWarning("Cannot build a Folio page: the preview is not attached.");
 
             return false;
         }
-
-        List<FolioRenderedDocument> rendered = [];
 
         // Every document's numbering settled here, before the first render: a preference
         // changed while a long export is running must not number the first half of a
@@ -8130,71 +8143,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // that matters: one contributor's chapter numbering its own headings does not make
         // the other eleven unnumbered. Keyed by path, as the planner keys its own lookup,
         // because a plan carries where a document came from rather than which tab it is.
+        //
+        // A planned document with no open tab cannot happen - the picker offers only what is
+        // open - but it falls back to the preference rather than to Off, which is what a
+        // document nobody has spoken for is numbered with everywhere else.
         Dictionary<string, HeadingNumbering> numbering = byPath
             .ToDictionary(p => p.Key, p => NumberingFor(p.Value.Id), StringComparer.OrdinalIgnoreCase);
 
-        for (int i = 0; i < plan.Documents.Count; i++)
-        {
-            FolioDocumentPlan document = plan.Documents[i];
-
-            StatusText = $"Rendering {document.EntryName} ({i + 1} of {plan.Documents.Count})...";
-
-            // The planned text, not the buffer: its references have already been repointed at
-            // what the Folio will actually contain.
-            //
-            // Numbered as the preview is. A Folio is the document as the author reads it,
-            // and the export used to be handed numbers by the shell on its way past; the
-            // renderer writes them now, so this is where they have to be asked for.
-            //
-            // A planned document with no open tab cannot happen - the picker offers only what
-            // is open - but it falls back to the preference rather than to Off, which is what
-            // a document nobody has spoken for is numbered with everywhere else.
-            HeadingNumbering documentNumbering =
-                numbering.TryGetValue(document.SourcePath, out HeadingNumbering chosen)
-                    ? chosen
-                    : _settings.Current.HeadingNumbering;
-
-            RenderedMarkdown markdown = await Task
-                .Run(() => _renderer.Render(document.Text, documentNumbering))
-                .ConfigureAwait(true);
-
-            string html = await _host.RenderForExportAsync(markdown.Html).ConfigureAwait(true);
-
-            rendered.Add(new FolioRenderedDocument(
-                document,
-                markdown.Outline.FirstOrDefault(h => h.Level == 1)?.Text
-                    ?? Path.GetFileNameWithoutExtension(document.EntryName),
-                html,
-                [.. markdown.Outline.Select(h => h.Slug)]));
-        }
-
-        StatusText = "Writing the Folio...";
-
-        IReadOnlyList<string> unresolved = await _folioHtml
-            .WriteAsync(
-                plan,
-                rendered,
-                path,
-                title,
-                _settings.Current.PreviewMaxWidth,
-                AppVersion.Current,
-                Environment.MachineName)
+        ExportOutcome outcome = await _folioPageJob
+            .RunAsync(
+                _documentRenderer,
+                new FolioPageRequest(
+                    plan,
+                    path,
+                    title,
+                    numbering,
+                    _settings.Current.HeadingNumbering,
+                    _settings.Current.PreviewMaxWidth,
+                    AppVersion.Current,
+                    Environment.MachineName),
+                new StatusLine(text => StatusText = text))
             .ConfigureAwait(true);
 
-        if (unresolved.Count > 0)
-        {
-            // Logged rather than shown. Every one of these is a local reference the page could
-            // not match to a planned asset - remote addresses are skipped by the embedder - so
-            // the planner has already reported it as a missing image, and the report window
-            // says so with a line number and a way to get there. A dialog on top of that was
-            // the third telling of the same thing, and the first two are better.
-            _logger.LogInformation(
-                "The Folio page left {Count} reference(s) unembedded: {Entries}.",
-                unresolved.Count,
-                string.Join(", ", unresolved.Distinct(StringComparer.OrdinalIgnoreCase).Take(10)));
-        }
+        return outcome.Written;
+    }
 
-        return true;
+    /// <summary>
+    /// A job's progress, straight onto the status line. Not <see cref="Progress{T}"/>, which
+    /// posts each report for later: the jobs run on the UI thread, and a report arriving after
+    /// the export had announced itself would put "Writing..." back over "Exported ...".
+    /// </summary>
+    private sealed class StatusLine(Action<string> show) : IProgress<string>
+    {
+        public void Report(string value) => show(value);
     }
 
     /// <summary>
@@ -8353,7 +8334,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task WriteWordExportAsync()
     {
-        if (_workspace.Active is not { } document || _docxExporter is null)
+        if (_workspace.Active is not { } document || _documentRenderer is null)
         {
             return;
         }
@@ -8387,60 +8368,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IsBusy = true;
             StatusText = "Exporting Word document...";
 
-            // Timed end to end. Everything from here until the report window appears is dead
-            // air to whoever is watching - the file dialog has closed and nothing else has
-            // happened yet - so when that wait is long enough to notice, the log has to be
-            // able to say which part of it was slow.
-            var elapsed = System.Diagnostics.Stopwatch.StartNew();
-
-            // Whatever the preview has, or nothing at all. A document that has never been
-            // previewed, or one typed into a second ago, still exports.
-            string rendered = _host is null
-                ? string.Empty
-                : await _host.GetRenderedHtmlAsync().ConfigureAwait(true);
-
-            long renderedMs = elapsed.ElapsedMilliseconds;
-
             string markdown = document.Text;
             string title = document.DisplayName;
-            string? source = document.Path;
-            DocumentImages images = ImagesFor(document);
 
-            // This document's answer, not the preference: a tab whose numbers were switched
-            // off because the author writes their own must not export with both sets. What is
-            // on screen is what goes into the file.
-            HeadingNumbering numbering = NumberingFor(document.Id);
-
-            // Off the UI thread. Building a .docx is heavier than building an HTML file -
-            // there are images to re-encode and a whole part graph to assemble - and the HTML
-            // export freezing the window on a picture-heavy document is the mistake not to
-            // repeat.
-            IReadOnlyList<ExportIssue> issues = await Task.Run(
-                () => _docxExporter.WriteAsync(
-                    path,
-                    title,
-                    markdown,
-                    setup,
-                    layout,
-                    numbering,
-                    source,
-                    rendered,
-                    RequestDiagramPngAsync,
-                    images,
-                    _colorThemes.Find(ExportColorThemeId),
-                    RequestDiagramSvgForExportAsync,
-                    RequestMathPngForExportAsync))
+            // The numbering in the request is this document's answer, not the preference: a tab
+            // whose numbers were switched off because the author writes their own must not
+            // export with both sets. What is on screen is what goes into the file.
+            ExportOutcome outcome = await _wordJob
+                .RunAsync(
+                    _documentRenderer,
+                    new WordExportRequest(
+                        RenderRequestFor(document),
+                        path,
+                        title,
+                        setup,
+                        layout,
+                        ImagesFor(document),
+                        _colorThemes.Find(ExportColorThemeId)))
                 .ConfigureAwait(true);
 
-            _logger.LogInformation(
-                "Word export of {Document} took {Total} ms: {Preview} ms collecting the preview, "
-                + "{Export} ms in the exporter ({Characters} characters, {Rendered} of preview HTML).",
-                title,
-                elapsed.ElapsedMilliseconds,
-                renderedMs,
-                elapsed.ElapsedMilliseconds - renderedMs,
-                markdown.Length,
-                rendered.Length);
+            IReadOnlyList<ExportIssue> issues = outcome.Issues;
 
             AnnounceExport(path);
 
@@ -8473,107 +8420,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Asks the shell to rasterize one diagram, from whatever thread the export is on.
-    ///
-    /// The export itself runs on a worker, and the bridge cannot be spoken to from there: it
-    /// writes to the WebView, which belongs to the UI thread. So the request goes back across
-    /// the dispatcher and the answer comes home through a completion source.
-    ///
-    /// Returns null when there is no preview to ask, or when the shell could not draw the
-    /// diagram - which the exporter treats as "write the definition instead", so a document is
-    /// never left with a gap where a picture was.
-    /// </summary>
-    private Task<byte[]?> RequestDiagramPngAsync(string hash)
-    {
-        if (_host is not { } host)
-        {
-            return Task.FromResult<byte[]?>(null);
-        }
-
-        var completion = new TaskCompletionSource<byte[]?>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-
-        _ui.Post(async () =>
-        {
-            // Nothing is thrown out of here: the continuation is the dispatcher's, and an
-            // exception escaping it would take the window down rather than the export.
-            try
-            {
-                completion.SetResult(await host.RequestDiagramPngAsync(hash, forCopy: false).ConfigureAwait(true));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "A diagram could not be rasterized for the Word export.");
-                completion.SetResult(null);
-            }
-        });
-
-        return completion.Task;
-    }
-
-    /// <summary>
-    /// A diagram's light drawing as SVG, for the Word export's vector diagrams: the same one
-    /// Copy as SVG takes. Asked across the dispatcher for the reason the PNG is
-    /// (<see cref="RequestDiagramPngAsync"/>); null, and the diagram stays a PNG, on any failure.
-    /// </summary>
-    private Task<string?> RequestDiagramSvgForExportAsync(string hash)
-    {
-        if (_host is not { } host)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        var completion = new TaskCompletionSource<string?>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-
-        _ui.Post(async () =>
-        {
-            try
-            {
-                completion.SetResult(await host.RequestDiagramSvgAsync(hash).ConfigureAwait(true));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "A diagram's SVG could not be had for the Word export; it stays a PNG.");
-                completion.SetResult(null);
-            }
-        });
-
-        return completion.Task;
-    }
-
-    /// <summary>
-    /// A picture of one equation, for an equation the Word export cannot write as a Word
-    /// equation. Across the dispatcher, as <see cref="RequestDiagramPngAsync"/> is; null, and the
-    /// equation is written as its TeX source, on any failure.
-    /// </summary>
-    private Task<MathPicture?> RequestMathPngForExportAsync(int line, int ordinal)
-    {
-        if (_host is not { } host)
-        {
-            return Task.FromResult<MathPicture?>(null);
-        }
-
-        var completion = new TaskCompletionSource<MathPicture?>(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-
-        _ui.Post(async () =>
-        {
-            try
-            {
-                completion.SetResult(await host.RequestMathPngAsync(line, ordinal).ConfigureAwait(true));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "An equation could not be drawn for the Word export; its source goes in.");
-                completion.SetResult(null);
-            }
-        });
-
-        return completion.Task;
-    }
-
     /// <summary>Exports the active document as a PDF, after asking for page setup.</summary>
     [RelayCommand(CanExecute = nameof(CanActOnContent))]
     private async Task ExportPdfAsync()
@@ -8585,7 +8431,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task WritePdfExportAsync()
     {
-        if (_workspace.Active is not { } document || _host is null)
+        if (_workspace.Active is not { } document || _documentRenderer is null)
         {
             return;
         }
@@ -8621,8 +8467,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // the document moving on beneath it, and what its picture rows are checked against.
             string markdown = document.Text;
 
-            PdfExportOutcome outcome = await _host
-                .ExportPdfAsync(path, setup, PrintTitleOf(document), FurnitureFor(document))
+            ExportOutcome outcome = await _pdfJob
+                .RunAsync(
+                    _documentRenderer,
+                    new PdfExportRequest(RenderRequestFor(document), path, PrintTitleOf(document), setup, FurnitureFor(document)))
                 .ConfigureAwait(true);
 
             AnnounceExport(path);
@@ -8635,11 +8483,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 StatusText += " (with the classic engine; the paged engine could not finish)";
             }
 
-            IReadOnlyList<ExportIssue> issues =
-            [
-                .. outcome.Issues,
-                .. await PdfPictureIssuesAsync(markdown, document.Path).ConfigureAwait(true),
-            ];
+            // The renderer's rows and the pictures the PDF leaves out, in line order.
+            IReadOnlyList<ExportIssue> issues = outcome.Issues;
 
             // Only when something is missing, as the Folio's report is: a PDF that came out
             // whole is announced in the status bar, and a window saying so would be noise.
@@ -8652,9 +8497,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                         ExportedText = new Dictionary<Guid, string> { [document.Id] = markdown },
                         OutputPath = path,
                         Outcome = "PDF exported",
-                        Issues = [.. issues
-                            .Select(i => i with { DocumentId = document.Id })
-                            .OrderBy(i => i.Line)],
+                        Issues = [.. issues.Select(i => i with { DocumentId = document.Id })],
                     },
                     GoToExportedLine);
             }
@@ -8761,63 +8604,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         FrontMatter.Read(document.Text).Title is { Length: > 0 } title
             ? title
             : document.DisplayName;
-
-    /// <summary>
-    /// The pictures a PDF of this text leaves out, as export report rows: the ones addressed on
-    /// the web, which the preview never fetches; the ones not found; and the ones kept outside
-    /// the document's folder, which the preview will not serve (docs/Export-Alignment-Plan.md,
-    /// §6.5).
-    ///
-    /// The editor's own link check, run once more over the exported text with only the picture
-    /// rules on - so the report and the underlines in the editor agree about what is missing.
-    /// The wording is Word's where Word has the same row.
-    /// </summary>
-    private async Task<IReadOnlyList<ExportIssue>> PdfPictureIssuesAsync(string markdown, string? documentPath)
-    {
-        try
-        {
-            AnalysisResult found = await Task.Run(() =>
-            {
-                RenderedMarkdown rendered = _renderer.Render(markdown);
-
-                return _analyzer.Analyze(new AnalysisRequest
-                {
-                    Text = markdown,
-                    DocumentPath = documentPath,
-                    Links = rendered.Links,
-                    Outline = rendered.Outline,
-                    Anchors = rendered.Anchors,
-                    CheckImageAltText = false,
-                    CheckBlockedImages = true,
-                });
-            }).ConfigureAwait(true);
-
-            return
-            [
-                .. found.LinkFindings
-                    .Where(f => f.Kind is LinkFindingKind.MissingImage
-                        or LinkFindingKind.RemoteMedia
-                        or LinkFindingKind.OutsideFolder)
-                    .Select(f => new ExportIssue
-                    {
-                        Line = f.Line + 1,
-                        Problem = f.Kind switch
-                        {
-                            LinkFindingKind.MissingImage => "Not found",
-                            LinkFindingKind.RemoteMedia => "Not on this machine",
-                            _ => "Outside the document's folder, so not shown",
-                        },
-                        Item = f.Url.Length <= 80 ? f.Url : f.Url[..80] + "…",
-                    }),
-            ];
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // The report is a courtesy; the PDF is already written.
-            _logger.LogWarning(ex, "Could not check the exported PDF's pictures.");
-            return [];
-        }
-    }
 
     /// <summary>
     /// The paper furniture for a document: the shared <see cref="ExportLayout"/>, as last saved,

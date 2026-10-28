@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// Writes the rendered preview out as one self-contained HTML file.

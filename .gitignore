@@ -44,3 +44,7 @@ tests/baselines/cli/*
 !tests/baselines/cli/README.md
 !tests/baselines/cli/MANIFEST.sha256
 !tests/baselines/cli/inputs/
+
+# Fresh sets of the same exports, made to be compared with the baseline by
+# build/Compare-ExportBaseline.ps1, one folder per occasion, with its report beside it.
+tests/baselines/fresh/

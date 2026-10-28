@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Text;
 using PaulTechGuy.MQ.Themes;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// The shapes a color theme leaves the app in: the palettes the webshell's color-theme.js
@@ -15,7 +15,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// Slot ids go across as the dictionary keys they already are. The serializer's camel-case
 /// policy names properties, not keys, so "heading-1" arrives as "heading-1".
 /// </summary>
-internal static class ColorThemePayloads
+public static class ColorThemePayloads
 {
     /// <summary>One theme's two palettes, as color-theme.js takes them.</summary>
     public static object Palettes(ColorTheme theme)

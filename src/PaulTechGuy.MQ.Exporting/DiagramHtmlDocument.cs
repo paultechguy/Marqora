@@ -3,7 +3,7 @@
 
 using System.Net;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// Wraps one diagram's SVG in a standalone HTML file.
@@ -17,7 +17,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// forces it: a diagram written to a file is on its way somewhere else, and a dark plate is
 /// rarely what is wanted when it arrives.
 /// </summary>
-internal static class DiagramHtmlDocument
+public static class DiagramHtmlDocument
 {
     public static string Build(string svg, string title)
     {

@@ -39,7 +39,7 @@ script exist only on `feature/CLI`. A checkout switched to `v1.0.13` would not h
 | Folder | Holds | Used for |
 | --- | --- | --- |
 | `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora` | your checkout, on `feature/CLI` throughout | the documents you open, **the folder every export is saved into**, recording the result |
-| `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora-baseline` | a worktree at `v1.0.13`, made for this and removed after | **running the 1.0.13 app**, and nothing else |
+| `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora-baseline` | a worktree at `v1.0.13`, made for this and removed after (**removed 2026-10-28**) | **running the 1.0.13 app**, and nothing else |
 | `%LOCALAPPDATA%\PaulTechGuy\Marqora` | the app's settings and browser data, shared by every Marqora build | nothing to do: it is why only one Marqora may run at a time |
 
 **Never save an export into the worktree.** It has no `tests\baselines` folder, and it is deleted
@@ -88,6 +88,9 @@ dotnet build .\src\PaulTechGuy.MQ.App\PaulTechGuy.MQ.App.csproj -c Release
    - `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora\webshell\cheatsheet.md`
    - `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora\docs\UltimateMarkdownContent.md`
    - `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora\tests\baselines\cli\inputs\pictures.md`
+
+   **Close every other tab**, this README included: a Folio takes every open document, so a
+   fourth tab becomes a fourth document in each Folio.
 2. **Set the export theme to "Same as the screen"** in Preferences, so that `View > Color Theme`
    alone decides what each export wears.
 3. **Leave every export dialog as it opens**, and make no change in any of them: the same page
@@ -104,32 +107,44 @@ dotnet build .\src\PaulTechGuy.MQ.App\PaulTechGuy.MQ.App.csproj -c Release
 Tick each as it is saved. `build/Get-BaselineHashes.ps1` reads the names from this list, so a
 name typed wrongly shows up as missing.
 
-### Color theme: Default
+> **Making a fresh set to compare, not the baseline?** Save every file below into your folder
+> under `tests\baselines\fresh\` instead, such as
+> `C:\Users\pcarver\Documents\MyData\Home\Software\dotnet\PaulTechGuy.Marqora\tests\baselines\fresh\after-M2-06\`,
+> and leave the ticks alone. Saving into this folder overwrites the baseline. See
+> [Comparing a fresh set](#comparing-a-fresh-set).
 
-`View > Color Theme > Default`.
+### Color theme: Forest
 
-- [x] `cheatsheet.default.html` — cheatsheet, `File > Export > HTML`
-- [x] `cheatsheet.default.pdf` — cheatsheet, `File > Export > PDF`
-- [x] `cheatsheet.default.docx` — cheatsheet, `File > Export > Word`
-- [x] `UltimateMarkdownContent.default.html` — UltimateMarkdownContent, HTML
-- [x] `UltimateMarkdownContent.default.pdf` — UltimateMarkdownContent, PDF
-- [x] `UltimateMarkdownContent.default.docx` — UltimateMarkdownContent, Word
-- [x] `pictures.default.html` — pictures, HTML
-- [x] `pictures.default.pdf` — pictures, PDF
-- [x] `pictures.default.docx` — pictures, Word
+`View > Color Theme > Forest`.
+
+This list asked for Default when the baseline was made, and these files came out in Forest:
+their stylesheets carry Forest's colors, and their Word styles too. Found on 2026-10-27 by the
+first fresh set, which was in Default. They were renamed from `*.default.*` the same day, and
+nothing in them changed: `MANIFEST.sha256` keeps every hash it recorded on 2026-10-26, under
+the new names. A comparison exports these in Forest.
+
+- [x] `cheatsheet.forest.html` — cheatsheet, `File > Export > HTML`
+- [x] `cheatsheet.forest.pdf` — cheatsheet, `File > Export > PDF`
+- [x] `cheatsheet.forest.docx` — cheatsheet, `File > Export > Word`
+- [x] `UltimateMarkdownContent.forest.html` — UltimateMarkdownContent, HTML
+- [x] `UltimateMarkdownContent.forest.pdf` — UltimateMarkdownContent, PDF
+- [x] `UltimateMarkdownContent.forest.docx` — UltimateMarkdownContent, Word
+- [x] `pictures.forest.html` — pictures, HTML
+- [x] `pictures.forest.pdf` — pictures, PDF
+- [x] `pictures.forest.docx` — pictures, Word
 
 Then `File > Share as Folio...`, with exactly the three documents ticked, nothing fetched from the
 web, and "Shrink images wider than" **unticked**:
 
-- [x] `folio.default.html` — the single-file form
-- [x] `folio.default.zip` — the zip form
-- [x] `folio.default.folder` — the folder form (a folder of that name)
+- [x] `folio.forest.html` — the single-file form
+- [x] `folio.forest.zip` — the zip form
+- [x] `folio.forest.folder` — the folder form (a folder of that name)
 
 And once more with "Shrink images wider than" **ticked**, at its default of 1600:
 
-- [x] `folio.default.reduced.html` — the single-file form
-- [x] `folio.default.reduced.zip` — the zip form
-- [x] `folio.default.reduced.folder` — the folder form
+- [x] `folio.forest.reduced.html` — the single-file form
+- [x] `folio.forest.reduced.zip` — the zip form
+- [x] `folio.forest.reduced.folder` — the folder form
 
 ### Color theme: Vintage Press
 
@@ -180,6 +195,11 @@ git worktree prune
 `--force` is needed because the build outputs and the restored web assets make the worktree
 "dirty"; nothing in it is worth keeping. The 1.0.13 app can be rebuilt from the tag any time.
 
+**Done 2026-10-28.** The worktree was removed after the second 1.0.13 export
+(`fresh\v1.0.13-again`). No further runs of 1.0.13 are planned: later fresh sets come from the
+`feature/CLI` app and the CLI (see [Comparing a fresh set](#comparing-a-fresh-set)). If one is
+ever needed, steps 1 and 2 make the worktree again.
+
 ## Known gaps in this baseline
 
 Made 2026-10-26 with Marqora 1.0.13, and kept as it is by decision, with two cases it does not
@@ -217,3 +237,51 @@ pwsh .\build\Get-BaselineHashes.ps1 -Check
 
 exits non-zero if any export has changed, gone missing, or been added since the manifest was
 written.
+
+## Comparing a fresh set
+
+Each step of M2 that moves export code proves itself the same way: the same exports are made
+again and compared with this baseline by `build/Compare-ExportBaseline.ps1`. It allows for
+exactly what changes on every export by design (the times inside a Word package, a PDF and a
+Folio, the names a Word package gives at random, and the numbers mermaid counts across a
+session) and reports anything else. A PDF whose bytes still differ is compared page by page as
+pictures.
+
+Before comparing, it checks this folder against `MANIFEST.sha256` and stops if anything in it
+has changed, so a baseline overwritten by a stray save is reported as that and not as a
+difference.
+
+**Where the fresh sets come from.** Exporting by hand is slow and easy to get wrong, so it is
+kept to as few occasions as possible (decided 2026-10-27):
+
+- **From WP-M2-09 on, the CLI makes them.** Claude runs the CLI over the three inputs and
+  compares the result, with no hand work.
+- **The app, once, after WP-M2-06.** One short session covers M2-02 to M2-06 together: the
+  cheatsheet in HTML, PDF and Word and its Folio in each form, all in Forest; one print to
+  Microsoft Print to PDF; and Copy as PNG and Copy as SVG on a diagram. Claude writes the
+  checklist for it when the time comes.
+
+**When the app makes one:**
+
+1. **Follow items 1 to 3 of step 3**, with the theme the checklist names, every dialog left as
+   it opens, and exactly the names in step 4's list.
+2. **Save into a folder of its own** under `tests\baselines\fresh\`, named for the occasion,
+   such as `tests\baselines\fresh\after-M2-06\`. Item 4 of step 3 does **not** apply.
+   `tests/baselines/fresh/` is git-ignored like the baseline.
+3. **Watch the folder each Save dialog opens in.** It remembers the last one used, which may be
+   this one. On 2026-10-27 a fresh PDF went into this folder that way, over
+   `cheatsheet.forest.pdf`; the original was restored from a copy kept outside the repo.
+4. **Compare**, from your own checkout, naming only what was made:
+
+   ```powershell
+   pwsh .\build\Compare-ExportBaseline.ps1 -Fresh .\tests\baselines\fresh\after-M2-06 -Name cheatsheet.forest.*, folio.forest.html, folio.forest.zip, folio.forest.folder
+   ```
+
+   It prints a line per export, writes the report beside the folder as
+   `after-M2-06.comparison.md`, and exits 0 when nothing differs.
+
+**The comparison itself was checked on 2026-10-27**, against a second export of the whole set
+from the unchanged 1.0.13 build. That set was made in Default where this list says Forest, so
+only its Vintage Press exports, made in the same theme both times, could be compared. They came
+out the same once the script allowed for mermaid's session counters and the Folio's dated
+title. The first Forest set, from the app or the CLI, checks the Forest rows the same way.

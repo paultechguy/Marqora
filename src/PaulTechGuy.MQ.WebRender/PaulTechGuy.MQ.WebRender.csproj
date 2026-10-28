@@ -3,6 +3,9 @@
   <!--
     The preview shell in a WebView2 that is never shown: what marqora-cli renders and prints
     with, and in time the app's Word export too (docs/CLI-Implementation-Plan.md, WP-M0-01).
+    And the paged engine both of them print with (PagedPrintHost, PagedJobs, WebViewPrinting),
+    moved here from the app in WP-M2-03 and told once, by the app or the CLI, which browser to
+    run in.
 
     WebView2 Core only, no WinUI. The paged engine is written against WebView2's WinRT
     projection, which the package switches on by itself only for Windows App SDK projects, so it
@@ -27,26 +30,13 @@
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Exporting\PaulTechGuy.MQ.Exporting.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-  </ItemGroup>
-
-  <!--
-    M0 only: the app's paged engine and theme payloads, compiled in from where they live rather
-    than moved, so the spike runs the real engine and the app is not touched. WP-M2-03 and
-    WP-M2-02 move them for good and these links go, with the InternalsVisibleTo below.
-  -->
-  <ItemGroup Label="Linked from the app for the spike">
-    <Compile Include="..\PaulTechGuy.MQ.App\Services\PagedPrintHost.cs" Link="Linked\PagedPrintHost.cs" />
-    <Compile Include="..\PaulTechGuy.MQ.App\Services\ColorThemePayloads.cs" Link="Linked\ColorThemePayloads.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="marqora-cli" />
   </ItemGroup>
 
 </Project>

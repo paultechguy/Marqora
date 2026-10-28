@@ -10,9 +10,8 @@ using PaulTechGuy.MQ.Abstractions;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Themes;
-using Windows.UI;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.Exporting;
 
 /// <summary>
 /// Turns the live preview's markup into something that survives leaving the app.
@@ -164,7 +163,7 @@ public sealed partial class RenderedHtmlPackager(
     /// <summary>
     /// The accent, written out for a document that has left the app.
     ///
-    /// app.css names no teal. It is chosen once, in <see cref="AccentColors"/>, because the
+    /// app.css names no teal. It is chosen once, in <see cref="DocumentAccent"/>, because the
     /// window paints the same color with WinUI brushes, and the shell is posted it at
     /// startup - but a file on somebody else's disk has no host to be told by. So the value is
     /// stated here instead, after the stylesheet, where a plain :root block wins.
@@ -185,8 +184,8 @@ public sealed partial class RenderedHtmlPackager(
             CultureInfo.InvariantCulture,
             $$"""
             :root {
-              --mq-accent-screen: {{AccentColors.LightHex}};
-              --mq-accent-print: {{AccentColors.LightHex}};
+              --mq-accent-screen: {{DocumentAccent.LightHex}};
+              --mq-accent-print: {{DocumentAccent.LightHex}};
             }
             """);
     }

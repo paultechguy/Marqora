@@ -10,7 +10,7 @@ using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Domain;
 using Windows.Foundation;
 
-namespace PaulTechGuy.MQ.App.Services;
+namespace PaulTechGuy.MQ.WebRender;
 
 /// <summary>
 /// A PDF or a printout through the paged engine, falling back to the classic one, for every
@@ -30,7 +30,7 @@ namespace PaulTechGuy.MQ.App.Services;
 /// </list>
 /// </summary>
 
-internal static class PagedJobs
+public static class PagedJobs
 {
     /// <summary>A PDF file. Answers which engine wrote it, and whether its notes are endnotes.</summary>
     /// <param name="requestMarkup">The page's print markup, or null when it did not answer.</param>
@@ -152,4 +152,4 @@ internal static class PagedJobs
 /// the document because Paged.js could not place them all at the page foot (plan O4) - zero
 /// when they are footnotes, as they should be.
 /// </summary>
-internal sealed record PdfJob(PrintEngine Engine, int NotesAsEndnotes);
+public sealed record PdfJob(PrintEngine Engine, int NotesAsEndnotes);
