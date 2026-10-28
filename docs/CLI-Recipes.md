@@ -531,6 +531,99 @@ shell, 5.1 included:
 marqora-cli replace --find "DRAFT: " --with= --match-case --write "docs/**/*.md"
 ```
 
+## Exporting
+
+### A PDF beside every document
+
+The everyday export: each document's PDF next to it, named after it. The command is the same in
+every shell:
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf "docs/**/*.md"
+```
+
+A PDF that is already there is refused, so the second time, say to replace them:
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf --overwrite "docs/**/*.md"
+```
+
+`export html` and `export word` work the same way. For a printer, leave out the shaded
+backgrounds and use the paper your country uses:
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf --overwrite --paper a4 --no-backgrounds "docs/**/*.md"
+```
+
+### Exports in a folder of their own
+
+To hand a set of documents to someone, put the exports in one folder instead, named for the day:
+
+PowerShell:
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf --out-dir "Handbook-$(Get-Date -Format yyyy-MM-dd)" "docs/handbook/*.md"
+```
+
+cmd (in a `.cmd` file, write `%%d` for `%d`):
+
+```bat
+for /f %d in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do marqora-cli export pdf --out-dir "Handbook-%d" "docs/handbook/*.md"
+```
+
+bash:
+
+<!-- cli-example: no-output -->
+
+```bash
+marqora-cli export pdf --out-dir "Handbook-$(date +%F)" "docs/handbook/*.md"
+```
+
+Each PDF is named after its document, so two documents with the same name in different folders
+would land on one file. The run refuses that before writing anything (exit 3) and names both;
+export them in two runs, or rename one.
+
+### Export only what has changed
+
+A folder that keeps a PDF beside each document only needs the PDFs whose document is newer, or
+that are missing.
+
+PowerShell:
+
+```powershell
+$stale = Get-ChildItem docs -Recurse -Filter *.md | Where-Object {
+    $pdf = [IO.Path]::ChangeExtension($_.FullName, '.pdf')
+    -not (Test-Path $pdf) -or $_.LastWriteTime -gt (Get-Item $pdf).LastWriteTime
+}
+if ($stale) { marqora-cli export pdf --overwrite $stale.FullName }
+```
+
+bash:
+
+```bash
+stale=()
+while IFS= read -r -d '' f; do
+  [ "$f" -nt "${f%.md}.pdf" ] && stale+=("$f")
+done < <(find docs -name '*.md' -print0)
+[ ${#stale[@]} -gt 0 ] && marqora-cli export pdf --overwrite "${stale[@]}"
+```
+
+`-nt` is true when the PDF is missing as well as when it is older. cmd cannot compare two files'
+times without a good deal of ceremony; from cmd, run the PowerShell recipe saved as
+`Export-Changed.ps1`:
+
+```bat
+pwsh -NoProfile -File Export-Changed.ps1
+```
+
 ## Folios
 
 ### A dated Folio every week

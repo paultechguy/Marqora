@@ -406,9 +406,14 @@ part of this document comes out in a terminal.
 
 - **The forms.** The output path decides: `-o Handbook.zip` is the zip, `-o Handbook\` (or a
   folder that exists) is the folder, `-o Handbook.html` the single page, and `--form` decides a
-  path that says nothing. The folder and zip forms are made now, and every document and picture in
-  them is byte for byte what the app puts in its own; the M0-05 baseline is the proof. The single
-  page needs the preview's renderer, run with no window, and comes with the exports.
+  path that says nothing. In the folder and zip forms, every document and picture is byte for
+  byte what the app puts in its own; the M0-05 baseline is the proof. The single page is drawn by
+  the preview's shell in a browser with no window, through the app's own page job, and matches
+  the app's page; a document that does not finish drawing within `--timeout` fails the Folio
+  rather than going in unfinished.
+- **A page too large to open.** Past 50 MB, the size the preflight warns at, the window warns and
+  lets the author go on; the command line refuses before drawing anything, with exit 4, and
+  suggests the zip or `--shrink-images`. It never changes the form on its own.
 - **The order.** The documents keep the order they are named in on the command line, as the
   window keeps the order they were ticked in, because that order is the order the Folio is read
   in. Every other command sorts its files by path.
@@ -424,8 +429,8 @@ part of this document comes out in a terminal.
 - **The report is findings.** Each row of the report is a warning on its document's own line, in
   the report's wording, with a code for a script to filter on. A Folio with warnings is still
   made, and the run still succeeds: what it lacks is reported, not refused.
-- **An output that exists.** There is no save dialog to ask, so the command line refuses a zip
-  or a folder that is already there unless `--overwrite` is given. Then it replaces what is in the
+- **An output that exists.** There is no save dialog to ask, so the command line refuses a page,
+  a zip or a folder that is already there unless `--overwrite` is given. Then it replaces what is in the
   folder by writing beside it and swapping the two, and never empties a folder that holds
   something the run reads. `unpack --overwrite` works the same way.
 

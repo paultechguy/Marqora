@@ -410,19 +410,16 @@ internal sealed class CommandTree
     }
 
     /// <summary>
-    /// The exports, with the options every one of them shares (WP-M2-08). Hidden from help until
-    /// each has been compared with the app's own file; html, pdf and word all run through the
-    /// shared export run.
+    /// The exports, with the options every one of them shares (WP-M2-08): html, pdf and word, each
+    /// through the shared export run and compared with the app's own file (WP-M2-09 to M2-13).
     /// </summary>
     private static Command Export(CommandShared shared)
     {
         Command export = shared.Verb("export", "Export documents as HTML, PDF or Word, as File > Export does.", []);
-        export.Hidden = true;
 
         foreach ((string name, string what, ExportFormat format) in new (string, string, ExportFormat)[] { ("html", "HTML", new HtmlFormat()), ("pdf", "PDF", new PdfFormat()), ("word", "Word", new WordFormat()) })
         {
             Command command = shared.Verb(name, $"Export each document as {what}.", [$"marqora-cli export {name} docs/guide.md", $"marqora-cli export {name} --out-dir dist docs/*.md"]);
-            command.Hidden = true;
 
             InputOptions inputs = CommandShared.AddInputs(command);
 

@@ -988,17 +988,18 @@ says when the next reminder is due.
 
 ## Command line
 
-`marqora-cli.exe` ships beside `Marqora.exe` and does what the Format, Find and Share menus do,
-without a window, through the same code, so a file formatted from a terminal is formatted exactly
-as **Format Document** would have formatted it. The installer offers to put it on your PATH.
+`marqora-cli.exe` ships beside `Marqora.exe` and does what the Format, Find, Export and Share
+menus do, without a window, through the same code, so a file formatted from a terminal is
+formatted exactly as **Format Document** would have formatted it, and a PDF is the one **File >
+Export > PDF** would have made. The installer offers to put it on your PATH.
 
 ```powershell
 # Is every document formatted, and does every link still lead somewhere?
 marqora-cli format --check "docs/**/*.md"
 marqora-cli check "docs/**/*.md"
 
-# Number the headings, and look at the change before making it
-marqora-cli number --dry-run Guide.md
+# A PDF beside every document, on A4
+marqora-cli export pdf --paper a4 "docs/**/*.md"
 
 # Share a handbook as a Folio, its pictures reduced to 1600 pixels wide
 marqora-cli folio -o Handbook.zip --shrink-images 1600 docs/handbook/*.md
@@ -1054,9 +1055,9 @@ PaulTechGuy.MQ.slnx
 │   ├── PaulTechGuy.MQ.Spelling        The spelling analyzer and its skip rules
 │   ├── PaulTechGuy.MQ.Finding         Find All's search engine
 │   ├── PaulTechGuy.MQ.Folio           Gathering documents and their images
-│   ├── PaulTechGuy.MQ.Exporting       What an export or a Folio does, with no window: shrinking pictures
+│   ├── PaulTechGuy.MQ.Exporting       The export jobs: HTML, PDF, Word and the Folio page, for app and CLI
 │   ├── PaulTechGuy.MQ.Imaging         Resizing pictures through Windows' own codecs
-│   ├── PaulTechGuy.MQ.WebRender       The preview shell in a browser with no window, for marqora-cli
+│   ├── PaulTechGuy.MQ.WebRender       The preview shell in a browser with no window, and the PDF engine
 │   ├── PaulTechGuy.MQ.Services        Document lifetime, settings, recent files, watching
 │   ├── PaulTechGuy.MQ.App             WinUI 3 shell and view models
 │   └── PaulTechGuy.MQ.Cli             marqora-cli: the same commands in a terminal

@@ -14,18 +14,21 @@ For whoever edits this file. Tests in tests/PaulTechGuy.MQ.Cli.Tests/Manual hold
   shows no output, such as a block listing several commands. Either comment anywhere else fails.
 -->
 
-`marqora-cli` does what Marqora's Format, Find and Share menus do, without opening a window:
-format a document, number its headings, find dead links, list its contents, or share a set of
-documents as a Folio. It runs the same code the app runs, so a file formatted here is formatted
-exactly as **Format Document** would have formatted it.
+`marqora-cli` does what Marqora's Format, Find, Export and Share menus do, without opening a
+window: format a document, number its headings, find dead links, list its contents, export it as
+HTML, PDF or Word, or share a set of documents as a Folio. It runs the same code the app runs, so
+a file formatted here is formatted exactly as **Format Document** would have formatted it, and a
+PDF is the one **File > Export > PDF** would have made.
 
 It is for the jobs that are tedious one tab at a time: formatting a folder of notes, checking
-every link before a release, or a script that builds the same Folio every Friday. The
-[recipes](CLI-Recipes.md) show jobs like these step by step, in PowerShell, cmd and bash.
+every link before a release, a PDF of every document in a folder, or a script that builds the
+same Folio every Friday. The [recipes](CLI-Recipes.md) show jobs like these step by step, in
+PowerShell, cmd and bash.
 
 Like the app, it is **offline by default**, and nothing happens that you didn't decide. One
 option uses the network, `folio --fetch-web-images`, and only when you type it: it collects the
-pictures your documents name by web address, from the sites `--dry-run` lists first.
+pictures your documents name by web address, from the sites `--dry-run` lists first. An export
+draws its document without it, and a picture named by web address is reported, not fetched.
 
 ## Install and PATH
 
@@ -201,6 +204,19 @@ marqora-cli: Guide.md:11: warning: Not on this machine: images/workflow.png [mis
 marqora-cli: Field-Guide.zip: shared 2 documents and 1 picture as a zip.
 ```
 
+To send someone one document instead, export it. Without `-o`, the file goes beside its document:
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf Guide.md
+marqora-cli export html Guide.md
+```
+
+Each one writes `Guide.pdf` or `Guide.html` next to `Guide.md` and lists, as warnings, what the
+file lacks, as the app's export report does. [Exports](#exports-where-they-go-and-what-they-need)
+has the rest.
+
 That is the tour. The rest of this manual is the detail.
 
 ## How commands work
@@ -291,6 +307,67 @@ marqora-cli: Guide.md:11: warning: Not on this machine: images/workflow.png [mis
 
 When `check`, `toc` or `outline` is given more than one file, each file's lines come under its
 name, with a blank line after them.
+
+### Exports: where they go, and what they need
+
+`export html`, `export pdf` and `export word` make the files **File > Export** makes, through the
+same code, one for each document named. The single-page Folio is drawn the same way.
+
+**Where each file goes.**
+
+- **With neither `-o` nor `--out-dir`**, beside its document and named after it: `notes\Guide.md`
+  gives `notes\Guide.pdf`. A document read from standard input has no folder, so it needs `-o`.
+- **`-o <file>`** names the file, for one document.
+- **`--out-dir <folder>`** puts every document's file in that folder, each named after its
+  document. The folder is made if it is missing. `-o` and `--out-dir` cannot be combined.
+
+A file that is already there is refused (exit 4) before anything is drawn, unless `--overwrite`
+is given. Each file is written beside its name first and moved onto it when it is finished, so a
+run that fails or is stopped never leaves half a file.
+
+**What the run tells you.** What the app's export report would list, the run lists as warnings on
+standard error, each with its line: a picture that is not there, a diagram that would not draw,
+raw HTML that Word cannot show. Advice, such as a PDF printed without page numbers, is
+information. Neither fails the run: the file was made, and the run exits 0.
+
+```text
+marqora-cli: Guide.md:11: warning: Not found: images/workflow.png [not-found]
+marqora-cli: Guide.md: exported to C:\Notes\Guide.pdf.
+```
+
+**`--dry-run`** draws nothing, starts nothing and writes nothing. It prints the theme, the page
+setup and where each file would go, and lists as warnings what [`check`](#check) finds missing
+already. `marqora-cli export pdf --dry-run Guide.md` prints:
+
+```text
+Theme:      Default, from the default
+Page:       Letter, portrait, normal margins, backgrounds printed
+Layout:     cover page off, contents off, header and footer on
+Export:     Guide.md -> C:\Notes\Guide.pdf
+marqora-cli: Guide.md:7:46: warning: Nothing at "Glossary.md". [broken-link]
+marqora-cli: Guide.md:11:1: warning: No image at "images/workflow.png". [missing-image]
+```
+
+**A browser nobody sees.** A document is drawn by the WebView2 runtime the app uses, in a browser
+of the run's own that never appears on screen: started by the first export, closed when the run
+ends, its data in a folder under `%TEMP%\Marqora-cli` that goes with it. The first export adds
+about a second and a half to a run; the documents after it share that browser. The browser loads
+nothing from the web.
+
+- **A document that does not finish drawing** within `--timeout` seconds, 60 unless you say
+  otherwise, fails with exit 5. Nothing is written for it, and the run goes on to the next
+  document. The app would export what it had; a script has nobody watching to notice the
+  missing diagrams.
+- **Exports need a Windows desktop.** They run in a terminal, or a script started from one, on
+  a desktop you are signed in to. Over SSH there is no desktop for the browser, and an export
+  stops with exit 5; the other commands work anywhere. Exports have not been tried as a
+  scheduled task or on a CI service.
+
+**What the settings decide.** Without `--settings`, the built-in defaults, as for every command.
+The color theme, the heading numbering, the PDF's and Word's page setup, the cover, contents and
+header and footer all come from the settings in force, and `--paper`, `--orientation`, `--margin`
+and the background options override the PDF's page. What leaves is light, whatever the theme, as
+the app's exports are.
 
 ### Global options
 
@@ -522,6 +599,83 @@ marqora-cli outline Guide.md
 marqora-cli outline --json Guide.md
 ```
 
+### `export html`
+
+Exports each document as one HTML page, as **File > Export > HTML** does: its diagrams drawn, its
+math and code finished, its pictures inside the page, so the one file is all there is to send.
+The page is as wide as the reading width in the settings' Preview options, or as the window it is
+opened in when that has no limit. [Exports](#exports-where-they-go-and-what-they-need) says where
+each page goes and what the run needs.
+
+| Option                  | What it does                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `-o`, `--output <file>` | The file to write, for one document, or `-` for standard output                                                                    |
+| `--out-dir <folder>`    | The folder to write into, for any number of documents, each named after its document. Made if it is missing                        |
+| `--theme <theme>`       | The color theme the page wears, by id or name. Without it, the theme the settings name for exports, then their theme, then Default |
+| `--timeout <seconds>`   | How long one document may take to draw before that file fails with exit 5. Default 60                                              |
+| `--dry-run`             | Draw and write nothing; print the theme, where each page would go, and what is already missing                                     |
+| `--overwrite`           | Replace a page that already exists                                                                                                 |
+| `--base-dir <folder>`   | Where links and pictures resolve for a document read from standard input                                                           |
+
+`-o -` prints the page on standard output, byte for byte the file it would have written, so it
+can go into a pipe. Under `--json` the page is the line's `text` instead.
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export html docs/guide.md
+marqora-cli export html --out-dir dist docs/*.md
+marqora-cli export html -o - Guide.md > Guide.html
+```
+
+### `export pdf`
+
+Exports each document as a PDF, as **File > Export > PDF** does, with the page setup in force: the
+paper, orientation, margins and backgrounds, and the cover page, contents and header and footer.
+The options below change the page for this run; the cover, contents and header and footer stay as
+the settings have them.
+
+| Option                                                                                          | What it does                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--paper <letter\|a4\|legal>`                                                                   | The paper. Without it, the settings' paper, or Letter                                                                                                                      |
+| `--orientation <portrait\|landscape>`                                                           | Portrait or landscape. Without it, the settings' orientation, or portrait                                                                                                  |
+| `--margin <normal\|narrow\|moderate\|wide\|none>`                                               | The margins, as Page Setup names them: normal is 1 in all round, narrow 0.5 in, moderate 1 in top and bottom and 0.75 in at the sides, wide 1 in and 2 in, none no margins |
+| `--backgrounds`                                                                                 | Print background colors and shading, such as code blocks and table headers. The default, unless the settings turn it off                                                   |
+| `--no-backgrounds`                                                                              | Leave them out, for a printer that would spend ink on them. Not with `--backgrounds`                                                                                       |
+| `-o`, `--output`, `--out-dir`, `--theme`, `--timeout`, `--dry-run`, `--overwrite`, `--base-dir` | As for `export html`, except that `-o -` cannot be used: a PDF is a file                                                                                                   |
+
+The values ignore case, so `--paper A4` is `--paper a4`. If the PDF engine that lays out pages
+cannot lay a document out, the simpler one prints it, as in the app, and the run says so as
+information: that PDF has no page numbers, contents page or cover.
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export pdf docs/guide.md
+marqora-cli export pdf --out-dir dist docs/*.md
+marqora-cli export pdf --paper a4 --margin narrow --no-backgrounds Guide.md
+```
+
+### `export word`
+
+Exports each document as a Word file, as **File > Export > Word** does: headings, lists, tables
+and callouts as Word's own, each diagram as a picture, each equation as a Word equation (a
+picture only where Word cannot write it), and code in its colors. The page and the cover,
+contents and header and footer are the Word setup in the settings, which the app keeps apart from
+the PDF's. Word has no options of its own here: to change its page, change the settings.
+
+| Option                                                                                          | What it does                                                                 |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `-o`, `--output`, `--out-dir`, `--theme`, `--timeout`, `--dry-run`, `--overwrite`, `--base-dir` | As for `export html`, except that `-o -` cannot be used: a `.docx` is a file |
+
+<!-- cli-example: no-output -->
+
+```powershell
+marqora-cli export word docs/guide.md
+marqora-cli export word --out-dir dist docs/*.md
+marqora-cli export word --settings app Guide.md
+```
+
 ### `folio`
 
 Shares documents as one Folio, as **File > Share as Folio** does: the documents, the pictures they
@@ -603,8 +757,8 @@ marqora-cli unpack Handbook.html --out-dir Handbook
 
 ### `themes list`
 
-Lists the color themes a Folio can wear: each one's id, name and description, in the gallery's
-order. `--theme` takes either the id or the name.
+Lists the color themes an export or a Folio can wear: each one's id, name and description, in the
+gallery's order. `--theme` takes either the id or the name.
 
 <!-- cli-example: no-output -->
 
@@ -639,13 +793,17 @@ missing or cannot be read stops the run with exit 2, rather than quietly falling
 defaults.
 
 The commands that use settings are `format` (the formatting options), `number`, `toc` and
-`outline` (heading numbering), and `folio` (the color theme). The others ignore `--settings`.
+`outline` (heading numbering), `folio` (the color theme), and the exports: the color theme and the
+heading numbering for all three, the reading width for `export html`, and the PDF's and Word's
+page setup, cover, contents and header and footer for `export pdf` and `export word`. The others
+ignore `--settings`.
 
 `--verbose` says which settings are in force and where they came from.
 
 ## Themes
 
-A Folio wears one color theme, chosen the way the app chooses it, with the command line first:
+An export or a Folio wears one color theme, the same for every document in the run, chosen the
+way the app chooses it, with the command line first:
 
 1. `--theme`, if given;
 2. the theme the settings name for exports;
@@ -654,7 +812,7 @@ A Folio wears one color theme, chosen the way the app chooses it, with the comma
 
 A theme is named by its id (`vintage-press`) or its name (`"Vintage Press"`), ignoring case. A
 theme that does not exist stops the run with exit 2 before anything is made, even when it comes
-from a settings file: the app would quietly use Default instead, but a Folio sent in the wrong
+from a settings file: the app would quietly use Default instead, but a file sent in the wrong
 colors is found out only after it has gone. `marqora-cli themes list` shows them all.
 
 Whatever the theme, what leaves the app is light, as the app's exports are.
@@ -695,21 +853,21 @@ marqora-cli check --json Guide.md
 {"schemaVersion":1,"path":"Guide.md","verb":"check","outcome":"found","outputs":[],"findings":[{"line":7,"column":46,"code":"broken-link","severity":"error","message":"Nothing at \"Glossary.md\"."},{"line":11,"column":1,"code":"missing-image","severity":"error","message":"No image at \"images/workflow.png\"."},{"line":28,"column":5,"code":"dead-anchor","severity":"error","message":"Nothing in this document is named \"#step\"."}]}
 ```
 
-| Field           | Holds                                                                                                                   |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `schemaVersion` | The version of this shape, now 1                                                                                        |
-| `path`          | The file as it was named, or `-` for standard input                                                                     |
-| `verb`          | The command, by its main name: `number`, even when it was typed as `number-headings`                                    |
-| `outcome`       | What happened to the file: one of the outcomes below                                                                    |
-| `outputs`       | Every file written for it; empty when nothing was                                                                       |
-| `findings`      | What the command found in it, each with `line`, `column`, `code`, `severity` and `message`                              |
-| `message`       | Why the file failed; absent otherwise                                                                                   |
-| `baseDir`       | For standard input only: the folder its links were resolved against                                                     |
-| `theme`         | On a Folio: the theme's `id`, and the `source` that chose it: `option`, `settingsExport`, `settingsScreen` or `default` |
-| `text`          | The changed document, when it was printed rather than written                                                           |
-| `diff`          | The diff `--dry-run` printed                                                                                            |
-| `headings`      | `outline`'s headings, each with `level`, `text`, `anchor` and `line`                                                    |
-| `preflight`     | `folio --dry-run`'s preflight, on the Folio's own line                                                                  |
+| Field           | Holds                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemaVersion` | The version of this shape, now 1                                                                                                     |
+| `path`          | The file as it was named, or `-` for standard input                                                                                  |
+| `verb`          | The command, by its main name: `number`, even when it was typed as `number-headings`                                                 |
+| `outcome`       | What happened to the file: one of the outcomes below                                                                                 |
+| `outputs`       | Every file written for it; empty when nothing was                                                                                    |
+| `findings`      | What the command found in it, each with `line`, `column`, `code`, `severity` and `message`                                           |
+| `message`       | Why the file failed; absent otherwise                                                                                                |
+| `baseDir`       | For standard input only: the folder its links were resolved against                                                                  |
+| `theme`         | On an export or a Folio: the theme's `id`, and the `source` that chose it: `option`, `settingsExport`, `settingsScreen` or `default` |
+| `text`          | The changed document, when it was printed rather than written, or the page `export html -o -` printed                                |
+| `diff`          | The diff `--dry-run` printed                                                                                                         |
+| `headings`      | `outline`'s headings, each with `level`, `text`, `anchor` and `line`                                                                 |
+| `preflight`     | `folio --dry-run`'s preflight, on the Folio's own line                                                                               |
 
 A finding's `line` and `column` count from 1; 0 means it is about the whole document. Its
 `severity` is `error`, `warning`, `info` or `hint`. Only errors fail a run, and hints only under
@@ -731,7 +889,7 @@ The outcomes:
 | `wouldChange` | `--check` or `--dry-run`: the file would change, and was not touched            |
 | `passed`      | `check`, `toc` or `outline` ran, and found nothing that fails the file          |
 | `found`       | `check` found what fails the file                                               |
-| `exported`    | A file was made from it: a Folio                                                |
+| `exported`    | A file was made from it: an export or a Folio                                   |
 | `failed`      | Nothing could be done with it; `message` says why                               |
 | `skipped`     | Not reached: an earlier file failed under `--fail-fast`, or the run was stopped |
 
@@ -788,10 +946,24 @@ for Windows PowerShell 5.1 too. Naming the files, and `--write`, avoid the quest
 `--settings`, marqora-cli uses the built-in defaults, not your Preferences; `--settings app` uses
 yours.
 
-**`folio -o Handbook.html` stops with exit 5.** The page is drawn by the WebView2 runtime, the
-same one the app uses; the message says whether it is missing or a document did not finish
-drawing in time. Install the runtime, or pass a longer `--timeout`. The zip and folder forms need
-no runtime.
+**An export, or `folio -o Handbook.html`, stops with exit 5.** These draw their documents with the
+WebView2 runtime the app uses, and the message says which of these it met:
+
+- **The runtime is not installed.** Windows 11 comes with it; the message gives the page to
+  install it from. The zip and folder forms of a Folio, and every other
+  command, need no runtime.
+- **The files that draw documents are incomplete.** Something has removed part of the
+  installation; install Marqora again.
+- **A document did not finish drawing in time.** A very long document with many diagrams can
+  need more than 60 seconds on a slow machine: pass a longer `--timeout`. The other documents in
+  the run are still exported.
+- **The browser could not be started.** Most often a session with no desktop, such as SSH; run
+  the export in a terminal on your own desktop.
+
+**An export differs from the one the app makes.** The app exports with your Preferences, and
+marqora-cli with the built-in defaults unless told otherwise: add `--settings app`. `--verbose`
+names the theme and page setup in force and where each came from. A gantt chart draws a line at
+today's date, so two exports made on different days differ there.
 
 **A settings file is refused.** It has to be a file made with **Export preferences...**, or a
 `settings.json`. A damaged one is refused, never repaired or moved; the app's own file is only

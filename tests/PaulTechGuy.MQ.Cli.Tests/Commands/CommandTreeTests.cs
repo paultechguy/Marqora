@@ -78,14 +78,22 @@ public sealed class CommandTreeTests
             .Attribute("Version").ShouldBeNull();
     }
 
-    /// <summary>The exports have names from the start, but are kept out of help until they work.</summary>
+    /// <summary>The exports were kept out of help until they matched the app's files; since M2-14 they are listed.</summary>
     [Fact]
-    public async Task The_export_verbs_are_hidden_from_help_until_M2()
+    public async Task The_export_verbs_are_in_help()
     {
         CliResult result = await CliRunner.RunAsync(["--help"], cancellationToken: TestContext.Current.CancellationToken);
 
         // A line of the command list, not the word: the root's description mentions exporting.
         result.Out.ReplaceLineEndings("\n").Split('\n')
-            .ShouldNotContain(line => line.TrimStart().StartsWith("export ", StringComparison.Ordinal));
+            .ShouldContain(line => line.TrimStart().StartsWith("export ", StringComparison.Ordinal));
+
+        CliResult export = await CliRunner.RunAsync(["export", "--help"], cancellationToken: TestContext.Current.CancellationToken);
+
+        foreach (string format in new[] { "html", "pdf", "word" })
+        {
+            export.Out.ReplaceLineEndings("\n").Split('\n')
+                .ShouldContain(line => line.TrimStart().StartsWith(format + " ", StringComparison.Ordinal), $"export {format}");
+        }
     }
 }
