@@ -3,6 +3,7 @@
 
 using System.Text;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Cli.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Themes;
 
@@ -35,6 +36,22 @@ internal sealed record CliEnvironment(
     /// a catalog of its own, to show that a theme file added is a theme the CLI offers.
     /// </summary>
     public Func<ThemeCatalog> Themes { get; init; } = ThemeCatalog.Load;
+
+    /// <summary>
+    /// The installed WebView2 runtime's version, or null when there is none. A test says there is
+    /// none, to show that only the verbs that draw need it (CLI-NF-04).
+    /// </summary>
+    public Func<string?> WebViewRuntime { get; init; } = RendererFactory.InstalledRuntime;
+
+    /// <summary>
+    /// Makes an export run's renderer. Null for the real one; a test hands a fake, to count what a
+    /// run starts or to stand in for a browser.
+    /// </summary>
+    public Func<RenderSetup, IRendererFactory>? Renderers { get; init; }
+
+    /// <summary>The renderer factory for one export run: the test's, or the real one.</summary>
+    public IRendererFactory CreateRenderers(RenderSetup setup) =>
+        Renderers?.Invoke(setup) ?? new RendererFactory(setup, WebViewRuntime);
 
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 

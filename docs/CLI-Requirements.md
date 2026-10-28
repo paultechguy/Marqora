@@ -110,6 +110,7 @@ code. The plan's §3 has the finding behind each one. No ID was added, removed o
 | `CLI-SP-03`, `CLI-DOC-02` | No GitHub Actions is used: the spike's Actions run is recorded as not run, by decision, and the manual has a pre-commit hook and no Actions recipe. Amended again on 2026-10-26; the version of 2026-10-16 had the runs made by Paul in a scratch repository |
 | `CLI-VB-UNP-01` | Single-file Folios only. Amended again on 2026-10-27 (A5c, which reverses A5b): `--overwrite` replaces what is in a non-empty target, except for the folders that are never emptied; without it the target is refused |
 | `CLI-IN-01` | Amended on 2026-10-27 (A15): `folio` keeps the order its documents were named in, because that order is the Folio's reading order |
+| `CLI-OUT-07` | Amended on 2026-10-28 (A16): an export given neither `-o` nor `--out-dir` writes each output beside its document |
 | `CLI-OUT-08` | Amended on 2026-10-27 (A5c): for `folio`'s folder form, `--overwrite` replaces what is in the folder, as for `unpack` |
 | `CLI-VB-REN-01` | `--style sequential\|ones\|zeros`; the app's per-list suggestion by default |
 | `CLI-OUT-06` | `format` decides line endings and the final newline through its own options |
@@ -387,10 +388,13 @@ to everything else.
 
 **Requirement.** Exports and `folio` take `-o <path>` for one input (for `folio`, the whole set)
 or `--out-dir <folder>` for many, where each output is named after its input with the format's
-extension. `--out-dir` is created if missing. Two inputs that would give the same output name
-are an input error before any work starts.
+extension. `--out-dir` is created if missing. An export given neither writes each output beside
+its document, under the same name with the format's extension, as File > Export offers; standard
+input, which has no name, still needs `-o`. Two inputs that would give the same output name are
+an input error before any work starts.
 **Acceptance.**
 - [ ] `export pdf --out-dir dist a.md b.md` writes `dist/a.pdf` and `dist/b.pdf`
+- [ ] `export pdf docs/a.md` writes `docs/a.pdf`; `export pdf -` without `-o` exits 2
 - [ ] `-o` with two inputs exits 2
 - [ ] `docs/a.md` and `notes/a.md` into one `--out-dir` exits 3 before anything is written
 

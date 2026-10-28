@@ -119,8 +119,9 @@ function Get-MaskedTime([string] $json) {
 # Some ids in a diagram come from counters that run for the whole session, so the same document
 # exported twice numbers them from wherever the counter stood: each diagram's own id, and a
 # sequence diagram's actors. The numbers are replaced in the order they first appear, which
-# keeps two apart and still finds one missing.
-$sessionCounters = 'mq-diagram-', 'actor', 'root-'
+# keeps two apart and still finds one missing. A sequence diagram's stick figure counts its own
+# parts too (found 2026-10-28, WP-M2-09: 6 in the app's session, 0 in the CLI's fresh browser).
+$sessionCounters = 'mq-diagram-', 'actor', 'root-', 'actor-man-torso', 'actor-man-arms'
 
 function Get-RenumberedDiagrams([string] $text) {
     foreach ($prefix in $sessionCounters) {

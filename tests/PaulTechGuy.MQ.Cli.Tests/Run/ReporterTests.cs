@@ -108,4 +108,20 @@ public sealed class ReporterTests
         result.Out.ShouldNotContain(Escape);
         result.Out.ShouldContain("\"outcome\":\"failed\"");
     }
+
+    [Fact]
+    public async Task Verbose_on_an_export_names_the_theme_and_where_it_came_from()
+    {
+        using var workspace = new Workspace();
+        workspace.Text("a.md", "# A\n");
+
+        CliResult result = await CliRunner.RunAsync(
+            ["export", "pdf", "--verbose", "--theme", "vintage-press", "-o", "a.pdf", "a.md"],
+            currentDirectory: workspace.Root,
+            renderers: new FakeRenderers().Make,
+            cancellationToken: Ct);
+
+        result.ExitCode.ShouldBe(0, result.ToString());
+        result.Error.ShouldContain("Theme: Vintage Press, from --theme.");
+    }
 }

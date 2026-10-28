@@ -8605,44 +8605,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ? Path.GetFileNameWithoutExtension(path) + extension
             : "Untitled" + extension;
 
-    /// <summary>
-    /// What a PDF or a print job calls itself: the front matter's title, which is the one the
-    /// Word export puts in the same property, or the file's own name. Never the path - that
-    /// went into every PDF's Title property, and so to whoever the PDF was sent.
-    /// </summary>
+    /// <summary>What a PDF or a print job calls itself; marqora-cli asks the same place.</summary>
     private static string PrintTitleOf(MarkdownDocument document) =>
-        FrontMatter.Read(document.Text).Title is { Length: > 0 } title
-            ? title
-            : document.DisplayName;
+        PaperFurnitureFor.Title(document.Text, document.DisplayName);
 
     /// <summary>
     /// The paper furniture for a document: the shared <see cref="ExportLayout"/>, as last saved,
-    /// resolved against this document - so a PDF and a .docx of it carry the same furniture
-    /// (docs/Export-Alignment-Plan.md, §6.4).
-    ///
-    /// The cover reads the same front matter and the same date rule as Word's cover; the
-    /// contents lists the same heading levels, from this document's own numbering.
+    /// resolved against this document and its own numbering.
     /// </summary>
-    private PaperFurniture FurnitureFor(MarkdownDocument document)
-    {
-        ExportLayout layout = _settings.Current.LayoutDefaults;
-        FrontMatter front = FrontMatter.Read(document.Text);
-
-        PaperCover? cover = layout.IncludeCoverPage
-            ? new PaperCover(front.Title ?? document.DisplayName, front.Subject, front.CoverDate(), front.Version, front.Author)
-            : null;
-
-        PaperContents? contents = null;
-
-        if (layout.IncludeTableOfContents)
-        {
-            (int first, int last) = ContentsListing.Levels(NumberingFor(document.Id));
-
-            contents = new PaperContents(ContentsListing.Title, first, last);
-        }
-
-        return new PaperFurniture(cover, contents, layout.IncludeHeaderAndFooter);
-    }
+    private PaperFurniture FurnitureFor(MarkdownDocument document) =>
+        PaperFurnitureFor.Document(document.Text, document.DisplayName, _settings.Current.LayoutDefaults, NumberingFor(document.Id));
 
     /// <summary>
     /// Puts an export on the status line, and stops there. What was written is deliberately

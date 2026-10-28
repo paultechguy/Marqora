@@ -105,6 +105,12 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
     public int BrowserProcessId { get; }
 
     /// <summary>
+    /// The browser this host runs in. marqora-cli hands it to the paged engine too, so a run that
+    /// prints has one browser process tree rather than two (CLI-EX-01).
+    /// </summary>
+    public CoreWebView2Environment BrowserEnvironment => _environment;
+
+    /// <summary>
     /// Whether the browser is still there. The app keeps one host for its whole session, and a
     /// browser that crashed or was ended has to be replaced rather than asked again.
     /// </summary>
@@ -386,7 +392,12 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
 
     /// <summary>
     /// Closes the browser and waits for its process to end, so the data folder can be removed.
-    /// Ends the process tree itself if the browser does not go within a few seconds.
+    /// Ends the process tree itself if the browser does not go within a second.
+    ///
+    /// Not going is the usual case for a document that asked for a picture, served or not: the
+    /// browser lingers after the close, and a run waiting 5 seconds for it and then warning made
+    /// every such export slower and noisier for nothing (WP-M2-09; the cause is not known, and
+    /// is in the plan's backlog). Its work is done by then, so it is ended without a word.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -394,11 +405,11 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
         _controller.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
         _controller.Close();
 
-        Task finished = await Task.WhenAny(_browserExited.Task, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(true);
+        Task finished = await Task.WhenAny(_browserExited.Task, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(true);
 
         if (finished != _browserExited.Task)
         {
-            _logger.LogWarning("The render browser, process {Id}, did not exit after closing; ending it.", BrowserProcessId);
+            _logger.LogDebug("The render browser, process {Id}, had not exited a second after closing; ending it.", BrowserProcessId);
             EndProcessTree(BrowserProcessId, _logger);
         }
     }

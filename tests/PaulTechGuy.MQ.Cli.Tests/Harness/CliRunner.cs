@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Cli.Rendering;
 using PaulTechGuy.MQ.Repositories;
 
 namespace PaulTechGuy.MQ.Cli.Tests.Harness;
@@ -29,6 +30,8 @@ internal static class CliRunner
 
     /// <param name="errorIsTerminal">Whether the run believes stderr is a terminal, which decides color under --color auto.</param>
     /// <param name="variables">The environment variables the run can see. Only NO_COLOR is ever read.</param>
+    /// <param name="renderers">Makes an export run's renderer in place of the real one.</param>
+    /// <param name="webViewRuntime">Stands in for looking up the installed WebView2 runtime.</param>
     public static async Task<CliResult> RunAsync(
         string[] args,
         string? currentDirectory = null,
@@ -36,6 +39,8 @@ internal static class CliRunner
         bool errorIsTerminal = false,
         IReadOnlyDictionary<string, string>? variables = null,
         IAppPaths? appPaths = null,
+        Func<RenderSetup, IRendererFactory>? renderers = null,
+        Func<string?>? webViewRuntime = null,
         CancellationToken cancellationToken = default)
     {
         var output = new MemoryStream();
@@ -52,7 +57,9 @@ internal static class CliRunner
         {
             // Never the Preferences of the machine running the tests: a folder of the test's own, or
             // one that does not exist.
-            AppPaths = () => appPaths ?? new AppPaths(Path.Combine(Path.GetTempPath(), "marqora-cli-tests", "no-app"), Repo.Root),
+            AppPaths = () => appPaths ?? new AppPaths(Path.Combine(Path.GetTempPath(), "marqora-cli-tests", "no-app"), Repo.CliFolder),
+            Renderers = renderers,
+            WebViewRuntime = webViewRuntime ?? RendererFactory.InstalledRuntime,
         };
 
         int code = await CliApp.RunAsync(args, environment, cancellationToken);

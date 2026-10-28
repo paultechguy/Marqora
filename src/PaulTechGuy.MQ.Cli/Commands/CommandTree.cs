@@ -403,24 +403,60 @@ internal sealed class CommandTree
     }
 
     /// <summary>
-    /// The exports: present in the tree from the start, so their names are taken and their options
-    /// settled, but hidden from help and refusing to run until WP-M2 brings the renderer.
+    /// The exports, with the options every one of them shares (WP-M2-08). Hidden from help until
+    /// each has been compared with the app's own file: export html and export pdf run through the
+    /// shared export run, and Word still refuses until its package lands (WP-M2-11).
     /// </summary>
     private static Command Export(CommandShared shared)
     {
         Command export = shared.Verb("export", "Export documents as HTML, PDF or Word, as File > Export does.", []);
         export.Hidden = true;
 
-        foreach ((string name, string what) in new[] { ("html", "HTML"), ("pdf", "PDF"), ("word", "Word") })
+        foreach ((string name, string what, ExportFormat? format) in new (string, string, ExportFormat?)[] { ("html", "HTML", new HtmlFormat()), ("pdf", "PDF", new PdfFormat()), ("word", "Word", null) })
         {
-            Command command = shared.Verb(name, $"Export each document as {what}.", [$"marqora-cli export {name} --out-dir dist docs/*.md"]);
+            Command command = shared.Verb(name, $"Export each document as {what}.", [$"marqora-cli export {name} docs/guide.md", $"marqora-cli export {name} --out-dir dist docs/*.md"]);
             command.Hidden = true;
 
-            CommandShared.AddInputs(command);
-            command.Options.Add(ThemeOption());
+            InputOptions inputs = CommandShared.AddInputs(command);
+
+            var output = new Option<string?>("--output", "-o")
+            {
+                Description = format?.WritesStandardOutput == true
+                    ? "The file to write, for one document, or - for standard output. Without -o or --out-dir, each output is written beside its document."
+                    : "The file to write, for one document. Without -o or --out-dir, each output is written beside its document.",
+                HelpName = "file",
+            };
+
+            var outDir = new Option<string?>("--out-dir")
+            {
+                Description = $"The folder to write into, for any number of documents: each is named after its document, with {format?.Extension ?? "the format's extension"}. Made if it is missing.",
+                HelpName = "folder",
+            };
+
+            var timeout = new Option<int?>("--timeout")
+            {
+                Description = $"How long one document's render may take, in seconds, before that file fails with exit 5. Default {ExportVerb.DefaultTimeoutSeconds}.",
+                HelpName = "seconds",
+            };
+
+            var dryRun = new Option<bool>("--dry-run") { Description = "Render and write nothing; print where each output would go, the theme and page setup, and what is already missing." };
+            var overwrite = new Option<bool>("--overwrite") { Description = "Replace an output that already exists." };
+            var theme = ThemeOption();
+
+            command.Options.Add(output);
+            command.Options.Add(outDir);
+            command.Options.Add(theme);
+            command.Options.Add(timeout);
+            command.Options.Add(dryRun);
+            command.Options.Add(overwrite);
 
             export.Subcommands.Add(command);
-            shared.SetAction(command, "export " + name, (context, _) => PendingVerb.RunAsync(context, "export " + name));
+
+            var options = new ExportVerb.Options(inputs, output, outDir, theme, timeout, dryRun, overwrite);
+
+            shared.SetAction(command, "export " + name, (context, parse) => format is null
+                ? PendingVerb.RunAsync(context, "export " + name)
+                : ExportVerb.RunAsync(context, parse, options, format));
         }
 
         return export;

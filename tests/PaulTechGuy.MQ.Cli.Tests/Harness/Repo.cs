@@ -21,6 +21,9 @@ internal static class Repo
     public static string CliExecutable => Path.Combine(
         Root, "src", "PaulTechGuy.MQ.Cli", "bin", Configuration, "net10.0-windows10.0.19041.0", "win-x64", "marqora-cli.exe");
 
+    /// <summary>The folder the built marqora-cli.exe is in, with the web shell beside it.</summary>
+    public static string CliFolder => Path.GetDirectoryName(CliExecutable)!;
+
     /// <summary>A path inside the repository.</summary>
     public static string At(params string[] parts) => Path.Combine([Root, .. parts]);
 

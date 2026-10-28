@@ -86,7 +86,8 @@ internal static class OutputPlan
             }
             else if (output.Kind == OutputKind.File && File.Exists(path) && !overwrite)
             {
-                code = ExitCodes.Worst(code, Refuse(context, output.ReportedAs, ExitCode.Output, "It already exists. Pass --overwrite to replace it."));
+                // Named, because an export reports against its input, and "it" would be the document.
+                code = ExitCodes.Worst(code, Refuse(context, output.ReportedAs, ExitCode.Output, $"{path} already exists. Pass --overwrite to replace it."));
             }
         }
 
