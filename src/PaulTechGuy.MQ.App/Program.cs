@@ -182,6 +182,7 @@ public static class Program
         builder.Services.AddSingleton<PdfExportJob>();
         builder.Services.AddSingleton<WordExportJob>();
         builder.Services.AddSingleton<FolioPageJob>();
+        builder.Services.AddSingleton<ExportRenderHost>();
         builder.Services.AddSingleton<IImageResizer, WicImageResizer>();
         builder.Services.AddSingleton<FolioShrinker>();
         builder.Services.AddSingleton(sp => new FolioFetcher(

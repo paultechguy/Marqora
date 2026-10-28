@@ -105,6 +105,19 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
     public int BrowserProcessId { get; }
 
     /// <summary>
+    /// Whether the browser is still there. The app keeps one host for its whole session, and a
+    /// browser that crashed or was ended has to be replaced rather than asked again.
+    /// </summary>
+    public bool IsRunning => !_browserExited.Task.IsCompleted;
+
+    /// <summary>
+    /// The reader's preview preferences, as the live preview is sent them, for the renders that
+    /// follow. The shell redraws diagrams only when a setting that draws them has changed.
+    /// </summary>
+    public void ApplyPreferences(PreviewPreferences preferences) =>
+        Post(ShellPreferences.Message, ShellPreferences.Payload(preferences));
+
+    /// <summary>
     /// Starts a browser in <paramref name="userDataFolder"/>, loads the shell, and waits until it
     /// reports ready and has its themes and paper spec.
     /// </summary>

@@ -33,6 +33,15 @@ bash: checking a folder before a release, formatting only what you changed, keep
 list up to date, a dated Folio every week. The single-page Folio, and exporting HTML, PDF and
 Word, come in a later release.
 
+## Word export no longer depends on the preview
+
+A Word export used to take its diagrams, equations and code colors from the preview, so a
+preview that was still catching up, or had just been switched to another tab, could cost the
+file its pictures. Marqora now draws them for the export in a browser of its own that is never
+on screen, from exactly the text being exported. The same document gives the same Word file
+whatever the window is doing. The first Word export after starting Marqora takes a moment
+longer while that browser starts; the ones after it do not.
+
 ## Fixes
 
 **Links to other folders are no longer marked broken.** A link such as `../README.md`, to a file

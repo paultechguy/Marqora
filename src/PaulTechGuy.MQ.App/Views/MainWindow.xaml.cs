@@ -978,6 +978,9 @@ public sealed partial class MainWindow : Window
         _preferencesDialogs.Shutdown();
 
         _previewHost?.Dispose();
+
+        // The Word export's own browser, if one was started; see ExportRenderHost.
+        ViewModel.EndExportRenderer();
         _beepFilter.Dispose();
         Close();
     }

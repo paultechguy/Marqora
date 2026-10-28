@@ -355,6 +355,34 @@ the item. A ticked item hangs its box where a bullet would sit; its plain siblin
 
 ## 7. The preview harvest
 
+### Where the rendered HTML comes from
+
+Not from the preview, since WP-M2-07 (`docs/CLI-Implementation-Plan.md`, CLI-ARC-07). The export
+asks `ExportRenderHost` (App/Services) for a renderer: a `HeadlessRenderHost`, the one marqora-cli
+renders with, started on the first Word export of a session and kept until shutdown. It loads the
+same shell in a WebView2 with its own data folder (`WebView2-Render`, beside the preview's) and a
+message-only window, so it is never on screen and never takes focus. `WordExportJob` (Exporting)
+then asks it, through `IDocumentRenderer`, for:
+
+- the finished markup, rendered from the exact text being exported, numbered as the tab is and
+  drawn in the export theme;
+- each diagram's PNG and light SVG, and a picture of any equation Word cannot write.
+
+The reader's preview preferences go with it (`ShellPreferences`, the same message the preview is
+sent), so separated diagram labels and the rest are as on screen.
+
+Before, all of this came from the live preview, which answers for whatever it is showing: a
+preview mid-re-render, or one on another tab a moment ago, cost the .docx its diagrams, equations
+and code colors. Now the file is the same whether the preview is busy, idle or elsewhere, and the
+same as the CLI's. What it costs is the first export's start of that browser, about a second;
+later exports reuse it.
+
+If the browser cannot be started, the export logs why and falls back to the preview, as before.
+`WordExportJob` hands the exporter's picture requests back to the thread the job started on, the
+UI thread, where both renderers live.
+
+### The harvest
+
 `PreviewHarvest.From(renderedPreviewHtml)` scans the string once and keys everything on
 **`data-src-line`**, which `SourceLineExtension` stamps on every block and which is the same
 number `block.Line` gives on the AST side.
@@ -371,9 +399,10 @@ Matching by ordinal position breaks silently on four constructs this app already
 Inline math is the one exception to line keying — `SourceLineExtension` stamps blocks only — so a
 `MathInline` keys on *containing-block line + ordinal within that block*.
 
-**Then every artifact is guarded on content.** The AST is parsed from the current editor text; the
-rendered HTML is whatever the preview last painted, and `emitTextChange` is debounced 160 ms. Edit
-inside a fence and the line keys still resolve while the harvested runs carry the old text. So:
+**Then every artifact is guarded on content.** The export renderer renders the text being
+exported, so the two now agree; but the preview it falls back to shows whatever it last painted,
+and `emitTextChange` is debounced 160 ms. Edit inside a fence and the line keys still resolve
+while the harvested runs carry the old text. So:
 code token text is compared against the AST block's text, and KaTeX's own
 `<annotation encoding="application/x-tex">` is compared against the AST's TeX source. On any
 difference the AST wins and the artifact is dropped.

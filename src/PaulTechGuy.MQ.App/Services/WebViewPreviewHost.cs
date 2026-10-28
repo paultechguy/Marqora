@@ -556,31 +556,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDocumentRenderer, IDispo
     {
         ArgumentNullException.ThrowIfNull(preferences);
 
-        return SendAsync(
-            "applyPreferences",
-            new
-            {
-                // Null font families are sent as null rather than omitted: the web side
-                // clears its own custom property on null, which is what restores the
-                // stylesheet's stack.
-                sourceFont = preferences.SourceFontFamily,
-                sourceFontSize = preferences.SourceFontSize,
-                previewFont = preferences.PreviewFontFamily,
-                previewFontSize = preferences.PreviewFontSize,
-                previewMaxWidth = preferences.PreviewMaxWidth,
-                tabSize = preferences.TabSize,
-                insertSpaces = preferences.InsertSpaces,
-                minimap = preferences.ShowMinimap,
-                highlightCurrentLine = preferences.HighlightCurrentLine,
-                continueLists = preferences.ContinueLists,
-                repeatListNumbers = preferences.RepeatListNumbers,
-                autoCloseBrackets = preferences.AutoCloseBrackets,
-                separateDiagramLabels = preferences.SeparateDiagramLabels,
-
-                // Heading numbering is deliberately not here. The numbers are written into
-                // the HTML by the renderer, so the shell has nothing to do with them: see
-                // ReapplyHeadingNumberingAsync, which re-renders instead.
-            });
+        // The same message the export renderer is sent (ShellPreferences). Heading numbering is
+        // not in it: see ReapplyHeadingNumberingAsync, which re-renders instead.
+        return SendAsync(ShellPreferences.Message, ShellPreferences.Payload(preferences));
     }
 
     public Task SetDiagnosticsAsync(Guid documentId, IReadOnlyList<Diagnostic> diagnostics)

@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Analysis;
 using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Ui;
+using PaulTechGuy.MQ.Cli.Verbs;
+using PaulTechGuy.MQ.Docx;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Rendering;
@@ -25,7 +27,11 @@ namespace PaulTechGuy.MQ.Cli;
 /// each out, through the shell in a hidden WebView2 and the app's own paged engine.
 ///
 /// <code>marqora-cli __spike-pdf &lt;in.md…&gt; -o &lt;folder&gt; [--parent message-only|hidden|cloaked]
-///     [--no-throttle] [--timeout &lt;s&gt;] [--cancel-after &lt;ms&gt;] [--verbose]</code>
+///     [--no-throttle] [--timeout &lt;s&gt;] [--cancel-after &lt;ms&gt;] [--verbose]
+///     [--settings &lt;preferences.json&gt;] [--theme &lt;id&gt;]</code>
+///
+/// With <c>--settings</c>, a Word file each as well, through the app's own Word job and with those
+/// settings, as the app makes one since WP-M2-07.
 ///
 /// It answers the spike's questions and nothing else, and goes in WP-M2-10 when export pdf
 /// replaces it. Timings go to stderr, measured from process start (CLI-SP-02).
@@ -34,7 +40,7 @@ internal static class Spike
 {
     private const string Usage =
         "usage: marqora-cli __spike-pdf <in.md...> -o <folder> [--parent message-only|hidden|cloaked] "
-        + "[--no-throttle] [--timeout <seconds>] [--cancel-after <ms>] [--verbose]";
+        + "[--no-throttle] [--timeout <seconds>] [--cancel-after <ms>] [--verbose] [--settings <preferences.json>] [--theme <id>]";
 
     /// <summary>
     /// Chromium's throttling of pages it believes are hidden or covered, switched off. Paged.js
@@ -99,6 +105,25 @@ internal static class Spike
 
         var renderer = new MarkdigMarkdownRenderer(new StderrLogger<MarkdigMarkdownRenderer>(level));
         ThemeCatalog themes = ThemeCatalog.Load();
+        AppSettings? settings = null;
+
+        if (options.SettingsFile is { } settingsFile)
+        {
+            PreferencesImportResult imported = await new PreferencesTransferService(VersionVerb.Current, new StderrLogger<PreferencesTransferService>(level))
+                .ImportAsync(settingsFile, new AppSettings(), cancel.Token)
+                .ConfigureAwait(true);
+
+            if (!imported.Succeeded)
+            {
+                Console.Error.WriteLine($"marqora-cli: {settingsFile}: {imported.Failure}");
+                return 2;
+            }
+
+            settings = imported.Settings!;
+        }
+
+        HeadingNumbering numbering = settings?.HeadingNumbering ?? HeadingNumbering.Off;
+        var wordJob = new WordExportJob(new DocxExporter(new StderrLogger<DocxExporter>(level)), new StderrLogger<WordExportJob>(level));
         var pdfJob = new PdfExportJob(renderer, new MarkdownAnalyzer(), new StderrLogger<PdfExportJob>(level));
 
         Mark($"starting, parent window {options.Parent}{(options.NoThrottle ? ", throttling off" : string.Empty)}");
@@ -112,10 +137,15 @@ internal static class Spike
         try
         {
             host = await HeadlessRenderHost.StartAsync(
-                parent.Handle, assets, Path.Combine(run, "WebView2-Render"), themes, "default", renderer, options.Timeout, logger, cancel.Token)
+                parent.Handle, assets, Path.Combine(run, "WebView2-Render"), themes, options.ThemeId, renderer, options.Timeout, logger, cancel.Token)
                 .ConfigureAwait(true);
 
             Mark($"shell ready, browser process {host.BrowserProcessId}");
+
+            if (settings is not null)
+            {
+                host.ApplyPreferences(PreviewPreferences.FromSettings(settings));
+            }
 
             foreach (string input in options.Inputs)
             {
@@ -128,7 +158,7 @@ internal static class Spike
                 Task<ExportOutcome> printing = pdfJob.RunAsync(
                     host,
                     new PdfExportRequest(
-                        new RenderRequest(text, Path.GetFullPath(input), HeadingNumbering.Off, "default"),
+                        new RenderRequest(text, Path.GetFullPath(input), numbering, options.ThemeId),
                         writing,
                         name,
                         PdfPageSetup.Default,
@@ -145,6 +175,23 @@ internal static class Spike
                 foreach (ExportIssue issue in printed.Issues)
                 {
                     Mark($"{name}:   {issue}");
+                }
+
+                if (settings is not null)
+                {
+                    ExportOutcome word = await wordJob.RunAsync(
+                        host,
+                        new WordExportRequest(
+                            new RenderRequest(text, Path.GetFullPath(input), numbering, options.ThemeId),
+                            Path.Combine(options.OutputFolder, name + ".docx"),
+                            Path.GetFileName(input),
+                            settings.DocxDefaults,
+                            settings.LayoutDefaults,
+                            DocumentImages.FromDocument(Path.GetFullPath(input)),
+                            themes.Find(options.ThemeId)),
+                        cancel.Token).ConfigureAwait(true);
+
+                    Mark($"{name}: Word, {new FileInfo(word.Outputs[0]).Length:N0} bytes, {word.Issues.Count} issues");
                 }
             }
         }
@@ -320,6 +367,8 @@ internal static class Spike
         bool noThrottle = false;
         bool verbose = false;
         int timeoutSeconds = 60;
+        string? settingsFile = null;
+        string theme = "default";
         int? cancelAfter = null;
 
         for (int i = 0; i < args.Length; i++)
@@ -355,6 +404,14 @@ internal static class Spike
 
                 case "--no-throttle":
                     noThrottle = true;
+                    break;
+
+                case "--settings":
+                    settingsFile = Next();
+                    break;
+
+                case "--theme":
+                    theme = Next() ?? theme;
                     break;
 
                 case "--verbose":
@@ -398,7 +455,7 @@ internal static class Spike
             return false;
         }
 
-        options = new Options(inputs, output, parent, noThrottle, verbose, TimeSpan.FromSeconds(timeoutSeconds), cancelAfter);
+        options = new Options(inputs, output, parent, noThrottle, verbose, TimeSpan.FromSeconds(timeoutSeconds), cancelAfter, settingsFile, theme);
         return true;
     }
 
@@ -409,7 +466,9 @@ internal static class Spike
         bool NoThrottle,
         bool Verbose,
         TimeSpan Timeout,
-        int? CancelAfter);
+        int? CancelAfter,
+        string? SettingsFile,
+        string ThemeId);
 }
 
 #endif

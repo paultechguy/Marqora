@@ -51,6 +51,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly HtmlExportJob _htmlJob;
     private readonly WordExportJob _wordJob;
     private readonly PdfExportJob _pdfJob;
+    private readonly ExportRenderHost _exportRenderHost;
     private readonly RenderedHtmlPackager _packager;
     private readonly IExportDialogService _exportDialogs;
     private readonly IFolioDialogService _folioDialogs;
@@ -775,6 +776,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         HtmlExportJob htmlJob,
         WordExportJob wordJob,
         PdfExportJob pdfJob,
+        ExportRenderHost exportRenderHost,
         RenderedHtmlPackager packager,
         IExportDialogService exportDialogs,
         IFolioDialogService folioDialogs,
@@ -815,6 +817,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _htmlJob = htmlJob;
         _wordJob = wordJob;
         _pdfJob = pdfJob;
+        _exportRenderHost = exportRenderHost;
         _packager = packager;
         _exportDialogs = exportDialogs;
         _folioDialogs = folioDialogs;
@@ -8371,12 +8374,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             string markdown = document.Text;
             string title = document.DisplayName;
 
+            // Drawn by a browser of its own rather than the preview, so what the preview is
+            // doing - re-rendering, showing another tab - has no part in the file (CLI-ARC-07).
+            // The preview stands in only if that browser could not be started.
+            IDocumentRenderer renderer = await _exportRenderHost
+                .GetAsync(PreviewPreferences.FromSettings(_settings.Current), ExportColorThemeId)
+                .ConfigureAwait(true) ?? _documentRenderer;
+
             // The numbering in the request is this document's answer, not the preference: a tab
             // whose numbers were switched off because the author writes their own must not
             // export with both sets. What is on screen is what goes into the file.
             ExportOutcome outcome = await _wordJob
                 .RunAsync(
-                    _documentRenderer,
+                    renderer,
                     new WordExportRequest(
                         RenderRequestFor(document),
                         path,
@@ -8642,6 +8652,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void AnnounceExport(string path) =>
         StatusText = $"Exported {Path.GetFileName(path)}";
+
+    /// <summary>Ends the Word export's own browser, at shutdown; see <see cref="ExportRenderHost"/>.</summary>
+    public void EndExportRenderer() => _exportRenderHost.End();
 
     // ------------------------------------------------------------------ one diagram
 

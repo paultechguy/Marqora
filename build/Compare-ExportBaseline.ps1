@@ -23,7 +23,7 @@
     - Diagrams: the numbers that count across the whole session, in each diagram's id
       (mq-diagram-N) and a sequence diagram's actors (actorN, root-N). Numbers are compared by
       the order they first appear in. And what mermaid leaves to chance in every drawing, in
-      HTML: rough.js's control points (the endpoints are kept), a gantt chart's "today" line, a
+      HTML and SVG: rough.js's control points (the endpoints are kept), a gantt chart's "today" line, a
       gitGraph commit's generated id, and the random part of an Iconify icon's ids.
     - Preferences: the export time in preferences.json.
 
@@ -163,6 +163,7 @@ function Get-NormalText([string] $path) {
 
     switch -Regex ([IO.Path]::GetFileName($path)) {
         '\.html?$' { $text = Get-MaskedChance (Get-MaskedFolioPayload $text) }
+        '\.svg$' { $text = Get-MaskedChance $text }
         '\.json$' { $text = Get-MaskedTime $text }
         '\.(xml|rels|psmdcp)$' {
             $text = $text -replace '\s+w:rsid\w*="[0-9A-Fa-f]+"', ''
