@@ -784,7 +784,7 @@ public sealed partial class MainWindow : Window
             // it has to be retold whenever that set changes.
             _diagramWindows.WatchedChanged += OnWatchedDiagramsChanged;
 
-            ViewModel.AttachPreviewHost(_previewHost);
+            ViewModel.AttachPreviewHost(_previewHost, _previewHost);
 
             // The theme goes in before the page is navigated to, not after it reports ready.
             // Ready is the far side of a Monaco load, and the restored session is flushed
@@ -978,6 +978,9 @@ public sealed partial class MainWindow : Window
         _preferencesDialogs.Shutdown();
 
         _previewHost?.Dispose();
+
+        // The Word export's own browser, if one was started; see ExportRenderHost.
+        ViewModel.EndExportRenderer();
         _beepFilter.Dispose();
         Close();
     }

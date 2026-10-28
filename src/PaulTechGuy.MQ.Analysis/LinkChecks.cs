@@ -114,7 +114,12 @@ internal static partial class LinkChecks
                 continue;
             }
 
-            if (!Exists(folder, target))
+            // A picture has to be beside the document, because that is the only place the
+            // preview loads one from. A link does not: the preview follows "../README.md"
+            // wherever it leads, so calling it broken while it works would be wrong.
+            bool found = link.IsImage ? Exists(folder, target) : Reachable(folder, target);
+
+            if (!found)
             {
                 // The file may be perfectly well there and simply not beside the document -
                 // "../shared/logo.png" is the everyday shape. Saying "no image at" about a file
@@ -249,6 +254,25 @@ internal static partial class LinkChecks
         }
 
         return File.Exists(full) || Directory.Exists(full);
+    }
+
+    /// <summary>
+    /// Whether a relative link resolves to a file or folder that is really there, wherever it
+    /// is. Following a link is the reader's choice, so the folder is not a limit here.
+    /// </summary>
+    private static bool Reachable(string folder, string relative)
+    {
+        try
+        {
+            string full = Path.GetFullPath(
+                Path.Combine(folder, WebUtility.UrlDecode(relative).Replace('/', Path.DirectorySeparatorChar)));
+
+            return File.Exists(full) || Directory.Exists(full);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Drops any query string or fragment, which are not part of the file name.</summary>

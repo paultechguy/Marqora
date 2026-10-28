@@ -429,6 +429,7 @@ public class HeadingNumberRewriterTests
             HeadingNumberStyle.TwoSpaces);
 
         result.UncertainHeadings.ShouldBe(1);
+        result.UncertainLines.ShouldBe([3]);
         result.LinksMoved.ShouldBe(0);
         result.Text.ShouldContain("[go](#scope)");
         result.Text.ShouldContain("# 1  [Scope](https://example.com)");

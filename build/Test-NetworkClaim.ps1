@@ -76,6 +76,12 @@ $surfaces = @(
     'build/release-notes-template.md'
     'build/New-Release.ps1'
     'src/PaulTechGuy.MQ.App/Views/AboutDialog.cs'
+    'docs/CLI.md'
+    'docs/CLI-Recipes.md'
+    'src/PaulTechGuy.MQ.Cli/Commands/CommandTree.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/CommandShared.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/GlobalOptions.cs'
+    'src/PaulTechGuy.MQ.Cli/Commands/ExamplesHelpAction.cs'
 )
 
 # Still true, and must not be "fixed". Each is a file plus the phrase that is allowed in it.
@@ -107,6 +113,13 @@ $allowed = @(
 $skipDirectories = @('.git', '.claude', 'bin', 'obj', 'node_modules', 'vendor', 'artifacts', 'releases')
 $skipFiles = @('Test-NetworkClaim.ps1', 'UltimateMarkdownContent.md')
 
+# The CLI export baseline: what the app exported, kept byte for byte as evidence
+# (tests/baselines/cli/README.md). An export carries its document's text, so the HTML made from
+# UltimateMarkdownContent.md says whatever that file says, and the file is skipped above for a
+# reason. Only the README and inputs/ in that folder are written by hand, and those are scanned.
+# The fresh sets compared with it, under fresh/, are evidence the same way.
+$baselineExports = '^tests[\\/]baselines[\\/](cli[\\/](?!README\.md$|inputs[\\/])|fresh[\\/])'
+
 function Test-Allowed {
     param([string]$Relative, [string]$Line)
 
@@ -127,7 +140,8 @@ $files = Get-ChildItem -Path $repo -Recurse -File -Include '*.md', '*.html', '*.
         $parts = $relative -split '[\\/]'
 
         -not ($parts | Where-Object { $skipDirectories -contains $_ }) -and
-        -not ($skipFiles -contains $_.Name)
+        -not ($skipFiles -contains $_.Name) -and
+        $relative -notmatch $baselineExports
     }
 
 foreach ($file in $files) {

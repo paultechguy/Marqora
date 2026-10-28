@@ -1,0 +1,145 @@
+// Copyright (c) 2026 Paul Carver
+// SPDX-License-Identifier: Apache-2.0
+
+using Microsoft.Web.WebView2.Core;
+using PaulTechGuy.MQ.Domain;
+
+namespace PaulTechGuy.MQ.WebRender;
+
+/// <summary>
+/// The classic engine: a window's live page printed as it stands, to a PDF or to a printer the
+/// user has already chosen.
+///
+/// No longer how Marqora prints. Every PDF and printout - the preview's, the cheatsheet's and
+/// a diagram pop-out's - goes through the paged engine (<see cref="PagedPrintHost"/>, by way of
+/// <see cref="PagedJobs"/>), so all three agree by construction rather than by sharing these
+/// settings. This is what <see cref="PagedJobs"/> falls back to when the paged engine cannot
+/// finish, and what "Use the classic print engine" in Preferences asks for. It goes, with that
+/// setting, a release after the paged engine shipped (docs/Export-Alignment-Plan.md, §6.2).
+///
+/// The settings-driven print rather than either dialog the WebView can raise, and that is the
+/// whole point: it is the only route on which the browser's header and footer can be switched
+/// off.
+/// </summary>
+public static class WebViewPrinting
+{
+    /// <summary>
+    /// Writes a WebView's pages to a PDF file on the page setup the user chose.
+    ///
+    /// Shared by the preview and the diagram pop-out, so a document and a diagram land on
+    /// the same paper with the same margins rather than each building its own settings.
+    ///
+    /// The header and footer band is off here for the same reason it is off in
+    /// <see cref="PrintAsync"/>: it prints the page title and the source URL, and that URL
+    /// would read https://marqora.assets/.
+    /// </summary>
+    /// <exception cref="IOException">The file was not written.</exception>
+    public static async Task ExportPdfAsync(CoreWebView2 core, string path, PdfPageSetup setup)
+    {
+        ArgumentNullException.ThrowIfNull(core);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(setup);
+
+        CoreWebView2PrintSettings settings = core.Environment.CreatePrintSettings();
+
+        settings.Orientation = setup.Orientation == PageOrientation.Landscape
+            ? CoreWebView2PrintOrientation.Landscape
+            : CoreWebView2PrintOrientation.Portrait;
+
+        settings.PageWidth = setup.WidthInches;
+        settings.PageHeight = setup.HeightInches;
+
+        // Two figures, not one: Moderate and Wide change the measure without changing the
+        // page, which is what Word means by them and now what the PDF dialog means too.
+        settings.MarginTop = setup.VerticalMarginInches;
+        settings.MarginBottom = setup.VerticalMarginInches;
+        settings.MarginLeft = setup.HorizontalMarginInches;
+        settings.MarginRight = setup.HorizontalMarginInches;
+
+        settings.ShouldPrintBackgrounds = setup.IncludeBackgrounds;
+        settings.ShouldPrintHeaderAndFooter = false;
+        settings.ScaleFactor = 1.0;
+
+        if (!await core.PrintToPdfAsync(path, settings))
+        {
+            throw new IOException($"The pages could not be written to {path}.");
+        }
+    }
+
+    /// <summary>
+    /// Prints and waits for the printer to accept the job.
+    ///
+    /// Throws <see cref="IOException"/> when the job does not land, which is a real
+    /// possibility here - a printer can be off, out of paper or gone from the network
+    /// between the dialog closing and this call.
+    /// </summary>
+    public static async Task PrintAsync(CoreWebView2 core, PrintJob job)
+    {
+        ArgumentNullException.ThrowIfNull(core);
+        ArgumentNullException.ThrowIfNull(job);
+
+        CoreWebView2PrintSettings settings = core.Environment.CreatePrintSettings();
+
+        settings.PrinterName = job.PrinterName;
+        settings.Copies = job.Copies;
+        settings.Collation = job.Collate
+            ? CoreWebView2PrintCollation.Collated
+            : CoreWebView2PrintCollation.Uncollated;
+
+        settings.Orientation = job.Orientation == PageOrientation.Landscape
+            ? CoreWebView2PrintOrientation.Landscape
+            : CoreWebView2PrintOrientation.Portrait;
+
+        // Custom, so that PageWidth and PageHeight are the ones used. Left at Default the
+        // printer reaches for its own default paper instead, and the size the user picked in
+        // the dialog would be quietly dropped: the paper choice lives in a DEVMODE that the
+        // print call has no way to accept, so it is carried across as inches or not at all.
+        settings.MediaSize = CoreWebView2PrintMediaSize.Custom;
+        settings.PageWidth = job.WidthInches;
+        settings.PageHeight = job.HeightInches;
+
+        settings.MarginTop = job.VerticalMarginInches;
+        settings.MarginBottom = job.VerticalMarginInches;
+        settings.MarginLeft = job.HorizontalMarginInches;
+        settings.MarginRight = job.HorizontalMarginInches;
+
+        settings.ShouldPrintBackgrounds = job.IncludeBackgrounds;
+
+        // Color and sides, which the dialog offers only where the driver said it could do
+        // them. Default means the printer was not asked, and decides for itself - which is
+        // what every job did before Marqora had a dialog of its own to ask in.
+        settings.ColorMode = job.ColorMode switch
+        {
+            PrintColorMode.Color => CoreWebView2PrintColorMode.Color,
+            PrintColorMode.Grayscale => CoreWebView2PrintColorMode.Grayscale,
+            _ => CoreWebView2PrintColorMode.Default,
+        };
+
+        settings.Duplex = job.Duplex switch
+        {
+            PrintDuplex.OneSided => CoreWebView2PrintDuplex.OneSided,
+            PrintDuplex.LongEdge => CoreWebView2PrintDuplex.TwoSidedLongEdge,
+            PrintDuplex.ShortEdge => CoreWebView2PrintDuplex.TwoSidedShortEdge,
+            _ => CoreWebView2PrintDuplex.Default,
+        };
+
+        // The point of the whole exercise: off, and not offered to the reader as a choice.
+        settings.ShouldPrintHeaderAndFooter = false;
+
+        settings.ScaleFactor = 1.0;
+
+        if (!string.IsNullOrWhiteSpace(job.PageRanges))
+        {
+            settings.PageRanges = job.PageRanges;
+        }
+
+        CoreWebView2PrintStatus status = await core.PrintAsync(settings);
+
+        if (status != CoreWebView2PrintStatus.Succeeded)
+        {
+            throw new IOException(status == CoreWebView2PrintStatus.PrinterUnavailable
+                ? $"{job.PrinterName} is not available."
+                : $"The pages could not be sent to {job.PrinterName}.");
+        }
+    }
+}

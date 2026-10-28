@@ -986,6 +986,35 @@ says when the next reminder is due.
 
 ---
 
+## Command line
+
+`marqora-cli.exe` ships beside `Marqora.exe` and does what the Format, Find, Export and Share
+menus do, without a window, through the same code, so a file formatted from a terminal is
+formatted exactly as **Format Document** would have formatted it, and a PDF is the one **File >
+Export > PDF** would have made. The installer offers to put it on your PATH.
+
+```powershell
+# Is every document formatted, and does every link still lead somewhere?
+marqora-cli format --check "docs/**/*.md"
+marqora-cli check "docs/**/*.md"
+
+# A PDF beside every document, on A4
+marqora-cli export pdf --paper a4 "docs/**/*.md"
+
+# Share a handbook as a Folio, its pictures reduced to 1600 pixels wide
+marqora-cli folio -o Handbook.zip --shrink-images 1600 docs/handbook/*.md
+```
+
+It is offline by default, like the app: `folio --fetch-web-images` is the only option that uses
+the network, and `--dry-run` names the sites first. Without `--settings`, it uses the built-in
+defaults rather than your Preferences, so the same command gives the same result on every
+machine. Every command takes `--json`, and the exit codes are fixed, for scripts and Git hooks.
+[`docs/CLI.md`](docs/CLI.md) is the manual, with a five-minute tour, and
+[`docs/CLI-Recipes.md`](docs/CLI-Recipes.md) has recipes for everyday jobs in PowerShell, cmd and
+bash.
+
+---
+
 ## Where things are kept
 
 | Path                                                       | Contents                                                    |
@@ -1026,15 +1055,20 @@ PaulTechGuy.MQ.slnx
 │   ├── PaulTechGuy.MQ.Spelling        The spelling analyzer and its skip rules
 │   ├── PaulTechGuy.MQ.Finding         Find All's search engine
 │   ├── PaulTechGuy.MQ.Folio           Gathering documents and their images
+│   ├── PaulTechGuy.MQ.Exporting       The export jobs: HTML, PDF, Word and the Folio page, for app and CLI
+│   ├── PaulTechGuy.MQ.Imaging         Resizing pictures through Windows' own codecs
+│   ├── PaulTechGuy.MQ.WebRender       The preview shell in a browser with no window, and the PDF engine
 │   ├── PaulTechGuy.MQ.Services        Document lifetime, settings, recent files, watching
-│   └── PaulTechGuy.MQ.App             WinUI 3 shell and view models
+│   ├── PaulTechGuy.MQ.App             WinUI 3 shell and view models
+│   └── PaulTechGuy.MQ.Cli             marqora-cli: the same commands in a terminal
 └── tests/                       One xUnit v3 project per library above
 ```
 
 No concrete layer references another, with one documented exception: `Docx` references
 `Rendering` for the Markdig pipeline, so that the Word export reads a document exactly as the
-preview does. Everything else meets at the composition root in
-`src/PaulTechGuy.MQ.App/Program.cs`.
+preview does. Everything else meets at the two composition roots,
+`src/PaulTechGuy.MQ.App/Program.cs` and `src/PaulTechGuy.MQ.Cli/CliApp.cs`. The command line
+never references the app, nor the app the command line, and a test holds both to it.
 
 ---
 

@@ -47,6 +47,19 @@ internal static class ListRenumber
             runs.All(run => FollowsABreak(context.Lines, guarded, run.Lines[0])));
     }
 
+    /// <summary>
+    /// The first line of every numbered list in <paramref name="lines"/>, nested ones included, in
+    /// document order: each is where a caret picks exactly that list. Read the way
+    /// <see cref="Describe"/> and <see cref="Apply"/> read lists, so a whole-document pass and the
+    /// command run list by list cannot disagree about where the lists are.
+    /// </summary>
+    internal static IReadOnlyList<int> ListStarts(IReadOnlyList<string> lines)
+    {
+        bool[] guarded = MarkdownRegionScanner.FindProtectedLines(lines);
+
+        return [.. Join(lines, guarded, OrderedRuns.Find(lines, guarded)).Select(run => run.Lines[0]).Order()];
+    }
+
     /// <summary>Renumbers the picked lists. Returns no edits when they already read that way.</summary>
     public static EditResult Apply(EditContext context, ListNumbering numbering)
     {

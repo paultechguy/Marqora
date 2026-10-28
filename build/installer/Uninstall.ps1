@@ -383,6 +383,25 @@ try {
         Remove-Item -LiteralPath $arpKey -Recurse -Force
     }
 
+    # Only the entry the installer recorded adding. A folder the user put on PATH themselves has
+    # no record, and stays.
+    $pathEntry = Get-ManifestValue -Manifest $manifest -Name 'pathEntry' -Default $null
+
+    if ($pathEntry) {
+        $helper = Join-Path $PSScriptRoot 'UserPath.ps1'
+
+        if (Test-Path -LiteralPath $helper -PathType Leaf) {
+            . $helper
+
+            if (Remove-UserPathEntry -Directory $pathEntry) {
+                Write-Detail 'marqora-cli PATH entry'
+            }
+        }
+        else {
+            Write-Warning "UserPath.ps1 was not found, so '$pathEntry' is still on your PATH. Remove it in Settings > System > About > Advanced system settings > Environment Variables."
+        }
+    }
+
     Write-Step '[4/4] Removing the app'
     Remove-InstallDirectory -Directory $target
     Write-Detail $target

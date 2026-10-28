@@ -15,6 +15,7 @@ using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Controls;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Folio;
 using Windows.Graphics;
 
 namespace PaulTechGuy.MQ.App.Views;
@@ -57,30 +58,6 @@ internal sealed class FolioWindow : PaletteWindow
     /// figures wait until the selection settles. The list itself does not care - it virtualizes.
     /// </summary>
     private const int LiveRecalculationLimit = 60;
-
-    /// <summary>
-    /// Past this many pictures a single page is slow to open whatever it weighs - a browser has
-    /// to lay every one of them out at once, and none of them stream because they are all inline.
-    /// It is a layout problem before it is a size problem, which is why it is counted separately.
-    /// </summary>
-    private const int CrowdedPageImages = 150;
-
-    /// <summary>Past this the one file is unwieldy to open, mail aside.</summary>
-    private const long HeavyPageBytes = 50L * 1024 * 1024;
-
-    /// <summary>
-    /// What most mail still stops at. Not a reason to refuse anything - plenty of Folios never
-    /// go near email - but the number the author is usually judging the total against.
-    /// </summary>
-    private const long MailLimitBytes = 25L * 1024 * 1024;
-
-    /// <summary>
-    /// How much reducible weight is worth mentioning on a Folio that is otherwise fine.
-    ///
-    /// In bytes rather than a count of images, so that one enormous photograph is noticed and
-    /// four slightly-too-wide screenshots are not.
-    /// </summary>
-    private const long ReducibleBytes = 5L * 1024 * 1024;
 
     private static readonly string[] Forms =
     [
@@ -146,9 +123,6 @@ internal sealed class FolioWindow : PaletteWindow
     private const string OtherProblems = "Other problems";
 
     private static readonly HashSet<FolioWarningKind> Grouped = [.. Groups.Select(g => g.Kind)];
-
-    /// <summary>The width the shrink box opens on, and what most screens are no wider than.</summary>
-    private const int DefaultMaxImageWidth = 1600;
 
     /// <summary>
     /// A drag handle, the tick, the name, then the folder taking whatever is left.
@@ -340,7 +314,7 @@ internal sealed class FolioWindow : PaletteWindow
         _shrink = new CheckBox { Content = "Shrink images wider than", MinWidth = 0 };
         _shrinkWidth = new NumberBox
         {
-            Value = DefaultMaxImageWidth,
+            Value = FolioPreflight.DefaultMaxImageWidth,
             Minimum = 200,
             Maximum = 10_000,
             SmallChange = 100,
@@ -821,125 +795,44 @@ internal sealed class FolioWindow : PaletteWindow
             parts.Add($"{plan.RelocatedCount} collected from elsewhere");
         }
 
-        parts.Add(Size(Weight(plan)));
+        parts.Add(Size(FolioPreflight.Weight(plan, IsSingleFile)));
 
         return string.Join("  ·  ", parts);
     }
 
-    /// <summary>
-    /// What the chosen form will actually weigh.
-    ///
-    /// The one file is not the sum of its parts: every image goes in as base64, which costs a
-    /// third again. Showing the raw total there would understate the file by 33% and make the
-    /// figure the author is judging against email useless.
-    /// </summary>
-    private long Weight(FolioPlan plan) =>
-        IsSingleFile ? plan.TotalBytes * 4 / 3 : plan.TotalBytes;
-
     private bool IsSingleFile => _form.SelectedIndex is 0 or < 0;
 
     /// <summary>
-    /// Says when one page is the wrong shape for this set, and offers the zip in the same breath.
-    ///
-    /// Two separate ceilings, because they are two different failures. A great many pictures is
-    /// a layout problem - the browser lays every one of them out at once and none of them stream,
-    /// because they are all inline - and it bites at a count rather than a size. Sheer weight is
-    /// the other, and the mail limit below it is advice rather than a fault: plenty of Folios
-    /// never go near email.
+    /// The preflight's advice about the set's shape, shown in the InfoBar. The advice itself, and
+    /// the figures behind it, live in <see cref="FolioPreflight"/>, which marqora-cli's folio
+    /// --dry-run reads too; what is left here is showing it.
     /// </summary>
     private void UpdateWeightAdvice(FolioPlan plan)
     {
-        // Everything about one page being the wrong shape applies to one page only. Reducible
-        // weight is not like that - a photograph that is four times wider than any screen is
-        // just as wasteful in a zip - so that last piece of advice is not gated on the form.
         bool single = IsSingleFile;
-
-        long bytes = Weight(plan);
-        string zip = Size(plan.TotalBytes);
 
         _useZip.Visibility = single ? Visibility.Visible : Visibility.Collapsed;
 
         // Worth offering only when it would actually do something: shrinking is not already on,
         // and something here is wider than the width it would reduce to.
-        FolioAsset[] oversized = MaxImageWidth > 0
-            ? []
-            : [.. plan.Assets.Where(a => a.PixelWidth > DefaultMaxImageWidth)];
+        _shrinkLarge.Visibility = FolioPreflight.Oversized(plan, MaxImageWidth).Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        long oversizedBytes = oversized.Sum(a => a.Bytes);
-
-        _shrinkLarge.Visibility = oversized.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        string alsoShrink = oversized.Length > 0
-            ? $" {Count(oversized.Length, "image")} here {(oversized.Length == 1 ? "is" : "are")} "
-                + $"wider than {DefaultMaxImageWidth} px and could be sent smaller."
-            : string.Empty;
-
-        (InfoBarSeverity Severity, string Title, string Message)? advice = (single, plan.Assets.Count) switch
-        {
-            (true, > CrowdedPageImages) => (
-                InfoBarSeverity.Warning,
-                "That is a lot of pictures for one page",
-                $"{plan.Assets.Count} images in a single file are slow to open, whatever it "
-                + $"weighs - a browser lays them all out at once. A zip would be about {zip}."
-                + alsoShrink),
-
-            _ when single && bytes > HeavyPageBytes => (
-                InfoBarSeverity.Warning,
-                "This will be a big file",
-                $"About {Size(bytes)} in one page, which is unwieldy to open and past what most "
-                + $"mail will take. A zip of the same documents would be about {zip}."
-                + alsoShrink),
-
-            _ when single && bytes > MailLimitBytes => (
-                InfoBarSeverity.Informational,
-                "Larger than most mail will accept",
-                $"About {Size(bytes)}, and most mail stops at around 25 MB. It opens perfectly "
-                + $"well; it may just need another way to send it. A zip would be about {zip}."
-                + alsoShrink),
-
-            /*
-                Nothing is wrong with the total, but a lot of it is reducible.
-
-                Without this the offer only ever appears on a Folio that is already in trouble,
-                and the case that prompted it - one very large photograph in an otherwise small
-                set - never trips any of the thresholds above. Weighed in bytes rather than
-                counted, so a handful of slightly-too-wide screenshots stays quiet.
-            */
-            _ when oversizedBytes > ReducibleBytes && oversized.Length > 0 => (
-                InfoBarSeverity.Informational,
-                "Some images are larger than they need to be",
-                $"{Count(oversized.Length, "image")} account for about {Size(oversizedBytes)} of "
-                + $"this, at more than {DefaultMaxImageWidth} px wide - wider than most screens. "
-                + "Sending them smaller would not change how they look."),
-
-            _ => null,
-        };
-
-        if (advice is not { } shown)
+        if (FolioPreflight.Advice(plan, single, MaxImageWidth) is not { } shown)
         {
             _weight.IsOpen = false;
 
             return;
         }
 
-        _weight.Severity = shown.Severity;
+        _weight.Severity = shown.Level == FolioAdviceLevel.Warning ? InfoBarSeverity.Warning : InfoBarSeverity.Informational;
         _weight.Title = shown.Title;
         _weight.Message = shown.Message;
         _weight.IsOpen = true;
     }
 
-    private static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+    private static string Count(int n, string noun) => FolioPreflight.Count(n, noun);
 
-    /// <summary>
-    /// A size a person reads rather than a byte count. One decimal past a megabyte, because the
-    /// question being asked of this number is whether it will go through email.
-    /// </summary>
-    private static string Size(long bytes) => bytes switch
-    {
-        < 1024 => $"{bytes} bytes",
-        < 1024 * 1024 => $"{bytes / 1024.0:0} KB",
-        _ => string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024.0 * 1024.0):0.0} MB"),
-    };
+    private static string Size(long bytes) => FolioPreflight.Size(bytes);
 
     // ------------------------------------------------------------------ the problems pane
 

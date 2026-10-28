@@ -5,7 +5,8 @@
     Builds the Marqora release zip: one command, one file, ready to hand to someone else.
 
 .DESCRIPTION
-    Restores the third-party web assets if they are missing, publishes the app, stages it
+    Restores the third-party web assets if they are missing, publishes the app and marqora-cli
+    into one folder, checks the files they share are the same bytes, stages it
     alongside the installer scripts, and compresses the lot into
 
         build\artifacts\Marqora-<version>-win-x64.zip
@@ -23,7 +24,7 @@
         Install.cmd         double-click to install
         Uninstall.cmd       double-click to remove
         install\            the scripts both wrappers call
-        app\                the published application
+        app\                the published application, with marqora-cli beside it
 
     Tests are opt-in via -Test. Repackaging is something you do repeatedly while getting
     the installer right, and paying for the full suite on every iteration only teaches you
@@ -90,6 +91,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.App\PaulTechGuy.MQ.App.csproj'
+$cliProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.Cli\PaulTechGuy.MQ.Cli.csproj'
 $solution = Join-Path $repoRoot 'PaulTechGuy.MQ.slnx'
 $buildProps = Join-Path $repoRoot 'Directory.Build.props'
 $installerSource = Join-Path $PSScriptRoot 'installer'
@@ -105,7 +107,7 @@ $artifacts = if ($OutputDirectory) { [System.IO.Path]::GetFullPath($OutputDirect
 $staging = Join-Path $artifacts '.stage'
 $runtimeIdentifier = 'win-x64'
 
-Initialize-TaskList -Total $(if ($Test) { 5 } else { 4 })
+Initialize-TaskList -Total $(if ($Test) { 6 } else { 5 })
 
 try {
     Write-Host ''
@@ -188,6 +190,18 @@ try {
         Write-Host '        no welcome document in the publish; this release will not introduce itself' `
             -ForegroundColor Yellow
     }
+
+    # ---- the command line, published beside the app (ReleaseCommon's Add-CliToPublish)
+    Write-Task 'publish marqora-cli'
+    $appVersion = Get-PublishedVersion -Exe $publishedExe -PropsPath $buildProps
+    $cliSummary = Add-CliToPublish `
+        -CliProject $cliProject `
+        -PublishDir $publishDir `
+        -StagingRoot $staging `
+        -Configuration $Configuration `
+        -AppVersion $appVersion `
+        -ShowBuildOutput:$ShowBuildOutput
+    Write-Done $cliSummary
 
     # ---- stage
     Write-Task 'stage installer'

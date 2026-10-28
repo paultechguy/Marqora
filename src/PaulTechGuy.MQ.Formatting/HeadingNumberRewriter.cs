@@ -56,6 +56,12 @@ public static class HeadingNumberRewriter
         public int UncertainHeadings { get; init; }
 
         /// <summary>
+        /// Where those headings are: one-based line numbers, in document order. For a caller that
+        /// reports each one where it is rather than a count - marqora-cli's findings.
+        /// </summary>
+        public IReadOnlyList<int> UncertainLines { get; init; } = [];
+
+        /// <summary>
         /// Nothing to do. Said plainly by the caller rather than silently, because a command
         /// that appears to do nothing reads as a broken one.
         /// </summary>
@@ -218,7 +224,7 @@ public static class HeadingNumberRewriter
 
         int headings = edits.Count(e => !markdown.AsSpan(e.Offset, e.Consume).SequenceEqual(e.Insert));
 
-        Dictionary<string, string> renamed = Anchors.Renamed(scan.Headings, rewritten, out int uncertain);
+        Dictionary<string, string> renamed = Anchors.Renamed(scan.Headings, rewritten, out IReadOnlyList<int> uncertain);
         int moved = 0;
 
         if (renamed.Count > 0)
@@ -245,7 +251,8 @@ public static class HeadingNumberRewriter
         {
             Changed = headings,
             LinksMoved = moved,
-            UncertainHeadings = uncertain,
+            UncertainHeadings = uncertain.Count,
+            UncertainLines = [.. uncertain.Select(i => scan.Headings[i].Line + 1)],
         };
     }
 

@@ -49,8 +49,8 @@ lands; only "Extract Here" in a third-party tool puts 632 files loose in Downloa
 README.txt        plain text, no markdown, because they cannot read markdown yet
 Install.cmd       double-click this
 Uninstall.cmd     or this
-install/          Install.ps1, Uninstall.ps1, Register-FileAssociation.ps1
-app/              the published application
+install/          Install.ps1, Uninstall.ps1, Register-FileAssociation.ps1, UserPath.ps1
+app/              the published application, with marqora-cli.exe beside Marqora.exe
 ```
 
 After `Install.cmd`:
@@ -58,18 +58,20 @@ After `Install.cmd`:
 ```
 %LOCALAPPDATA%\Programs\Marqora\
     Marqora.exe
+    marqora-cli.exe
     Assets\web\...
     uninstall\
         Uninstall.ps1
         Register-FileAssociation.ps1
+        UserPath.ps1
         install-manifest.json
 
 %LOCALAPPDATA%\PaulTechGuy\Marqora\      settings, recent files, snippets, logs
                                           (written by the app; see AppPaths)
 ```
 
-Plus a Start menu shortcut, a desktop shortcut, the markdown file associations, and an
-entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Marqora` so
+Plus a Start menu shortcut, a desktop shortcut, the markdown file associations, the install
+folder on PATH if that was chosen, and an entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Marqora` so
 **Settings > Apps** shows Marqora with a working Uninstall button.
 
 ---
@@ -117,16 +119,18 @@ This produces the artifact. Getting that artifact onto GitHub — version bump, 
 promoting `dev` to `master`, tagging, the draft release — is
 [`docs/Releasing.md`](Releasing.md), which calls this script as one of its steps.
 
-Four steps, each one line of output:
+Five steps, each one line of output, and a sixth, **tests**, under `-Test`:
 
 1. **web assets** — runs `Get-WebAssets.ps1` if `webshell\vendor\monaco\vs\loader.js` is
    missing. That is deliberately the same sentinel the app project's `VerifyWebAssets`
    target checks, so the failure arrives at step one with an explanation instead of at the
    publish as an MSBuild error.
 2. **publish** — `dotnet publish -c Release -o <staging>\app`.
-3. **stage** — reads the version, assembles the release folder, expands `{{VERSION}}` in
+3. **publish marqora-cli** — publishes the command line into `<staging>\cli` and merges it
+   into `app\`; see **marqora-cli in the release** below.
+4. **stage** — reads the version, assembles the release folder, expands `{{VERSION}}` in
    `README.txt`.
-4. **zip** — `ZipFile.CreateFromDirectory` with `includeBaseDirectory: false`, so the
+5. **zip** — `ZipFile.CreateFromDirectory` with `includeBaseDirectory: false`, so the
    staged folder's *contents* are the zip, not the folder itself. The staged folder is
    still named `Marqora-<version>-win-x64`, which is what `-KeepStaging` leaves behind.
 
@@ -159,6 +163,26 @@ Assets\web\vendor\monaco\vs\loader.js  the editor
 **dotnet output is captured, not streamed**, so the step lines stay one line each. The whole
 log is printed on failure, which is the only time anyone wants it. `-ShowBuildOutput`
 overrides this.
+
+### marqora-cli in the release
+
+`marqora-cli.exe` is not a second install. It is published into `<staging>\cli` and merged
+into `app\`, so the zip holds one folder and the installer copies it as it always has. The two
+executables share the .NET runtime, the web shell and the themes: shipping two copies would
+add the best part of 200 MB for nothing, and two copies of the web shell could drift apart.
+
+That works only if both publishes produce the same shared files, which is why the runtime
+identifier, the self-contained switch and ReadyToRun live in one place, `build\Publish.props`,
+imported by both projects. The merge then checks it rather than trusting it:
+
+- **A shared file must be byte for byte the app's copy.** The hash of every file both publishes
+  produce is compared, and one that differs fails the release, naming it. A copy that differs
+  would mean one of the two executables runs on a file it was not built against.
+- **The CLI's own files are copied in**: the executable and the assemblies the app does not
+  use. The 1.0.12 build had 8 of them, beside 518 shared.
+- **The versions must agree.** `marqora-cli.exe`'s file version must equal the app's, and so
+  must what `marqora-cli version` prints when run. The CLI promises to be the app's version,
+  and this is where that promise is kept.
 
 ---
 
@@ -194,6 +218,36 @@ actually wanted.
 Windows 10 gets it through Windows Update, so it is nearly always present — but when it is
 missing the app fails at the first preview, and a warning at install time is far cheaper
 than that diagnosis.
+
+### PATH, for marqora-cli
+
+The install folder goes on PATH only when the person installing chooses it, because a PATH
+entry is a change to every terminal they open, not only to Marqora:
+
+- **`-AddToPath`** adds it without asking.
+- **Without it, an interactive install asks**, "Add it to your PATH, so any terminal can run
+  marqora-cli? [y/N]", and the answer is No unless they type yes. Double-clicking
+  `Install.cmd` is interactive.
+- **`-Quiet`, or a session with nobody to ask, never adds it.** An unattended install that
+  changed PATH on its own would be the software deciding.
+
+The entry is the user's, in `HKCU\Environment`, so no administrator is needed. The helpers are
+in `UserPath.ps1`, shipped beside the installer and copied into `uninstall\`.
+
+**PATH is read and written through the registry, never through
+`[Environment]::SetEnvironmentVariable`.** The user's PATH is a `REG_EXPAND_SZ`, and entries
+such as `%USERPROFILE%\bin` are stored unexpanded. `SetEnvironmentVariable` reads the expanded
+value and writes it back as a plain string, so adding one entry would quietly turn every
+`%VARIABLE%` in the list into a fixed path, and a later change to the variable would no longer
+reach it. `Read-UserPath` reads the value with `DoNotExpandEnvironmentNames`, the one entry is
+added or removed, and `Write-UserPath` writes it back as `ExpandString`. `Send-EnvironmentChange`
+then broadcasts `WM_SETTINGCHANGE`, so Explorer, and every terminal started from it afterward,
+sees the new PATH without signing out. A terminal that was already open keeps the old one.
+
+**The manifest records the entry only when this install added it**, as `pathEntry`. A folder
+that was already on PATH is the user's, and is not recorded, so uninstalling cannot take away
+an entry the user made themselves. An upgrade over an install that added it reads the old
+manifest before the copy and keeps the entry, without asking again.
 
 ---
 

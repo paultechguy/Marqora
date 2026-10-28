@@ -132,6 +132,9 @@ install\, so from a command prompt:
   Install.cmd -NoDesktopShortcut        skip the desktop shortcut
   Install.cmd -NoStartMenuShortcut      skip the Start menu shortcut
   Install.cmd -NoFileAssociations       do not register markdown file types
+  Install.cmd -AddToPath                put marqora-cli on your PATH without
+                                        asking (the installer otherwise asks;
+                                        No unless you say yes)
   Install.cmd -InstallDir "D:\Apps\Marqora"
                                         install somewhere else
   Install.cmd -Force                    close Marqora if it is running

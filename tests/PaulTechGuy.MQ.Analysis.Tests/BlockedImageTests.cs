@@ -189,15 +189,14 @@ public class BlockedImageTests
     }
 
     [Fact]
-    public void A_link_climbing_out_of_the_folder_keeps_the_answer_it_always_gave()
+    public void A_link_climbing_out_of_the_folder_is_never_told_it_is_outside()
     {
         using var folder = new DocumentFolder();
         string climbing = folder.WithPrefixedSibling("notes.md");
 
-        // Links are out of scope for this rule, and that has to include the ones that would have
-        // qualified. Changing what a link says was never part of the bargain.
-        folder.Links($"[notes]({climbing})").ShouldHaveSingleItem()
-            .Kind.ShouldBe(LinkFindingKind.BrokenLink);
+        // Links are out of scope for this rule, which is about what the preview can load. The
+        // preview follows a link wherever it leads, so one to a file that is there says nothing.
+        folder.Links($"[notes]({climbing})").ShouldBeEmpty();
     }
 
     // ---- pictures written as HTML -----------------------------------------

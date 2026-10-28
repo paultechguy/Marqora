@@ -46,6 +46,13 @@
 .PARAMETER NoFileAssociations
     Skips registering .md and its siblings. The app still opens files from its own File menu.
 
+.PARAMETER AddToPath
+    Adds the install folder to your PATH, so marqora-cli runs from any terminal, without asking.
+    Without it, an interactive install asks, and the answer is No unless you type yes; -Quiet
+    never asks. Per user, no administrator. The uninstaller takes the entry out again, and only
+    an entry this installer added: a folder already on PATH is left as yours. An upgrade over an
+    install that added it keeps it.
+
 .PARAMETER Force
     Proceeds when the target directory holds something that does not look like a previous
     Marqora install, and closes a running Marqora that has not responded to a polite
@@ -80,6 +87,8 @@ param(
 
     [switch] $NoFileAssociations,
 
+    [switch] $AddToPath,
+
     [switch] $Force,
 
     [switch] $Quiet
@@ -88,8 +97,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Read-UserPath, Add-UserPathEntry and the rest: shared with Uninstall.ps1.
+. (Join-Path $PSScriptRoot 'UserPath.ps1')
+
 $appName = 'Marqora'
 $exeName = 'Marqora.exe'
+$cliExeName = 'marqora-cli.exe'
 $processName = 'Marqora'
 $publisher = 'PaulTechGuy'
 
@@ -410,12 +423,56 @@ function Write-ArpEntry {
     }
 }
 
+function Get-PreviousPathEntry {
+    param([string] $Directory)
+
+    # Read before the copy, which replaces the folder the old manifest is in. Only an entry the
+    # previous install added counts, and only while PATH still has it: one the user has since
+    # taken out by hand stays out.
+    $path = Join-Path $Directory "$uninstallFolder\$manifestName"
+
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $previous = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+
+        if ($previous.PSObject.Properties.Match('pathEntry').Count -gt 0 -and $previous.pathEntry -and (Test-UserPathEntry -Directory $previous.pathEntry)) {
+            return [string] $previous.pathEntry
+        }
+    }
+    catch {
+        # An unreadable manifest is an install that never recorded a PATH entry.
+    }
+
+    return $null
+}
+
+function Test-WantsPath {
+    if ($AddToPath) {
+        return $true
+    }
+
+    # Off unless chosen (CLI-PKG-02): nobody to ask means no.
+    if ($Quiet -or -not [Environment]::UserInteractive) {
+        return $false
+    }
+
+    Write-Plain "$appName comes with marqora-cli, its document commands for a terminal."
+    $answer = Read-Host 'Add it to your PATH, so any terminal can run marqora-cli? [y/N]'
+    Write-Plain
+
+    return $answer -match '^\s*(y|yes)\s*$'
+}
+
 function Write-Manifest {
     param(
         [string] $Directory,
         [string] $Version,
         [string[]] $Shortcuts,
-        [bool] $Associations
+        [bool] $Associations,
+        [string] $PathEntry
     )
 
     # The uninstaller removes what this install actually created, not what a default
@@ -431,6 +488,10 @@ function Write-Manifest {
         installDir        = $Directory
         shortcuts         = @($Shortcuts)
         fileAssociations  = $Associations
+
+        # The folder this install added to the user's PATH, or null when it added none - the
+        # marker the uninstaller goes by, so it never takes out an entry the user made.
+        pathEntry         = $(if ($PathEntry) { $PathEntry } else { $null })
         arpKey            = $arpKey
         dataDirectory     = $dataDirectory
     }
@@ -460,6 +521,11 @@ continue now and install it afterwards.
     $installedExe = Join-Path $target $exeName
     $upgrading = Test-Path -LiteralPath $installedExe -PathType Leaf
 
+    # Asked once, before anything changes, so the question is not lost among the steps.
+    $hasCli = Test-Path -LiteralPath (Join-Path $payload $cliExeName) -PathType Leaf
+    $pathEntry = Get-PreviousPathEntry -Directory $target
+    $wantsPath = $hasCli -and ($pathEntry -or (Test-WantsPath))
+
     Write-Step $(if ($upgrading) { "[1/5] Replacing the previous install" } else { "[1/5] Preparing" })
     Write-Detail $target
     Stop-RunningMarqora
@@ -478,7 +544,7 @@ continue now and install it afterwards.
     $uninstallDir = Join-Path $target $uninstallFolder
     New-Item -ItemType Directory -Path $uninstallDir -Force | Out-Null
 
-    foreach ($file in @('Uninstall.ps1', 'Register-FileAssociation.ps1')) {
+    foreach ($file in @('Uninstall.ps1', 'Register-FileAssociation.ps1', 'UserPath.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $uninstallDir -Force
     }
 
@@ -507,9 +573,21 @@ continue now and install it afterwards.
         Write-Detail 'markdown file types'
     }
 
+    if ($wantsPath -and -not $pathEntry) {
+        # False when PATH already had the folder: that entry is the user's, so it is not recorded
+        # and the uninstaller leaves it alone.
+        if (Add-UserPathEntry -Directory $target) {
+            $pathEntry = $target
+        }
+    }
+
+    if ($wantsPath) {
+        Write-Detail 'marqora-cli on PATH'
+    }
+
     Write-Step '[5/5] Registering with Windows'
     Write-ArpEntry -Directory $target -Version $version -Exe $installedExe
-    Write-Manifest -Directory $target -Version $version -Shortcuts $shortcuts.ToArray() -Associations $associationsRegistered
+    Write-Manifest -Directory $target -Version $version -Shortcuts $shortcuts.ToArray() -Associations $associationsRegistered -PathEntry $pathEntry
     Write-Detail 'Settings > Apps > Marqora'
 
     Write-Plain
@@ -520,6 +598,11 @@ continue now and install it afterwards.
         Write-Plain 'Windows does not let an app make itself the default for a file type, so to open'
         Write-Plain 'markdown files with Marqora by double-click, do this once:'
         Write-Plain '  right-click any .md file > Open with > Choose another app > Marqora > Always'
+        Write-Plain
+    }
+
+    if ($wantsPath) {
+        Write-Plain 'marqora-cli is on your PATH. Open a new terminal and run: marqora-cli --help'
         Write-Plain
     }
 

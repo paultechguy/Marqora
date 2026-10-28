@@ -10,7 +10,9 @@ using Microsoft.Web.WebView2.Core;
 using PaulTechGuy.MQ.Abstractions.Rendering;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Themes;
+using PaulTechGuy.MQ.WebRender;
 
 namespace PaulTechGuy.MQ.App.Services;
 
@@ -22,9 +24,8 @@ namespace PaulTechGuy.MQ.App.Services;
 /// state in, translates messages out, and keeps the two sides from talking past each other
 /// before the page is ready.
 /// </summary>
-public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
+public sealed class WebViewPreviewHost : IPreviewHost, IDocumentRenderer, IDisposable
 {
-    private const string DocumentVirtualHost = "marqora.document";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -127,7 +128,17 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
         _webView = createWebView();
         _surface.Children.Add(_webView);
+
+        // The control is replaced on recovery, so the transport reads the current one each time,
+        // and none once the page has been given up on (see BeginRecovery).
+        _bridge = new ShellBridge(new CoreWebView2Transport(() => _abandoned ? null : _webView.CoreWebView2));
     }
+
+    /// <summary>
+    /// The export-shaped requests - rendered and finished markup, print markup, diagram and math
+    /// pictures - which the headless host makes of the same shell the same way (CLI-ARC-05).
+    /// </summary>
+    private readonly ShellBridge _bridge;
 
     public bool IsReady { get; private set; }
 
@@ -359,26 +370,13 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     /// <summary>
     /// Records the open document's folder so relative images and links in the markdown
-    /// resolve against it, the way they would in any other viewer.
-    ///
-    /// The folder is not mapped with SetVirtualHostNameToFolderMapping, although that is
-    /// what the assets host uses. A folder mapping is handed to a page when it navigates and
-    /// the shell page navigates once, at startup; a mapping added or changed after that is
-    /// never seen by it, so every relative image came back ERR_NAME_NOT_RESOLVED until the
-    /// page was reloaded. The folder changes on every tab switch, so instead the requests
-    /// for marqora.document are answered here, in <see cref="OnWebResourceRequested"/>,
-    /// against whatever folder is current at the time of each request.
+    /// resolve against it, the way they would in any other viewer. The requests for
+    /// marqora.document are answered in <see cref="OnWebResourceRequested"/>, against whatever
+    /// folder is current at the time of each request; <see cref="DocumentFiles"/> says why.
     /// </summary>
     private void SetDocumentLocation(string? documentPath)
     {
-        string? directory = string.IsNullOrWhiteSpace(documentPath)
-            ? null
-            : Path.GetDirectoryName(Path.GetFullPath(documentPath));
-
-        if (directory is not null && !Directory.Exists(directory))
-        {
-            directory = null;
-        }
+        string? directory = DocumentFiles.FolderOf(documentPath);
 
         if (!string.Equals(directory, _documentDirectory, StringComparison.OrdinalIgnoreCase))
         {
@@ -389,21 +387,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
 
     /// <summary>
     /// Serves a file from the current document's folder in answer to a request for
-    /// https://marqora.document/... - the address the shell rewrites relative sources to.
-    ///
-    /// Anything outside the folder, anything with no folder to resolve against and anything
-    /// that is not a file gets a 404 rather than falling through, because falling through
-    /// would leave the request to Chromium, and marqora.document is not a real host.
+    /// https://marqora.document/..., or a resumed review's own picture for a tab with no folder.
     /// </summary>
-    /// <summary>
-    /// Added to every picture served for a document. Two things depend on it. The address is
-    /// the same for every tab - https://marqora.document/img/a.png names a different file in
-    /// each document's folder - so a cached answer could show one tab's picture in another.
-    /// And a resumed review's pictures came from a page somebody sent; kept out of the browser's
-    /// disk cache, they live only as long as the tab that holds them.
-    /// </summary>
-    private const string NoStore = "\r\nCache-Control: no-store";
-
     private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
         if (ResolveDocumentAsset(e.Request.Uri) is { } asset)
@@ -414,63 +399,11 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 new MemoryStream(asset.Bytes, writable: false).AsRandomAccessStream(),
                 200,
                 "OK",
-                $"Content-Type: {asset.MediaType}{NoStore}");
+                $"Content-Type: {asset.MediaType}{DocumentFiles.NoStore}");
             return;
         }
 
-        string? path = ResolveDocumentFile(e.Request.Uri);
-
-        if (path is null)
-        {
-            e.Response = sender.Environment.CreateWebResourceResponse(null, 404, "Not Found", string.Empty);
-            return;
-        }
-
-        try
-        {
-            FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-
-            e.Response = sender.Environment.CreateWebResourceResponse(
-                stream.AsRandomAccessStream(),
-                200,
-                "OK",
-                $"Content-Type: {ContentTypeFor(path)}{NoStore}");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _logger.LogDebug(ex, "Could not read {Path} for the preview.", path);
-            e.Response = sender.Environment.CreateWebResourceResponse(null, 404, "Not Found", string.Empty);
-        }
-    }
-
-    /// <summary>
-    /// The file a marqora.document URL names, or null when it names nothing that may be
-    /// served: no document folder, a path that escapes it, or a path that is not a file.
-    /// </summary>
-    private string? ResolveDocumentFile(string url)
-    {
-        if (_documentDirectory is not { } directory
-            || !url.StartsWith(DocumentBaseUrl, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        string relative = url[DocumentBaseUrl.Length..];
-
-        int cut = relative.IndexOfAny(['?', '#']);
-        if (cut >= 0)
-        {
-            relative = relative[..cut];
-        }
-
-        if (PathContainment.ResolveWithin(directory, Uri.UnescapeDataString(relative)) is not { } path)
-        {
-            _logger.LogDebug("{Url} does not resolve to a file inside the document folder.", url);
-
-            return null;
-        }
-
-        return File.Exists(path) ? path : null;
+        DocumentFiles.Serve(sender, e, _documentDirectory, _logger);
     }
 
     /// <summary>
@@ -506,28 +439,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    private static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
-    {
-        ".png" => "image/png",
-        ".jpg" or ".jpeg" => "image/jpeg",
-        ".gif" => "image/gif",
-        ".svg" => "image/svg+xml",
-        ".webp" => "image/webp",
-        ".avif" => "image/avif",
-        ".bmp" => "image/bmp",
-        ".ico" => "image/x-icon",
-        ".mp4" or ".m4v" => "video/mp4",
-        ".webm" => "video/webm",
-        ".ogv" => "video/ogg",
-        ".mp3" => "audio/mpeg",
-        ".wav" => "audio/wav",
-        ".ogg" or ".oga" => "audio/ogg",
-        ".m4a" => "audio/mp4",
-        ".flac" => "audio/flac",
-        _ => "application/octet-stream",
-    };
-
-    public static string DocumentBaseUrl => $"https://{DocumentVirtualHost}/";
+    public static string DocumentBaseUrl => DocumentFiles.BaseUrl;
 
     // ------------------------------------------------------------------ outbound
 
@@ -644,31 +556,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     {
         ArgumentNullException.ThrowIfNull(preferences);
 
-        return SendAsync(
-            "applyPreferences",
-            new
-            {
-                // Null font families are sent as null rather than omitted: the web side
-                // clears its own custom property on null, which is what restores the
-                // stylesheet's stack.
-                sourceFont = preferences.SourceFontFamily,
-                sourceFontSize = preferences.SourceFontSize,
-                previewFont = preferences.PreviewFontFamily,
-                previewFontSize = preferences.PreviewFontSize,
-                previewMaxWidth = preferences.PreviewMaxWidth,
-                tabSize = preferences.TabSize,
-                insertSpaces = preferences.InsertSpaces,
-                minimap = preferences.ShowMinimap,
-                highlightCurrentLine = preferences.HighlightCurrentLine,
-                continueLists = preferences.ContinueLists,
-                repeatListNumbers = preferences.RepeatListNumbers,
-                autoCloseBrackets = preferences.AutoCloseBrackets,
-                separateDiagramLabels = preferences.SeparateDiagramLabels,
-
-                // Heading numbering is deliberately not here. The numbers are written into
-                // the HTML by the renderer, so the shell has nothing to do with them: see
-                // ReapplyHeadingNumberingAsync, which re-renders instead.
-            });
+        // The same message the export renderer is sent (ShellPreferences). Heading numbering is
+        // not in it: see ReapplyHeadingNumberingAsync, which re-renders instead.
+        return SendAsync(ShellPreferences.Message, ShellPreferences.Payload(preferences));
     }
 
     public Task SetDiagnosticsAsync(Guid documentId, IReadOnlyList<Diagnostic> diagnostics)
@@ -786,45 +676,60 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     // -------------------------------------------------------------------- export
 
     /// <summary>
-    /// Outstanding rendered-HTML requests, keyed by request id.
-    ///
-    /// The bridge is otherwise one-way, so this is the only place a reply has to be matched
-    /// to its request. Keying by id rather than assuming the next message back is the answer
-    /// keeps an export correct even if other traffic arrives in between.
+    /// The active document's markup as the preview shows it, or empty when the shell did not
+    /// hand it over. For Copy as SVG; an export asks <see cref="RenderAsync"/>.
     /// </summary>
-    private readonly Dictionary<Guid, TaskCompletionSource<string>> _htmlRequests = [];
+    public async Task<string> GetRenderedHtmlAsync() =>
+        (await RenderedMarkupAsync(CancellationToken.None).ConfigureAwait(true)).Value ?? string.Empty;
 
-    public async Task<string> GetRenderedHtmlAsync()
+    /// <summary>
+    /// The document on screen, which is the one the app exports. The request names what the
+    /// preview is already showing, so nothing is rendered again: the preview's own markup is
+    /// handed over, which is why what is exported is what was on screen.
+    /// </summary>
+    public async Task<BridgeOutcome<RenderedDocument>> RenderAsync(RenderRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        BridgeOutcome<string> outcome = await RenderedMarkupAsync(cancellationToken).ConfigureAwait(true);
+
+        return outcome.Map(html => new RenderedDocument(html ?? string.Empty));
+    }
+
+    /// <summary>
+    /// The preview's markup for the active document. The reply is matched to its request by id,
+    /// in the bridge, so an export stays correct whatever other traffic arrives meanwhile.
+    /// </summary>
+    private async Task<BridgeOutcome<string>> RenderedMarkupAsync(CancellationToken cancellationToken)
     {
         if (!IsReady)
         {
-            return string.Empty;
+            return BridgeOutcome.Failed<string>(new InvalidOperationException("The preview is not ready."));
         }
 
-        var id = Guid.NewGuid();
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // A shell that has stopped responding must not hang the export for ever.
+        BridgeOutcome<string> outcome = await _bridge
+            .RenderedHtmlAsync(TimeSpan.FromSeconds(10), cancellationToken)
+            .ConfigureAwait(true);
 
-        _htmlRequests[id] = completion;
-
-        try
+        if (!outcome.IsRendered)
         {
-            await SendAsync("requestRenderedHtml", new { requestId = id }).ConfigureAwait(true);
-
-            // A shell that has stopped responding must not hang the export for ever.
-            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(10)))
-                .ConfigureAwait(true);
-
-            if (finished != completion.Task)
-            {
-                _logger.LogWarning("The preview did not return its markup within ten seconds.");
-                return string.Empty;
-            }
-
-            return await completion.Task.ConfigureAwait(true);
+            LogUnanswered(outcome, "The preview did not return its markup within ten seconds.");
         }
-        finally
+
+        return outcome;
+    }
+
+    /// <summary>Says why a request to the shell came back without an answer.</summary>
+    private void LogUnanswered(BridgeOutcome<string> outcome, string timedOut)
+    {
+        if (outcome.Result == BridgeResult.Failed)
         {
-            _htmlRequests.Remove(id);
+            _logger.LogWarning(outcome.Error, "Could not post a message to the preview shell.");
+        }
+        else
+        {
+            _logger.LogWarning("{Message}", timedOut);
         }
     }
 
@@ -900,61 +805,38 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
         }
     }
 
-    /// <summary>Outstanding off-screen render requests, keyed the same way as the HTML ones.</summary>
-    private readonly Dictionary<Guid, TaskCompletionSource<string>> _exportRequests = [];
-
     /// <summary>
     /// Finishes a document that is not on screen: mermaid, KaTeX and highlighting applied to
     /// markup Markdig has already produced.
     ///
-    /// A Folio of twelve tabs needs this eleven times, because <see cref="GetRenderedHtmlAsync"/>
-    /// can only ever answer for the document in front. The shell does the work in a container of
+    /// A Folio of twelve tabs needs this eleven times, because <see cref="RenderAsync"/> can
+    /// only ever answer for the document in front. The shell does the work in a container of
     /// its own and never touches the preview, so the reader's scroll position and diagram
     /// numbering survive being exported around.
     ///
     /// The timeout is longer than the preview's ten seconds: a document full of diagrams is
     /// slower than anything the live preview is asked for, and a Folio is not a keystroke.
     /// </summary>
-    public async Task<string> RenderForExportAsync(string html)
+    public async Task<BridgeOutcome<string>> RenderDetachedAsync(string html, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(html);
 
         if (!IsReady)
         {
-            return html;
+            return BridgeOutcome.Failed<string>(new InvalidOperationException("The preview is not ready."));
         }
 
-        var id = Guid.NewGuid();
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        BridgeOutcome<string> outcome = await _bridge
+            .ExportHtmlAsync(html, TimeSpan.FromSeconds(30), cancellationToken)
+            .ConfigureAwait(true);
 
-        _exportRequests[id] = completion;
-
-        try
+        if (!outcome.IsRendered)
         {
-            await SendAsync("requestExportHtml", new { requestId = id, html }).ConfigureAwait(true);
-
-            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(30)))
-                .ConfigureAwait(true);
-
-            if (finished != completion.Task)
-            {
-                _logger.LogWarning("The preview did not finish a document for export within thirty seconds.");
-
-                // The Markdig markup, unfinished. A Folio missing one document's diagrams beats
-                // a Folio missing the document.
-                return html;
-            }
-
-            return await completion.Task.ConfigureAwait(true);
+            LogUnanswered(outcome, "The preview did not finish a document for export within thirty seconds.");
         }
-        finally
-        {
-            _exportRequests.Remove(id);
-        }
+
+        return outcome;
     }
-
-    /// <summary>Outstanding diagram PNG and SVG requests, keyed the same way as the HTML ones.</summary>
-    private readonly Dictionary<Guid, TaskCompletionSource<string>> _diagramRequests = [];
 
     public async Task<byte[]?> RequestDiagramPngAsync(string hash, bool forCopy)
     {
@@ -963,98 +845,57 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             return null;
         }
 
-        if (await AskShellAsync("requestDiagramPng", id => new { requestId = id, hash, copy = forCopy })
-                .ConfigureAwait(true) is not { } data)
-        {
-            return null;
-        }
-
-        try
-        {
-            return Convert.FromBase64String(data);
-        }
-        catch (FormatException ex)
-        {
-            _logger.LogWarning(ex, "The shell's diagram image was not readable base64.");
-            return null;
-        }
+        return await AskShellAsync("a diagram's picture", (bridge, timeout) => bridge.DiagramPngAsync(hash, forCopy, timeout))
+                .ConfigureAwait(true) is { } data
+            ? ShellAnswers.DiagramPng(data, _logger)
+            : null;
     }
 
-    public async Task<MathPicture?> RequestMathPngAsync(int line, int ordinal)
-    {
-        if (await AskShellAsync("requestMathPng", id => new { requestId = id, line, ordinal })
-                .ConfigureAwait(true) is not { } data)
-        {
-            return null;
-        }
+    /// <summary>The tight crop: the export's document already sets a picture apart from its text.</summary>
+    public Task<byte[]?> DiagramPngAsync(string hash, CancellationToken cancellationToken = default) =>
+        RequestDiagramPngAsync(hash, forCopy: false);
 
-        // "depth|base64": see mathPngOf in app.js.
-        int bar = data.IndexOf('|', StringComparison.Ordinal);
+    public async Task<MathPicture?> MathPngAsync(int line, int ordinal, CancellationToken cancellationToken = default) =>
+        await AskShellAsync("an equation's picture", (bridge, timeout) => bridge.MathPngAsync(line, ordinal, timeout))
+                .ConfigureAwait(true) is { } data
+            ? ShellAnswers.MathPng(data, _logger)
+            : null;
 
-        try
-        {
-            double depth = bar > 0 && double.TryParse(data.AsSpan(0, bar), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double read) ? read : 0;
-
-            return new MathPicture(Convert.FromBase64String(data[(bar + 1)..]), depth);
-        }
-        catch (FormatException ex)
-        {
-            _logger.LogWarning(ex, "The shell's equation image was not readable base64.");
-            return null;
-        }
-    }
-
+    /// <summary>One diagram's light drawing: null when the shell had none to give, or did not answer in time.</summary>
     public Task<string?> RequestDiagramSvgAsync(string hash) =>
-        RequestDiagramAsync("requestDiagramSvg", hash);
-
-    /// <summary>
-    /// Asks the shell for one diagram in some form and waits for the answer: null when it had
-    /// none to give, or did not answer in time.
-    /// </summary>
-    private Task<string?> RequestDiagramAsync(string message, string hash) =>
         string.IsNullOrEmpty(hash)
             ? Task.FromResult<string?>(null)
-            : AskShellAsync(message, id => new { requestId = id, hash });
+            : AskShellAsync("a diagram's drawing", (bridge, timeout) => bridge.DiagramSvgAsync(hash, timeout));
+
+    public Task<string?> DiagramSvgAsync(string hash, CancellationToken cancellationToken = default) =>
+        RequestDiagramSvgAsync(hash);
 
     /// <summary>
-    /// Sends a message carrying a request id and waits for the shell's answer to it: null when
-    /// the answer was empty, or did not come in time.
+    /// Asks the shell one of the bridge's questions and waits for the answer: null when the
+    /// answer was empty, or did not come in time. <paramref name="what"/> names it in the log.
     /// </summary>
-    private async Task<string?> AskShellAsync(string message, Func<Guid, object> payload)
+    private async Task<string?> AskShellAsync(
+        string what,
+        Func<ShellBridge, TimeSpan, Task<BridgeOutcome<string>>> ask)
     {
         if (!IsReady)
         {
             return null;
         }
 
-        var id = Guid.NewGuid();
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        BridgeOutcome<string> outcome = await ask(_bridge, TimeSpan.FromSeconds(20)).ConfigureAwait(true);
 
-        _diagramRequests[id] = completion;
-
-        try
+        if (!outcome.IsRendered)
         {
-            await SendAsync(message, payload(id)).ConfigureAwait(true);
-
-            Task finished = await Task.WhenAny(completion.Task, Task.Delay(TimeSpan.FromSeconds(20)))
-                .ConfigureAwait(true);
-
-            if (finished != completion.Task)
-            {
-                _logger.LogWarning("The shell did not answer {Message}.", message);
-                return null;
-            }
-
-            string data = await completion.Task.ConfigureAwait(true);
-
-            // An empty reply is the shell saying it could not produce one, which it reports
-            // on its own side; there is nothing to add to that here.
-            return data.Length == 0 ? null : data;
+            LogUnanswered(outcome, $"The shell did not answer the request for {what}.");
+            return null;
         }
-        finally
-        {
-            _diagramRequests.Remove(id);
-        }
+
+        string data = outcome.Value ?? string.Empty;
+
+        // An empty reply is the shell saying it could not produce one, which it reports
+        // on its own side; there is nothing to add to that here.
+        return data.Length == 0 ? null : data;
     }
 
     /// <summary>Outstanding selection-range requests, keyed the same way as the HTML ones.</summary>
@@ -1257,10 +1098,15 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// path and all, so every PDF carried the author's folder layout to whoever it was sent.
     /// </summary>
     private async Task PrepareForPrintAsync(double pageRatio, string title) =>
-        await AskShellAsync("prepareForPrint", id => new { requestId = id, pageRatio, title })
+        await AskShellAsync("print readiness", (bridge, timeout) => bridge.PrepareForPrintAsync(pageRatio, title, timeout))
             .ConfigureAwait(true);
 
-    public async Task<PdfExportOutcome> ExportPdfAsync(string path, PdfPageSetup setup, string title, PaperFurniture furniture)
+    public async Task<PdfExportOutcome> PrintPdfAsync(
+        string path,
+        PdfPageSetup setup,
+        string title,
+        PaperFurniture furniture,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(setup);
@@ -1286,77 +1132,8 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             _logger,
             () => ExportClassicPdfAsync(core, path, setup, title)).ConfigureAwait(true);
 
-        IReadOnlyList<ExportIssue> issues = DiagramIssues(markup);
-
-        // Plan O4: every note is still in the PDF, only at the end rather than at its page foot,
-        // so the row is worth knowing rather than a loss - and it says why, because a reader
-        // who expected footnotes will otherwise think the export got them wrong.
-        if (job.NotesAsEndnotes > 0)
-        {
-            issues =
-            [
-                new ExportIssue
-                {
-                    Line = 0,
-                    IsAdvisory = true,
-                    Problem = "The footnotes are endnotes in this PDF: one could not be placed at the foot of its page, and a document takes one kind or the other",
-                    Item = job.NotesAsEndnotes == 1 ? "1 footnote" : $"{job.NotesAsEndnotes} footnotes",
-                },
-                .. issues,
-            ];
-        }
-
-        return new PdfExportOutcome(job.Engine, issues);
+        return new PdfExportOutcome(job.Engine, ShellAnswers.PdfIssues(markup, job, _logger));
     }
-
-    /// <summary>
-    /// A report row for every diagram the shell listed as failing to draw. The PDF carries the
-    /// diagram's error where the drawing would be, so the row says that rather than Word's
-    /// "its source is in the document instead".
-    /// </summary>
-    private IReadOnlyList<ExportIssue> DiagramIssues(string? markup)
-    {
-        if (string.IsNullOrEmpty(markup))
-        {
-            return [];
-        }
-
-        try
-        {
-            using JsonDocument parsed = JsonDocument.Parse(markup);
-
-            if (!parsed.RootElement.TryGetProperty("diagramErrors", out JsonElement errors)
-                || errors.ValueKind != JsonValueKind.Array)
-            {
-                return [];
-            }
-
-            return
-            [
-                .. errors.EnumerateArray().Select(error => new ExportIssue
-                {
-                    // Markdig counts from zero and the editor from one; -1 is "no line known".
-                    Line = ReadInt(error, "line", -1) is int line and >= 0 ? line + 1 : 0,
-                    Problem = "The diagram could not be drawn; the PDF shows its error instead",
-                    Item = OneLine(ReadString(error, "message")) is { Length: > 0 } message
-                        ? (message.Length <= 80 ? message : message[..80].TrimEnd() + "…")
-                        : "A diagram",
-                }),
-            ];
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogDebug(ex, "The print markup's diagram list could not be read.");
-            return [];
-        }
-    }
-
-    /// <summary>
-    /// A message on one line. Mermaid's parse errors run over three - the message, the source
-    /// around the fault, a row of dashes pointing at it - and a report row is read in a column.
-    /// </summary>
-    private static string OneLine(string text) =>
-        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>
     /// Prints the active document to the printer the user chose: the paged engine, so a
@@ -1390,7 +1167,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// no comment marks - or null when it did not answer within the request's bound.
     /// </summary>
     private Task<string?> RequestPrintMarkupAsync() =>
-        AskShellAsync("requestPrintHtml", id => new { requestId = id });
+        AskShellAsync("the print markup", (bridge, timeout) => bridge.PrintHtmlAsync(timeout));
 
     /// <summary>The window the preview sits in, which a print view's controller is parented to.</summary>
     private IntPtr ParentWindow() =>
@@ -1583,6 +1360,12 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
             string type = typeElement.GetString() ?? string.Empty;
             JsonElement payload = root.TryGetProperty("payload", out JsonElement p) ? p : default;
 
+            // An answer to one of the bridge's requests is the bridge's, and nothing else reads it.
+            if (_bridge.Accept(type, payload))
+            {
+                return;
+            }
+
             Dispatch(type, payload);
         }
         catch (JsonException ex)
@@ -1703,14 +1486,6 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                 break;
             }
 
-            case "renderedHtml":
-                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid requestId)
-                    && _htmlRequests.TryGetValue(requestId, out TaskCompletionSource<string>? pending))
-                {
-                    pending.TrySetResult(ReadString(payload, "html"));
-                }
-                break;
-
             case "reviewHtml":
                 if (Guid.TryParse(ReadString(payload, "requestId"), out Guid reviewId)
                     && _reviewRequests.TryGetValue(reviewId, out TaskCompletionSource<string>? reviewPending))
@@ -1791,26 +1566,6 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
                     }
 
                     CommentsPlaced?.Invoke(this, new CommentsPlacedEventArgs(placedDocument, missing));
-                }
-                break;
-
-            case "exportHtml":
-                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid exportId)
-                    && _exportRequests.TryGetValue(exportId, out TaskCompletionSource<string>? awaiting))
-                {
-                    awaiting.TrySetResult(ReadString(payload, "html"));
-                }
-                break;
-
-            case "printHtml":
-            case "diagramPng":
-            case "diagramSvg":
-            case "mathPng":
-            case "outputReady":
-                if (Guid.TryParse(ReadString(payload, "requestId"), out Guid drawingId)
-                    && _diagramRequests.TryGetValue(drawingId, out TaskCompletionSource<string>? drawing))
-                {
-                    drawing.TrySetResult(ReadString(payload, "data"));
                 }
                 break;
 
@@ -2064,7 +1819,7 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDisposable
     /// Read from the string the shell sent rather than from a parsed URL. Parsing collapses
     /// "../" against the root of the virtual host, so a link to a sibling folder's document
     /// would have arrived pointing inside this one. Unlike a picture, which
-    /// <see cref="ResolveDocumentFile"/> serves only from inside the folder, a link may go
+    /// <see cref="DocumentFiles.Resolve"/> serves only from inside the folder, a link may go
     /// anywhere: following it is something the reader chose.
     /// </summary>
     private LocalLinkActivatedEventArgs ResolveLocalLink(string relative)

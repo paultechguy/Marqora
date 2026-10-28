@@ -30,7 +30,11 @@ Repositories Rendering Analysis Spelling Services   App
 | `Analysis` | dead links, missing images, the style rules | rewrite anything |
 | `Spelling` | the spelling analyzer, the skip rules, the seed list, the cache | know how to spell — that arrives as `ISpellingEngine`. See `Spelling.md` |
 | `Services` | the document workspace, settings, recent files, file watching, the word list | reference WinUI |
+| `Exporting` | the export jobs and what they assemble: the HTML page and its packaging, the Folio's page and shrinking | reference Windows (it is plain `net10.0`), start a browser, or know which front end runs it |
+| `Imaging` | resizing a picture through Windows Imaging, for the Folio's shrink | know about documents |
+| `WebRender` | the browser without a window: the headless host, the shell bridge and its transport, the paged PDF engine | reference WinUI |
 | `App` | window, view models, WebView bridge, the Windows spell engine | contain file or rendering logic |
+| `Cli` | marqora-cli: the command tree, the verbs, reporting and exit codes | reference the app, or be referenced by it |
 
 **`Markdown` is a foundation rather than a concrete layer**, which is why two concrete layers may
 both depend on it. It has no state, no I/O and no references — every member takes and returns
@@ -979,12 +983,13 @@ processes that each hand over and exit produce the same ten tabs, just more slow
 
 ## Exporting
 
-HTML and PDF take the **rendered preview**, not a fresh render of the source. Diagrams are
-already inline SVG at that point, math is already laid out by KaTeX and code is already
-highlighted, so an export cannot disagree with what was on screen. `IPreviewHost` grows one
-request/response call for this, `GetRenderedHtmlAsync`, keyed by request id — the bridge is
-otherwise one-way, and matching a reply to its request keeps an export correct even if other
-traffic arrives in between.
+In the app, HTML and PDF take the **rendered preview**, not a fresh render of the source.
+Diagrams are already inline SVG at that point, math is already laid out by KaTeX and code is
+already highlighted, so an export cannot disagree with what was on screen. They ask for it
+through `IDocumentRenderer.RenderAsync`, a request and its reply matched by request id - the
+bridge is otherwise one-way, and the match keeps an export correct even if other traffic
+arrives in between. The preview is one implementation of that interface; the headless host
+below is the other, and every export job takes whichever it is handed.
 
 Word is the exception, and the section on it below says why.
 
@@ -1009,7 +1014,9 @@ experience, themed by the system and handing back settings the app had no way to
 **HTML** is assembled by `HtmlExporter`. It reuses `app.css` rather than maintaining a second
 stylesheet, which is what keeps exports looking like the preview; it carries a few pane and
 splitter rules an exported document has no use for, a fair trade for not having two
-stylesheets to keep in step. The KaTeX and highlight.js themes are included only when the
+stylesheets to keep in step. The rules for the dark screen are the exception, and are taken
+out on the way (`RenderedHtmlPackager.WithoutDarkScreen`): every page that leaves is fixed to
+light, so they could never apply. The KaTeX and highlight.js themes are included only when the
 document actually contains math or code — KaTeX's stylesheet alone is most of the file for a
 document with no equations. Local images become data URIs, read by the host rather than by
 the page, which sidesteps the CSP and the cross-origin rules entirely. KaTeX's web fonts are
@@ -1048,13 +1055,15 @@ sections, real numbering definitions, real tables, real footnotes, and OMML equa
 can click into. Colors and fonts are theme references rather than literals, which is what lets
 Word's Design tab restyle the whole file.
 
-Three things exist only after a browser has drawn them, and those still come from the preview:
-the SVG mermaid produced, the MathML KaTeX produced, and the token classes highlight.js
-produced. `PreviewHarvest` reads all three out of the same `GetRenderedHtmlAsync` string the
-HTML export already asks for, so there is no second conversation with the shell and nothing in
-`webshell/` had to change. Diagram pictures come back through the existing
-`RequestDiagramPngAsync`, fetched together before the walk begins because the walk is
-synchronous and the bridge allows twenty seconds a diagram.
+Three things exist only after a browser has drawn them: the SVG mermaid produced, the MathML
+KaTeX produced, and the token classes highlight.js produced. They come from a browser of the
+export's own, not the preview: the app's `ExportRenderHost` keeps a headless host for its
+session and renders the document there, so whatever the preview is doing - catching up with a
+keystroke, showing another tab - has no part in the file (CLI-ARC-07). The preview stands in
+only if that browser could not be started. `PreviewHarvest` reads all three out of the markup
+`RenderAsync` returns, and diagram pictures come back through `DiagramPngAsync` and
+`DiagramSvgAsync`, fetched together before the walk begins because the walk is synchronous and
+the bridge allows twenty seconds a diagram.
 
 Two details are worth knowing before touching it. The artifacts are matched on the source line
 Markdig stamped on each block, **not** on the order they appear in: display math renders as a
@@ -1083,6 +1092,52 @@ reviewed source with the comments written in. It is also the one export that kee
 others strip - `withoutCommentMarks` takes the marks out of every other copy of the preview, and
 print neutralizes them, because print paints the live page. `docs/Review.md` covers it, including
 why a document under review is held read-only and the three paths that needed more than that.
+
+---
+
+## Headless rendering
+
+Every export needs a browser to finish its document, and marqora-cli has no window to put one
+in. `HeadlessRenderHost` (`WebRender`) is a preview with one tab and no screen: it loads the same
+`shell.html`, is told the same color themes and paper spec when the shell reports ready, and
+opens a document with the same `openTab` and `activateTab` the live preview gets. What it hands
+back is therefore what the app would export for the same document, by construction rather than
+by two renders kept in step.
+
+**The host.** A WebView2 controller under a message-only window, kept visible as far as the
+browser knows but placed outside its parent's client area: the mode the paged print engine
+found to be the one that lays out. It lives on a `RenderThread`, an STA thread pumping messages
+through `StaPump`, because WebView2 belongs to the thread that made it and that thread has to
+pump; marqora-cli otherwise awaits without a context and wanders between pool threads. It is
+always light. A render that does not settle in time comes back `TimedOut` rather than degrading:
+the app shows a reader what it has, and a script has nobody to show it to.
+
+**One bridge.** `ShellBridge` is how both hosts make requests of the shell - a render, the
+finished markup, a diagram's picture or light SVG, an equation's picture, a document finished
+detached for a Folio - each with a request id and an answer matched to it. It speaks through
+`IShellTransport`, and `CoreWebView2Transport` is the transport for the live preview's control
+and the headless host's controller alike; the preview's transport takes its WebView as a
+function because recovering from a shell that stopped responding makes a new one. The shell
+cannot tell the two hosts apart, and `tests/PaulTechGuy.MQ.Exporting.Tests` runs its bridge suite
+over the real transport against a real headless shell, which is as near the preview as a test
+process gets.
+
+**One pipeline, two front ends.** The exports are jobs in `Exporting` - `HtmlExportJob`,
+`PdfExportJob`, `WordExportJob`, `FolioPageJob` - each handed its `IDocumentRenderer` per run and
+answering with an `ExportOutcome`: what was written, and the report's rows. The app's view model
+runs them with the preview or its `ExportRenderHost`, then shows its dialogs and report window;
+marqora-cli runs the same jobs with its own host, and turns the rows into findings on standard
+error. Neither front end does any of the export's work, which is what lets the CLI's files be
+compared byte for byte with the app's: the baseline comparison in
+`build/Compare-ExportBaseline.ps1` is how that was shown, format by format.
+
+**A run's browser.** marqora-cli starts its host with the first export of a run and keeps it for
+the rest, in a data folder of its own under `%TEMP%\Marqora-cli` named for the process and its
+start time, swept when a run that was killed left one behind. The PDF engine prints in that same
+browser rather than starting a second. The host counts any request its page makes outside
+`marqora.assets` and `marqora.document`; the shell's content policy is what keeps that count at
+zero, as it keeps the preview offline. The whole design, the spike that proved it and the
+records of every comparison are in `docs/CLI-Implementation-Plan.md`.
 
 ---
 

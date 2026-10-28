@@ -349,6 +349,12 @@ page whenever you want it.
   an empty one to retype into.
 - **Everything is on the keyboard.** `Alt` puts you on the menu bar, and `Help > Keyboard
   Shortcuts...` lists every shortcut in the app with a button that copies the lot.
+- **The same commands work in a terminal.** `marqora-cli`, installed beside the app, formats,
+  numbers headings, checks links, exports and builds Folios without opening a window, through
+  the same code: `marqora-cli check "docs/**/*.md"` finds every dead link in a folder at once,
+  and `marqora-cli export pdf "docs/**/*.md"` puts a PDF beside each document. If the
+  installer did not put it on your PATH, it is in the folder Marqora is installed in, and
+  `marqora-cli --help` is the place to start.
 
 ---
 

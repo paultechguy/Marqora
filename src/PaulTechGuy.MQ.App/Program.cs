@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Dispatching;
 using PaulTechGuy.MQ.Abstractions;
+using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Abstractions.Spelling;
 using PaulTechGuy.MQ.Abstractions.Ui;
 using PaulTechGuy.MQ.App.Services;
@@ -15,13 +16,16 @@ using PaulTechGuy.MQ.Analysis;
 using PaulTechGuy.MQ.Docx;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
+using PaulTechGuy.MQ.Exporting;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
+using PaulTechGuy.MQ.Imaging;
 using PaulTechGuy.MQ.Rendering;
 using PaulTechGuy.MQ.Repositories;
 using PaulTechGuy.MQ.Services;
 using PaulTechGuy.MQ.Spelling;
 using PaulTechGuy.MQ.Themes;
+using PaulTechGuy.MQ.WebRender;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -48,6 +52,10 @@ public static class Program
         Environment.SetEnvironmentVariable(
             "WEBVIEW2_USER_DATA_FOLDER",
             Path.Combine(paths.DataDirectory, "WebView2"));
+
+        // Prints and PDFs lay out in a browser of their own, in the folder beside that one
+        // (PagedPrintHost says why). Told here, before anything can print.
+        PagedPrintHost.Configure(PagedPrintHost.BesideUserDataFolderAsync);
 
         Log.Logger = CreateBootstrapLogger(paths);
 
@@ -168,6 +176,14 @@ public static class Program
         builder.Services.AddSingleton<RenderedHtmlPackager>();
         builder.Services.AddSingleton<IHtmlExporter, HtmlExporter>();
         builder.Services.AddSingleton<FolioHtmlWriter>();
+
+        // The export jobs both front ends run (CLI-ARC-04); the renderer is handed to each run.
+        builder.Services.AddSingleton<HtmlExportJob>();
+        builder.Services.AddSingleton<PdfExportJob>();
+        builder.Services.AddSingleton<WordExportJob>();
+        builder.Services.AddSingleton<FolioPageJob>();
+        builder.Services.AddSingleton<ExportRenderHost>();
+        builder.Services.AddSingleton<IImageResizer, WicImageResizer>();
         builder.Services.AddSingleton<FolioShrinker>();
         builder.Services.AddSingleton(sp => new FolioFetcher(
             sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FolioFetcher>>(),

@@ -2844,6 +2844,12 @@
 
   // --- applying a render ---------------------------------------------------
 
+  /*
+    The render applyPreviewHtml last started, settled or not. Read by requestRenderSettled, for a
+    host that asks for a document's output the moment it has opened it.
+  */
+  var lastRender = Promise.resolve();
+
   function applyPreviewHtml(html, resetScroll) {
     if (html === state.lastHtml) { return Promise.resolve(); }
 
@@ -2868,7 +2874,7 @@
       els.previewPane.scrollTop = 0;
     }
 
-    return Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
+    lastRender = Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
       buildLineMap();
 
       if (generation === state.renderGeneration) {
@@ -2888,6 +2894,8 @@
         scrollPreviewToLine(anchorLine);
       }
     });
+
+    return lastRender;
   }
 
   // --------------------------------------------------------- review comments
@@ -6731,6 +6739,21 @@
           })
         });
       });
+    },
+
+    /*
+      Answers once the preview's current render has finished - diagrams, math and code - and
+      every diagram carries its output drawing. The app never sends it: it prints a preview the
+      reader has already watched settle. The CLI's headless host opens a document and asks for
+      its output straight away, so it asks this first. A render that failed still answers; what
+      it left behind is what there is to print, as it would be on screen.
+    */
+    requestRenderSettled: function (p) {
+      lastRender.catch(function () { /* reported where it failed */ })
+        .then(whenOutputReady)
+        .then(function () {
+          post('renderSettled', { requestId: p.requestId, data: 'settled' });
+        });
     },
 
     requestRenderedHtml: function (p) {

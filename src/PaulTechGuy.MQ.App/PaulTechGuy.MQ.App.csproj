@@ -22,33 +22,21 @@
       no developer certificate.
     -->
     <WindowsPackageType>None</WindowsPackageType>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <!-- Carrying the Windows App SDK in the output removes the runtime prerequisite. -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
     <!--
-      The .NET runtime is only bundled for Release. Debug stays framework-dependent so
-      the inner loop does not pay to copy the runtime on every build.
+      The runtime identifier, self-contained Release and ReadyToRun live in build\Publish.props,
+      imported below and by marqora-cli, which publishes into the same folder.
     -->
-    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
-    <PublishSingleFile Condition="'$(Configuration)' == 'Release'">false</PublishSingleFile>
-
-    <!--
-      Precompiling IL to native code takes the time to first window from about 600ms to
-      about 390ms, measured on this publish, and costs roughly 45 MB of output. Release
-      only: it adds a crossgen2 pass the inner loop has no use for.
-
-      Single file stays off above. The Windows App SDK bundles its native DLLs into the
-      executable, and WinRT needs them on disk to build an activation factory, so the
-      first Windows App SDK call fails with 0x8007007E and the process dies before a
-      window appears.
-    -->
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
 
     <!-- The WinUI XAML compiler emits its own entry point; Program.cs replaces it. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
+
+  <!-- How it publishes, shared with marqora-cli: runtime identifier, self-contained, ReadyToRun. -->
+  <Import Project="..\..\build\Publish.props" />
 
   <ItemGroup>
     <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
@@ -56,15 +44,18 @@
     <ProjectReference Include="..\PaulTechGuy.MQ.Analysis\PaulTechGuy.MQ.Analysis.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Docx\PaulTechGuy.MQ.Docx.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Editing\PaulTechGuy.MQ.Editing.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Exporting\PaulTechGuy.MQ.Exporting.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Finding\PaulTechGuy.MQ.Finding.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Folio\PaulTechGuy.MQ.Folio.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Formatting\PaulTechGuy.MQ.Formatting.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Imaging\PaulTechGuy.MQ.Imaging.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Markdown\PaulTechGuy.MQ.Markdown.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Services\PaulTechGuy.MQ.Services.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Spelling\PaulTechGuy.MQ.Spelling.csproj" />
     <ProjectReference Include="..\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.WebRender\PaulTechGuy.MQ.WebRender.csproj" />
   </ItemGroup>
 
   <!--
@@ -115,39 +106,10 @@
   </ItemGroup>
 
   <!--
-    The preview shell and its vendor bundle live in webshell\ at the repository root and are
-    deployed to Assets\web next to the executable, where WebAssetProvider maps them onto the
-    marqora.assets virtual host. vendor\ is restored by build\Get-WebAssets.ps1 and is not in
-    source control.
-
-    They sit outside the project directory deliberately. The WinUI resource indexer walks the
-    project folder and reads Monaco's content-hashed file names (worker-BIZPAL9O.js) as
-    resource qualifiers, warning about every one. Keeping the tree out of the project, and
-    copying it with an explicit target rather than as Content, avoids that entirely and skips
-    evaluating several thousand items that need nothing more than a copy.
+    The preview shell and its vendor bundle, copied to Assets\web next to the executable. Shared
+    with marqora-cli, which hosts the same shell; the file says why it is done this way.
   -->
-  <PropertyGroup>
-    <MarqoraWebShellDir>$(MSBuildThisFileDirectory)..\..\webshell\</MarqoraWebShellDir>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <MarqoraWebAsset Include="$(MarqoraWebShellDir)**\*" />
-  </ItemGroup>
-
-  <!--
-    Visual Studio decides whether to build a project at all before MSBuild is asked to run a
-    single target, and that check only looks at the item types it recognises. MarqoraWebAsset
-    is not one of them, so an edit in webshell\ left the project looking up to date: the build
-    was skipped whole, CopyWebAssetsToOutput never ran, and the output kept the previous shell
-    while the source said otherwise.
-
-    Only the hand-written files are listed. vendor\ changes when Get-WebAssets.ps1 runs and at
-    no other time, and putting its several hundred files through a check that runs on every
-    build costs more than the rebuilds it would catch.
-  -->
-  <ItemGroup>
-    <UpToDateCheckInput Include="$(MarqoraWebShellDir)*.*" />
-  </ItemGroup>
+  <Import Project="..\..\build\WebAssets.targets" />
 
   <!--
     WinUI ships the strings for its built-in controls, right-click menus and screen-reader
@@ -207,27 +169,6 @@
                              RelativePath="%(Filename)%(Extension)"
                              CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
-  </Target>
-
-  <Target Name="VerifyWebAssets" BeforeTargets="Build">
-    <Error Condition="!Exists('$(MarqoraWebShellDir)vendor\monaco\vs\loader.js')"
-           Text="Web assets are missing. Run 'pwsh .\build\Get-WebAssets.ps1' from the repository root, then build again." />
-  </Target>
-
-  <Target Name="CopyWebAssetsToOutput"
-          AfterTargets="Build"
-          Inputs="@(MarqoraWebAsset)"
-          Outputs="@(MarqoraWebAsset->'$(OutDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')">
-    <Copy SourceFiles="@(MarqoraWebAsset)"
-          DestinationFiles="@(MarqoraWebAsset->'$(OutDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true"
-          UseHardlinksIfPossible="true" />
-  </Target>
-
-  <Target Name="CopyWebAssetsToPublish" AfterTargets="Publish">
-    <Copy SourceFiles="@(MarqoraWebAsset)"
-          DestinationFiles="@(MarqoraWebAsset->'$(PublishDir)Assets\web\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
