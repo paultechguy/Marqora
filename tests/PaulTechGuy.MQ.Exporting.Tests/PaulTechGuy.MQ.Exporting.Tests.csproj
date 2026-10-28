@@ -4,6 +4,11 @@
     The export code shared by the app and marqora-cli (CLI-TST-02). On the Windows target so the
     shrinker can be tested with the real Windows Imaging resizer rather than a stand-in: whether a
     picture is really made smaller is the thing worth knowing.
+
+    And with a real browser, for the bridge both hosts speak to the shell through (CLI-ARC-05,
+    WP-M2-13): the shell's files are copied here as they are next to the app and marqora-cli, and
+    WebView2's WinRT projection is asked for by name, as marqora-cli asks for it, because the
+    package switches it on only for Windows App SDK projects. x64 alone, as marqora-cli is built.
   -->
 
   <PropertyGroup>
@@ -11,7 +16,10 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>PaulTechGuy.MQ.Exporting.Tests</RootNamespace>
     <OutputType>Exe</OutputType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
     <Nullable>enable</Nullable>
+    <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,11 +28,18 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Exporting\PaulTechGuy.MQ.Exporting.csproj" />
     <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Imaging\PaulTechGuy.MQ.Imaging.csproj" />
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Rendering\PaulTechGuy.MQ.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Repositories\PaulTechGuy.MQ.Repositories.csproj" />
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Themes\PaulTechGuy.MQ.Themes.csproj" />
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.WebRender\PaulTechGuy.MQ.WebRender.csproj" />
   </ItemGroup>
+
+  <Import Project="..\..\build\WebAssets.targets" />
 
 </Project>

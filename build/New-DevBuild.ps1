@@ -105,6 +105,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $appProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.App\PaulTechGuy.MQ.App.csproj'
+$cliProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.Cli\PaulTechGuy.MQ.Cli.csproj'
 $solution = Join-Path $repoRoot 'PaulTechGuy.MQ.slnx'
 $installerSource = Join-Path $PSScriptRoot 'installer'
 $associationScript = Join-Path $PSScriptRoot 'Register-FileAssociation.ps1'
@@ -208,7 +209,7 @@ and run its Install.cmd over the top of this one.
     Set-Content -LiteralPath $path -Value ($banner + $existing) -Encoding UTF8 -NoNewline
 }
 
-Initialize-TaskList -Total $(if ($Test) { 5 } else { 4 })
+Initialize-TaskList -Total $(if ($Test) { 6 } else { 5 })
 
 try {
     $numericVersion = Assert-DevVersion -Value $Version
@@ -303,6 +304,20 @@ try {
     if ($welcomeMissing) {
         Write-Note 'no welcome document in the publish; this build will not introduce itself'
     }
+
+    # ---- the command line, published beside the app as the release does it, at the same
+    # version. A dev build is how a change to the libraries the two share is first built for
+    # real, so it is where a CLI that no longer compiles has to fail.
+    Write-Task 'publish marqora-cli'
+    $cliSummary = Add-CliToPublish `
+        -CliProject $cliProject `
+        -PublishDir $publishDir `
+        -StagingRoot $staging `
+        -Configuration $configuration `
+        -AppVersion $Version `
+        -ExtraArguments @("-p:Version=$Version", "-p:AssemblyVersion=$numericVersion.0", "-p:FileVersion=$numericVersion.0") `
+        -ShowBuildOutput:$ShowBuildOutput
+    Write-Done $cliSummary
 
     # ---- stage
     Write-Task 'stage installer'

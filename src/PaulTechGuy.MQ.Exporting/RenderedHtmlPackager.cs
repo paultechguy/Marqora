@@ -122,7 +122,7 @@ public sealed partial class RenderedHtmlPackager(
 
         var builder = new StringBuilder();
 
-        builder.AppendLine(ReadAsset("app.css"));
+        builder.AppendLine(WithoutDarkScreen(ReadAsset("app.css")));
         builder.AppendLine(AccentDeclarations());
 
         // app.css reads every document color as a theme slot and declares none, so a page with
@@ -159,6 +159,24 @@ public sealed partial class RenderedHtmlPackager(
     /// cannot see on a machine that is not this one.
     /// </summary>
     private static string WithoutFontFaces(string css) => FontFaceBlock().Replace(css, string.Empty);
+
+    /// <summary>
+    /// app.css without what only the dark screen reads. Everything that leaves the app is light
+    /// (CLAUDE.md, Screen and output), and every page this stylesheet goes into is fixed to
+    /// data-theme="light", so a dark rule there could never apply: it was dead weight, and a
+    /// false lead for anyone looking through an export for dark colors.
+    ///
+    /// Three shapes, taken in this order: the dark root named beside the light one in a selector
+    /// list (the print block), where only the dark name goes; a rule of the dark root's own,
+    /// with whatever it selects beneath it; and an @media block that held nothing else.
+    /// </summary>
+    private static string WithoutDarkScreen(string css)
+    {
+        css = DarkRootInSelectorList().Replace(css, string.Empty);
+        css = DarkRootRule().Replace(css, string.Empty);
+
+        return EmptyMediaBlock().Replace(css, string.Empty);
+    }
 
     /// <summary>
     /// The accent, written out for a document that has left the app.
@@ -527,6 +545,17 @@ public sealed partial class RenderedHtmlPackager(
     /// <summary>The light :root block, and nothing indented or qualified.</summary>
     [GeneratedRegex(@"^:root[ \t]*\{(?<body>[^}]*)\}", RegexOptions.Multiline)]
     private static partial Regex LightRootBlock();
+
+    /// <summary>", :root[data-theme="dark"]" just before a rule's opening brace.</summary>
+    [GeneratedRegex(@",\s*:root\[data-theme=""dark""\](?=\s*\{)")]
+    private static partial Regex DarkRootInSelectorList();
+
+    /// <summary>A rule whose selector starts at the dark root, with its declarations (which hold no braces).</summary>
+    [GeneratedRegex(@":root\[data-theme=""dark""\][^{}]*\{[^{}]*\}")]
+    private static partial Regex DarkRootRule();
+
+    [GeneratedRegex(@"@media[^{}]*\{\s*\}")]
+    private static partial Regex EmptyMediaBlock();
 
     [GeneratedRegex(@"--(?<name>[A-Za-z0-9_\-]+)\s*:\s*(?<value>[^;]+);")]
     private static partial Regex CustomProperty();

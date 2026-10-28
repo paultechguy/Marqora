@@ -86,7 +86,7 @@ internal sealed class RendererFactory(RenderSetup setup, Func<string?> runtimeVe
             }
 
             _assets = assets;
-            _thread = new RenderThread();
+            _thread = new RenderThread("marqora-cli render");
 
             // Asked on the thread WebView2 will live on. Asked from a pool thread, WinRT's
             // activation answered "class not registered" there even with the runtime installed.

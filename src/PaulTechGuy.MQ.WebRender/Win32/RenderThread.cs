@@ -2,27 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Threading.Channels;
-using PaulTechGuy.MQ.WebRender.Win32;
 
-namespace PaulTechGuy.MQ.Cli.Rendering;
+namespace PaulTechGuy.MQ.WebRender.Win32;
 
 /// <summary>
-/// The one thread a run's browser lives on: STA, pumping messages through a <see cref="StaPump"/>,
-/// and running the work handed to it.
+/// The one thread a browser lives on, where there is no UI thread to host it: STA, pumping
+/// messages through a <see cref="StaPump"/>, and running the work handed to it.
 ///
-/// WebView2 belongs to the thread that made it, and that thread has to pump. The rest of the CLI
-/// awaits without a context and so wanders between pool threads, which suits files and text and
-/// would break a browser. Started by the first export, so a run of text verbs never makes it.
+/// WebView2 belongs to the thread that made it, and that thread has to pump. marqora-cli awaits
+/// without a context and so wanders between pool threads, which suits files and text and would
+/// break a browser; a run starts one of these with its first export, so a run of text verbs never
+/// makes it. The export tests start one for theirs.
 /// </summary>
-internal sealed class RenderThread : IDisposable
+public sealed class RenderThread : IDisposable
 {
     private readonly Channel<Func<Task>> _work = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions { SingleReader = true });
 
     private readonly Thread _thread;
 
-    public RenderThread()
+    /// <param name="name">The thread's name, for a debugger.</param>
+    public RenderThread(string name)
     {
-        _thread = new Thread(Pump) { IsBackground = true, Name = "marqora-cli render" };
+        _thread = new Thread(Pump) { IsBackground = true, Name = name };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
     }

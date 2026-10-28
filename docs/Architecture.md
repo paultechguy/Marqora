@@ -1009,7 +1009,9 @@ experience, themed by the system and handing back settings the app had no way to
 **HTML** is assembled by `HtmlExporter`. It reuses `app.css` rather than maintaining a second
 stylesheet, which is what keeps exports looking like the preview; it carries a few pane and
 splitter rules an exported document has no use for, a fair trade for not having two
-stylesheets to keep in step. The KaTeX and highlight.js themes are included only when the
+stylesheets to keep in step. The rules for the dark screen are the exception, and are taken
+out on the way (`RenderedHtmlPackager.WithoutDarkScreen`): every page that leaves is fixed to
+light, so they could never apply. The KaTeX and highlight.js themes are included only when the
 document actually contains math or code — KaTeX's stylesheet alone is most of the file for a
 document with no equations. Local images become data URIs, read by the host rather than by
 the page, which sidesteps the CSP and the cross-origin rules entirely. KaTeX's web fonts are

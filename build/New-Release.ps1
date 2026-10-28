@@ -191,72 +191,17 @@ try {
             -ForegroundColor Yellow
     }
 
-    # ---- the command line
-    #
-    # marqora-cli ships in the same app\ folder, sharing the runtime, the web shell and the themes
-    # (CLI-PKG-01). Published on its own and merged in, rather than by pointing both publishes at
-    # one folder, so that a file the two would both write is compared instead of quietly won by
-    # whichever came second. build\Publish.props is what makes them equal; this is what notices
-    # if they stop being.
+    # ---- the command line, published beside the app (ReleaseCommon's Add-CliToPublish)
     Write-Task 'publish marqora-cli'
-    $cliPublishDir = Join-Path $staging 'cli'
-
-    Invoke-Dotnet `
-        -Arguments @('publish', $cliProject, '-c', $Configuration, '-o', $cliPublishDir, '--nologo') `
-        -FailureMessage 'The marqora-cli publish failed.' `
-        -Stream:$ShowBuildOutput
-
-    $differing = New-Object System.Collections.Generic.List[string]
-    $cliOnly = New-Object System.Collections.Generic.List[string]
-    $shared = 0
-
-    foreach ($file in Get-ChildItem -LiteralPath $cliPublishDir -Recurse -File) {
-        $relative = [System.IO.Path]::GetRelativePath($cliPublishDir, $file.FullName)
-        $inApp = Join-Path $publishDir $relative
-
-        if (-not (Test-Path -LiteralPath $inApp -PathType Leaf)) {
-            $cliOnly.Add($relative)
-        }
-        elseif ((Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath $inApp).Hash) {
-            $differing.Add($relative)
-        }
-        else {
-            $shared++
-        }
-    }
-
-    if ($differing.Count -gt 0) {
-        Write-Failed
-        throw "marqora-cli and the app publish different copies of $($differing.Count) shared file(s), and only one copy can ship:`n  $($differing -join "`n  ")`nCheck that both projects import build\Publish.props and reference the same package versions."
-    }
-
-    foreach ($relative in $cliOnly) {
-        $destination = Join-Path $publishDir $relative
-        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-        Copy-Item -LiteralPath (Join-Path $cliPublishDir $relative) -Destination $destination
-    }
-
-    Remove-Item -LiteralPath $cliPublishDir -Recurse -Force
-
-    $publishedCli = Join-Path $publishDir 'marqora-cli.exe'
-
-    if (-not (Test-Path -LiteralPath $publishedCli -PathType Leaf)) {
-        Write-Failed
-        throw "The marqora-cli publish completed but no marqora-cli.exe reached '$publishDir'."
-    }
-
-    # One version for both (CLI-VB-VER-01): read the way the installer reads the app's, and asked
-    # of the CLI itself, which answers from the same ProductVersion the app's About shows.
     $appVersion = Get-PublishedVersion -Exe $publishedExe -PropsPath $buildProps
-    $cliVersion = Get-PublishedVersion -Exe $publishedCli -PropsPath $buildProps
-    $cliAnswer = (& $publishedCli version 2>&1 | Out-String).Trim()
-
-    if ($LASTEXITCODE -ne 0 -or $cliVersion -ne $appVersion -or $cliAnswer -notmatch [regex]::Escape($appVersion)) {
-        Write-Failed
-        throw "marqora-cli is not at the app's version: the app is $appVersion, marqora-cli.exe is $cliVersion, and 'marqora-cli version' said '$cliAnswer'."
-    }
-
-    Write-Done "v$cliVersion, $($cliOnly.Count) files of its own, $shared shared"
+    $cliSummary = Add-CliToPublish `
+        -CliProject $cliProject `
+        -PublishDir $publishDir `
+        -StagingRoot $staging `
+        -Configuration $Configuration `
+        -AppVersion $appVersion `
+        -ShowBuildOutput:$ShowBuildOutput
+    Write-Done $cliSummary
 
     # ---- stage
     Write-Task 'stage installer'

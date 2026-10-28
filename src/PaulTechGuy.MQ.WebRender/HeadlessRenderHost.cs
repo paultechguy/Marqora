@@ -105,6 +105,12 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
     public int BrowserProcessId { get; }
 
     /// <summary>
+    /// How many requests this host's page has made for anything but Marqora's own files and the
+    /// document's: zero, offline by default (CLI-NF-03, WP-M2-13's OfflineTests).
+    /// </summary>
+    public int OutsideRequests { get; private set; }
+
+    /// <summary>
     /// The browser this host runs in. marqora-cli hands it to the paged engine too, so a run that
     /// prints has one browser process tree rather than two (CLI-EX-01).
     /// </summary>
@@ -196,8 +202,10 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
             _assets.RootDirectory,
             CoreWebView2HostResourceAccessKind.Allow);
 
-        // A document's own pictures, from its folder, as the preview serves them.
-        core.AddWebResourceRequestedFilter($"{DocumentFiles.BaseUrl}*", CoreWebView2WebResourceContext.All);
+        // A document's own pictures, from its folder, as the preview serves them; and every other
+        // request seen, so one that would leave the machine is counted (CLI-NF-03). The shell's
+        // content policy is what stops those, as in the preview; this only proves it did.
+        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += OnWebResourceRequested;
 
         // Light, always: everything that leaves the app is light (CLAUDE.md, Screen and output).
@@ -387,8 +395,27 @@ public sealed class HeadlessRenderHost : IDocumentRenderer, IAsyncDisposable
         _themeId = id;
     }
 
-    private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e) =>
-        DocumentFiles.Serve(sender, e, _documentDirectory, _logger);
+    private void OnWebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        string url = e.Request.Uri;
+
+        if (url.StartsWith(DocumentFiles.BaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            DocumentFiles.Serve(sender, e, _documentDirectory, _logger);
+        }
+        else if (!url.StartsWith($"https://{_assets.VirtualHostName}/", StringComparison.OrdinalIgnoreCase) && !IsLocalScheme(url))
+        {
+            // Left to the browser, as the preview leaves it: counted and logged, not answered.
+            OutsideRequests++;
+            _logger.LogWarning("The render browser asked for {Url}, which is not one of Marqora's own.", url);
+        }
+    }
+
+    /// <summary>A URL the browser answers from what it already holds, never from the network.</summary>
+    private static bool IsLocalScheme(string url) =>
+        url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+        || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase)
+        || url.StartsWith("about:", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Closes the browser and waits for its process to end, so the data folder can be removed.

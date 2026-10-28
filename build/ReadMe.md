@@ -45,7 +45,7 @@ differ only in where the version comes from.
 
 | Script | What it does |
 |---|---|
-| `New-DevBuild.ps1` | Builds the working tree as it stands under a version **you** name: `-Version 0.3.0-test4`. Writes no commits, no tags, and does not touch `Directory.Build.props`. For putting today's code on another machine. `-Version` is mandatory — without it the zip and the About box would be indistinguishable from the real release of the same number. |
+| `New-DevBuild.ps1` | Builds the working tree as it stands under a version **you** name: `-Version 0.3.0-test4`. Writes no commits, no tags, and does not touch `Directory.Build.props`. For putting today's code on another machine. Publishes `marqora-cli` beside the app as the release does, so a change to the libraries they share that breaks the CLI fails the build. `-Version` is mandatory — without it the zip and the About box would be indistinguishable from the real release of the same number. |
 | `New-Release.ps1` | The same build, taking its version from `Directory.Build.props`. This is the one command that produces something shippable, and it is step 2 of the release below. `-Test` gates it on a green test run. |
 
 Both take `-ForceAssets`, `-OutputDirectory`, `-KeepStaging` and `-ShowBuildOutput`.

@@ -171,11 +171,21 @@ function Get-MaskedChance([string] $text) {
         })
 }
 
+# app.css's rules for the dark screen, which pages leaving the app stopped carrying on
+# 2026-10-28 (Paul's decision, WP-M2-13): every such page is fixed to light, so they could never
+# apply. Taken out of both sides by the patterns RenderedHtmlPackager.WithoutDarkScreen uses, so
+# a baseline made before the change still compares; a fresh page has none left to take.
+function Get-WithoutDarkScreen([string] $text) {
+    $text = $text -replace ',\s*:root\[data-theme="dark"\](?=\s*\{)', ''
+    $text = $text -replace ':root\[data-theme="dark"\][^{}]*\{[^{}]*\}', ''
+    $text -replace '@media[^{}]*\{\s*\}', ''
+}
+
 function Get-NormalText([string] $path) {
     $text = [IO.File]::ReadAllText($path)
 
     switch -Regex ([IO.Path]::GetFileName($path)) {
-        '\.html?$' { $text = Get-MaskedChance (Get-MaskedFolioPayload $text) }
+        '\.html?$' { $text = Get-MaskedChance (Get-MaskedFolioPayload (Get-WithoutDarkScreen $text)) }
         '\.svg$' { $text = Get-MaskedChance $text }
         '\.json$' { $text = Get-MaskedTime $text }
         '\.(xml|rels|psmdcp)$' {
