@@ -34,7 +34,9 @@ anywhere else.
 ## Download
 
 **[Get the latest release](https://github.com/paultechguy/Marqora/releases/latest)** — one
-zip, around 84 MB. Extract it into a folder of its own and double-click `Install.cmd`.
+zip, around 95 MB. Extract it into a folder of its own and double-click `Install.cmd`. It
+installs the app and `marqora-cli`, its [command line](#command-line), and asks whether to put
+the command line on your PATH; the answer is No unless you say yes.
 
 Everything is per-user: no administrator, no UAC prompt, nothing written outside `HKCU` and
 your own profile. The .NET runtime and the Windows App SDK travel inside the zip, so the
@@ -92,7 +94,7 @@ Release builds are self-contained and unpackaged: the output folder holds the .N
 the Windows App SDK and the web assets, so it can be copied to another machine as-is. No
 MSIX, no signing certificate, no installer.
 
-The output is about 178 MB. Three things Marqora cannot reach at runtime are deliberately
+The output is about 256 MB. Three things Marqora cannot reach at runtime are deliberately
 left out — the Windows App SDK's machine-learning components, WinUI's non-English resource
 files, and Monaco's language services for TypeScript, CSS, HTML and JSON. That is roughly
 68 MB. See `docs/Architecture.md` for how each is excluded and what not to trim further.
@@ -109,7 +111,7 @@ pwsh .\build\New-Release.ps1 -Test
 This is the one command that produces something shippable. It restores the web assets if
 they are missing, publishes, stages the app next to the installer scripts, and writes
 `build\artifacts\Marqora-<version>-win-x64.zip` with a `.sha256` beside it. The zip is
-around 84 MB and has no wrapper folder — `README.txt`, `Install.cmd`, `Uninstall.cmd`,
+around 95 MB and has no wrapper folder — `README.txt`, `Install.cmd`, `Uninstall.cmd`,
 `install\` and `app\` sit at its root, so it extracts into a folder of the recipient's
 choosing rather than one of its own making.
 
@@ -677,11 +679,12 @@ a document that skips a heading level — a level-three heading directly under a
 come out numbered differently from the preview, because Marqora drops the missing level and
 Word does not.
 
-Only the three things a browser alone can produce are taken from the preview — the diagrams
-mermaid drew, the layout KaTeX gave the equations, and the colors highlight.js put on the code.
-Everything else comes from the Markdown. Which is why this export never refuses: if the preview
-has not caught up, or has never been asked, you get the document without its colors rather than
-an error. Anything that could not be carried across — a picture that is not on this machine, a
+Only the three things a browser alone can produce come from a browser — the diagrams mermaid
+drew, the layout KaTeX gave the equations, and the colors highlight.js put on the code — and it
+is one of the export's own, never on screen, drawing exactly the text being exported, so what
+the preview happens to be doing has no part in the file. Everything else comes from the
+Markdown. Which is why this export never refuses: if that browser cannot draw something, you
+get the document without it rather than an error. Anything that could not be carried across — a picture that is not on this machine, a
 diagram that would not draw — is named when the export finishes rather than left to be
 discovered by whoever you sent it to.
 
@@ -1078,7 +1081,8 @@ never references the app, nor the app the command line, and a test holds both to
 dotnet test PaulTechGuy.MQ.slnx
 ```
 
-Three projects, all pure text in and assertions out:
+One project per library, fifteen in all. Most are pure text in and assertions out. A few
+worth knowing:
 
 - **`PaulTechGuy.MQ.Editing.Tests`** exercises every Format-menu command through a small
   stand-in for the editor, so the edits are proven to compose rather than merely to look
@@ -1089,6 +1093,11 @@ Three projects, all pure text in and assertions out:
 - **`PaulTechGuy.MQ.Finding.Tests`** pins Find All's line and column numbers, which is the
   whole of what makes a result clickable: mixed line endings, whole-word boundaries, regular
   expressions and the ceiling on how many matches come back.
+- **`PaulTechGuy.MQ.Cli.Tests`** runs marqora-cli both in-process and as the built
+  executable, holds `docs/CLI.md` to the command tree, and runs every example in it.
+- **`PaulTechGuy.MQ.Exporting.Tests`** and the CLI's export tests draw real documents in a
+  headless browser, so they need the WebView2 runtime and a signed-in desktop, as the exports
+  themselves do. They run one at a time.
 
 Adding another needs no wiring. A project under `tests\` is picked up as a test project by
 `Directory.Build.props` automatically, and package versions come from

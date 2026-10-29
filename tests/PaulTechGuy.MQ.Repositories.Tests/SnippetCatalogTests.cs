@@ -180,12 +180,12 @@ public class SnippetCatalogTests
         using var catalog = new Catalog().With("scratch.md", "first version");
 
         Snippet snippet = catalog.User().ShouldHaveSingleItem();
-        (await catalog.Subject.ReadBodyAsync(snippet)).ShouldBe("first version");
+        (await catalog.Subject.ReadBodyAsync(snippet, TestContext.Current.CancellationToken)).ShouldBe("first version");
 
         // Edited behind the app's back. Reading late is what makes this work without a
         // file watcher.
         File.WriteAllText(snippet.Path!, "second version");
-        (await catalog.Subject.ReadBodyAsync(snippet)).ShouldBe("second version");
+        (await catalog.Subject.ReadBodyAsync(snippet, TestContext.Current.CancellationToken)).ShouldBe("second version");
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class SnippetCatalogTests
         Snippet snippet = catalog.User().ShouldHaveSingleItem();
         File.Delete(snippet.Path!);
 
-        (await catalog.Subject.ReadBodyAsync(snippet)).ShouldBeNull();
+        (await catalog.Subject.ReadBodyAsync(snippet, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]

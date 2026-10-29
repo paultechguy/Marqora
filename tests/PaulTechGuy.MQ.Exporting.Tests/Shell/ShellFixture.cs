@@ -14,8 +14,8 @@ namespace PaulTechGuy.MQ.Exporting.Tests.Shell;
 /// <summary>
 /// The tests that need the shell, one at a time: they share one browser, and the shell has one tab.
 /// </summary>
-[CollectionDefinition(nameof(ShellCollection), DisableParallelization = true)]
-public sealed class ShellCollection : ICollectionFixture<ShellFixture>;
+[CollectionDefinition(nameof(ShellRunsAlone), DisableParallelization = true)]
+public sealed class ShellRunsAlone : ICollectionFixture<ShellFixture>;
 
 /// <summary>
 /// One headless host for the collection, started as marqora-cli starts its own: on a render thread

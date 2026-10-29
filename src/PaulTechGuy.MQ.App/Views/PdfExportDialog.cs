@@ -82,7 +82,7 @@ internal sealed class PdfExportDialog : ContentDialog
     /// Two columns (<see cref="DialogFields.TwoColumns"/>), the same shape as Print: the page
     /// on the left - its size, way up and margins - and what is printed on it on the right.
     /// </summary>
-    private FrameworkElement BuildContent(string documentName)
+    private Grid BuildContent(string documentName)
     {
         StackPanel page = DialogFields.Column();
 

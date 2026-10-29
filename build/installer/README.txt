@@ -38,6 +38,26 @@ selecting a dozen of them opens a dozen tabs in one window.
 
 
 ---------------------------------------------------------------------------
+The command line: marqora-cli
+---------------------------------------------------------------------------
+
+marqora-cli.exe is installed beside Marqora.exe. It does what the Format,
+Find, Export and Share menus do, from a terminal, for a whole folder at
+once:
+
+  marqora-cli check "docs/**/*.md"
+  marqora-cli export pdf "docs/**/*.md"
+
+The installer asks whether to put it on your PATH, so any terminal can run
+it. The answer is No unless you type y; Install.cmd -AddToPath says yes
+without asking. Open a new terminal afterwards. Uninstalling takes the
+entry out again.
+
+marqora-cli --help lists its commands. The manual is docs/CLI.md in the
+project's repository on GitHub.
+
+
+---------------------------------------------------------------------------
 Requirements
 ---------------------------------------------------------------------------
 
@@ -88,7 +108,7 @@ you do, open PowerShell in the folder holding the zip and run:
 The Hash it prints should match the one in the .sha256 file, ignoring upper
 and lower case.
 
-A mismatch means the copy is damaged rather than dangerous. 84 MB across a
+A mismatch means the copy is damaged rather than dangerous. 95 MB across a
 USB stick, a network share or a mail server does occasionally arrive short,
 and a partly corrupt zip will often extract far enough to look right and
 then fail somewhere later, which is a miserable thing to diagnose. Copy it

@@ -54,3 +54,8 @@ longer while that browser starts; the ones after it do not.
 outside the document's own folder, was underlined as broken even though clicking it
 in the preview opened the file. A link is now checked wherever it leads. Pictures are still
 expected beside the document, because that is where the preview loads them from.
+
+**Saving a shared review over the last one no longer fails now and then.** Writing the review
+page again a moment after it was written could fail with "Unable to remove the file to be
+replaced", about one time in a hundred, when a virus scanner or Windows Search was still reading
+the copy just written. Marqora now waits briefly for it, as it already did for a pasted picture.

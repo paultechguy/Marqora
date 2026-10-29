@@ -755,7 +755,7 @@ public sealed partial class ExportReportWindow : PaletteWindow
     /// the repaint quietly stops working the day somebody nests a panel differently - which is
     /// a thing nobody notices until the window is opened in the other theme.
     /// </summary>
-    private IEnumerable<FontIcon> Warnings() => _warningGlyphs;
+    private List<FontIcon> Warnings() => _warningGlyphs;
 
     /// <summary>
     /// Windows' own caution color, stated rather than looked up - the same amber Find All's

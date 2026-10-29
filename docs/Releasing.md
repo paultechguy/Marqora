@@ -115,6 +115,7 @@ happens here rather than against a zip you built locally five minutes earlier:
 ```powershell
 gh release download v0.3.0 --dir $env:TEMP\marqora-0.3.0
 #   extract it, run Install.cmd, launch, check Help > About says 0.3.0
+& "$env:LOCALAPPDATA\Programs\Marqora\marqora-cli.exe" version    # says 0.3.0 too
 ```
 
 Happy with it? Click **Publish release** on the draft page. Not happy? Fix what is wrong on

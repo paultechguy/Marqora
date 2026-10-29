@@ -17,7 +17,7 @@ namespace PaulTechGuy.MQ.Exporting.Tests.Shell;
 /// light one; which of the two a dark window sends is the preview's, and stays with the shell's
 /// own code. What is proved here is that the two ways out agree.
 /// </summary>
-[Collection(nameof(ShellCollection))]
+[Collection(nameof(ShellRunsAlone))]
 public sealed class DiagramOutputTests(ShellFixture shell)
 {
     [Fact]

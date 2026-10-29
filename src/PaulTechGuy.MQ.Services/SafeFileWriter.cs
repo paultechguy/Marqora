@@ -30,6 +30,9 @@ public static partial class SafeFileWriter
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>The waits, in milliseconds, before each further try at swapping a file in (<see cref="SwapInAsync"/>).</summary>
+    private static readonly int[] SwapRetries = [50, 100, 200, 400];
+
     /// <summary>Text, written as UTF-8 without a byte order mark.</summary>
     /// <param name="scratchRoot">Where scratch folders go; the temp folder's own unless a test says otherwise.</param>
     public static Task WriteAsync(
@@ -70,7 +73,7 @@ public static partial class SafeFileWriter
             string temporary = Path.Combine(scratch.Path, Path.GetFileName(full));
 
             await File.WriteAllBytesAsync(temporary, contents, cancellationToken).ConfigureAwait(false);
-            SwapIn(temporary, full);
+            await SwapInAsync(temporary, full, logger, cancellationToken).ConfigureAwait(false);
 
             return;
         }
@@ -160,7 +163,7 @@ public static partial class SafeFileWriter
                 await stream.WriteAsync(contents, cancellationToken).ConfigureAwait(false);
             }
 
-            SwapIn(temporary, full);
+            await SwapInAsync(temporary, full, logger, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -183,16 +186,36 @@ public static partial class SafeFileWriter
     /// Replace rather than delete-and-move keeps what the existing file had - its permissions and
     /// its creation time. Nothing is shown hidden that should not be: Replace carries the
     /// temporary file's attributes over on some file systems.
+    ///
+    /// Tried again, briefly, when Windows says the file is in use. A virus scanner or the search
+    /// indexer opens a file just written to look at it, and while it does, Replace fails with
+    /// "Unable to remove the file to be replaced": about one write in a hundred, when the same
+    /// file was written a moment before, as a script running two commands over it does. The
+    /// waits total 750 ms, so a file that really cannot be written still fails at once, as far as
+    /// anyone waiting can tell, with the error it gave.
     /// </summary>
-    private static void SwapIn(string temporary, string full)
+    private static async Task SwapInAsync(string temporary, string full, ILogger logger, CancellationToken cancellationToken)
     {
-        if (File.Exists(full))
+        for (int attempt = 0; ; attempt++)
         {
-            File.Replace(temporary, full, destinationBackupFileName: null, ignoreMetadataErrors: true);
-        }
-        else
-        {
-            File.Move(temporary, full);
+            try
+            {
+                if (File.Exists(full))
+                {
+                    File.Replace(temporary, full, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                }
+                else
+                {
+                    File.Move(temporary, full);
+                }
+
+                break;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < SwapRetries.Length)
+            {
+                logger.LogDebug(ex, "{Path} was in use; trying again in {Delay} ms.", full, SwapRetries[attempt]);
+                await Task.Delay(SwapRetries[attempt], cancellationToken).ConfigureAwait(false);
+            }
         }
 
         File.SetAttributes(full, File.GetAttributes(full) & ~FileAttributes.Hidden);

@@ -110,7 +110,7 @@ JavaScript context makes syncing a local calculation on one frame. Split across 
 controls it becomes a round trip through the host on every scroll event, which visibly
 lags and jitters.
 
-The native window still owns everything a user recognises as the app: Mica, the extended
+The native window still owns everything a user recognizes as the app: Mica, the extended
 title bar, the menu bar, dialogs, the file pickers, theming and drag-and-drop. The WebView
 holds only the document surface.
 
@@ -1840,8 +1840,10 @@ markdown models, and a language worker is fetched only when a model of that lang
 ## Testing
 
 One project under `tests/` for each library, run with `dotnet test`. xUnit v3 and Shouldly; `Directory.Build.props`
-recognises anything under `tests/` and turns on the test SDK, so a new one needs no wiring beyond
-a reference to the project it exercises.
+recognizes anything under `tests/` and turns on the test SDK, so a new one needs no wiring beyond
+a reference to the project it exercises. The export tests are the exception to "no UI": they
+start a real headless browser (*Headless rendering*), so they need the WebView2 runtime and a
+desktop, and a collection apiece keeps them to one browser at a time.
 
 **Fakes are hand-written.** `NSubstitute` is pinned in `Directory.Packages.props` and used by
 nothing: a fake with a name and a doc comment saying what it stands in for reads better than a
