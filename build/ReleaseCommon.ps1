@@ -941,6 +941,9 @@ function Test-GateNetworkClaim {
     Write-Done
 }
 
+# Runs after the test gate, whose `dotnet test` has already compiled everything with warnings
+# left as warnings. An incremental build here would recompile nothing and so see no warning;
+# --no-incremental makes every project compile again under -warnaserror.
 function Test-GateBuild {
     param(
         [Parameter(Mandatory)][string] $Solution,
@@ -950,7 +953,7 @@ function Test-GateBuild {
 
     Write-Check 'build, no warnings'
     Invoke-Dotnet `
-        -Arguments @('build', $Solution, '-c', $Configuration, '-warnaserror', '--nologo') `
+        -Arguments @('build', $Solution, '-c', $Configuration, '-warnaserror', '--no-incremental', '--nologo') `
         -FailureMessage 'The build produced errors or warnings.' `
         -Stream:$Stream
     Write-Done 'clean'

@@ -1266,20 +1266,6 @@ it.
   stem rewrites an enum member, so whether that name leaves the scanned files (a settings or
   report file) needs checking first, as CLAUDE.md says. Seen 2026-10-28.
 
-**Build and release**
-
-- **B9. The release's "build, no warnings" gate sees a compiler warning only in a project it
-  recompiles.** It runs after the test gate, whose `dotnet test -c Release` has already compiled
-  everything with warnings left as warnings, so `dotnet build -warnaserror` recompiles only what
-  changed between them, usually nothing. The 16 warnings that hid behind it are fixed (§9.3,
-  after the merge), and a clean Release build has none; `--no-incremental` in the gate in
-  `build/Publish-Release.ps1` would keep it that way. Seen 2026-10-28.
-- **B10. The CLI test project builds with an MSB3277 warning**: two versions of `WindowsBase`
-  conflict, one from .NET and one wanted by the WebView2 package's WPF assembly, which reaches
-  the test project through `marqora-cli`. Seen at `f225114`, before M2; it was not in the clean
-  Release build of 2026-10-28, so it may be Debug only. The tests run; it is noise in the build
-  output. Seen 2026-10-27.
-
 **Known differences, understood and accepted**
 
 Nothing to do unless Paul wants the cause found.
@@ -1336,3 +1322,11 @@ Kept so they are not reopened. Nothing here needs work.
 - **`InputSetTests.One_missing_file_among_three_the_others_are_processed_and_the_run_exits_3`
   failed once.** **Fixed 2026-10-28:** exit 4, `File.Replace` meeting a reader of the file just
   written; `SafeFileWriter` now retries the swap (§9.3, after the merge).
+- **B9. The release's "build, no warnings" gate saw a compiler warning only in a project it
+  recompiled**, because it runs after the test gate, whose `dotnet test -c Release` has already
+  compiled everything with warnings left as warnings. **Fixed 2026-10-29:** `Test-GateBuild` in
+  `build/ReleaseCommon.ps1` builds with `--no-incremental`, so every project compiles again under
+  `-warnaserror`.
+- **B10. The CLI test project built with an MSB3277 `WindowsBase` conflict**, seen at `f225114`,
+  before M2. **Closed 2026-10-29, no change:** a `--no-incremental` build of the project gives no
+  warning in Debug or in Release with `-warnaserror`; something in M2 removed it.
