@@ -35,6 +35,10 @@ draws its document without it, and a picture named by web address is reported, n
 `marqora-cli.exe` comes with Marqora, in the same folder as `Marqora.exe`. Installing Marqora
 installs it, and its version is always the app's.
 
+This manual comes with it too. It is in the `docs` folder beside `marqora-cli.exe`, with the
+[recipes](CLI-Recipes.md) and the [tour](cli-tour/) folder, and **Help > Command Line Manual**
+opens it in Marqora, read-only. Every command's `--help` ends by saying where it is.
+
 To run it from any terminal, its folder has to be on your PATH. The installer offers to do that:
 
 - **Double-clicking `Install.cmd`** asks "Add it to your PATH, so any terminal can run
@@ -384,8 +388,9 @@ These work with every command, before or after its name.
 | `-h`, `-?`, `--help`            | Show the help for marqora-cli, or for the command it follows.                                                                                |
 | `--version`                     | Print the version, the same as `marqora-cli version`.                                                                                        |
 
-Every command's `--help` ends with examples. Longer ones, with the pipes, redirection and loops
-around the commands, are in the [recipes](CLI-Recipes.md).
+Every command's `--help` ends with examples, and then with where this manual is: the copy
+installed beside `marqora-cli.exe`, and the one online. Longer examples, with the pipes,
+redirection and loops around the commands, are in the [recipes](CLI-Recipes.md).
 
 ## The commands
 

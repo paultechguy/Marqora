@@ -106,6 +106,19 @@
   </ItemGroup>
 
   <!--
+    marqora-cli's manual, its recipes and the tour folder the manual sends the reader to, in a
+    docs folder beside the executable, laid out as they are in the repository so the links
+    between them still lead somewhere. Help, Command Line Manual opens the first; somebody in
+    a terminal finds them beside marqora-cli.exe, and its help says so. The masters are the
+    repository's own, so there is one copy to keep up to date.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\docs\CLI.md" Link="docs\CLI.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\CLI-Recipes.md" Link="docs\CLI-Recipes.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\cli-tour\**\*" LinkBase="docs\cli-tour" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
     The preview shell and its vendor bundle, copied to Assets\web next to the executable. Shared
     with marqora-cli, which hosts the same shell; the file says why it is done this way.
   -->

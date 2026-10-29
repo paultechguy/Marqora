@@ -6,6 +6,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using PaulTechGuy.MQ.Abstractions;
 using PaulTechGuy.MQ.Abstractions.Analysis;
 using PaulTechGuy.MQ.Abstractions.Editing;
 using PaulTechGuy.MQ.Abstractions.Formatting;
@@ -78,6 +79,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IPastedImageTracker _pastedImages;
     private readonly IDocumentLocks _locks;
     private readonly IDocumentPins _pins;
+    private readonly IAppPaths _paths;
     private readonly ILogger<MainViewModel> _logger;
 
     private IPreviewHost? _host;
@@ -803,6 +805,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IPastedImageTracker pastedImages,
         IDocumentLocks locks,
         IDocumentPins pins,
+        IAppPaths paths,
         ILogger<MainViewModel> logger)
     {
         _workspace = workspace;
@@ -844,6 +847,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _pastedImages = pastedImages;
         _locks = locks;
         _pins = pins;
+        _paths = paths;
         _logger = logger;
 
         DocumentName = string.Empty;
@@ -9405,6 +9409,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Already open is the ordinary case for a second visit, and OpenPathAsync surfaces that
         // tab rather than making a second one. It is also what takes the keyboard back off the
         // menu and puts it in the document.
+        await OpenPathAsync(path).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Help, Command Line Manual: marqora-cli's manual, opened where it ships.
+    ///
+    /// Not copied like the welcome document, because nothing invites the reader to write on
+    /// it, and the recipes and the tour folder it links to sit beside it only in the install
+    /// folder. Marked read-only before it opens instead: the next install replaces the file, so
+    /// an edit saved there would be lost without a word. The mark is the ordinary one, so
+    /// somebody who wants to scribble on it anyway can take it off.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowCliManualAsync()
+    {
+        string path = _paths.CliManualPath;
+
+        if (!File.Exists(path))
+        {
+            await _dialogs.ShowMessageAsync(
+                "Command line manual not available",
+                $"The copy that ships with Marqora could not be found at {path}.").ConfigureAwait(true);
+
+            RestoreDocumentFocusAfterChrome();
+            return;
+        }
+
+        if (!_locks.IsLocked(path))
+        {
+            await _locks.SetAsync(path, locked: true).ConfigureAwait(true);
+        }
+
         await OpenPathAsync(path).ConfigureAwait(true);
     }
 

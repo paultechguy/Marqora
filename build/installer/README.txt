@@ -53,8 +53,17 @@ it. The answer is No unless you type y; Install.cmd -AddToPath says yes
 without asking. Open a new terminal afterwards. Uninstalling takes the
 entry out again.
 
-marqora-cli --help lists its commands. The manual is docs/CLI.md in the
-project's repository on GitHub.
+marqora-cli --help lists its commands. The manual and the recipes are
+installed with it, in the docs folder beside marqora-cli.exe:
+
+  CLI.md            the manual, with a five-minute tour
+  CLI-Recipes.md    everyday jobs step by step, in PowerShell, cmd and bash
+
+In Marqora, Help > Command Line Manual opens the manual. Both are online
+too:
+
+  https://github.com/paultechguy/Marqora/blob/master/docs/CLI.md
+  https://github.com/paultechguy/Marqora/blob/master/docs/CLI-Recipes.md
 
 
 ---------------------------------------------------------------------------

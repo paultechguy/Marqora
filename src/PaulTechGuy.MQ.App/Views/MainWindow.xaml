@@ -1354,6 +1354,14 @@
 
                         <MenuFlyoutItem Text="Keyboard Shortcuts..." Click="OnShowShortcuts" />
 
+                        <!--
+                            marqora-cli's manual, read-only in a tab of its own. No ellipsis,
+                            like Welcome: it opens a tab rather than a dialog.
+                        -->
+                        <MenuFlyoutItem Text="Command Line Manual"
+                                        Command="{x:Bind ViewModel.ShowCliManualCommand}"
+                                        ToolTipService.ToolTip="Open the manual for marqora-cli, Marqora's commands in a terminal" />
+
                         <MenuFlyoutSeparator />
 
                         <!--

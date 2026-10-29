@@ -67,6 +67,13 @@ public interface IAppPaths
     string WelcomeTemplatePath { get; }
 
     /// <summary>
+    /// marqora-cli's manual as it ships, in the docs folder beside the executable, with the
+    /// recipes and the tour folder it links to. Opened where it is, read-only: an install
+    /// replaces it, so there is no copy of the user's own to keep.
+    /// </summary>
+    string CliManualPath { get; }
+
+    /// <summary>
     /// The user's own copy of the welcome document, refreshed from the template by each new
     /// release. Its name is fixed, so a release replaces the last one rather than leaving a
     /// trail of them behind.

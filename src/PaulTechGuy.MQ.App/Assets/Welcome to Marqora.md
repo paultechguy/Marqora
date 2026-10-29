@@ -356,7 +356,8 @@ page whenever you want it.
   the same code: `marqora-cli check "docs/**/*.md"` finds every dead link in a folder at once,
   and `marqora-cli export pdf "docs/**/*.md"` puts a PDF beside each document. If the
   installer did not put it on your PATH, it is in the folder Marqora is installed in, and
-  `marqora-cli --help` is the place to start.
+  `marqora-cli --help` is the place to start. `Help > Command Line Manual` opens its manual,
+  which links to recipes for everyday jobs in PowerShell, cmd and bash.
 
 ---
 

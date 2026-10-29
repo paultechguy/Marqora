@@ -211,6 +211,7 @@ would rather not reach for the mouse.
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
+| 💻  | **Command line**                         | `marqora-cli` formats, checks links, exports and builds Folios for a whole folder, from a terminal or a script, through the app's own code. Its manual and recipes install with it, and `Help > Command Line Manual` opens them          |
 | 💬  | **Review comments**                      | Comment on a document without changing it, diagrams included, then share one read-only page with your notes in the margin. Drop that page back in later to pick the review up again, pictures and all                                                         |
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
@@ -1014,7 +1015,9 @@ defaults rather than your Preferences, so the same command gives the same result
 machine. Every command takes `--json`, and the exit codes are fixed, for scripts and Git hooks.
 [`docs/CLI.md`](docs/CLI.md) is the manual, with a five-minute tour, and
 [`docs/CLI-Recipes.md`](docs/CLI-Recipes.md) has recipes for everyday jobs in PowerShell, cmd and
-bash.
+bash. Both are installed with it, in the `docs` folder beside `marqora-cli.exe`; **Help > Command
+Line Manual** opens the manual in Marqora, and every command's `--help` ends by saying where it
+is.
 
 ---
 

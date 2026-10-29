@@ -227,6 +227,8 @@ internal sealed class FakeAppPaths(string root) : IAppPaths
     public string WelcomeDocumentPath =>
         System.IO.Path.Combine(DataDirectory, "Welcome to Marqora.md");
 
+    public string CliManualPath => System.IO.Path.Combine(InstallDirectory, "docs", "CLI.md");
+
     public void EnsureCreated()
     {
         Directory.CreateDirectory(DataDirectory);

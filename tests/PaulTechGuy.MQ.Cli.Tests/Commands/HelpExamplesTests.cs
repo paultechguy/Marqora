@@ -43,6 +43,19 @@ public sealed class HelpExamplesTests
         help.ExitCode.ShouldBe(0);
         help.Out.ShouldContain("Examples:");
         help.Out.ShouldContain($"marqora-cli {verb}");
+        help.Out.ShouldContain(ExamplesHelpAction.ManualUrl);
+    }
+
+    /// <summary>The top-level help is where a newcomer starts, so it says where the manual is.</summary>
+    [Fact]
+    public async Task The_top_level_help_says_where_the_manual_is()
+    {
+        CliResult help = await CliRunner.RunAsync(["--help"], cancellationToken: TestContext.Current.CancellationToken);
+
+        help.ExitCode.ShouldBe(0);
+        help.Out.ShouldContain("Manual:");
+        help.Out.ShouldContain(ExamplesHelpAction.ManualFolder);
+        help.Out.ShouldContain(ExamplesHelpAction.ManualUrl);
     }
 
     /// <summary>Every example names the verb it belongs to, so none was pasted under the wrong one.</summary>

@@ -32,6 +32,7 @@ public sealed class AppPaths : IAppPaths
         DataDirectory = Path.Combine(localAppDataRoot, CompanyFolder, ProductFolder);
         WebAssetsDirectory = Path.Combine(installRoot, "Assets", "web");
         WelcomeTemplatePath = Path.Combine(installRoot, "Assets", WelcomeFileName);
+        CliManualPath = Path.Combine(installRoot, "docs", "CLI.md");
     }
 
     public string DataDirectory { get; }
@@ -55,6 +56,8 @@ public sealed class AppPaths : IAppPaths
     public string WebAssetsDirectory { get; }
 
     public string WelcomeTemplatePath { get; }
+
+    public string CliManualPath { get; }
 
     public string WelcomeDocumentPath => Path.Combine(DataDirectory, WelcomeFileName);
 
