@@ -1207,112 +1207,132 @@ Also from the spike, for M2:
 
 ## 11. Backlog
 
-Out of v1, or turned up while planning. Paul picks from these. None is done along the way.
+Paul picks from these. None is done along the way.
 
-- `completion` (shell completion scripts) and `@file` response files (requirements §3.2).
-- `toc --write`, designed in the app first (requirements §5 item 1).
-- `--strict` making export findings fail the run (requirements §5 item 4).
-- `check --fix`, `replace --skip-code`, and a CLI settings file of its own.
-- `print`, `check --spelling`, `watch`, and a recipe file.
-- Moving the app's HTML and PDF exports to the headless host too, if M2-09..M2-13 find the live
-  and headless markup differ.
-- **The app's HTML export leaves pictures outside the document's folder as relative links**
+**Where things stand (2026-10-28).** The CLI is complete: M0, M1 and M2 are done, all 92 rows of
+the §8 matrix are verified, and it reached `dev` through PR #10 and PR #11 (the release-readiness
+fixes in §9.3, "After the merge"). A release made from `dev` would carry `marqora-cli.exe`, and the
+documents describe what ships. Everything below is optional work.
+
+The section has three parts: **11.1** items found and still open, numbered so they can be named;
+**11.2** features left out of v1 on purpose; **11.3** items that are closed, kept so nobody
+reopens them. An entry is open only if it is in 11.1.
+
+### 11.1 Open
+
+Grouped by what they touch. Each says where it was seen and, where one is known, what would close
+it.
+
+**The CLI's own behavior**
+
+- **B1. `export --dry-run --out-dir` does not catch two documents with the same name**: it lists
+  both going to one file, where the real run refuses with exit 3 before writing. The dry run skips
+  the output check altogether. Seen 2026-10-28, writing WP-M2-14's recipes.
+- **B2. The collision message says "share them separately" for an export**, the Folio's wording:
+  `docs\a\Notes.md and docs\b\Notes.md would both be written to ...\Notes.html. Rename one, or
+  share them separately.` Seen 2026-10-28. Pairs naturally with B1.
+- **B3. `--settings` is not checked by a command that reads no settings.** `check`, `replace` and
+  the others that never consult the settings accept `--settings nosuch.json` and exit 0, so a typo
+  is noticed only on a command that does read them (`format`, `number`, `toc`, `outline`,
+  `folio`), which stops with exit 2. Seen while writing the manual, 2026-10-27. Checking the file
+  on every command would cost each one a read it does not need; the manual says which commands
+  use settings.
+
+**Shared with the app**
+
+- **B4. "N lines changed" counts by position, not by difference.**
+  `MarkdownFormatter.CountChangedLines` compares line i with line i, so one blank line inserted
+  near the top counts every line after it: formatting `docs/CLI.md` reported "684 lines changed"
+  for about 30 real changes. The app shows the same figure; `format --write` repeats it. A count
+  from the diff the CLI already makes for `--dry-run` would be right in both. Seen while writing
+  the manual, 2026-10-27.
+- **B5. The app's HTML export carries the preview's caret bar.** The page is the preview's
+  markup, and the block the cursor was in keeps `class="mq-active-block"`, which app.css draws as
+  a teal bar beside it in a browser (print hides it). Seen in the baseline's
+  `pictures.forest.html`, 2026-10-28 (WP-M2-09); the CLI's page, from a browser with no cursor,
+  has none. Stripping the class on the way out, or moving the app's HTML export to the headless
+  host as Word moved (B7), would each answer it.
+- **B6. The app's HTML export leaves pictures outside the document's folder as relative links**
   (`../../../../docs/assets/...` in `pictures.default.html`), while it embeds the one beside the
   document. The file shows them only where it was saved; moved or sent, they break. Seen in the
   M0-05 baseline, 2026-10-26. Possibly intended, and an app question rather than a CLI one; the
   CLI's `export html` matches whatever the app does.
-- **`--settings` is not checked by a command that reads no settings.** `check`, `replace` and the
-  others that never consult the settings accept `--settings nosuch.json` and exit 0, so a typo
-  is noticed only on a command that does read them (`format`, `number`, `toc`, `outline`, `folio`), which stops
-  with exit 2. Seen while writing the manual, 2026-10-27. Checking the file on every command
-  would cost each one a read it does not need; the manual says which commands use settings.
-- **"N lines changed" counts by position, not by difference.** `MarkdownFormatter.CountChangedLines`
-  compares line i with line i, so one blank line inserted near the top counts every line after
-  it: formatting `docs/CLI.md` reported "684 lines changed" for about 30 real changes. The app
-  shows the same figure; `format --write` repeats it. A count from the diff the CLI already makes
-  for `--dry-run` would be right in both. Seen while writing the manual, 2026-10-27.
-- **An option whose value goes missing takes the next option as its value.** `--with=` with
-  nothing after the `=`, in any shell, and `--with ''` in Windows PowerShell 5.1, which drops an
-  empty argument, both leave `--with` to take the next token: `replace --find x --with=
-  --dry-run a.md` replaces with the text "--dry-run" and, no longer a dry run, prints the
-  document. With `--write` next, the file is left alone and the document printed with
-  "--write" in place of each match, so nothing is lost but the run did not do what was asked. The recipes
-  give `'""'` for 5.1; refusing an option-shaped value for `--with`, or `--with=` with nothing
-  after it, would close it. Seen while writing the recipes, 2026-10-27.
-  **Done 2026-10-27:** `--with=` (any option written `--name=`) is now an empty value, and an
-  option that needs a value followed by one of the command's own options as a separate word stops
-  with exit 2 and says to write `--with=--write` if that text is meant. Tried in Windows
-  PowerShell 5.1: `--with ''` is refused, `--with=` deletes. The recipes now give `--with=`.
-- **`check` reports every link that leaves the document's folder as broken**, `../README.md`
-  included, because the app's own link check (`LinkChecks.Exists`, through
-  `PathContainment.ResolveWithin`) only looks inside the folder. The source pane underlines the
-  same links. In a repository whose documents link up and across folders, `check` over all of
-  them reports each such link, so it cannot gate a commit there. An app question first; the CLI
-  follows whatever the app decides. The manual and the recipes say so. Seen while writing the
-  recipes, 2026-10-27.
-  **Done 2026-10-27, in the app:** a link (not a picture) is checked wherever it leads, as the
-  preview follows it there, so `../README.md` is fine when the file is there, in the source pane
-  and in `check` alike. Pictures keep the folder rule and their `outside-folder` finding.
-- **From WSL, a Linux absolute path is written on the Windows drive without a word.**
-  `folio -o /tmp/x/Linux.zip`, run from a folder under `/mnt/c`, made `C:\tmp\x\Linux.zip` and
-  exited 0, because to Windows `/tmp/...` is a path from the root of the current drive. The
-  recipes now say so and give `wslpath -w`. Refusing a path that starts with a single `/` would
-  catch it, but `\folder\file` is a real, if rare, Windows form, so it is a question for Paul
-  rather than a fix. Seen in the WSL run, 2026-10-27. **Decided 2026-10-27 (Paul):** left as the
-  recipes describe it; no change to the CLI.
-- **Uninstalling drops a trailing `;` from the user PATH.** `%USERPROFILE%\...\WindowsApps;`
-  came back as `%USERPROFILE%\...\WindowsApps`. It works the same, since the `;` only ends an
-  empty entry, but it is not the value the user had. Seen in the Sandbox install run,
-  2026-10-27. **Done 2026-10-27 (Paul asked for it now):** the install, not the uninstall, was at
-  fault: `Add-UserPathEntry` took the user's trailing `;` as its separator, so `A;` became
-  `A;dir` and removing `dir` left `A`. It now keeps the ending, `A;dir;`, and removing gives back
-  `A;`. Add then remove gave back the exact value for six shapes of PATH (a trailing `;`, none,
-  `;;` in the middle and at the end, empty) and left one already holding the folder alone, in
-  Windows PowerShell 5.1 and PowerShell 7, against an in-memory PATH; the old script failed the
-  three that end in `;`.
-- **The app's HTML export carries the preview's caret bar.** The page is the preview's markup,
-  and the block the cursor was in keeps `class="mq-active-block"`, which app.css draws as a teal
-  bar beside it in a browser (print hides it). Seen in the baseline's `pictures.forest.html`,
-  2026-10-28 (WP-M2-09); the CLI's page, from a browser with no cursor, has none. Stripping the
-  class on the way out, or moving the app's HTML export to the headless host as Word moved, would
-  each answer it.
-- **The render browser does not exit after closing when the document asked for a picture**,
-  served or not: the headless host waited out its 5 seconds and ended it, on every such run. It
-  now waits one second and ends it quietly (WP-M2-09), so the cost is gone, but the cause is not
-  known. Seen 2026-10-28.
-- **The CLI's PDF draws some color emoji paler than the app's**: three on page 6 of
-  `UltimateMarkdownContent.forest.pdf` and the check and cross marks on page 52, nothing else.
-  Not the shared print browser and, as far as one comparison shows, not a newer WebView2 runtime
-  (WP-M2-10, §9.3). Accepted by Paul as a known difference; an app PDF made today would say whether
-  the app now draws them the same way.
-  Seen 2026-10-28.
-- **`folio.vintage-press.html` is compared only to line 4408 of 5458**: past it, a mindmap's
-  `node-` ids are numbered from the app's session and do not renumber cleanly, so
-  `Compare-ExportBaseline.ps1` stops there. Forest, which matches, is the same page in another
-  theme (WP-M2-12, §9.3). Seen 2026-10-28.
-- **`InputSetTests.One_missing_file_among_three_the_others_are_processed_and_the_run_exits_3`
-  failed once** in a full run of the CLI tests and passed in the four runs after it, alone and in
-  full; the assertion that failed was the exit code, and it does not say which it got. Seen
-  2026-10-28, during WP-M2-12. **Done 2026-10-28:** exit 4, `File.Replace` meeting a reader of
-  the file just written; `SafeFileWriter` now retries the swap (§9.3, after the merge).
-- **`export --dry-run --out-dir` does not catch two documents with the same name**: it lists both
-  going to one file, where the real run refuses with exit 3 before writing. The dry run skips the
-  output check altogether. Seen 2026-10-28, writing WP-M2-14's recipes.
-- **The collision message says "share them separately" for an export**, the Folio's wording:
-  `docs\a\Notes.md and docs\b\Notes.md would both be written to ...\Notes.html. Rename one, or
-  share them separately.` Seen 2026-10-28.
-- **The release's "build, no warnings" gate sees a compiler warning only in a project it
-  recompiles.** It runs after the test gate, whose `dotnet test -c Release` has already compiled
-  everything with warnings left as warnings, so `dotnet build -warnaserror` recompiles only what
-  changed between them, usually nothing. The 15 warnings that came from that are fixed (§9.3,
-  after the merge), and a clean Release build has none; `--no-incremental` in the gate would keep
-  it that way. Seen 2026-10-28.
-- **British "recognise" is not in `Set-AmericanSpelling.ps1`'s list**, and appears in code as well
-  as prose: `PreferenceImportIssue.Unrecognised`, a log template, test names, and a message a
+- **B7. Moving the app's HTML and PDF exports to the headless host too**, as Word moved in
+  WP-M2-07. M2-09 to M2-13 found the live and headless markup differ only by B5, so this is a
+  choice rather than a need.
+- **B8. British "recognise" is not in `Set-AmericanSpelling.ps1`'s list**, and appears in code as
+  well as prose: `PreferenceImportIssue.Unrecognised`, a log template, test names, and a message a
   user reads ("setting Marqora recognises"). The two in `Architecture.md` are fixed. Adding the
   stem rewrites an enum member, so whether that name leaves the scanned files (a settings or
   report file) needs checking first, as CLAUDE.md says. Seen 2026-10-28.
-- **The CLI test project builds with an MSB3277 warning**: two versions of `WindowsBase`
+
+**Build and release**
+
+- **B9. The release's "build, no warnings" gate sees a compiler warning only in a project it
+  recompiles.** It runs after the test gate, whose `dotnet test -c Release` has already compiled
+  everything with warnings left as warnings, so `dotnet build -warnaserror` recompiles only what
+  changed between them, usually nothing. The 16 warnings that hid behind it are fixed (§9.3,
+  after the merge), and a clean Release build has none; `--no-incremental` in the gate in
+  `build/Publish-Release.ps1` would keep it that way. Seen 2026-10-28.
+- **B10. The CLI test project builds with an MSB3277 warning**: two versions of `WindowsBase`
   conflict, one from .NET and one wanted by the WebView2 package's WPF assembly, which reaches
-  the test project through `marqora-cli`. It is there at `f225114`, before M2, so nothing in M2
-  caused it. The tests run; it is noise in every build's output. Seen 2026-10-27.
+  the test project through `marqora-cli`. Seen at `f225114`, before M2; it was not in the clean
+  Release build of 2026-10-28, so it may be Debug only. The tests run; it is noise in the build
+  output. Seen 2026-10-27.
+
+**Known differences, understood and accepted**
+
+Nothing to do unless Paul wants the cause found.
+
+- **B11. The render browser does not exit after closing when the document asked for a
+  picture**, served or not: the headless host waited out its 5 seconds and ended it, on every
+  such run. It now waits one second and ends it quietly (WP-M2-09), so the cost is gone, but the
+  cause is not known. Seen 2026-10-28.
+- **B12. The CLI's PDF draws some color emoji paler than the app's**: three on page 6 of
+  `UltimateMarkdownContent.forest.pdf` and the check and cross marks on page 52, nothing else.
+  Not the shared print browser and, as far as one comparison shows, not a newer WebView2 runtime
+  (WP-M2-10, §9.3). Accepted by Paul as a known difference; an app PDF made today would say
+  whether the app now draws them the same way. Seen 2026-10-28.
+- **B13. `folio.vintage-press.html` is compared only to line 4408 of 5458**: past it, a
+  mindmap's `node-` ids are numbered from the app's session and do not renumber cleanly, so
+  `Compare-ExportBaseline.ps1` stops there. Forest, which matches, is the same page in another
+  theme (WP-M2-12, §9.3). Seen 2026-10-28.
+
+### 11.2 Left out of v1 on purpose
+
+Decided while planning (§4, and the requirements). Each is a feature to design, not a defect.
+
+- **F1.** `completion` (shell completion scripts) and `@file` response files (requirements §3.2).
+- **F2.** `toc --write`, designed in the app first (requirements §5 item 1).
+- **F3.** `--strict` making export findings fail the run (requirements §5 item 4).
+- **F4.** `check --fix`, `replace --skip-code`, and a CLI settings file of its own.
+- **F5.** `print`, `check --spelling`, `watch`, and a recipe file.
+
+Checking web links is not deferred: the network rule in CLAUDE.md bans it.
+
+### 11.3 Closed
+
+Kept so they are not reopened. Nothing here needs work.
+
+- **An option whose value goes missing took the next option as its value.** `replace --find x
+  --with= --dry-run a.md` replaced with the text "--dry-run". **Fixed 2026-10-27:** `--with=`
+  (any option written `--name=`) is an empty value, and an option that needs a value followed by
+  one of the command's own options as a separate word stops with exit 2 and says to write
+  `--with=--write` if that text is meant. Tried in Windows PowerShell 5.1: `--with ''` is
+  refused, `--with=` deletes. The recipes give `--with=`.
+- **`check` reported every link that leaves the document's folder as broken**, `../README.md`
+  included. **Fixed 2026-10-27, in the app** (`LinkChecks`): a link (not a picture) is checked
+  wherever it leads, as the preview follows it there, so `../README.md` is fine when the file is
+  there, in the source pane and in `check` alike. Pictures keep the folder rule and their
+  `outside-folder` finding.
+- **Uninstalling dropped a trailing `;` from the user PATH.** **Fixed 2026-10-27:** the install
+  was at fault: `Add-UserPathEntry` (`build/installer/UserPath.ps1`) took the user's trailing `;`
+  as its separator. It now keeps the ending, so install then uninstall gives back the exact
+  value; tested for six shapes of PATH in Windows PowerShell 5.1 and PowerShell 7.
+- **From WSL, a Linux absolute path is written on the Windows drive without a word**
+  (`folio -o /tmp/x/Linux.zip` made `C:\tmp\x\Linux.zip`). **Decided 2026-10-27 (Paul):** left
+  as the recipes describe it, with `wslpath -w`; no change to the CLI, since `\folder\file` is a
+  real Windows form.
+- **`InputSetTests.One_missing_file_among_three_the_others_are_processed_and_the_run_exits_3`
+  failed once.** **Fixed 2026-10-28:** exit 4, `File.Replace` meeting a reader of the file just
+  written; `SafeFileWriter` now retries the swap (§9.3, after the merge).
