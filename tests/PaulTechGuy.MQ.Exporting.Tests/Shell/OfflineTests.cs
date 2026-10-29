@@ -19,7 +19,7 @@ namespace PaulTechGuy.MQ.Exporting.Tests.Shell;
 /// a document says can make one: the count cannot be driven above zero from here, only shown to
 /// stay there with the documents most likely to move it.
 /// </summary>
-[Collection(nameof(ShellCollection))]
+[Collection(nameof(ShellRunsAlone))]
 public sealed class OfflineTests(ShellFixture shell)
 {
     [Theory]

@@ -29,7 +29,9 @@ pwsh .\build\New-Release.ps1          # → build\artifacts\Marqora-<version>-wi
 pwsh .\build\New-Release.ps1 -Test    # same, gated on a green test run
 ```
 
-Measured on the 0.1.0 build: 632 files, about 225 MB published, 84 MB zipped.
+Measured on the 0.1.0 build: 632 files, about 225 MB published, 84 MB zipped. With
+marqora-cli beside the app (the 1.0.13 working tree, 2026-10-28): 672 files, about 257 MB, 95 MB
+zipped.
 
 Tests are opt-in rather than always-on. Repackaging is something you do repeatedly while
 getting the installer right, and paying for the full suite on every iteration only teaches
@@ -375,7 +377,7 @@ The whole cycle was exercised against a real install on a real machine, not reas
   `docs/Architecture.md`.
 - **Auto-update.** An upgrade is "run the new `Install.cmd`", which is honest and has no
   background service, no update endpoint and no signing story to get wrong.
-- **Delta updates.** The payload is 84 MB zipped. Not worth a patch format.
+- **Delta updates.** The payload is about 95 MB zipped. Not worth a patch format.
 - **A `marqora` command on `PATH`.** Nothing has asked for it; adding to the user `PATH`
   from an installer is more intrusive than it looks.
 - **A Start menu uninstall shortcut.** Windows users look in Settings > Apps, and the zip's

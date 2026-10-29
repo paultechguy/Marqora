@@ -66,7 +66,7 @@ internal sealed class WordExportDialog : ContentDialog
     /// Two columns (<see cref="DialogFields.TwoColumns"/>), the same shape as Print and Export
     /// to PDF: the page on the left, what is printed around the document on the right.
     /// </summary>
-    private FrameworkElement BuildContent(string documentName)
+    private Grid BuildContent(string documentName)
     {
         StackPanel page = DialogFields.Column();
 

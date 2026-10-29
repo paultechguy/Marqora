@@ -53,7 +53,7 @@ public sealed class PastedImageTrackerTests : IDisposable
     }
 
     [Fact]
-    public void A_file_copied_in_from_explorer_and_then_undone_is_taken_away_too()
+    public async Task A_file_copied_in_from_explorer_and_then_undone_is_taken_away_too()
     {
         // The exact reported case: an images folder that already held image.png, a copy of it
         // pasted in as image-1.png, then Ctrl+Z. Nothing about arriving as a file rather than a
@@ -68,8 +68,8 @@ public sealed class PastedImageTrackerTests : IDisposable
         var document = Guid.NewGuid();
         _tracker.Track(document, "images/image-1.png", pasted);
 
-        PastedImageReview review = _tracker
-            .ReviewAsync(document, "# Guide\n", "", []).GetAwaiter().GetResult();
+        PastedImageReview review = await _tracker
+            .ReviewAsync(document, "# Guide\n", "", []);
 
         review.Recycled.ShouldBe(1);
         review.Failed.ShouldBe(0);
@@ -95,7 +95,7 @@ public sealed class PastedImageTrackerTests : IDisposable
             {
                 await Task.Delay(60, TestContext.Current.CancellationToken);
                 await hold.DisposeAsync();
-            });
+            }, TestContext.Current.CancellationToken);
 
             PastedImageReview review = await _tracker
                 .ReviewAsync(_document, "# Guide\n", "", []);
@@ -272,7 +272,7 @@ public sealed class PastedImageTrackerTests : IDisposable
     }
 
     [Fact]
-    public void Two_images_with_the_same_name_from_different_folders_do_not_collide()
+    public async Task Two_images_with_the_same_name_from_different_folders_do_not_collide()
     {
         string otherPath = Path.Combine(_folder.Path, "notes.assets", "image.png");
 
@@ -283,10 +283,10 @@ public sealed class PastedImageTrackerTests : IDisposable
         _tracker.Track(second, "notes.assets/image.png", otherPath);
 
         Review("");
-        _ = _tracker.ReviewAsync(second, "", "", []).GetAwaiter().GetResult();
+        _ = await _tracker.ReviewAsync(second, "", "", []);
 
         // Both recycled under distinct names, so restoring one cannot hand back the other's bytes.
-        _ = _tracker.ReviewAsync(second, "![](notes.assets/image.png)", "", []).GetAwaiter().GetResult();
+        _ = await _tracker.ReviewAsync(second, "![](notes.assets/image.png)", "", []);
 
         File.ReadAllBytes(otherPath).ShouldBe([7, 7, 7]);
         ImageExists.ShouldBeFalse();

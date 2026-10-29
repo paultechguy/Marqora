@@ -232,8 +232,9 @@ screen, and one of them may not have been rendered at all.
 **What is done instead** is a new bridge request that renders Markdown into a *detached*
 container in the shell, runs mermaid, KaTeX and highlight.js over it, and returns the HTML —
 without the visible preview being touched. It reuses the whole existing pipeline rather than
-growing a second one, and `GetRenderedHtmlAsync` is the precedent for the request-and-reply
-shape, keyed by request id.
+growing a second one, and the rendered-markup request is the precedent for the
+request-and-reply shape, keyed by request id. Both are `IDocumentRenderer` calls now
+(`RenderAsync` and `RenderDetachedAsync`), which is how marqora-cli builds the same page.
 
 **These renders are serialized, not run in parallel.** Mermaid runs in a single off-screen frame
 that the shell reaches into to copy the finished SVG back out; twelve concurrent renders would

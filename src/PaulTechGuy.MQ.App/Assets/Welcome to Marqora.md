@@ -222,8 +222,10 @@ Word is the one that works differently, because it has to. A `.docx` is not a we
 document is read again and written into Word's own constructs: headings that the navigation
 pane can find, lists Word counts itself, tables it can resize, equations you can click into and
 edit. Only the three things a browser alone can make — the diagrams, the typeset math and the
-colored code — are taken from the preview. Which means a Word export never refuses: if the
-preview has not caught up, you get the document without its colors rather than no document.
+colored code — come from a browser, one of the export's own that never appears on screen, so a
+preview still catching up or showing another tab makes no difference to the file. And a Word
+export never refuses: whatever cannot be drawn, you get the document without it rather than no
+document.
 
 > [!TIP]
 > `Ctrl+Shift+C` copies the formatted page rather than the Markdown — the quickest way into an

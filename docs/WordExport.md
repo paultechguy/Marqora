@@ -30,14 +30,15 @@ only the three things a browser alone can produce:
 | KaTeX MathML | `<span class="katex-mathml"><math>…` | converting to OMML |
 | highlight.js tokens | `<code class="language-x hljs"><span class="hljs-keyword">…` | code colors |
 
-All three arrive inside the string `IPreviewHost.GetRenderedHtmlAsync()` already returns — the
-same string the HTML export uses. **Nothing in `webshell/` was changed for this feature**, and
-nothing needs to be.
+All three arrive inside the markup `IDocumentRenderer.RenderAsync()` returns — the same markup
+the HTML export uses, drawn since WP-M2-07 by a browser of the export's own rather than the
+preview (§7). **Nothing in `webshell/` was changed for this feature**, and nothing needs to be.
 
 Two consequences worth knowing when testing:
 
-- **A Word export never fails because the preview is busy.** HTML export refuses with *"The
-  preview has not finished rendering yet"*. Word degrades instead — code loses its colors, math
+- **A Word export never fails because a render did not answer.** The preview has no part in it
+  now (§7), and HTML export, which still takes the preview, refuses with *"The preview has not
+  finished rendering yet"*. Word degrades instead — code loses its colors, math
   falls back to TeX source, a diagram falls back to its source as a code block — and a document
   always comes out.
 - **The visual target is the paper spec, shared with the PDF.** Faces, sizes, weights, line
@@ -103,8 +104,10 @@ MainViewModel.ExportWordCommand
         -> WordExportDialog                          returns ExportChoice<DocxExportSetup>
      -> _settings.Update(s => s.WithLayout(layout) with { DocxSetup = setup })   saved on accept, not on success
      -> IFileDialogService.PickExportFileAsync()
-     -> IPreviewHost.GetRenderedHtmlAsync()          may be empty; never fatal
-     -> Task.Run(() => IDocxExporter.WriteAsync(...))          off the UI thread
+     -> ExportRenderHost.GetAsync()                  the export's own headless browser (§7)
+     -> WordExportJob.RunAsync(renderer, ...)        Exporting
+        -> IDocumentRenderer.RenderAsync()           may be empty; never fatal
+        -> Task.Run(() => IDocxExporter.WriteAsync(...))       off the UI thread
      -> AnnounceExport(path) + IExportReportService.Show(...)   the report window
 ```
 

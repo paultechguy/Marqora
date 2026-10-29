@@ -23,6 +23,13 @@
     <PlatformTarget>x64</PlatformTarget>
     <Nullable>enable</Nullable>
     <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
+
+    <!--
+      Self-contained in Release, as marqora-cli is (build/Publish.props): the SDK refuses a
+      framework-dependent project referencing a self-contained executable (NETSDK1151), and that
+      stopped `dotnet test -c Release`, which the release runs, from building this project at all.
+    -->
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

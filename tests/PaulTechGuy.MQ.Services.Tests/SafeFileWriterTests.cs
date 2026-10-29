@@ -111,6 +111,41 @@ public sealed class SafeFileWriterTests : IDisposable
         Leftovers().ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A virus scanner or the search indexer opens a file just written to read it, without letting
+    /// it be removed meanwhile. A write that meets one waits for it, briefly, rather than failing:
+    /// about one write in a hundred did, when the same file had just been written.
+    /// </summary>
+    [Fact]
+    public async Task A_file_held_open_for_a_moment_by_a_reader_is_still_written()
+    {
+        await WriteAsync("<html>first</html>");
+
+        var reader = new FileStream(Page, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Task released = Task.Delay(150, TestContext.Current.CancellationToken).ContinueWith(_ => reader.Dispose(), TaskScheduler.Default);
+
+        await WriteAsync("<html>second</html>");
+        await released;
+
+        File.ReadAllText(Page).ShouldBe("<html>second</html>");
+        Leftovers().ShouldBeEmpty();
+    }
+
+    /// <summary>A reader that does not let go is not waited for long: the write fails and the file is as it was.</summary>
+    [Fact]
+    public async Task A_file_held_open_for_good_still_fails_and_is_left_as_it_was()
+    {
+        await WriteAsync("<html>kept</html>");
+
+        using (new FileStream(Page, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await Should.ThrowAsync<IOException>(() => WriteAsync("<html>lost</html>"));
+        }
+
+        File.ReadAllText(Page).ShouldBe("<html>kept</html>");
+        Leftovers().ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task On_another_drive_the_copy_goes_beside_the_file_and_is_removed()
     {

@@ -235,9 +235,9 @@ public sealed class AppSettingsTests : IDisposable
 
         try
         {
-            await repository.SaveAsync(written);
+            await repository.SaveAsync(written, TestContext.Current.CancellationToken);
 
-            AppSettings read = await repository.LoadAsync();
+            AppSettings read = await repository.LoadAsync(TestContext.Current.CancellationToken);
 
             read.ShouldBe(written);
         }
@@ -263,9 +263,9 @@ public sealed class AppSettingsTests : IDisposable
 
         try
         {
-            await repository.SaveAsync(written);
+            await repository.SaveAsync(written, TestContext.Current.CancellationToken);
 
-            AppSettings read = await repository.LoadAsync();
+            AppSettings read = await repository.LoadAsync(TestContext.Current.CancellationToken);
 
             read.DialogFolderFor("export word document").ShouldBe(@"C:\Reports\2026");
             read.DialogFolderFor("export PDF document").ShouldBe(@"C:\Printouts");

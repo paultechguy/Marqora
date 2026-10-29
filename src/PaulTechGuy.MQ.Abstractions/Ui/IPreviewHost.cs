@@ -509,7 +509,7 @@ public interface IPreviewHost
     /// workspace. Sending it is about not letting somebody type into a document that will throw
     /// the keystroke away.
     /// </summary>
-    Task SetReadOnlyAsync(Guid documentId, bool readOnly);
+    Task SetReadOnlyAsync(Guid documentId, bool isReadOnly);
 
     Task SetLineNumbersAsync(bool enabled);
 

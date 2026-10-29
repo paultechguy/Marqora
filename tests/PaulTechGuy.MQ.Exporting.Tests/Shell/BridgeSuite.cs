@@ -17,7 +17,7 @@ namespace PaulTechGuy.MQ.Exporting.Tests.Shell;
 /// cannot host; the headless host uses them over its controller, which is what runs here. Each
 /// request the exports make goes out and comes back with its answer.
 /// </summary>
-[Collection(nameof(ShellCollection))]
+[Collection(nameof(ShellRunsAlone))]
 public sealed class BridgeSuite(ShellFixture shell)
 {
     /// <summary>A diagram, an equation and some code: everything the exports ask the shell to finish.</summary>
