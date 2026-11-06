@@ -98,25 +98,32 @@ Runs every gate, shows you exactly what it is about to do, and asks once. Then:
   [2/5] build from master  New-Release.ps1 -Test
   [3/5] tag                annotated v0.3.0, then push
   [4/5] release body       your notes plus the generated footer
-  [5/5] draft              gh release create --draft, both assets attached
+  [5/5] draft              gh release create --draft, four assets attached
 ```
+
+The four assets are the x64 zip, the ARM64 zip and a checksum for each. If any of them is missing
+after the build, the run stops before the tag. The build step, tests included, took about four minutes on a warm tree.
 
 **This script writes no commits.** It promotes, builds, tags and uploads; that is all. It
 returns you to `dev` on the way out, including when something fails.
 
-`-WhatIf` runs all nine gates for real and then prints the git and `gh` commands without
+`-WhatIf` runs all eleven gates for real and then prints the git and `gh` commands without
 running them. `-Yes` skips the confirmation for an unattended run.
 
 ## Step 4 — Smoke-test the draft, then publish it
 
-The draft is private. Its asset is the literal file GitHub will serve, which is why the test
-happens here rather than against a zip you built locally five minutes earlier:
+The draft is private. Its assets are the literal files GitHub will serve, which is why the test
+happens here rather than against zips you built locally five minutes earlier:
 
 ```powershell
 gh release download v0.3.0 --dir $env:TEMP\marqora-0.3.0
-#   extract it, run Install.cmd, launch, check Help > About says 0.3.0
+#   extract the x64 zip, run Install.cmd, launch, check Help > About says 0.3.0
 & "$env:LOCALAPPDATA\Programs\Marqora\marqora-cli.exe" version    # says 0.3.0 too
 ```
+
+Then the ARM64 zip, which this PC cannot run. On the ARM PC, work through the short check in
+[`ARM-Release-Checklist.md`](ARM-Release-Checklist.md). A release waits for this step: if the ARM PC
+is not to hand, the draft stays a draft.
 
 Happy with it? Click **Publish release** on the draft page. Not happy? Fix what is wrong on
 `dev` and republish the same version — the next section.
@@ -159,14 +166,15 @@ release. Once **Publish release** is clicked, the only way forward is the next v
 pwsh .\build\Publish-Release.ps1 -Version 0.3.0 -Verify
 ```
 
-Downloads both assets, checks the zip against its published checksum, and confirms the
-archive's root holds the five entries it should.
+Downloads all four assets, checks each zip against its published checksum, and confirms each
+archive's root holds the five entries it should. A release missing a zip fails, so this reports
+the ARM64 zip as missing if pointed at 1.0.21 or earlier, which never had one.
 
 ---
 
 ## The gates
 
-All ten run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`, which
+All eleven run in `Publish-Release.ps1`; the first four also run in `New-ReleaseNotes.ps1`, which
 adds one of its own: `vNext.md` must say something beyond headings, in the working tree or in
 `HEAD`.
 
@@ -184,7 +192,8 @@ release should happen at all.
 | tests | `dotnet test` fails |
 | licence headers | `Add-FileHeaders.ps1 -Check` fails |
 | network claim | `Test-NetworkClaim.ps1 -Check` fails — something still carries the retired absolute claim, or says it somewhere new |
-| build, no warnings | `dotnet build -warnaserror` fails |
+| build, no warnings | `dotnet build -warnaserror` fails, for the solution on x64 |
+| build arm64, no warnings | The same fails for the app and CLI projects on ARM64. Not the solution, because the test projects stay x64 |
 
 Two are worth explaining.
 

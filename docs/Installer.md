@@ -1,6 +1,7 @@
 # Marqora installer
 
-Marqora ships as a zip that someone extracts and installs by double-clicking a `.cmd` file.
+Marqora ships as a zip, one for x64 PCs and one for ARM PCs, that someone extracts and installs
+by double-clicking a `.cmd` file.
 There is no MSIX, no certificate, no installer framework, and nothing that asks for an
 administrator. This document records why it is shaped that way, because several of the
 decisions look arbitrary until you know what forced them.
@@ -9,7 +10,7 @@ Everything lives in `build/`:
 
 ```
 build/
-    New-Release.ps1               the one command; produces the zip
+    New-Release.ps1               the one command; produces both zips
     Register-FileAssociation.ps1  markdown file types (also useful on its own)
     installer/
         Install.cmd               double-clickable wrapper
@@ -26,8 +27,15 @@ build/
 
 ```powershell
 pwsh .\build\New-Release.ps1          # → build\artifacts\Marqora-<version>-win-x64.zip
+                                      #   build\artifacts\Marqora-<version>-win-arm64.zip
 pwsh .\build\New-Release.ps1 -Test    # same, gated on a green test run
 ```
+
+A release always has both zips, and no switch leaves one out. The architecture is the MSBuild
+property `MarqoraArch`, `x64` unless a build says `-p:MarqoraArch=arm64`. It is stated in
+`Directory.Build.props` and read by `build\Publish.props`, marqora-cli and WebRender. The word is
+both the platform target and the end of the runtime identifier, so nothing translates between them.
+The list of what a release contains is `$MqReleaseArchitectures` in `ReleaseCommon.ps1`.
 
 Measured on the 0.1.0 build: 632 files, about 225 MB published, 84 MB zipped. With
 marqora-cli beside the app (the 1.0.13 working tree, 2026-10-28): 672 files, about 257 MB, 95 MB
@@ -121,7 +129,10 @@ This produces the artifact. Getting that artifact onto GitHub — version bump, 
 promoting `dev` to `master`, tagging, the draft release — is
 [`docs/Releasing.md`](Releasing.md), which calls this script as one of its steps.
 
-Five steps, each one line of output, and a sixth, **tests**, under `-Test`:
+**Web assets** and, under `-Test`, **tests** run once, because the tests run on x64 whichever zip
+is being built. Then this version's old zips and checksums are removed, so a failure cannot leave a
+new zip beside an old one, and steps 2 to 6 run for each architecture in its own folder,
+`<staging>\win-x64` and `<staging>\win-arm64`. Each step is one line of output:
 
 1. **web assets** — runs `Get-WebAssets.ps1` if `webshell\vendor\monaco\vs\loader.js` is
    missing. That is deliberately the same sentinel the app project's `VerifyWebAssets`
@@ -130,18 +141,32 @@ Five steps, each one line of output, and a sixth, **tests**, under `-Test`:
 2. **publish** — `dotnet publish -c Release -o <staging>\app`.
 3. **publish marqora-cli** — publishes the command line into `<staging>\cli` and merges it
    into `app\`; see **marqora-cli in the release** below.
-4. **stage** — reads the version, assembles the release folder, expands `{{VERSION}}` in
-   `README.txt`.
-5. **zip** — `ZipFile.CreateFromDirectory` with `includeBaseDirectory: false`, so the
+4. **check files** — reads the header of every `.exe` and `.dll` after the merge; see **Proving
+   a zip's architecture** below.
+5. **stage** — assembles the release folder and fills the placeholders in `README.txt`: the
+   version, the zip's name and its requirement lines. A placeholder nothing fills fails the build.
+6. **zip** — `ZipFile.CreateFromDirectory` with `includeBaseDirectory: false`, so the
    staged folder's *contents* are the zip, not the folder itself. The staged folder is
-   still named `Marqora-<version>-win-x64`, which is what `-KeepStaging` leaves behind.
+   still named `Marqora-<version>-win-<architecture>`, which is what `-KeepStaging` leaves behind.
 
 Points worth keeping:
 
-**The version comes from the built executable, not from `Directory.Build.props`.** The exe
-is ground truth for what was actually produced; the props file is only consulted if the exe
-carries no version at all. Build metadata after a `+` is trimmed — Settings > Apps shows
-the string verbatim, and a commit hash in the version column helps nobody.
+**The zips are named from `Directory.Build.props`, and each executable has to agree.** The name
+has to be known before anything is built, so that the old zips can be removed first. The exe is
+ground truth for what was actually produced, so a build whose exe reports another version fails.
+Build metadata after a `+` is trimmed — Settings > Apps shows the string verbatim, and a commit
+hash in the version column helps nobody.
+
+**Proving a zip's architecture.** An x64 PC cannot start the ARM64 build, so
+`Assert-PublishArchitecture` reads what it cannot run. A file passes if its machine type is the
+zip's, or if it is CPU-neutral .NET: the x86 machine type, the IL-only flag, and no request for 32
+bits. The flag matters because a real x86 DLL has the same machine type. A file it cannot read
+fails, and every failure is named. What the header cannot prove, the ARM PC does:
+[`ARM-Release-Checklist.md`](ARM-Release-Checklist.md).
+
+**The CLI's version check adapts.** `Add-CliToPublish` runs `marqora-cli version` when this PC can
+run the build. For ARM64 on x64 it compares the version in the file's properties instead, and its
+output says so.
 
 **Staging moves the publish output, it does not copy it.** Same volume, so it is a rename.
 Copying 225 MB twice to produce one zip is time spent for nothing.
@@ -191,6 +216,25 @@ imported by both projects. The merge then checks it rather than trusting it:
 ## Install.ps1
 
 Five steps: prepare, copy, unblock, shortcuts and associations, register.
+
+**The architecture is checked before anything else.** The zip's architecture is read from the
+header of `app\Marqora.exe`. The PC's is read from the registry, not from the environment variable
+of the same name, which under emulation reports what the process is pretending to be:
+
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment    PROCESSOR_ARCHITECTURE
+```
+
+| Zip | PC | What happens |
+| --- | --- | --- |
+| ARM64 | x64 | Stops with a message pointing at the x64 zip, exit code 1. There is no override, because the app cannot run |
+| x64 | ARM | Installs, because Windows runs it under emulation, and says at the end that an ARM version exists |
+| Anything else | | Carries on |
+
+It sits ahead of `Copy-Payload` because that deletes the old install first: an ARM64 zip run by
+mistake must not cost someone the Marqora that works. An answer it does not recognize carries on,
+because it exists to catch one known mistake and must not stop an install that would work. Switching
+between the two zips is an ordinary upgrade.
 
 **The target directory is checked before anything is deleted.** An upgrade removes the old
 directory rather than copying over it — overlaying a new build on an old one leaves

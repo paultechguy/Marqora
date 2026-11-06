@@ -16,7 +16,7 @@
         2  build            New-Release.ps1 -Test, from master
         3  tag              annotated v<version> on master, then push
         4  release body     the committed notes plus the generated footer
-        5  draft            gh release create --draft, with both assets
+        5  draft            gh release create --draft, with both zips and their checksums
 
     With -Republish the run starts by deleting the draft and the tag left by a previous
     attempt at this version, and then does all five again. That is what a draft is for: it is
@@ -28,8 +28,8 @@
     you publish it, and deletes cleanly. The worst outcome is that you delete a draft and a
     tag and try again.
 
-    The draft is deliberately where the release stops. Downloading its asset and installing
-    that - rather than a zip built locally moments earlier - is the only way to test the
+    The draft is deliberately where the release stops. Downloading its assets and installing
+    those - rather than zips built locally moments earlier - is the only way to test the
     literal bytes GitHub will serve.
 
 .PARAMETER Version
@@ -38,9 +38,10 @@
     release's number typed out of habit.
 
 .PARAMETER Verify
-    Skip the release and check one that already exists: download both assets from GitHub,
-    confirm the zip matches its checksum, and confirm the archive's layout. Run it after you
-    have clicked Publish.
+    Skip the release and check one that already exists: download its assets from GitHub, and
+    confirm each zip matches its checksum and has the right layout. A release without a zip for
+    every architecture fails, which includes anything released before ARM64 was added. Run it
+    after you have clicked Publish.
 
 .PARAMETER Yes
     Skip the confirmation, including the one -Republish asks for. For an unattended run.
@@ -95,6 +96,8 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot 'PaulTechGuy.MQ.slnx'
+$appProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.App\PaulTechGuy.MQ.App.csproj'
+$cliProject = Join-Path $repoRoot 'src\PaulTechGuy.MQ.Cli\PaulTechGuy.MQ.Cli.csproj'
 $buildProps = Join-Path $repoRoot 'Directory.Build.props'
 $headerScript = Join-Path $PSScriptRoot 'Add-FileHeaders.ps1'
 $claimScript = Join-Path $PSScriptRoot 'Test-NetworkClaim.ps1'
@@ -103,12 +106,25 @@ $notesTemplate = Join-Path $PSScriptRoot 'release-notes-template.md'
 $footerTemplate = Join-Path $PSScriptRoot 'release-footer-template.md'
 $artifacts = Join-Path $PSScriptRoot 'artifacts'
 
-$runtimeIdentifier = 'win-x64'
 $configuration = 'Release'
 $tag = "v$Version"
-$zipName = "Marqora-$Version-$runtimeIdentifier.zip"
-$zipPath = Join-Path $artifacts $zipName
-$shaPath = "$zipPath.sha256"
+
+# A zip and its checksum per architecture, from ReleaseCommon's one list. Everything below walks
+# this, so a release cannot name, build-check, upload or verify a different set of files.
+$releaseZips = @(foreach ($architecture in $MqReleaseArchitectures) {
+    $name = Get-ReleaseZipName -Version $Version -Architecture $architecture
+    $path = Join-Path $artifacts $name
+
+    [pscustomobject]@{
+        Architecture = $architecture
+        Name         = $name
+        Path         = $path
+        ShaPath      = "$path.sha256"
+    }
+})
+
+$assetPaths = @($releaseZips | ForEach-Object { $_.Path, $_.ShaPath })
+$assetNames = @($assetPaths | ForEach-Object { Split-Path -Leaf $_ })
 $notesRelative = "docs/releases/v$Version.md"
 $notesPath = Join-Path $repoRoot ($notesRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
 $bodyPath = Join-Path $artifacts "release-body-$Version.md"
@@ -158,51 +174,53 @@ function Invoke-VerifyRelease {
 
     New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
-    Initialize-TaskList -Total 3
+    Initialize-TaskList -Total (1 + 2 * $releaseZips.Count)
 
     Write-Task 'download'
     Invoke-Gh `
         -Arguments @('release', 'download', $tag, '--repo', $Slug, '--dir', $staging, '--clobber') `
         -FailureMessage "Could not download the assets for $tag. Is the release published?" | Out-Null
 
-    $downloadedZip = Join-Path $staging $zipName
-    $downloadedSha = Join-Path $staging "$zipName.sha256"
-
-    foreach ($required in @($downloadedZip, $downloadedSha)) {
-        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+    foreach ($name in $assetNames) {
+        if (-not (Test-Path -LiteralPath (Join-Path $staging $name) -PathType Leaf)) {
             Write-Failed
-            throw "The release is missing '$(Split-Path -Leaf $required)'."
+            throw "The release is missing '$name'."
         }
     }
 
-    Write-Done (Format-Size (Get-Item -LiteralPath $downloadedZip).Length)
+    Write-Done "$($assetNames.Count) assets"
 
-    Write-Task 'checksum'
-    $actual = Get-AssetHash -Path $downloadedZip
-    $recorded = Get-RecordedHash -Path $downloadedSha
+    foreach ($zip in $releaseZips) {
+        $downloadedZip = Join-Path $staging $zip.Name
+        $downloadedSha = "$downloadedZip.sha256"
 
-    if ($actual -ne $recorded) {
-        Write-Failed
-        Write-Host ''
-        Write-Host "    recorded  $recorded" -ForegroundColor DarkGray
-        Write-Host "    actual    $actual" -ForegroundColor DarkGray
-        Write-Host ''
-        throw 'The published zip does not match its published checksum.'
+        Write-Task "checksum $($zip.Architecture)"
+        $actual = Get-AssetHash -Path $downloadedZip
+        $recorded = Get-RecordedHash -Path $downloadedSha
+
+        if ($actual -ne $recorded) {
+            Write-Failed
+            Write-Host ''
+            Write-Host "    recorded  $recorded" -ForegroundColor DarkGray
+            Write-Host "    actual    $actual" -ForegroundColor DarkGray
+            Write-Host ''
+            throw "The published $($zip.Name) does not match its published checksum."
+        }
+
+        Write-Done "matches, $(Format-Size (Get-Item -LiteralPath $downloadedZip).Length)"
+
+        Write-Task "archive layout $($zip.Architecture)"
+        $expected = @('app', 'install', 'Install.cmd', 'README.txt', 'Uninstall.cmd')
+        $actualRoots = @(Get-ZipRootEntry -Path $downloadedZip)
+
+        if (Compare-Object -ReferenceObject $expected -DifferenceObject $actualRoots) {
+            Write-Failed
+            Write-CapturedOutput $actualRoots
+            throw "The root of $($zip.Name) does not hold the expected five entries."
+        }
+
+        Write-Done "$($actualRoots.Count) entries at the root"
     }
-
-    Write-Done 'matches'
-
-    Write-Task 'archive layout'
-    $expected = @('app', 'install', 'Install.cmd', 'README.txt', 'Uninstall.cmd')
-    $actualRoots = @(Get-ZipRootEntry -Path $downloadedZip)
-
-    if (Compare-Object -ReferenceObject $expected -DifferenceObject $actualRoots) {
-        Write-Failed
-        Write-CapturedOutput $actualRoots
-        throw "The zip's root does not hold the expected five entries."
-    }
-
-    Write-Done "$($actualRoots.Count) entries at the root"
 
     Remove-Item -LiteralPath $staging -Recurse -Force
 
@@ -239,7 +257,7 @@ try {
     Test-GateTests -Solution $solution -Configuration $configuration -Stream:$ShowBuildOutput
     Test-GateHeaders -ScriptPath $headerScript
     Test-GateNetworkClaim -ScriptPath $claimScript
-    Test-GateBuild -Solution $solution -Configuration $configuration -Stream:$ShowBuildOutput
+    Test-GateBuild -Solution $solution -Executables @($appProject, $cliProject) -Configuration $configuration -Stream:$ShowBuildOutput
 
     Write-Host ''
 
@@ -263,7 +281,10 @@ try {
     }
 
     Write-Host "    promote   master $masterSha -> $devSha ($promoting commit(s), fast-forward)" -ForegroundColor Gray
-    Write-Host "    build     $zipName from master" -ForegroundColor Gray
+    foreach ($zip in $releaseZips) {
+        Write-Host "    build     $($zip.Name) from master" -ForegroundColor Gray
+    }
+
     Write-Host "    tag       $tag on master, annotated" -ForegroundColor Gray
     Write-Host "    publish   draft release on $slug" -ForegroundColor Gray
     Write-Host ''
@@ -380,7 +401,7 @@ try {
 
         if ($dryRun) {
             Write-Skipped 'what-if'
-            Write-Hint "pwsh .\build\New-Release.ps1 -Test    (~3 minutes)"
+            Write-Hint "pwsh .\build\New-Release.ps1 -Test    (~4 minutes)"
         }
         else {
             $buildArgs = @('-NoProfile', '-File', $releaseScript, '-Test')
@@ -398,17 +419,19 @@ try {
                 throw "New-Release.ps1 failed (exit code $buildCode)."
             }
 
-            # The zip is named from the version in the built executable. If that disagrees with
-            # what we are releasing, the bump did not take and the tag would name a build that
-            # does not exist.
-            if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
-                Write-Failed
-                $produced = Get-ChildItem -LiteralPath $artifacts -Filter '*.zip' -File | ForEach-Object { $_.Name }
-                Write-CapturedOutput $produced
-                throw "The build produced no '$zipName'. Directory.Build.props and the built executable disagree about the version."
+            # Every file, or no tag and no draft: a release does not go out with a zip missing.
+            # New-Release.ps1 clears this version's files before it builds, so what is here came
+            # from this run.
+            foreach ($asset in $assetPaths) {
+                if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+                    Write-Failed
+                    $produced = Get-ChildItem -LiteralPath $artifacts -Filter '*.zip*' -File | ForEach-Object { $_.Name }
+                    Write-CapturedOutput $produced
+                    throw "The build produced no '$(Split-Path -Leaf $asset)'. Directory.Build.props and the release version may disagree."
+                }
             }
 
-            Write-Done (Format-Size (Get-Item -LiteralPath $zipPath).Length)
+            Write-Done (($releaseZips | ForEach-Object { Format-Size (Get-Item -LiteralPath $_.Path).Length }) -join ', ')
         }
 
         # ---- 3. tag
@@ -429,19 +452,22 @@ try {
         # ---- 4. release body
         Write-Task 'release body'
 
-        # Under -WhatIf the build did not run, so there may be no checksum to fold in. An
-        # older zip left in artifacts is good enough to render a representative body.
-        if ($dryRun -and -not (Test-Path -LiteralPath $shaPath -PathType Leaf)) {
+        # Under -WhatIf the build did not run, so there may be no checksums to fold in. Older
+        # zips left in artifacts are good enough to render a representative body.
+        if ($dryRun -and @($releaseZips | Where-Object { -not (Test-Path -LiteralPath $_.ShaPath -PathType Leaf) })) {
             Write-Skipped 'what-if, nothing built to hash'
         }
         else {
-            $hash = Get-RecordedHash -Path $shaPath
-            $footer = Expand-Template -Path $footerTemplate -Token @{
-                VERSION      = $Version
-                ZIP          = $zipName
-                SHA256       = $hash
-                DOWNLOAD_URL = "https://github.com/$slug/releases/download/$tag/$zipName"
+            $tokens = @{ VERSION = $Version }
+
+            foreach ($zip in $releaseZips) {
+                $suffix = $zip.Architecture.ToUpperInvariant()
+                $tokens["ZIP_$suffix"] = $zip.Name
+                $tokens["SHA256_$suffix"] = Get-RecordedHash -Path $zip.ShaPath
+                $tokens["URL_$suffix"] = "https://github.com/$slug/releases/download/$tag/$($zip.Name)"
             }
+
+            $footer = Expand-Template -Path $footerTemplate -Token $tokens
 
             $body = ([System.IO.File]::ReadAllText($notesPath)).TrimEnd() + "`n`n" + $footer
 
@@ -459,7 +485,11 @@ try {
         if ($dryRun) {
             Write-Skipped 'what-if'
             Write-Hint "gh release create $tag --repo $slug --draft --verify-tag --target master"
-            Write-Hint "    --title ""Marqora $Version"" --notes-file <body> $zipName $zipName.sha256"
+            Write-Hint "    --title ""Marqora $Version"" --notes-file <body>"
+
+            foreach ($name in $assetNames) {
+                Write-Hint "    $name"
+            }
 
             Write-Host ''
             Write-Host '  Nothing reached origin. Confirm with:' -ForegroundColor DarkGray
@@ -469,19 +499,17 @@ try {
             exit 0
         }
 
-        $created = Invoke-Gh -Arguments @(
+        $created = Invoke-Gh -Arguments (@(
             'release', 'create', $tag,
             '--repo', $slug,
             '--draft',
             '--verify-tag',
             '--target', 'master',
             '--title', "Marqora $Version",
-            '--notes-file', $bodyPath,
-            $zipPath,
-            $shaPath
-        ) -FailureMessage 'Could not create the draft release.'
+            '--notes-file', $bodyPath
+        ) + $assetPaths) -FailureMessage 'Could not create the draft release.'
 
-        Write-Done '2 assets'
+        Write-Done "$($assetPaths.Count) assets"
 
         $draftUrl = ($created.Output -split '\r?\n' | Where-Object { $_ -match '^https://' } | Select-Object -Last 1)
     }
@@ -506,7 +534,8 @@ try {
     Write-Host '  bytes GitHub will actually serve:' -ForegroundColor DarkGray
     Write-Host ''
     Write-Host "      gh release download $tag --repo $slug --dir `$env:TEMP\marqora-$Version" -ForegroundColor Gray
-    Write-Host "      # extract it, run Install.cmd, launch, check Help > About says $Version" -ForegroundColor Gray
+    Write-Host "      # extract the zip for this PC, run Install.cmd, launch, check Help > About says $Version" -ForegroundColor Gray
+    Write-Host '      # then the short check on the ARM PC, from docs/ARM-Release-Checklist.md' -ForegroundColor Gray
     Write-Host ''
     Write-Host '  Then click Publish release on the page above, and confirm what shipped:' -ForegroundColor DarkGray
     Write-Host ''

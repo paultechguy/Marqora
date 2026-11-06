@@ -2,7 +2,12 @@
 
 ## Download
 
-**[{{ZIP}}]({{DOWNLOAD_URL}})** — Windows 10 1809 (build 17763) or later, 64-bit.
+There are two zips, one for each kind of PC. To see which you need, open
+**Settings > System > About** and read **System type**: it says x64-based processor or
+ARM-based processor.
+
+- **x64-based processor: [{{ZIP_X64}}]({{URL_X64}})** — Windows 10 1809 (build 17763) or later, 64-bit.
+- **ARM-based processor: [{{ZIP_ARM64}}]({{URL_ARM64}})** — Windows 11 on ARM.
 
 Self-contained in every sense. The .NET runtime and the Windows App SDK are inside the zip, so
 the target machine needs neither. The installer is per-user and writes nothing outside `HKCU`
@@ -40,15 +45,19 @@ installed it starts normally with no warnings at all.
 ## Verify your download
 
 ```
-SHA256  {{SHA256}}
+{{ZIP_X64}}
+SHA256  {{SHA256_X64}}
+
+{{ZIP_ARM64}}
+SHA256  {{SHA256_ARM64}}
 ```
 
 ```powershell
-Get-FileHash {{ZIP}} -Algorithm SHA256
+Get-FileHash Marqora-*.zip -Algorithm SHA256
 ```
 
-A mismatch means the copy is damaged rather than dangerous — 84 MB across a network or a USB
-stick does occasionally arrive short, and a partly corrupt zip will often extract far enough
+A mismatch means the copy is damaged rather than dangerous — a large file across a network or a
+USB stick does occasionally arrive short, and a partly corrupt zip will often extract far enough
 to look right and then fail somewhere later, which is a miserable thing to diagnose. Copy it
 across again rather than installing what you have.
 
