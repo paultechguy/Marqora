@@ -91,7 +91,10 @@ internal sealed class AboutDialog : ContentDialog
         string updateSummary,
         Action checkForUpdates)
     {
-        var panel = new StackPanel { Spacing = 16, Width = 420 };
+        // The right margin is a gutter for the scroll bar, which is drawn over the content
+        // rather than beside it. It sits outside the width, so the dialog grows to hold it
+        // and the text keeps its measure.
+        var panel = new StackPanel { Spacing = 16, Width = 420, Margin = new Thickness(0, 0, 16, 0) };
 
         panel.Children.Add(BuildHeader(version));
 

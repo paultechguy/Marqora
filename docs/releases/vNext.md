@@ -10,3 +10,5 @@
 -->
 
 ## Fixes
+
+**The About box's text no longer runs into its scroll bar.** Help, About now leaves a gutter on the right, so the long folder paths stay clear of the bar.
