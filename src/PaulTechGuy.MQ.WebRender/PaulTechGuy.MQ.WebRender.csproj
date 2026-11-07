@@ -12,15 +12,22 @@
     is asked for here by name. With it the package copies the native WinRT component beside the
     executable, and C#/WinRT activates it from there with no registration.
 
-    x64 named outright: the package picks the native component's architecture from the platform
-    target, and AnyCPU would hand the executable an x86 copy under the same file name.
+    The platform target is named outright, from MarqoraArch in Directory.Build.props: the package
+    picks the native component's architecture from it, and AnyCPU would hand the executable an
+    x86 copy under the same file name.
+
+    The runtime identifier gives each architecture its own bin and obj folders, as the two
+    executables have. Without it they share one, and the compiler does not treat a changed platform
+    target as a reason to rebuild, so an x64 build reuses the ARM64 library. Publishing hides that;
+    a test run or a Release run from Visual Studio then fails to load this assembly.
   -->
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>PaulTechGuy.MQ.WebRender</RootNamespace>
-    <PlatformTarget>x64</PlatformTarget>
+    <PlatformTarget>$(MarqoraArch)</PlatformTarget>
+    <RuntimeIdentifier>win-$(MarqoraArch)</RuntimeIdentifier>
     <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
 
     <!-- LibraryImport generates its marshalling as unsafe code. -->

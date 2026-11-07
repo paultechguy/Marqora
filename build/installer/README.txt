@@ -70,8 +70,7 @@ too:
 Requirements
 ---------------------------------------------------------------------------
 
-  * Windows 10 1809 (build 17763) or later. Windows 11 recommended.
-  * 64-bit (x64).
+{{REQUIREMENT}}
   * The WebView2 runtime, which Windows 11 already has and Windows 10 gets
     through Windows Update. The installer checks and tells you where to get
     it if it is missing.
@@ -106,20 +105,20 @@ Checking that the download arrived intact
 
 The build writes a SHA256 checksum beside the zip, in a file named
 
-  Marqora-{{VERSION}}-win-x64.zip.sha256
+  {{ZIP}}.sha256
 
 It is not inside the zip - a checksum of a zip cannot live within the zip it
 describes - so you have it only if it was sent along with the download. If
 you do, open PowerShell in the folder holding the zip and run:
 
-  Get-FileHash Marqora-{{VERSION}}-win-x64.zip -Algorithm SHA256
+  Get-FileHash {{ZIP}} -Algorithm SHA256
 
 The Hash it prints should match the one in the .sha256 file, ignoring upper
 and lower case.
 
-A mismatch means the copy is damaged rather than dangerous. 95 MB across a
-USB stick, a network share or a mail server does occasionally arrive short,
-and a partly corrupt zip will often extract far enough to look right and
+A mismatch means the copy is damaged rather than dangerous. A large file
+across a USB stick, a network share or a mail server does occasionally
+arrive short, and a partly corrupt zip will often extract far enough to look right and
 then fail somewhere later, which is a miserable thing to diagnose. Copy it
 across again rather than installing what you have.
 

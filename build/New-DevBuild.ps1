@@ -10,7 +10,7 @@
     extracts it and double-clicks Install.cmd exactly as they would a real release - built
     from whatever is in the tree right now and labeled with a version you supply:
 
-        build\artifacts\dev\Marqora-<version>-win-x64.zip
+        build\artifacts\dev\Marqora-<version>-win-<architecture>.zip
 
     What it does not do is the point. It writes no commits, moves no branches, creates no
     tags, uploads nothing, and above all does not touch <Version> in Directory.Build.props.
@@ -38,6 +38,11 @@
 
     A suffix is worth using. The numbers alone are indistinguishable from a real release,
     which is the confusion this script is meant to prevent.
+
+.PARAMETER Architecture
+    Which kind of PC the build is for: x64, the default, or arm64. One zip either way; a release
+    is what builds both. An x64 PC cannot start an ARM64 build, so that one is proven by reading
+    its files here and by installing it on an ARM PC.
 
 .PARAMETER Test
     Runs the test suite first and stops if anything fails. Off by default: the point of a
@@ -70,6 +75,11 @@
 
     The same, gated on a green test run, for something you are handing to another person.
 
+.EXAMPLE
+    pwsh .\build\New-DevBuild.ps1 -Version 0.3.0-arm1 -Architecture arm64
+
+    A build to try on an ARM PC.
+
 .NOTES
     Exit codes: 0 success, 1 failure.
 
@@ -83,6 +93,9 @@
 param(
     [Parameter(Mandatory)]
     [string] $Version,
+
+    [ValidateSet('x64', 'arm64')]
+    [string] $Architecture = 'x64',
 
     [switch] $Test,
 
@@ -118,7 +131,6 @@ $webAssetSentinel = Join-Path $repoRoot 'webshell\vendor\monaco\vs\loader.js'
 
 $artifacts = if ($OutputDirectory) { [System.IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'artifacts\dev' }
 $staging = Join-Path $artifacts '.stage'
-$runtimeIdentifier = 'win-x64'
 $configuration = 'Release'
 
 # Three numbers, then an optional prerelease suffix. Deliberately looser than
@@ -209,13 +221,13 @@ and run its Install.cmd over the top of this one.
     Set-Content -LiteralPath $path -Value ($banner + $existing) -Encoding UTF8 -NoNewline
 }
 
-Initialize-TaskList -Total $(if ($Test) { 6 } else { 5 })
+Initialize-TaskList -Total $(if ($Test) { 7 } else { 6 })
 
 try {
     $numericVersion = Assert-DevVersion -Value $Version
 
     Write-Host ''
-    Write-Host "Marqora dev build $Version" -ForegroundColor White
+    Write-Host "Marqora dev build $Version for $Architecture" -ForegroundColor White
     Write-Host ''
 
     $provenance = Get-TreeProvenance
@@ -272,6 +284,7 @@ try {
             "-p:Version=$Version",
             "-p:AssemblyVersion=$numericVersion.0",
             "-p:FileVersion=$numericVersion.0",
+            "-p:MarqoraArch=$Architecture",
             '--nologo') `
         -FailureMessage 'The publish failed.' `
         -Stream:$ShowBuildOutput
@@ -315,9 +328,14 @@ try {
         -StagingRoot $staging `
         -Configuration $configuration `
         -AppVersion $Version `
+        -Architecture $Architecture `
         -ExtraArguments @("-p:Version=$Version", "-p:AssemblyVersion=$numericVersion.0", "-p:FileVersion=$numericVersion.0") `
         -ShowBuildOutput:$ShowBuildOutput
     Write-Done $cliSummary
+
+    # ---- every native file, after the merge, so one pass covers both executables
+    Write-Task 'check files'
+    Write-Done (Assert-PublishArchitecture -PublishDir $publishDir -Architecture $Architecture)
 
     # ---- stage
     Write-Task 'stage installer'
@@ -338,7 +356,7 @@ try {
         -StagingRoot $staging `
         -InstallerSource $installerSource `
         -AssociationScript $associationScript `
-        -RuntimeIdentifier $runtimeIdentifier
+        -Architecture $Architecture
 
     Add-DevBuildBanner -StagedRoot $stagedRoot -Label $Version -Provenance $provenance.Text
     Write-Done $provenance.Text
@@ -346,7 +364,7 @@ try {
     # ---- zip
     Write-Task 'zip'
     New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
-    $zipPath = Join-Path $artifacts ("Marqora-$Version-$runtimeIdentifier.zip")
+    $zipPath = Join-Path $artifacts (Get-ReleaseZipName -Version $Version -Architecture $Architecture)
     New-ReleaseArchive -StagedRoot $stagedRoot -ZipPath $zipPath
 
     $zipSize = (Get-Item -LiteralPath $zipPath).Length

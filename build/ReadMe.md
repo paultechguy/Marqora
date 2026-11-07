@@ -1,4 +1,4 @@
-﻿# Marqora build scripts
+# Marqora build scripts
 
 Everything here is PowerShell 7 (`pwsh`) and everything is run from the repository root:
 
@@ -45,8 +45,8 @@ differ only in where the version comes from.
 
 | Script | What it does |
 |---|---|
-| `New-DevBuild.ps1` | Builds the working tree as it stands under a version **you** name: `-Version 0.3.0-test4`. Writes no commits, no tags, and does not touch `Directory.Build.props`. For putting today's code on another machine. Publishes `marqora-cli` beside the app as the release does, so a change to the libraries they share that breaks the CLI fails the build. `-Version` is mandatory — without it the zip and the About box would be indistinguishable from the real release of the same number. |
-| `New-Release.ps1` | The same build, taking its version from `Directory.Build.props`. This is the one command that produces something shippable, and it is step 2 of the release below. `-Test` gates it on a green test run. |
+| `New-DevBuild.ps1` | Builds the working tree as it stands under a version **you** name: `-Version 0.3.0-test4`. Writes no commits, no tags, and does not touch `Directory.Build.props`. For putting today's code on another machine. One zip, for x64 unless `-Architecture arm64` asks otherwise. Publishes `marqora-cli` beside the app as the release does, so a change to the libraries they share that breaks the CLI fails the build. `-Version` is mandatory — without it the zip and the About box would be indistinguishable from the real release of the same number. |
+| `New-Release.ps1` | The same build, taking its version from `Directory.Build.props`. This is the one command that produces something shippable, and it is step 2 of the release below. Always builds both zips, x64 and ARM64. `-Test` gates it on a green test run. |
 
 Both take `-ForceAssets`, `-OutputDirectory`, `-KeepStaging` and `-ShowBuildOutput`.
 
@@ -99,10 +99,10 @@ of the run unless `-KeepStaging` is passed.
 | `Add-FileHeaders.ps1` | — | — | — | rewrites `.cs` under `src\`, `tests\` |
 | `Get-WebAssets.ps1` | — | — | — | writes `webshell\vendor\` |
 | `New-AppIcon.ps1` | — | — | — | writes `src\...\Assets\MarqoraLogo.ico` |
-| `New-DevBuild.ps1` | reads all five | — | **writes** `Marqora-<version>-win-x64.zip` and `.zip.sha256`; `.stage\` while it runs | — |
-| `New-Release.ps1` | reads all five | **writes** `Marqora-<version>-win-x64.zip` and `.zip.sha256`; `.stage\` while it runs | — | — |
+| `New-DevBuild.ps1` | reads all five | — | **writes** `Marqora-<version>-win-<architecture>.zip` and `.zip.sha256`; `.stage\` while it runs | — |
+| `New-Release.ps1` | reads all five | **writes** `Marqora-<version>-win-x64.zip`, `Marqora-<version>-win-arm64.zip` and a `.zip.sha256` for each; `.stage\` while it runs | — | — |
 | `New-ReleaseNotes.ps1` | — | — | — | writes `docs\releases\v<version>.md`; edits `Directory.Build.props` |
-| `Publish-Release.ps1` | — | **writes** `release-body-<version>.md`; reads the zip and `.zip.sha256` that `New-Release.ps1` left | — | moves `master`, writes a tag, uploads a draft to GitHub. `-Verify` downloads to `%TEMP%` |
+| `Publish-Release.ps1` | — | **writes** `release-body-<version>.md`; reads the zips and `.zip.sha256` files that `New-Release.ps1` left | — | moves `master`, writes a tag, uploads a draft to GitHub. `-Verify` downloads to `%TEMP%` |
 | `Register-FileAssociation.ps1` | — | — | — | writes `HKCU` only; no files |
 | `ReleaseCommon.ps1` | reads, for its callers | writes, for its callers | writes, for its callers | — |
 | `Set-AmericanSpelling.ps1` | — | excluded by design | excluded by design | rewrites the whole tree |

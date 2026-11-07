@@ -944,9 +944,14 @@ function Test-GateNetworkClaim {
 # Runs after the test gate, whose `dotnet test` has already compiled everything with warnings
 # left as warnings. An incremental build here would recompile nothing and so see no warning;
 # --no-incremental makes every project compile again under -warnaserror.
+#
+# The solution builds for x64 alone, because the test projects name x64 and reference WebRender:
+# an ARM64 option across the solution would pull WebRender to ARM64 underneath them. Every other
+# architecture compiles the two executables by name, which reaches everything that ships.
 function Test-GateBuild {
     param(
         [Parameter(Mandatory)][string] $Solution,
+        [Parameter(Mandatory)][string[]] $Executables,
         [Parameter(Mandatory)][string] $Configuration,
         [switch] $Stream
     )
@@ -957,6 +962,19 @@ function Test-GateBuild {
         -FailureMessage 'The build produced errors or warnings.' `
         -Stream:$Stream
     Write-Done 'clean'
+
+    foreach ($architecture in $MqReleaseArchitectures | Where-Object { $_ -ne 'x64' }) {
+        Write-Check "build $architecture, no warnings"
+
+        foreach ($project in $Executables) {
+            Invoke-Dotnet `
+                -Arguments @('build', $project, '-c', $Configuration, "-p:MarqoraArch=$architecture", '-warnaserror', '--no-incremental', '--nologo') `
+                -FailureMessage "The $architecture build produced errors or warnings." `
+                -Stream:$Stream
+        }
+
+        Write-Done 'clean'
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -984,6 +1002,136 @@ function Get-RepoSlug {
 #  trust it. Everything a caller might want to vary is a parameter, so neither script reaches
 #  into the other's variables.
 # ---------------------------------------------------------------------------------------------
+
+# What a release contains: one zip per entry, in this order. The one list, so the build, the
+# gates and the upload cannot disagree about it. Each word is the value of MarqoraArch in
+# Directory.Build.props and the end of the runtime identifier, so nothing translates between them.
+$MqReleaseArchitectures = @('x64', 'arm64')
+
+function Get-ReleaseBaseName {
+    param(
+        [Parameter(Mandatory)][string] $Version,
+        [Parameter(Mandatory)][string] $Architecture
+    )
+
+    return "Marqora-$Version-win-$Architecture"
+}
+
+function Get-ReleaseZipName {
+    param(
+        [Parameter(Mandatory)][string] $Version,
+        [Parameter(Mandatory)][string] $Architecture
+    )
+
+    return (Get-ReleaseBaseName -Version $Version -Architecture $Architecture) + '.zip'
+}
+
+# The requirements section of README.txt. ARM64 states Windows 11 alone because that is what the
+# laptop check proves: Windows 10 on ARM is not blocked, it is just not promised.
+function Get-ReleaseRequirement {
+    param([Parameter(Mandatory)][string] $Architecture)
+
+    switch ($Architecture) {
+        'x64' { return "  * Windows 10 1809 (build 17763) or later. Windows 11 recommended.`n  * 64-bit (x64)." }
+        'arm64' { return '  * Windows 11 on ARM.' }
+        default { throw "No requirement is written for the architecture '$Architecture'." }
+    }
+}
+
+# Whether this PC can start an executable built for that architecture, which decides whether a
+# check may run it. Windows 11 on ARM runs x64 under emulation; nothing runs ARM64 on an x64 PC.
+function Test-CanRunArchitecture {
+    param([Parameter(Mandatory)][string] $Architecture)
+
+    $machine = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+
+    return $machine -eq $Architecture -or $machine -eq 'arm64'
+}
+
+# Proof that a publish is the architecture its zip will claim. An x64 PC cannot start an ARM64
+# build, so this reads what it cannot run: the header of every .exe and .dll.
+#
+# A file passes if its machine type is the architecture's, or if it is CPU-neutral .NET, which
+# runs on either. CPU-neutral means the x86 machine type AND the IL-only flag AND no request for
+# 32 bits: a real x86 DLL has the same machine type, so the machine type alone would pass one. A
+# file that cannot be read fails rather than being skipped, because every file in a good publish
+# can be.
+#
+# Throws, after Write-Failed, naming every file that does not belong; returns the summary for
+# Write-Done.
+function Assert-PublishArchitecture {
+    param(
+        [Parameter(Mandatory)][string] $PublishDir,
+        [Parameter(Mandatory)][string] $Architecture
+    )
+
+    $expected = switch ($Architecture) {
+        'x64' { [System.Reflection.PortableExecutable.Machine]::Amd64 }
+        'arm64' { [System.Reflection.PortableExecutable.Machine]::Arm64 }
+        default { throw "No machine type is known for the architecture '$Architecture'." }
+    }
+
+    $native = 0
+    $neutral = 0
+    $wrong = New-Object System.Collections.Generic.List[string]
+
+    $files = Get-ChildItem -LiteralPath $PublishDir -Recurse -File |
+        Where-Object { $_.Extension -in @('.exe', '.dll') }
+
+    foreach ($file in $files) {
+        $relative = [System.IO.Path]::GetRelativePath($PublishDir, $file.FullName)
+        $stream = [System.IO.File]::OpenRead($file.FullName)
+        $reader = [System.Reflection.PortableExecutable.PEReader]::new($stream)
+
+        try {
+            # PowerShell swallows what a property getter throws, so a file that is not a PE image
+            # arrives here as $null rather than as an exception.
+            $headers = $reader.PEHeaders
+
+            if (-not $headers) {
+                $wrong.Add("$relative (cannot be read)")
+                continue
+            }
+
+            $machine = $headers.CoffHeader.Machine
+
+            if ($machine -eq $expected) {
+                $native++
+                continue
+            }
+
+            $flags = if ($headers.CorHeader) { $headers.CorHeader.Flags } else { [System.Reflection.PortableExecutable.CorFlags] 0 }
+            $ilOnly = $flags.HasFlag([System.Reflection.PortableExecutable.CorFlags]::ILOnly)
+            $wants32Bit = $flags.HasFlag([System.Reflection.PortableExecutable.CorFlags]::Requires32Bit)
+
+            if ($machine -eq [System.Reflection.PortableExecutable.Machine]::I386 -and $ilOnly -and -not $wants32Bit) {
+                $neutral++
+            }
+            else {
+                $wrong.Add("$relative ($machine)")
+            }
+        }
+        catch {
+            $wrong.Add("$relative (cannot be read)")
+        }
+        finally {
+            $reader.Dispose()
+            $stream.Dispose()
+        }
+    }
+
+    if ($wrong.Count -gt 0) {
+        Write-Failed
+        throw "$($wrong.Count) file(s) in the $Architecture publish are not built for $($Architecture):`n  $($wrong -join "`n  ")"
+    }
+
+    if ($native -eq 0) {
+        Write-Failed
+        throw "No native file for $Architecture in '$PublishDir'."
+    }
+
+    return "$native $Architecture, $neutral CPU-neutral"
+}
 
 # The version to name the archive after. The executable is the ground truth for what was
 # actually built; PropsPath is a second opinion for the case where it carries no version at all.
@@ -1027,6 +1175,8 @@ function Get-PublishedVersion {
 #
 # One version for both (CLI-VB-VER-01): read from the executable as the installer reads the
 # app's, and asked of the CLI itself, which answers from the same ProductVersion About shows.
+# The asking needs a PC that can run the build. Where it cannot, the file's properties are the
+# whole check, and the summary says so.
 #
 # Throws, after Write-Failed, on anything wrong; returns the summary for Write-Done.
 function Add-CliToPublish {
@@ -1036,6 +1186,7 @@ function Add-CliToPublish {
         [Parameter(Mandatory)][string] $StagingRoot,
         [Parameter(Mandatory)][string] $Configuration,
         [Parameter(Mandatory)][string] $AppVersion,
+        [Parameter(Mandatory)][string] $Architecture,
         [string[]] $ExtraArguments = @(),
         [switch] $ShowBuildOutput
     )
@@ -1043,7 +1194,7 @@ function Add-CliToPublish {
     $cliPublishDir = Join-Path $StagingRoot 'cli'
 
     Invoke-Dotnet `
-        -Arguments (@('publish', $CliProject, '-c', $Configuration, '-o', $cliPublishDir) + $ExtraArguments + @('--nologo')) `
+        -Arguments (@('publish', $CliProject, '-c', $Configuration, '-o', $cliPublishDir, "-p:MarqoraArch=$Architecture") + $ExtraArguments + @('--nologo')) `
         -FailureMessage 'The marqora-cli publish failed.' `
         -Stream:$ShowBuildOutput
 
@@ -1087,6 +1238,17 @@ function Add-CliToPublish {
     }
 
     $cliVersion = Get-PublishedVersion -Exe $publishedCli
+    $summary = "v$cliVersion, $($cliOnly.Count) files of its own, $shared shared"
+
+    if (-not (Test-CanRunArchitecture -Architecture $Architecture)) {
+        if ($cliVersion -ne $AppVersion) {
+            Write-Failed
+            throw "marqora-cli is not at the app's version: the app is $AppVersion and marqora-cli.exe is $cliVersion. This PC cannot run the $Architecture build, so the file's properties are all that was read."
+        }
+
+        return "$summary, version read from the file"
+    }
+
     $cliAnswer = (& $publishedCli version 2>&1 | Out-String).Trim()
 
     if ($LASTEXITCODE -ne 0 -or $cliVersion -ne $AppVersion -or $cliAnswer -notmatch [regex]::Escape($AppVersion)) {
@@ -1094,7 +1256,7 @@ function Add-CliToPublish {
         throw "marqora-cli is not at the app's version: the app is $AppVersion, marqora-cli.exe is $cliVersion, and 'marqora-cli version' said '$cliAnswer'."
     }
 
-    return "v$cliVersion, $($cliOnly.Count) files of its own, $shared shared"
+    return $summary
 }
 
 # Lays the published app out next to the installer scripts, in the shape the zip ships:
@@ -1109,11 +1271,10 @@ function New-StagedRelease {
         [Parameter(Mandatory)][string] $StagingRoot,
         [Parameter(Mandatory)][string] $InstallerSource,
         [Parameter(Mandatory)][string] $AssociationScript,
-        [string] $RuntimeIdentifier = 'win-x64'
+        [Parameter(Mandatory)][string] $Architecture
     )
 
-    $name = "Marqora-$Version-$RuntimeIdentifier"
-    $root = Join-Path $StagingRoot $name
+    $root = Join-Path $StagingRoot (Get-ReleaseBaseName -Version $Version -Architecture $Architecture)
 
     New-Item -ItemType Directory -Path $root -Force | Out-Null
 
@@ -1138,10 +1299,15 @@ function New-StagedRelease {
     }
 
     # The readme carries the version so a zip that has been sitting in a downloads folder
-    # for six months still says which one it is.
-    $readme = Get-Content -LiteralPath (Join-Path $InstallerSource 'README.txt') -Raw
-    $readme.Replace('{{VERSION}}', $Version) |
-        Set-Content -LiteralPath (Join-Path $root 'README.txt') -Encoding UTF8 -NoNewline
+    # for six months still says which one it is, and which kind of PC it is for. Expand-Template
+    # refuses a token nothing filled, so a forgotten one fails here rather than reaching a zip.
+    $readme = Expand-Template -Path (Join-Path $InstallerSource 'README.txt') -Token @{
+        VERSION     = $Version
+        ZIP         = Get-ReleaseZipName -Version $Version -Architecture $Architecture
+        REQUIREMENT = Get-ReleaseRequirement -Architecture $Architecture
+    }
+
+    Save-Text -Path (Join-Path $root 'README.txt') -Text $readme
 
     return $root
 }

@@ -9,4 +9,17 @@
     any heading with nothing under it, and puts this stub back.
 -->
 
+## Marqora for ARM PCs
+
+Marqora now comes in a version built for Windows 11 on ARM, alongside the x64 one. Every release
+carries both zips, and the release page says how to tell which one your PC needs. The app and
+`marqora-cli` do the same things in both.
+
+If you have been running the x64 version on an ARM PC, it keeps working, and installing the ARM
+version over it keeps your settings. The x64 installer now tells you when an ARM version is
+available for your PC. The ARM installer stops on an x64 PC before it changes anything, and says
+which zip to get instead. **Help > About** now shows which version you are running.
+
 ## Fixes
+
+**The About box's text no longer runs into its scroll bar.** Help, About now leaves a gutter on the right, so the long folder paths stay clear of the bar.

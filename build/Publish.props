@@ -9,7 +9,7 @@
   -->
 
   <PropertyGroup>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier>win-$(MarqoraArch)</RuntimeIdentifier>
 
     <!--
       The .NET runtime is only bundled for Release. Debug stays framework-dependent so

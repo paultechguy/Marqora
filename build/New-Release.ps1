@@ -2,14 +2,20 @@
 
 <#
 .SYNOPSIS
-    Builds the Marqora release zip: one command, one file, ready to hand to someone else.
+    Builds the Marqora release zips: one command, one zip per architecture, ready to hand to
+    someone else.
 
 .DESCRIPTION
-    Restores the third-party web assets if they are missing, publishes the app and marqora-cli
-    into one folder, checks the files they share are the same bytes, stages it
-    alongside the installer scripts, and compresses the lot into
+    Restores the third-party web assets if they are missing. Then, for each architecture, it
+    publishes the app and marqora-cli into one folder, checks the files they share are the same
+    bytes, checks every native file is built for that architecture, stages it alongside the
+    installer scripts, and compresses the lot into
 
-        build\artifacts\Marqora-<version>-win-x64.zip
+        build\artifacts\Marqora-<version>-win-x64.zip      for x64 PCs
+        build\artifacts\Marqora-<version>-win-arm64.zip    for ARM PCs
+
+    Each zip has a .sha256 file beside it. A release always has both zips; nothing here leaves
+    one out, so Publish-Release.ps1 never has to ask what it was given.
 
     What comes out is self-contained in every sense. The .NET runtime and the Windows App
     SDK are inside it, so the target machine needs neither. The installer is per-user and
@@ -26,7 +32,11 @@
         install\            the scripts both wrappers call
         app\                the published application, with marqora-cli beside it
 
-    Tests are opt-in via -Test. Repackaging is something you do repeatedly while getting
+    An x64 PC cannot start the ARM64 build, so the ARM64 zip is proven by reading its files
+    here and by running it on an ARM PC before release (docs/ARM-Release-Checklist.md).
+
+    Tests are opt-in via -Test, and run once: they run on x64 whichever zip is being built.
+    Repackaging is something you do repeatedly while getting
     the installer right, and paying for the full suite on every iteration only teaches you
     to stop running the script.
 
@@ -43,11 +53,11 @@
     Re-downloads the web assets even when webshell\vendor already looks complete.
 
 .PARAMETER OutputDirectory
-    Where the zip is written. Defaults to build\artifacts, which is git-ignored.
+    Where the zips are written. Defaults to build\artifacts, which is git-ignored.
 
 .PARAMETER KeepStaging
-    Leaves the staged folder in place next to the zip, which is the quickest way to inspect
-    exactly what shipped without unzipping it again.
+    Leaves the staged folders in place next to the zips, one per architecture, which is the
+    quickest way to inspect exactly what shipped without unzipping it again.
 
 .PARAMETER ShowBuildOutput
     Streams the dotnet output instead of capturing it. The output is shown automatically
@@ -105,9 +115,9 @@ $webAssetSentinel = Join-Path $repoRoot 'webshell\vendor\monaco\vs\loader.js'
 
 $artifacts = if ($OutputDirectory) { [System.IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'artifacts' }
 $staging = Join-Path $artifacts '.stage'
-$runtimeIdentifier = 'win-x64'
 
-Initialize-TaskList -Total $(if ($Test) { 6 } else { 5 })
+# Web assets and, when asked for, the tests happen once. Five steps happen per architecture.
+Initialize-TaskList -Total ($MqReleaseArchitectures.Count * 5 + $(if ($Test) { 2 } else { 1 }))
 
 try {
     Write-Host ''
@@ -145,99 +155,133 @@ try {
         Write-Done 'passed'
     }
 
-    # ---- publish
-    Write-Task "publish $Configuration"
+    # Anything left from an earlier run goes first, so a failure below cannot leave a new zip
+    # beside an old one of the same version for Publish-Release.ps1 to pick up as a set.
+    $version = Get-RepoVersion -PropsPath $buildProps
+
+    foreach ($architecture in $MqReleaseArchitectures) {
+        $oldZip = Join-Path $artifacts (Get-ReleaseZipName -Version $version -Architecture $architecture)
+        Remove-Item -LiteralPath $oldZip, "$oldZip.sha256" -Force -ErrorAction SilentlyContinue
+    }
 
     if (Test-Path -LiteralPath $staging) {
         Remove-Item -LiteralPath $staging -Recurse -Force
     }
 
-    New-Item -ItemType Directory -Path $staging -Force | Out-Null
-    $publishDir = Join-Path $staging 'app'
-
-    Invoke-Dotnet `
-        -Arguments @('publish', $appProject, '-c', $Configuration, '-o', $publishDir, '--nologo') `
-        -FailureMessage 'The publish failed.' `
-        -Stream:$ShowBuildOutput
-
-    $publishedExe = Join-Path $publishDir 'Marqora.exe'
-
-    if (-not (Test-Path -LiteralPath $publishedExe -PathType Leaf)) {
-        Write-Failed
-        throw "The publish completed but produced no Marqora.exe in '$publishDir'."
-    }
-
-    # The app cannot start without these two, and neither is copied by the plain publish
-    # targets - see PublishWinUIResources in the app project. Checking here turns a zip
-    # that fails on the user's machine with an unresolvable ms-appx:/// URI into a build
-    # that fails on this one.
-    foreach ($required in @('Marqora.pri', 'App.xbf', 'Assets\web\shell.html', 'Assets\web\vendor\monaco\vs\loader.js')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $publishDir $required))) {
-            Write-Failed
-            throw "The publish is missing '$required'. The app would install but not start."
-        }
-    }
-
-    # The welcome document is what a new release introduces itself with, and its absence is
-    # invisible at run time: the app logs a line and opens nothing at all. Said out loud here
-    # rather than thrown, because the release is perfectly usable without it.
-    $welcomeMissing = -not (Test-Path -LiteralPath (Join-Path $publishDir 'Assets\Welcome to Marqora.md'))
-
-    $publishSize = Get-DirectorySize -Path $publishDir
-    Write-Done (Format-Size $publishSize)
-
-    if ($welcomeMissing) {
-        Write-Host '        no welcome document in the publish; this release will not introduce itself' `
-            -ForegroundColor Yellow
-    }
-
-    # ---- the command line, published beside the app (ReleaseCommon's Add-CliToPublish)
-    Write-Task 'publish marqora-cli'
-    $appVersion = Get-PublishedVersion -Exe $publishedExe -PropsPath $buildProps
-    $cliSummary = Add-CliToPublish `
-        -CliProject $cliProject `
-        -PublishDir $publishDir `
-        -StagingRoot $staging `
-        -Configuration $Configuration `
-        -AppVersion $appVersion `
-        -ShowBuildOutput:$ShowBuildOutput
-    Write-Done $cliSummary
-
-    # ---- stage
-    Write-Task 'stage installer'
-    $version = Get-PublishedVersion -Exe $publishedExe -PropsPath $buildProps
-    $stagedRoot = New-StagedRelease `
-        -PublishDir $publishDir `
-        -Version $version `
-        -StagingRoot $staging `
-        -InstallerSource $installerSource `
-        -AssociationScript $associationScript `
-        -RuntimeIdentifier $runtimeIdentifier
-    Write-Done "v$version"
-
-    # ---- zip
-    Write-Task 'zip'
     New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
-    $zipPath = Join-Path $artifacts ("Marqora-$version-$runtimeIdentifier.zip")
-    New-ReleaseArchive -StagedRoot $stagedRoot -ZipPath $zipPath
+    $built = New-Object System.Collections.Generic.List[object]
 
-    $zipSize = (Get-Item -LiteralPath $zipPath).Length
-    Write-Done (Format-Size $zipSize)
+    foreach ($architecture in $MqReleaseArchitectures) {
+        # A folder each, so nothing from one architecture can reach the other's zip.
+        $archStaging = Join-Path $staging "win-$architecture"
+        New-Item -ItemType Directory -Path $archStaging -Force | Out-Null
+        $publishDir = Join-Path $archStaging 'app'
 
-    # A checksum beside the zip, so whoever receives it can confirm it arrived intact.
-    # Cheap to produce and the only thing this build can offer in place of a signature.
-    $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
-    "$hash  $(Split-Path -Leaf $zipPath)" | Set-Content -LiteralPath "$zipPath.sha256" -Encoding ASCII
+        # ---- publish
+        Write-Task "publish $architecture"
+
+        Invoke-Dotnet `
+            -Arguments @('publish', $appProject, '-c', $Configuration, '-o', $publishDir, "-p:MarqoraArch=$architecture", '--nologo') `
+            -FailureMessage "The $architecture publish failed." `
+            -Stream:$ShowBuildOutput
+
+        $publishedExe = Join-Path $publishDir 'Marqora.exe'
+
+        if (-not (Test-Path -LiteralPath $publishedExe -PathType Leaf)) {
+            Write-Failed
+            throw "The publish completed but produced no Marqora.exe in '$publishDir'."
+        }
+
+        # The app cannot start without these two, and neither is copied by the plain publish
+        # targets - see PublishWinUIResources in the app project. Checking here turns a zip
+        # that fails on the user's machine with an unresolvable ms-appx:/// URI into a build
+        # that fails on this one.
+        foreach ($required in @('Marqora.pri', 'App.xbf', 'Assets\web\shell.html', 'Assets\web\vendor\monaco\vs\loader.js')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $publishDir $required))) {
+                Write-Failed
+                throw "The $architecture publish is missing '$required'. The app would install but not start."
+            }
+        }
+
+        # The zips are named for the version in Directory.Build.props, so the executable has to
+        # carry that version, or the name would be a claim about a build that does not exist.
+        $appVersion = Get-PublishedVersion -Exe $publishedExe
+
+        if ($appVersion -ne $version) {
+            Write-Failed
+            throw "Directory.Build.props says $version but the built $architecture Marqora.exe reports $appVersion."
+        }
+
+        # The welcome document is what a new release introduces itself with, and its absence is
+        # invisible at run time: the app logs a line and opens nothing at all. Said out loud here
+        # rather than thrown, because the release is perfectly usable without it.
+        $welcomeMissing = -not (Test-Path -LiteralPath (Join-Path $publishDir 'Assets\Welcome to Marqora.md'))
+
+        $publishSize = Get-DirectorySize -Path $publishDir
+        Write-Done (Format-Size $publishSize)
+
+        if ($welcomeMissing) {
+            Write-Host '        no welcome document in the publish; this release will not introduce itself' `
+                -ForegroundColor Yellow
+        }
+
+        # ---- the command line, published beside the app (ReleaseCommon's Add-CliToPublish)
+        Write-Task "publish marqora-cli $architecture"
+        $cliSummary = Add-CliToPublish `
+            -CliProject $cliProject `
+            -PublishDir $publishDir `
+            -StagingRoot $archStaging `
+            -Configuration $Configuration `
+            -AppVersion $appVersion `
+            -Architecture $architecture `
+            -ShowBuildOutput:$ShowBuildOutput
+        Write-Done $cliSummary
+
+        # ---- every native file, after the merge, so one pass covers both executables
+        Write-Task "check files $architecture"
+        Write-Done (Assert-PublishArchitecture -PublishDir $publishDir -Architecture $architecture)
+
+        # ---- stage
+        Write-Task "stage installer $architecture"
+        $stagedRoot = New-StagedRelease `
+            -PublishDir $publishDir `
+            -Version $version `
+            -StagingRoot $archStaging `
+            -InstallerSource $installerSource `
+            -AssociationScript $associationScript `
+            -Architecture $architecture
+        Write-Done "v$version"
+
+        # ---- zip
+        Write-Task "zip $architecture"
+        $zipPath = Join-Path $artifacts (Get-ReleaseZipName -Version $version -Architecture $architecture)
+        New-ReleaseArchive -StagedRoot $stagedRoot -ZipPath $zipPath
+
+        $zipSize = (Get-Item -LiteralPath $zipPath).Length
+        Write-Done (Format-Size $zipSize)
+
+        # A checksum beside the zip, so whoever receives it can confirm it arrived intact.
+        # Cheap to produce and the only thing this build can offer in place of a signature.
+        $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+        "$hash  $(Split-Path -Leaf $zipPath)" | Set-Content -LiteralPath "$zipPath.sha256" -Encoding ASCII
+
+        $built.Add([pscustomobject]@{ Architecture = $architecture; Zip = $zipPath; Hash = $hash })
+    }
 
     if (-not $KeepStaging) {
         Remove-Item -LiteralPath $staging -Recurse -Force
     }
 
     Write-Host ''
-    Write-Host "  $zipPath" -ForegroundColor White
-    Write-Host "  SHA256 $hash" -ForegroundColor DarkGray
-    Write-Host ''
-    Write-Host '  Copy the zip to the other machine, extract it into a folder, run Install.cmd.' `
+
+    foreach ($zip in $built) {
+        Write-Host "  $($zip.Zip)" -ForegroundColor White
+        Write-Host "  SHA256 $($zip.Hash)" -ForegroundColor DarkGray
+        Write-Host "  For $($zip.Architecture) PCs." -ForegroundColor DarkGray
+        Write-Host ''
+    }
+
+    Write-Host '  Copy the right zip to the other machine, extract it into a folder, run Install.cmd.' `
         -ForegroundColor DarkGray
     Write-Host ''
 

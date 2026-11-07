@@ -4,7 +4,7 @@
 
 <h1 style="margin-top: 0.2em;">Marqora</h1>
 
-<p><strong>A Markdown viewer and editor for Windows 11, built on .NET 10 and WinUI 3.</strong></p>
+<p><strong>A Markdown viewer and editor for Windows 11 on x64 and ARM64, built on .NET 10 and WinUI 3.</strong></p>
 
 <p>
 Source and preview live side by side with synchronized scrolling, mermaid diagrams render<br>
@@ -33,10 +33,16 @@ anywhere else.
 
 ## Download
 
-**[Get the latest release](https://github.com/paultechguy/Marqora/releases/latest)** — one
-zip, around 95 MB. Extract it into a folder of its own and double-click `Install.cmd`. It
-installs the app and `marqora-cli`, its [command line](#command-line), and asks whether to put
-the command line on your PATH; the answer is No unless you say yes.
+**[Get the latest release](https://github.com/paultechguy/Marqora/releases/latest)**. There are
+two zips, and the one you need depends on your PC. Open **Settings > System > About** and read
+**System type**:
+
+- **x64-based processor:** the `win-x64` zip, around 95 MB. It needs Windows 10 1809 or later.
+- **ARM-based processor:** the `win-arm64` zip, around 88 MB. It needs Windows 11 on ARM.
+
+Extract the zip into a folder of its own and double-click `Install.cmd`. It installs the app and
+`marqora-cli`, its [command line](#command-line), and asks whether to put the command line on
+your PATH; the answer is No unless you say yes.
 
 Everything is per-user: no administrator, no UAC prompt, nothing written outside `HKCU` and
 your own profile. The .NET runtime and the Windows App SDK travel inside the zip, so the
@@ -109,11 +115,12 @@ pwsh .\build\New-Release.ps1 -Test
 ```
 
 This is the one command that produces something shippable. It restores the web assets if
-they are missing, publishes, stages the app next to the installer scripts, and writes
-`build\artifacts\Marqora-<version>-win-x64.zip` with a `.sha256` beside it. The zip is
-around 95 MB and has no wrapper folder — `README.txt`, `Install.cmd`, `Uninstall.cmd`,
-`install\` and `app\` sit at its root, so it extracts into a folder of the recipient's
-choosing rather than one of its own making.
+they are missing, publishes for each architecture, stages the app next to the installer scripts,
+and writes `build\artifacts\Marqora-<version>-win-x64.zip` and
+`build\artifacts\Marqora-<version>-win-arm64.zip`, each with a `.sha256` beside it. They are
+around 95 MB and 88 MB, and neither has a wrapper folder — `README.txt`, `Install.cmd`,
+`Uninstall.cmd`, `install\` and `app\` sit at the root, so a zip extracts into a folder of the
+recipient's choosing rather than one of its own making.
 
 The person on the other end extracts it and double-clicks `Install.cmd`. That installs to
 `%LOCALAPPDATA%\Programs\Marqora`, adds a Start menu and desktop shortcut, registers the
@@ -152,7 +159,8 @@ alongside the branch and commit it came from.
 
 Nothing else moves: no commit, no tag, no upload, and `Directory.Build.props` is left alone,
 so `Publish-Release.ps1`'s version gate still means what it says. `-Test` runs the suite
-first, which is worth the wait for something another person is going to install.
+first, which is worth the wait for something another person is going to install. The build is x64
+unless you add `-Architecture arm64`.
 
 One thing to know before installing one. It is the release installer, so it takes over the same
 install directory, shortcuts and file associations as a real Marqora on that machine — settings
