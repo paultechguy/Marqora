@@ -63,8 +63,8 @@ WP-8, because it states publicly what WP-8 proves. WP-10 is the first release.
 - [x] **WP-5** The GitHub release *(built, uncommitted; `-WhatIf` still to run, section 3)*
 - [x] **WP-6** The installer *(built, uncommitted; double-click checks are in WP-8)*
 - [x] **WP-7** Build documents and the checklist *(built, uncommitted)*
-- [ ] **WP-8** The full check on the ARM laptop *(Paul, next)*
-- [ ] **WP-9** Documents showing ARM64 support *(after WP-8 passes)*
+- [x] **WP-8** The full check on the ARM laptop *(Paul: passed 2026-11-06, steps 1-12)*
+- [x] **WP-9** Documents showing ARM64 support *(written, uncommitted; goes live when a release promotes `master`)*
 - [ ] **WP-10** The first ARM64 release *(Paul)*
 
 ---
@@ -339,8 +339,8 @@ anything. The real draft, `-Verify` and `-Republish` are proven at the first rel
 
 ### WP-6: The installer
 
-**Status:** Built, uncommitted. The check itself is proven on x64 (section 3). The double-click on
-this PC is step 12 of the checklist.
+**Status:** Built. The check is proven on x64 (section 3), and the double-click passed as step 12 of
+the checklist.
 
 **Serves:** ARM-INS-01 to ARM-INS-06.
 
@@ -475,25 +475,25 @@ Paul accepted all three on 2026-11-04, and they are applied to `docs/ARM-Package
 | ARM-REL-04 | WP-5, WP-10 | First `-Republish`, whenever one occurs | Open |
 | ARM-REL-05 | WP-5, WP-10 | Generated body read; links resolve at the draft | Built; links resolve at the draft |
 | ARM-REL-06 | WP-5 | x64 name unchanged | Built |
-| ARM-INS-01 | WP-6 | ARM64 zip on the x64 PC | Built; double-click is checklist step 12 |
-| ARM-INS-02 | WP-6, WP-8 | x64 zip on the laptop | Open |
-| ARM-INS-03 | WP-6, WP-8 | Both of the above, by double-click | Open |
-| ARM-INS-04 | WP-8 | x64 then ARM64 on the laptop | Open |
-| ARM-INS-05 | WP-8 | No false warning on the laptop | Open |
-| ARM-INS-06 | WP-8 | Uninstall and associations on the laptop | Open |
+| ARM-INS-01 | WP-6 | ARM64 zip on the x64 PC | Passed |
+| ARM-INS-02 | WP-6, WP-8 | x64 zip on the laptop | Passed |
+| ARM-INS-03 | WP-6, WP-8 | Both of the above, by double-click | Passed |
+| ARM-INS-04 | WP-8 | x64 then ARM64 on the laptop | Passed |
+| ARM-INS-05 | WP-8 | No false warning on the laptop | Passed |
+| ARM-INS-06 | WP-8 | Uninstall and associations on the laptop | Passed |
 | ARM-DOC-01 | WP-2 | Each zip's README read | Built |
-| ARM-DOC-02 | WP-9 | Read | Open |
-| ARM-DOC-03 | WP-9 | Read | Open |
+| ARM-DOC-02 | WP-9 | Read | Built |
+| ARM-DOC-03 | WP-9 | Read | Built |
 | ARM-DOC-04 | WP-7 | Read | Built |
-| ARM-DOC-05 | WP-9 | Read | Open |
-| ARM-DOC-06 | WP-7, WP-9 | The check scripts | Open |
-| ARM-DOC-07 | WP-9 | Read for speed wording | Open |
-| ARM-DOC-08 | WP-9 | Read each place; lands after WP-8 | Open |
-| ARM-TST-01 | WP-8 | Checklist record | Open |
+| ARM-DOC-05 | WP-9 | Read | Built |
+| ARM-DOC-06 | WP-7, WP-9 | The check scripts | Built |
+| ARM-DOC-07 | WP-9 | Read for speed wording | Built |
+| ARM-DOC-08 | WP-9 | Read each place; lands after WP-8 | Built |
+| ARM-TST-01 | WP-8 | Checklist record | Passed |
 | ARM-TST-02 | WP-10 | Checklist record, each release | Open |
 | ARM-TST-03 | WP-7 | The file exists | Built |
 | ARM-TST-04 | All | No test switch in the diff | Built, to WP-7 |
-| ARM-TST-05 | WP-8 | Applies if a fault is found | Open |
+| ARM-TST-05 | WP-8 | Applies if a fault is found | No fault found |
 | ARM-TST-06 | WP-1, each WP | Test suite green | Built, to WP-7 |
 
 ---

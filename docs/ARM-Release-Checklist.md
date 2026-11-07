@@ -94,8 +94,8 @@ The parts that lean on Windows or on a native component:
 
 ## If something fails
 
-Fix it on `dev`, build again, and rerun only the steps it could affect. A fault that needs a change
-to how Windows reports the processor goes to `Get-MachineArchitecture` in
+Fix it on the branch the build came from, build again, and rerun only the steps it could affect. A
+fault that needs a change to how Windows reports the processor goes to `Get-MachineArchitecture` in
 `build/installer/Install.ps1`: its registry read is the one choice only this PC could confirm, and
 `Win32_Processor` is the fallback.
 
@@ -105,4 +105,4 @@ to how Windows reports the processor goes to `Get-MachineArchitecture` in
 
 | Date | Build | Check | Windows build | Result | Notes |
 | --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| 2026-11-06 | ARM64 and x64 dev builds (`1.0.21-arm1`) | Full, steps 1-12 | Laptop: 25H2, 26200.9711 | Passed | Step 12: the window stayed open, the installed files were unchanged, and Marqora started afterward |
