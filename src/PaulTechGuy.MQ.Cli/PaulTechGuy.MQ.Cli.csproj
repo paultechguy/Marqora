@@ -16,7 +16,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>PaulTechGuy.MQ.Cli</RootNamespace>
     <AssemblyName>marqora-cli</AssemblyName>
-    <PlatformTarget>x64</PlatformTarget>
+    <PlatformTarget>$(MarqoraArch)</PlatformTarget>
     <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
   </PropertyGroup>
 

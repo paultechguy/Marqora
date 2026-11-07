@@ -70,7 +70,7 @@ internal sealed class AboutDialog : ContentDialog
         CloseButtonText = "Close";
         DefaultButton = ContentDialogButton.Close;
 
-        string version = AppVersion.Current;
+        string version = $"{AppVersion.Current} ({ArchitectureName()})";
         string runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
 
         // The primary button copies rather than closes, which is what a bug report needs.
@@ -366,6 +366,18 @@ internal sealed class AboutDialog : ContentDialog
         panel.Children.Add(list);
         return panel;
     }
+
+    /// <summary>
+    /// What this process is running as, not what the zip was called, so the x64 build on an ARM
+    /// PC says x64. Nothing else in the app shows which of the two is installed.
+    /// </summary>
+    private static string ArchitectureName() =>
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.X64 => "x64",
+            System.Runtime.InteropServices.Architecture.Arm64 => "ARM64",
+            var other => other.ToString(),
+        };
 
     private static void CopyDetails(string version, string runtime, IAppPaths paths)
     {

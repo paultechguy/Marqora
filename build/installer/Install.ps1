@@ -122,6 +122,8 @@ $uninstallFolder = 'uninstall'
 $webView2ProductId = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
 $webView2Download = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
 
+$releasesPage = 'https://github.com/paultechguy/Marqora/releases/latest'
+
 function Write-Step {
     param([string] $Message)
 
@@ -173,6 +175,58 @@ function Get-PayloadVersion {
     # A ProductVersion can carry build metadata after a '+'. Settings > Apps shows this
     # string verbatim, and a commit hash in the version column helps nobody.
     return $productVersion.Split('+')[0].Trim()
+}
+
+function Get-PayloadArchitecture {
+    param([string] $Exe)
+
+    # What this zip was built for, read from the executable rather than the zip's name, which a
+    # renamed folder would lose. x64 or arm64, or $null for anything this cannot read. Marqora.exe
+    # is always native, so the machine type in its header is the whole answer. The header's
+    # offset sits at 0x3C, and the machine type follows the four-byte PE signature there.
+    try {
+        $stream = [System.IO.File]::OpenRead($Exe)
+
+        try {
+            $reader = New-Object System.IO.BinaryReader($stream)
+            $stream.Position = 0x3C
+            $stream.Position = $reader.ReadInt32() + 4
+            $machine = $reader.ReadUInt16()
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    catch {
+        return $null
+    }
+
+    switch ($machine) {
+        0x8664 { return 'x64' }
+        0xAA64 { return 'arm64' }
+    }
+
+    return $null
+}
+
+function Get-MachineArchitecture {
+    # What this PC really is: x64 or arm64, or $null for anything else. Not $env:PROCESSOR_ARCHITECTURE:
+    # under emulation that reports what this process is pretending to be. The value in the registry
+    # is the machine-wide one, whatever the process reading it.
+    try {
+        $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+        $value = (Get-ItemProperty -LiteralPath $key -Name 'PROCESSOR_ARCHITECTURE' -ErrorAction Stop).PROCESSOR_ARCHITECTURE
+    }
+    catch {
+        return $null
+    }
+
+    switch ($value) {
+        'AMD64' { return 'x64' }
+        'ARM64' { return 'arm64' }
+    }
+
+    return $null
 }
 
 function Test-WebView2Runtime {
@@ -509,6 +563,19 @@ try {
     Write-Plain "$appName $version"
     Write-Plain
 
+    # Ahead of everything that changes anything, because Copy-Payload deletes the old install
+    # first: an ARM64 build that cannot run here must not cost someone the Marqora that can. It
+    # exists to catch that one mistake, so any answer it does not recognize carries on. An x64
+    # build runs on an ARM PC under emulation, so that one installs and says so at the end.
+    $payloadArchitecture = Get-PayloadArchitecture -Exe $sourceExe
+    $machineArchitecture = Get-MachineArchitecture
+
+    if ($payloadArchitecture -eq 'arm64' -and $machineArchitecture -eq 'x64') {
+        throw "This is the version of $appName for ARM PCs, and this PC is x64. Download the win-x64 zip from $releasesPage. Nothing has been changed."
+    }
+
+    $showArmNote = $payloadArchitecture -eq 'x64' -and $machineArchitecture -eq 'arm64'
+
     if (-not (Test-WebView2Runtime)) {
         Write-Warning @"
 The WebView2 runtime was not found. $appName renders previews with it and will not work
@@ -593,6 +660,13 @@ continue now and install it afterwards.
     Write-Plain
     Write-Plain "Installed to $target"
     Write-Plain
+
+    # Here rather than before the install, where it would scroll away.
+    if ($showArmNote) {
+        Write-Plain "This PC has an ARM processor. A version of $appName built for ARM PCs is available:"
+        Write-Plain "the win-arm64 zip at $releasesPage"
+        Write-Plain
+    }
 
     if ($associationsRegistered) {
         Write-Plain 'Windows does not let an app make itself the default for a file type, so to open'

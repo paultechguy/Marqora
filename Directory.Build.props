@@ -31,6 +31,18 @@
     <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
   </PropertyGroup>
 
+  <!--
+    The processor a build is for: x64 or arm64. Those words serve as both the platform target and
+    the end of the runtime identifier, so nothing translates between them. It is x64 unless a
+    build asks otherwise with -p:MarqoraArch=arm64, which the release scripts do.
+
+    Stated here because WebRender needs it and does not import build\Publish.props. Read by that
+    file, marqora-cli and WebRender. The test projects name x64 themselves and stay x64.
+  -->
+  <PropertyGroup Label="Architecture">
+    <MarqoraArch Condition="'$(MarqoraArch)' == ''">x64</MarqoraArch>
+  </PropertyGroup>
+
   <PropertyGroup Label="Identity">
     <Product>Marqora</Product>
     <Company>PaulTechGuy</Company>
