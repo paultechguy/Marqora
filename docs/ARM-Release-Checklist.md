@@ -39,7 +39,7 @@ $$ e^{i\pi} + 1 = 0 $$
 ## Short check, every release
 
 - [ ] 1. Run `Install.cmd` from the extracted ARM64 zip by double-click. No WebView2 warning.
-- [ ] 2. Start Marqora from the Start menu. **Help > About** shows the version.
+- [ ] 2. Start Marqora from the Start menu. **Help > About** shows the version and ARM64.
 - [ ] 3. In Task Manager's **Details** tab, with the **Architecture** column on, `Marqora.exe` shows
       ARM64.
 - [ ] 4. Open the sample document. The source and the preview both draw, with the diagram and the

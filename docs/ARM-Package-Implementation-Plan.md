@@ -399,7 +399,8 @@ one, because it is pointed at the Marqora installed on his own PC.
    build, and take both zips to the laptop.
 2. **One session, using the checklist:** the full check, plus installing x64 first to prove the note
    and then ARM64 over it to prove the switch.
-3. **Faults** are fixed on `dev` and only the affected steps are rerun, not the whole list.
+3. **Faults** are fixed on the branch the build came from, and only the affected steps are rerun, not
+   the whole list.
 
 Rough size of Paul's time, as an estimate: about an hour for step 2, and ten minutes per release
 after that. Step 2's length depends mostly on how long a paged print and the exports take.

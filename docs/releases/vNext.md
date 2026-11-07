@@ -18,6 +18,6 @@ carries both zips, and the release page says how to tell which one your PC needs
 If you have been running the x64 version on an ARM PC, it keeps working, and installing the ARM
 version over it keeps your settings. The x64 installer now tells you when an ARM version is
 available for your PC. The ARM installer stops on an x64 PC before it changes anything, and says
-which zip to get instead.
+which zip to get instead. **Help > About** now shows which version you are running.
 
 ## Fixes

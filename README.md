@@ -159,7 +159,8 @@ alongside the branch and commit it came from.
 
 Nothing else moves: no commit, no tag, no upload, and `Directory.Build.props` is left alone,
 so `Publish-Release.ps1`'s version gate still means what it says. `-Test` runs the suite
-first, which is worth the wait for something another person is going to install.
+first, which is worth the wait for something another person is going to install. The build is x64
+unless you add `-Architecture arm64`.
 
 One thing to know before installing one. It is the release installer, so it takes over the same
 install directory, shortcuts and file associations as a real Marqora on that machine — settings
