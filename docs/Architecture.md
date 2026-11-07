@@ -1220,6 +1220,14 @@ property follows the nullable-plus-`[JsonIgnore]`-companion pattern that `Cheats
 and `FindAllPlacement` use, for the reason under *Persistence*: a property initializer does not
 run for a key absent from the file.
 
+**A default size is a design size.** `DefaultFolioWindow` and the rest say what a window needs at
+100% display scale, while Windows places windows in physical pixels and content grows with the
+scale. `RestorePlacement` multiplies a default by the scale of the display the main window is on,
+then holds the result to that display's work area, in `WindowSizing`. A size someone chose by
+dragging is already physical and stands as it is. A window nobody can resize has no chosen size, so
+it is scaled at every opening and moved if it would run off the display. The minimums are not
+scaled: they are only the floor for dragging.
+
 `SurfaceBrush` and `ApplyTitleBarTheme` are how a code-built surface gets a color. That is not
 convenience — a theme resource looked up in code resolves against the *application's* theme,
 which is the operating system's rather than the one the user chose in Marqora, and Find All

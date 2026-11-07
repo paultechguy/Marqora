@@ -272,10 +272,12 @@ public sealed class DiagramWindowService(
             return new RectInt32(120 + offset, 120 + offset, DefaultWidth, DefaultHeight);
         }
 
+        double scale = DisplayScale.Of(window.WindowHandle);
+
         return new RectInt32(
             main.Position.X + CascadeStep + offset,
             main.Position.Y + CascadeStep + offset,
-            Math.Min(DefaultWidth, Math.Max(MinimumExtent, main.Size.Width - CascadeStep)),
-            Math.Min(DefaultHeight, Math.Max(MinimumExtent, main.Size.Height - CascadeStep)));
+            Math.Min((int)(DefaultWidth * scale), Math.Max(MinimumExtent, main.Size.Width - CascadeStep)),
+            Math.Min((int)(DefaultHeight * scale), Math.Max(MinimumExtent, main.Size.Height - CascadeStep)));
     }
 }

@@ -22,4 +22,6 @@ which zip to get instead. **Help > About** now shows which version you are runni
 
 ## Fixes
 
+**Windows open at a sensible size on scaled displays.** Folio, Find All, the cheatsheet, the export report, Preferences and diagram pop-outs used to open too small the first time on a display scaled above 100%, such as a laptop at 150%. They now take the display's scale into account and stay within the screen, and any size you have already dragged a window to is kept.
+
 **The About box's text no longer runs into its scroll bar.** Help, About now leaves a gutter on the right, so the long folder paths stay clear of the bar.

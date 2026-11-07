@@ -331,24 +331,53 @@ public abstract class PaletteWindow : Window
 
         WindowPlacement placement = SavedPlacement;
 
-        // A window nobody can resize opens at its own size every time, whatever an older
-        // settings file happens to remember. Only where it sits is the user's to choose.
-        int width = IsResizable ? Math.Max(placement.Width, MinimumWidth) : MinimumWidth;
-        int height = IsResizable ? Math.Max(placement.Height, MinimumHeight) : MinimumHeight;
+        // A size someone chose is physical pixels and stands as it is. Anything else is a design
+        // size, which has to grow with the display or the content outgrows it: the defaults on a
+        // first opening, and every opening of a window nobody can resize, whatever an older
+        // settings file happens to remember. Only where that one sits is the user's to choose.
+        bool sizeWasChosen = IsResizable && placement.HasPosition;
 
-        if (placement.HasPosition && FitsOnADisplay(placement.X, placement.Y, width, height))
+        (int width, int height) = sizeWasChosen
+            ? (Math.Max(placement.Width, MinimumWidth), Math.Max(placement.Height, MinimumHeight))
+            : SizeForDisplay(
+                IsResizable ? placement.Width : MinimumWidth,
+                IsResizable ? placement.Height : MinimumHeight,
+                nearby);
+
+        bool canReturn = placement.HasPosition && FitsOnADisplay(placement.X, placement.Y, width, height);
+
+        if (sizeWasChosen && canReturn)
         {
             AppWindow.MoveAndResize(new RectInt32(placement.X, placement.Y, width, height));
 
             return;
         }
 
-        RectInt32 fallback = DefaultPosition(nearby, width, height);
+        RectInt32 wanted = canReturn
+            ? new RectInt32(placement.X, placement.Y, width, height)
+            : DefaultPosition(nearby, width, height);
 
-        AppWindow.MoveAndResize(
-            FitsOnADisplay(fallback.X, fallback.Y, fallback.Width, fallback.Height)
-                ? fallback
-                : new RectInt32(nearby.X + 48, nearby.Y + 48, width, height));
+        RectInt32 area = DisplayArea.GetFromRect(wanted, DisplayAreaFallback.Nearest).WorkArea;
+
+        AppWindow.MoveAndResize(new RectInt32(
+            WindowSizing.KeepInside(wanted.X, width, area.X, area.Width),
+            WindowSizing.KeepInside(wanted.Y, height, area.Y, area.Height),
+            width,
+            height));
+    }
+
+    /// <summary>
+    /// A design size for the display the main window is on, which is where this one is about to
+    /// open. The owner is asked for its scale because this window has not been shown yet.
+    /// </summary>
+    private (int Width, int Height) SizeForDisplay(int designWidth, int designHeight, RectInt32 nearby)
+    {
+        double scale = DisplayScale.Of(_ownerHandle != IntPtr.Zero ? _ownerHandle : Handle);
+
+        RectInt32 area = DisplayArea.GetFromRect(nearby, DisplayAreaFallback.Nearest).WorkArea;
+
+        return WindowSizing.FirstOpen(
+            designWidth, designHeight, MinimumWidth, MinimumHeight, scale, area.Width, area.Height);
     }
 
     /// <summary>
