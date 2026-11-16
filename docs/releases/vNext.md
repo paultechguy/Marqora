@@ -17,3 +17,9 @@ deleting a selection, or undoing — and stayed gone until the caret moved to an
 It now holds through edits, and it appears straight away when you switch into Side by Side
 rather than waiting for the caret to move. It no longer lingers in Preview view, where there is
 no caret for it to follow.
+
+**A colon before closing bold no longer turns into a face.** Typed faces such as `:)` and `:*`
+were converted to emoji, and they are made of markdown's own punctuation: a line like
+`` **`settings.json`:** `` read `:*` as a kiss, which took one of the closing asterisks and left
+the bold unfinished. Marqora now does what GitHub does: `:rocket:`-style shortcodes still become
+emoji, and typed faces stay as the text you wrote, in the preview and in every export.
