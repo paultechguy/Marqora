@@ -3721,9 +3721,20 @@
     preview was out of view.
   */
   function restoreActiveBlock() {
+    clearActiveBlock();
+    highlightActiveBlock(caretLine());
+  }
+
+  /*
+    The bar taken off. Called on leaving Side by Side: the bar points the eye from the caret to
+    the preview, and in Preview view there is no caret on screen to point from, so a bar left
+    standing marks a paragraph for no reason the reader can see. Done here rather than by
+    scoping the CSS to the view, which would raise that rule over the other ::before and ::after
+    decorations it is meant to lose to.
+  */
+  function clearActiveBlock() {
     if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
     activeBlock = null;
-    highlightActiveBlock(caretLine());
   }
 
   /// Set by wireSplitter below, and called when the host asks for an even split.
@@ -6493,7 +6504,7 @@
       els.root.setAttribute('data-view', p.mode);
       state.lineMapDirty = true;
 
-      if (p.mode === 'SideBySide') { restoreActiveBlock(); }
+      if (p.mode === 'SideBySide') { restoreActiveBlock(); } else { clearActiveBlock(); }
 
       // Guarded, because Monaco answers this call with its scroll event before it returns, and
       // the editor's scroll handler would read that as the user moving and throw the placement
