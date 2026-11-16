@@ -10,3 +10,9 @@
 -->
 
 ## Fixes
+
+**The preview's paragraph bar stays put while you edit.** In Side by Side view, the bar beside
+the preview paragraph the caret is in disappeared on any edit inside that paragraph — typing,
+deleting a selection, or undoing — and stayed gone until the caret moved to another paragraph.
+It now holds through edits, and it appears straight away when you switch into Side by Side
+rather than waiting for the caret to move.

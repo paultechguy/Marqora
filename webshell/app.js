@@ -2870,11 +2870,15 @@
     rewriteRelativeUrls();
     markBlockedMedia();
 
+    // Now rather than when the render settles, so the bar does not blink off with every
+    // keystroke while diagrams and math are still being drawn.
+    restoreActiveBlock();
+
     if (resetScroll) {
       els.previewPane.scrollTop = 0;
     }
 
-    lastRender = Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
+    lastRender =Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
       buildLineMap();
 
       if (generation === state.renderGeneration) {
@@ -3670,25 +3674,56 @@
 
   var activeBlock = null;
 
+  /*
+    The block a source line belongs to: the last one, in document order, starting at or before
+    it. A block nested inside one that starts on the same line is skipped, as buildLineMap skips
+    it, so a list carries the bar rather than its first item.
+
+    Read from the attributes alone rather than through lineMap, which measures every block.
+    This runs the moment a new render lands, before its diagrams have a size, and it has no use
+    for a position - only for which element it is.
+  */
+  function blockForLine(zeroBasedLine) {
+    var nodes = els.preview.querySelectorAll('[data-src-line]');
+    var chosen = null;
+    var lastLine = -1;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var line = parseInt(nodes[i].getAttribute('data-src-line'), 10);
+      if (!isFinite(line) || line <= lastLine) { continue; }
+      if (line > zeroBasedLine) { break; }
+
+      chosen = nodes[i];
+      lastLine = line;
+    }
+
+    return chosen;
+  }
+
   function highlightActiveBlock(zeroBasedLine) {
     if (state.viewMode !== 'SideBySide') { return; }
 
-    var map = lineMap();
-    if (map.length === 0) { return; }
-
-    var chosen = null;
-    for (var i = 0; i < map.length; i++) {
-      if (map[i].line <= zeroBasedLine) { chosen = map[i]; } else { break; }
-    }
-
-    if (!chosen) { return; }
-
-    var element = els.preview.querySelector('[data-src-line="' + chosen.line + '"]');
-    if (element === activeBlock) { return; }
+    var element = blockForLine(zeroBasedLine);
+    if (!element || element === activeBlock) { return; }
 
     if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
-    if (element) { element.classList.add('mq-active-block'); }
+    element.classList.add('mq-active-block');
     activeBlock = element;
+  }
+
+  /*
+    The bar put back on the caret's block when something other than the caret has moved it.
+
+    A render replaces the whole preview, and the element that carried the bar goes with it. The
+    caret has not moved, so nothing else would mark the new one: an edit made inside a paragraph
+    - typing, a delete, an undo - lost the bar until the caret crossed into another block.
+    Switching into Side by Side is the other case, because the caret was not followed while the
+    preview was out of view.
+  */
+  function restoreActiveBlock() {
+    if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
+    activeBlock = null;
+    highlightActiveBlock(caretLine());
   }
 
   /// Set by wireSplitter below, and called when the host asks for an even split.
@@ -6457,6 +6492,8 @@
       state.viewMode = p.mode;
       els.root.setAttribute('data-view', p.mode);
       state.lineMapDirty = true;
+
+      if (p.mode === 'SideBySide') { restoreActiveBlock(); }
 
       // Guarded, because Monaco answers this call with its scroll event before it returns, and
       // the editor's scroll handler would read that as the user moving and throw the placement
