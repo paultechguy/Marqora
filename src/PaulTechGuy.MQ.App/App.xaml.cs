@@ -42,8 +42,25 @@ public partial class App : Application
     /// </summary>
     public static IServiceProvider Services { get; private set; } = null!;
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Before the window is shown, so it can open where it was left. Activated first and
+        // placed later, it flashed at Windows' default spot on the primary display before moving
+        // to the one it belongs on. The view model's own load waits for this one rather than
+        // reading the file again; a failure is left for it to meet, as it always has.
+        bool settingsLoaded;
+
+        try
+        {
+            await Services.GetRequiredService<PaulTechGuy.MQ.Abstractions.Services.ISettingsService>().InitializeAsync();
+            settingsLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Settings could not be read before the window was shown.");
+            settingsLoaded = false;
+        }
+
         // Before any window is built, and before MqStyles.Verify below, which resolves the style
         // that uses these: Marqora's teal is stated in C# because the webshell is posted it too,
         // so the brushes XAML paints a selected list row with are put into the theme dictionaries
@@ -60,6 +77,11 @@ public partial class App : Application
 
         _window = window;
         _window.Closed += OnWindowClosed;
+
+        if (settingsLoaded)
+        {
+            _window.RestoreWindowPlacement();
+        }
 
         _window.Activate();
 

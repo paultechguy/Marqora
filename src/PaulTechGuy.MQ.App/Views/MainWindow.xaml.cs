@@ -2275,8 +2275,23 @@ public sealed partial class MainWindow : Window
     private static bool IsPlausibleWindowSize(int width, int height) =>
         width >= MinimumRestoreWidth && height >= MinimumRestoreHeight;
 
-    private void RestoreWindowPlacement()
+    private bool _placementRestored;
+
+    /// <summary>
+    /// Puts the window where it was left. Called by <c>App.OnLaunched</c> before the window is
+    /// first shown, so it opens on the right display rather than appearing at Windows' default
+    /// spot and then moving. <see cref="OnLoaded"/> calls it as well, for the launch whose early
+    /// settings read failed; it does its work once.
+    /// </summary>
+    public void RestoreWindowPlacement()
     {
+        if (_placementRestored)
+        {
+            return;
+        }
+
+        _placementRestored = true;
+
         WindowPlacement placement = _settings.Current.Window;
 
         // A settings file written by an older build, or by hand, can carry nonsense here.

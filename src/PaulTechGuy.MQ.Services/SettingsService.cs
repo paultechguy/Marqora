@@ -39,7 +39,22 @@ public sealed class SettingsService(ISettingsRepository repository, ILogger<Sett
 
     public event EventHandler<AppSettings>? SettingsChanged;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    private Task? _loading;
+
+    /// <summary>
+    /// Loads the settings file, once. The app asks before its window is shown, so the window can
+    /// open where it was left, and the view model asks again as it starts; the second call waits
+    /// for the first rather than reading the file again over anything changed in between.
+    /// </summary>
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_sync)
+        {
+            return _loading ??= LoadAsync(cancellationToken);
+        }
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
         AppSettings loaded = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
 

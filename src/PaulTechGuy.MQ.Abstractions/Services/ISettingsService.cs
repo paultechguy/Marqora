@@ -15,6 +15,7 @@ public interface ISettingsService
 
     event EventHandler<AppSettings>? SettingsChanged;
 
+    /// <summary>Loads the settings file. Only the first call reads it; later calls wait for that one.</summary>
     Task InitializeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Applies a change and schedules a debounced save.</summary>
