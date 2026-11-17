@@ -203,13 +203,15 @@ would rather not reach for the mouse.
 |     | Feature                                  | What you get                                                                                                                                                                                                                             |
 | --- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🔒  | **Yours alone**                          | Offline by default: no telemetry, no account, no sign-in, and nothing sent anywhere on its own. Your documents never leave the machine unless you send them                                                                                                                                           |
-| 📑  | **Tabbed workspace**                     | Every document in its own tab, each with its own undo history, cursor and scroll position. Open a whole folder at once, drag tabs to reorder, and pick up exactly where you left off next launch                                         |
+| 📑  | **Tabbed workspace**                     | Every document in its own tab, each with its own undo history, cursor and scroll position. Drag tabs to reorder, and pick up exactly where you left off next launch                                                                    |
 | ⚡   | **Live side-by-side preview**            | Source and rendered output together, scrolling in lockstep — mapped through line numbers, so tall diagrams never throw the alignment off                                                                                                 |
+| 📁  | **Folder panel**                         | A folder of documents beside the one you are writing, its markdown and images as a tree. Click to open, `F2` to rename, `Delete` to the Recycle Bin, and drag an image into the source pane to link it where you let go                  |
+| 💻  | **Command line**                         | `marqora-cli` formats, checks links, exports and builds Folios for a whole folder, from a terminal or a script, through the app's own code. Its manual and recipes install with it, and `Help > Command Line Manual` opens them          |
 | ✍️  | **Monaco editing**                       | The editor from VS Code: real find and replace, go-to-line, multi-level undo, line numbers, word wrap and per-pane zoom                                                                                                                  |
 | 🎨  | **A formatting bar that pays attention** | Bold, lists, headings and the rest, one click away — and the buttons light up for whatever the caret is sitting inside                                                                                                                   |
 | 🔍  | **Find All**                             | Every match in one window, across one tab or all of them, grouped by document. Walk the list with the arrow keys and the editor follows along                                                                                            |
 | 🔁  | **Replace All**                          | The same window with a replacement box, across every open tab at once. Regular-expression capture groups, a count to confirm against, and one undo per document                                                                          |
-| 🧭  | **Outline panel**                        | Every heading beside the document, highlighting whichever section you are reading. `Alt+4` shows it, `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there                                              |
+| 🧭  | **Outline panel**                        | Every heading beside the document, highlighting whichever section you are reading. `Alt+Shift+4` puts the keyboard in it, and the arrow keys walk the document from there. Docked, or tucked on the window's edge until you want it   |
 | 🧹  | **One-key document formatting**          | Sixteen independently switchable tidy-up rules, `Shift+Alt+F` to run them, `Ctrl+Z` to take the whole thing back. Never changes a single rendered word                                                                                   |
 | 📊  | **Mermaid 11 diagrams**                  | Flowcharts, sequence, class, state and the rest, rendered inline, re-themed with the app and cached so typing stays fast                                                                                                                 |
 | ∑   | **KaTeX math**                           | Inline and display math, laid out properly, exported the same way it looks                                                                                                                                                               |
@@ -219,7 +221,6 @@ would rather not reach for the mouse.
 | 🔤  | **Spell check**                          | Misspellings underlined as you type, corrections on `Ctrl+.` or a right-click, and a dictionary of your own that lives in a plain text file you can share. Windows' own words, so nothing is sent anywhere and nothing needs downloading |
 | 📤  | **Exports worth sending**                | Self-contained HTML with fonts and images embedded, print-ready PDF with full page setup, a real Word `.docx` with proper styles and an updatable contents, and rich text on the clipboard for Outlook or Confluence                     |
 | 🧺  | **Folios**                               | Send a whole set of documents *with* the images they use. One `.html` anyone can read without Marqora — and drop it back in to get the Markdown out again                                                                                |
-| 💻  | **Command line**                         | `marqora-cli` formats, checks links, exports and builds Folios for a whole folder, from a terminal or a script, through the app's own code. Its manual and recipes install with it, and `Help > Command Line Manual` opens them          |
 | 💬  | **Review comments**                      | Comment on a document without changing it, diagrams included, then share one read-only page with your notes in the margin. Drop that page back in later to pick the review up again, pictures and all                                                         |
 | 🧩  | **Snippets and diagram starters**        | A catalogue of ready-made blocks on the Insert menu, plus your own snippet files alongside them                                                                                                                                          |
 | 📖  | **Cheatsheet at your elbow**             | `Ctrl+F1` opens a live markdown reference — real diagrams, real math — in a window you can leave open beside the editor                                                                                                                  |
@@ -240,8 +241,10 @@ The rest of this section covers each of these in detail.
 - A Folio among the files you pick or drop is unpacked, and **everything else in that pick or
   drop is ignored** — the Folio is taken as the whole of what you meant. Open the other files
   separately, before or after. Only one Folio is unpacked at a time
-- **`File > Open Folder...` (`Ctrl+Shift+O`)** opens every markdown file in a folder, one per
-  tab, sorted by name and leaving the first one active. Dropping a folder does the same
+- **`File > Open Folder...` (`Ctrl+Shift+O`)** shows a folder in the folder panel, where each
+  document is a click away (see *Folder panel* below). Dropping a folder on the window, or
+  naming one on the command line, does the same. To open every document in a folder as a tab,
+  right-click it in the panel and choose **Open All in Tabs**
 - Dropping onto the preview works too, by a different route (see Architecture)
 - Recent files list with pinning, shown both in `File > Open Recent` and on the start screen.
   **Clear all** on the start screen — and `File > Open Recent > Clear Recent Files...` — empties
@@ -347,29 +350,39 @@ below sheds on its own schedule, at about 990px and 780px.
 **Outline**
 
 `View > Outline` lists the document's headings in a panel down the left-hand side, indented
-by level. It is off until you ask for it, and remembered after that.
+by level. It lives in one of two places, and stays where you last put it:
 
-| Action                                    | How                             |
-| ----------------------------------------- | ------------------------------- |
-| Show or hide the panel                    | `Alt+4`, or `View > Outline`. Also the button at the end of the filter row to hide it, and the strip left at the window's edge to bring it back; double-clicking the empty space below the headings, or anywhere on the strip, does the same |
-| Go to the panel, and back again           | `Alt+Shift+4`                   |
-| Jump to a heading, staying in the panel   | ↑ / ↓, or a single click        |
-| Jump to a heading and start editing there | `Enter`, or a double-click      |
-| Narrow the list                           | Type in the filter box          |
-| Leave the panel for the document          | `Escape`                        |
-| Copy a heading                            | `Ctrl+C` with the panel focused |
+- **Docked**, in the left-hand column, sharing it with the folder panel when both are docked.
+- **On the edge**, as a tab on a narrow strip at the window's far left. Click the tab and the
+  panel slides out over the text; it slides away again when you are done with it.
 
-Visibility and the keyboard are two separate questions, so they get two separate keys.
-`Alt+4` shows and hides. `Alt+Shift+4` takes you to the panel and brings you back, opening it
-first if it was closed — which is what you want when the outline is already on screen and you
-are typing, where a visibility toggle could only close the thing you were reaching for. It is
-the same split VS Code makes between showing the sidebar and focusing it.
+The pin at the top of the panel moves it between the two, and so do `Alt+4` and
+`View > Outline`, which is ticked while the outline is docked.
 
-Opening the panel puts the keyboard in it, on whichever section you are currently reading, on
+| Action                                    | How                                        |
+| ----------------------------------------- | ------------------------------------------ |
+| Dock it, or move it to the window's edge  | `Alt+4`, `View > Outline`, or its pin      |
+| Go to the panel, and back again           | `Alt+Shift+4`                              |
+| Slide it out from the edge                | Click its tab                              |
+| Jump to a heading, staying in the panel   | ↑ / ↓, or a single click                   |
+| Jump to a heading and start editing there | `Enter`, or a double-click                 |
+| Narrow the list                           | Type in the filter box                     |
+| Leave the panel for the document          | `Escape`                                   |
+| Copy a heading                            | `Ctrl+C` with the panel focused            |
+
+Where the panel sits and where the keyboard is are two separate questions, so they get two
+separate keys. `Alt+4` moves the panel. `Alt+Shift+4` takes you to it and brings you back,
+sliding it out first if it is on the edge, which is what you want while you are typing and the
+outline is already where you like it.
+
+Docking the panel puts the keyboard in it, on whichever section you are currently reading, on
 the grounds that asking for the outline is usually asking to use it. `Escape` hands the
-keyboard back and leaves the panel open. This is the only View menu item that moves the
-focus; the rest leave you where you were.
+keyboard back.
 
+A panel slid out from the edge slides away when you click outside it, press `Escape`, or pick
+a heading. Each of those is a switch under *Panels on the window edge* in
+`View > Preferences > Preview`, for anyone who would rather it stayed out until they click its
+tab again.
 The highlight follows what you are reading — the caret in the source pane, the top of the
 viewport in preview — so the panel says where you are as well as where you can go. Clicking a
 heading moves *both* panes, since the jump is by source line like everything else here.
@@ -384,6 +397,57 @@ gray out while the keyboard is in it. There is no caret on screen to apply them 
 applying them to one you cannot see is how documents get changed by accident. Everything else
 keeps working: Save, Undo, the Find family, view modes and zoom all behave exactly as usual,
 and zoom still targets the last pane you were in.
+
+**Folder panel**
+
+`File > Open Folder...` (`Ctrl+Shift+O`) shows a folder in the folder panel: its markdown files
+and images as a tree, folders first, sorted by name the way Explorer sorts them. It sits
+docked above the outline, or on the window's edge, exactly as the outline does, with `Alt+6`,
+`View > Folder Panel` and its pin to move it, and `Alt+Shift+6` to put the keyboard in it.
+The folder is remembered from one session to the next, and the `…` menu at the top of the panel
+keeps the last ten under **Recent Folders**.
+
+Other ways to choose the folder: drop one on the window, name one on the command line
+(`Marqora.exe .` shows the folder you are in), right-click a tab and choose **Use This
+Document's Folder**, or click the button the panel offers when a saved document is open and no
+folder is chosen.
+
+| Action                                     | How                                                   |
+| ------------------------------------------ | ----------------------------------------------------- |
+| Open a document                            | Click it, or `Enter`                                  |
+| Open an image in its usual program         | Double-click it, or `Enter`                           |
+| Open and close folders                     | Click, or → and ←                                     |
+| Find a file                                | Type in the filter box; it searches closed folders too |
+| Rename                                     | `F2`, or right-click > **Rename**                     |
+| Delete, to the Recycle Bin                 | `Delete`, or right-click > **Delete**                 |
+| Start a new document in a folder           | Right-click the folder > **New Document Here**        |
+| Open every document in a folder as tabs    | Right-click the folder > **Open All in Tabs**         |
+| Link an image into the document            | Drag it into the source pane, or right-click > **Insert Link in Source** |
+| Copy a name or path                        | Right-click > **Copy**                                |
+
+The document you are reading is picked out in the tree, and the panel opens its way to it as
+you switch tabs; **Reveal Active Document** on the `…` menu turns that off. Every open
+document's row carries the mark its tab does: unsaved, read-only, changed on disk or missing.
+Files your `.gitignore` leaves out are grayed rather than hidden, and **Show All Files** on the
+same menu lists everything else in the folder as well.
+
+**Renaming** happens in the row, with the name before the extension selected; a name Windows
+would refuse says why as you type. Open tabs, recent files and Reopen Closed Tab all follow the
+new name, and a line at the top of the panel says what changed, with **Undo**. `Ctrl+Z` stays the
+editor's.
+
+**Deleting** asks first, naming the file or the folder and how many files are in it. It goes to
+the Recycle Bin, and the question says *permanently* when the bin will not take it: a network
+drive, a USB stick, a bin set to delete straight away, or something larger than the bin holds.
+A document marked read-only, or under review, cannot be deleted from the panel, nor can a folder
+holding one. A file whose Windows properties say read-only can be, as in Explorer, but the
+question puts that first.
+
+**Linking an image** writes `![name](path)` relative to the document, the file name without its
+extension as the alt text. Only an image in the document's folder or below it can be linked,
+because those are the only ones the preview and exports will show, and the document has to be
+saved first so there is a folder to be relative to. Drop it over the preview and nothing
+happens: the preview never changes the source.
 
 **Heading numbers**
 

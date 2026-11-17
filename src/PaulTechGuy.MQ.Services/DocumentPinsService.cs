@@ -105,4 +105,65 @@ public sealed class DocumentPinsService(
 
         await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
     }
+
+    public PreparedMove PrepareMove(string from)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+
+        List<string> keys;
+
+        lock (_sync)
+        {
+            keys = [.. _pinned];
+        }
+
+        return PathKeyMoves.Prepare(from, keys);
+    }
+
+    public async Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+
+        List<string> snapshot;
+
+        lock (_sync)
+        {
+            if (!PathKeyMoves.Apply(_pinned, prepared, destination))
+            {
+                return;
+            }
+
+            snapshot = [.. _pinned];
+        }
+
+        try
+        {
+            await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // As for the marks: the file has moved, so the pin moves in memory regardless.
+            logger.LogWarning(ex, "Could not write the pins after a rename to {Path}.", destination);
+        }
+    }
+
+    public async Task RemoveUnderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        List<string> snapshot;
+
+        lock (_sync)
+        {
+            if (!PathKeyMoves.RemoveUnder(_pinned, path))
+            {
+                return;
+            }
+
+            snapshot = [.. _pinned];
+        }
+
+        await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
+    }
 }

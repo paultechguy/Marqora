@@ -60,7 +60,6 @@ public sealed partial class MainWindow
         OutlineList.AddHandler(
             UIElement.DoubleTappedEvent, new DoubleTappedEventHandler(OnOutlineDoubleTapped), handledEventsToo: true);
 
-        OutlineRail.DoubleTapped += OnOutlineRailDoubleTapped;
 
         OutlineFilterBox.GotFocus += OnOutlineGotFocus;
         OutlineFilterBox.KeyDown += OnOutlineFilterKeyDown;
@@ -110,7 +109,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void OnOutlineFocusRequested(object? sender, EventArgs e)
     {
-        if (!ViewModel.IsOutlineVisible)
+        if (!ViewModel.IsOutlineOnScreen)
         {
             return;
         }
@@ -208,37 +207,20 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// A double-click in the empty space below the headings hides the panel.
+    /// A double-click in the empty space below the headings does what Alt+4 does: docks the
+    /// panel, or moves it to the window's edge (P29).
     ///
     /// Undiscoverable on purpose: it is a shortcut for the hand already on the mouse, and the
-    /// filter row's button and Alt+4 are the ways that say so. A double-click on a row is the
-    /// row's business (see OnOutlineTapped), and one on the scroll bar is someone paging
-    /// the list quickly - neither should close anything.
+    /// pin and Alt+4 are the ways that say so. A double-click on a row is the row's business
+    /// (see OnOutlineTapped), and one on the scroll bar is someone paging the list quickly -
+    /// neither should move anything.
     ///
-    /// Asked whether the panel is still showing rather than toggled blindly, so a gesture that
-    /// arrives after something else has already closed it cannot open it again.
+    /// Asked whether the outline is switched on rather than toggled blindly, so a gesture that
+    /// arrives after the preference turned it off cannot bring it back.
     /// </summary>
     private void OnOutlineDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (!ViewModel.ShowOutline || IsOutlineRow(e.OriginalSource) || IsInScrollBar(e.OriginalSource))
-        {
-            return;
-        }
-
-        e.Handled = true;
-        ViewModel.ToggleOutlineCommand.Execute(null);
-    }
-
-    /// <summary>
-    /// A double-click anywhere on the collapsed rail brings the panel back.
-    ///
-    /// The rail's own button is inside it, and a quick double-click there is the one case
-    /// that needs care: the first click has already opened the panel, and a blind toggle on
-    /// the second would shut it again. Hence the same check as above, the other way round.
-    /// </summary>
-    private void OnOutlineRailDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        if (ViewModel.ShowOutline)
         {
             return;
         }

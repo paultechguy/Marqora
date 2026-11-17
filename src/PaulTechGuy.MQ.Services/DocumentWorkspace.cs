@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Folders;
 
 namespace PaulTechGuy.MQ.Services;
 
@@ -31,10 +32,33 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
     private readonly ISettingsService _settings;
     private readonly IDocumentLocks _locks;
     private readonly IDocumentPins _pins;
+    private readonly IRecycleBin _recycleBin;
     private readonly ILogger<DocumentWorkspace> _logger;
 
     private readonly List<MarkdownDocument> _documents = [];
     private readonly Dictionary<Guid, IFileWatcher> _watchers = [];
+
+    /// <summary>
+    /// Taken by every watcher callback for the whole of its decision, and by anything that
+    /// replaces a watcher or re-points a document's path (C4).
+    ///
+    /// A watcher reports on a pool thread. Without this, a callback that read the old path just
+    /// before a rename could test it just after, find nothing, and mark the renamed document
+    /// missing; or record a stamp computed before the rename over the document re-pointed after
+    /// it. Holding the lock across the callback and checking that the watcher is still the
+    /// current one means a stop either waits for a callback in flight or makes the next one a
+    /// no-op. Events are raised after it is released, never under it.
+    /// </summary>
+    private readonly Lock _gate = new();
+
+    /// <summary>
+    /// One per document, taken by saves, renames and deletes so they never overlap (P28). An
+    /// autosave landing between a recycle and the tab closing would write the deleted file back.
+    /// </summary>
+    private readonly Dictionary<Guid, SemaphoreSlim> _operationGates = [];
+
+    /// <summary>Documents a rename or delete is working on. A save that arrives meanwhile returns false.</summary>
+    private readonly HashSet<Guid> _moving = [];
 
     /// <summary>
     /// Per-document encoding, preserved from the file that was read so a document written
@@ -53,12 +77,14 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         ISettingsService settings,
         IDocumentLocks locks,
         IDocumentPins pins,
+        IRecycleBin recycleBin,
         ILogger<DocumentWorkspace> logger)
     {
         _watcherFactory = watcherFactory;
         _settings = settings;
         _locks = locks;
         _pins = pins;
+        _recycleBin = recycleBin;
         _logger = logger;
     }
 
@@ -116,7 +142,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         return document;
     }
 
-    public MarkdownDocument CreateUntitled(string? text = null)
+    public MarkdownDocument CreateUntitled(string? text = null, string? saveFolder = null)
     {
         MarkdownDocument document = MarkdownDocument.CreateUntitled($"Untitled {++_untitledCounter}");
 
@@ -125,6 +151,11 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         if (!string.IsNullOrEmpty(text))
         {
             document = document.WithText(text);
+        }
+
+        if (!string.IsNullOrWhiteSpace(saveFolder))
+        {
+            document = document with { SaveFolder = Path.GetFullPath(saveFolder) };
         }
 
         _documents.Add(document);
@@ -258,6 +289,94 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
     public async Task<bool> SaveAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        if (await EnterSaveAsync(id, cancellationToken).ConfigureAwait(false) is not { } gate)
+        {
+            return false;
+        }
+
+        try
+        {
+            return await SaveCoreAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<bool> SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (await EnterSaveAsync(id, cancellationToken).ConfigureAwait(false) is not { } gate)
+        {
+            return false;
+        }
+
+        try
+        {
+            return await SaveAsCoreAsync(id, path, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The document's operation gate for a save, or null when a rename or delete has it (P28).
+    /// Answering false there is what autosave already reads as "not written", and the file the
+    /// save would write is moving or going.
+    /// </summary>
+    private async Task<SemaphoreSlim?> EnterSaveAsync(Guid id, CancellationToken cancellationToken)
+    {
+        SemaphoreSlim gate;
+
+        lock (_gate)
+        {
+            if (_moving.Contains(id))
+            {
+                _logger.LogInformation("Did not save a document while its file is being renamed or deleted.");
+                return null;
+            }
+
+            gate = GateFor(id);
+        }
+
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        bool moving;
+
+        lock (_gate)
+        {
+            moving = _moving.Contains(id);
+        }
+
+        if (moving)
+        {
+            gate.Release();
+            return null;
+        }
+
+        return gate;
+    }
+
+    private SemaphoreSlim GateFor(Guid id)
+    {
+        lock (_gate)
+        {
+            if (!_operationGates.TryGetValue(id, out SemaphoreSlim? gate))
+            {
+                gate = new SemaphoreSlim(1, 1);
+                _operationGates[id] = gate;
+            }
+
+            return gate;
+        }
+    }
+
+    private async Task<bool> SaveCoreAsync(Guid id, CancellationToken cancellationToken)
+    {
         int index = _documents.FindIndex(d => d.Id == id);
 
         if (index < 0 || _documents[index].Path is not { } path)
@@ -301,10 +420,8 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         return true;
     }
 
-    public async Task<bool> SaveAsAsync(Guid id, string path, CancellationToken cancellationToken = default)
+    private async Task<bool> SaveAsCoreAsync(Guid id, string path, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
         int index = _documents.FindIndex(d => d.Id == id);
 
         if (index < 0)
@@ -353,6 +470,7 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
             External = ExternalState.InSync,
             Stamp = stamp,
             AutoReloadedUtc = null,
+            SaveFolder = null,
 
             // Read from the store rather than set to false, so the one place that decides
             // whether a path is marked stays the one place. The guard above has already
@@ -606,6 +724,15 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         _suppressWatchUntil.Remove(id);
         _documents.RemoveAt(index);
 
+        lock (_gate)
+        {
+            // A rename or delete holding the gate drops it itself when it lets go.
+            if (!_moving.Contains(id))
+            {
+                _operationGates.Remove(id);
+            }
+        }
+
         _logger.LogInformation("Closed {Name}.", document.DisplayName);
         Changed?.Invoke(this, new WorkspaceChangedEventArgs(WorkspaceChange.Closed, null, id));
 
@@ -620,6 +747,321 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         if (_documents.Count > 0)
         {
             Activate(_documents[Math.Min(index, _documents.Count - 1)].Id);
+        }
+    }
+
+    // ------------------------------------------------------- renaming and deleting
+
+    public async Task<FileOperationResult> RenameAsync(
+        string from,
+        string destination,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+
+        string source = FolderPaths.TrimEnd(Path.GetFullPath(from));
+        string target = FolderPaths.TrimEnd(Path.GetFullPath(destination));
+
+        if (string.Equals(source, target, StringComparison.Ordinal))
+        {
+            return FileOperationResult.Done;
+        }
+
+        bool caseOnly = FolderPaths.Equal(source, target);
+        bool isFolder = Directory.Exists(source);
+
+        // A document whose file is missing has nothing on disk to rename.
+        if (!isFolder && !File.Exists(source))
+        {
+            return FileOperationResult.Refused($"\"{Path.GetFileName(source)}\" is no longer there.");
+        }
+
+        if (!caseOnly && (File.Exists(target) || Directory.Exists(target)))
+        {
+            return FileOperationResult.Refused($"\"{Path.GetFileName(target)}\" already exists.");
+        }
+
+        List<Guid> affected = OpenAtOrUnder(source);
+        using OperationHold hold = await HoldAsync(affected, cancellationToken).ConfigureAwait(false);
+
+        // Stopped before anything is recorded or moved. A callback already in flight holds the
+        // lock and finishes first; any that comes after finds its watcher retired and does
+        // nothing. So the state recorded here is the last word, and it is restored as recorded
+        // rather than re-derived from a disk that is changing under us.
+        var recorded = new Dictionary<Guid, ExternalState>();
+
+        lock (_gate)
+        {
+            foreach (Guid id in affected)
+            {
+                StopWatchingCore(id);
+                recorded[id] = Find(id)?.External ?? ExternalState.InSync;
+            }
+        }
+
+        // Collected while the old path still exists: a link there can only be resolved now.
+        PreparedMove marks = _locks.PrepareMove(source);
+        PreparedMove pins = _pins.PrepareMove(source);
+
+        try
+        {
+            await Task.Run(
+                () =>
+                {
+                    if (isFolder)
+                    {
+                        Directory.Move(source, target);
+                    }
+                    else
+                    {
+                        File.Move(source, target);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not rename {Source} to {Target}.", source, target);
+            RestartWatching(affected);
+            return FileOperationResult.Refused(ReasonFor(ex, source));
+        }
+
+        // Unlike Save As, the mark moves: Save As leaves the file where it was and writes a new
+        // one, while a rename moves the file the mark guards. The stores are changed first and
+        // read back after (C5's order), so the store stays the one thing that decides.
+        await _locks.CompleteMoveAsync(marks, target, CancellationToken.None).ConfigureAwait(false);
+        await _pins.CompleteMoveAsync(pins, target, CancellationToken.None).ConfigureAwait(false);
+
+        var renamed = new List<MarkdownDocument>();
+
+        lock (_gate)
+        {
+            for (int i = 0; i < _documents.Count; i++)
+            {
+                MarkdownDocument document = _documents[i];
+
+                if (document.Path is { } path && recorded.TryGetValue(document.Id, out ExternalState external))
+                {
+                    string moved = FolderPaths.Rebase(path, source, target);
+
+                    _documents[i] = document with
+                    {
+                        Path = moved,
+                        IsLocked = _locks.IsLocked(moved),
+                        IsPinned = _pins.IsPinned(moved),
+                        External = external,
+                    };
+
+                    renamed.Add(_documents[i]);
+                }
+                else if (document is { Path: null, SaveFolder: { } folder } && FolderPaths.IsSameOrUnder(folder, source))
+                {
+                    _documents[i] = document with { SaveFolder = FolderPaths.Rebase(folder, source, target) };
+                }
+            }
+        }
+
+        foreach (MarkdownDocument document in renamed)
+        {
+            StartWatching(document);
+        }
+
+        _logger.LogInformation("Renamed {Source} to {Target}, carrying {Count} open document(s).", source, target, renamed.Count);
+
+        foreach (MarkdownDocument document in renamed)
+        {
+            Raise(WorkspaceChange.Renamed, document);
+        }
+
+        return FileOperationResult.Done;
+    }
+
+    public async Task<FileOperationResult> DeleteAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        string full = FolderPaths.TrimEnd(Path.GetFullPath(path));
+        string name = Path.GetFileName(full);
+
+        if (!File.Exists(full) && !Directory.Exists(full))
+        {
+            return FileOperationResult.Refused($"\"{name}\" is no longer there.");
+        }
+
+        List<Guid> affected = OpenAtOrUnder(full);
+
+        // The safety net under the grayed menu item (P8, P25): the mark protects against a stray
+        // keystroke, and Delete is one; a review's comments would go without being asked about.
+        if (_locks.AnyUnder(full) || affected.Any(id => Find(id)?.IsLocked == true))
+        {
+            return FileOperationResult.Refused($"\"{name}\" is marked read-only, or holds a document that is.");
+        }
+
+        if (affected.Any(id => Find(id)?.IsUnderReview == true))
+        {
+            return FileOperationResult.Refused($"\"{name}\" is under review, or holds a document that is.");
+        }
+
+        using OperationHold hold = await HoldAsync(affected, cancellationToken).ConfigureAwait(false);
+
+        lock (_gate)
+        {
+            foreach (Guid id in affected)
+            {
+                StopWatchingCore(id);
+            }
+        }
+
+        RecycleResult result = await _recycleBin.RecycleAsync(full, cancellationToken).ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            _logger.LogWarning("Could not delete {Path}: {Error}", full, result.Error);
+
+            // Every tab stays. A permanent delete that got part of the way leaves some files
+            // gone, and those are treated as anything else that deleted them would be.
+            foreach (Guid id in affected)
+            {
+                if (Find(id) is { Path: { } documentPath } document)
+                {
+                    if (File.Exists(documentPath))
+                    {
+                        StartWatching(document);
+                    }
+                    else
+                    {
+                        MarkExternal(id, ExternalState.Missing);
+                    }
+                }
+            }
+
+            return FileOperationResult.Refused(result.Error ?? $"\"{name}\" could not be deleted.");
+        }
+
+        // No question asked here about unsaved changes: the panel's confirmation already did.
+        foreach (Guid id in affected)
+        {
+            Close(id);
+        }
+
+        await _pins.RemoveUnderAsync(full, CancellationToken.None).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "{How} {Path}, closing {Count} open document(s).",
+            result.Permanent ? "Deleted" : "Recycled",
+            full,
+            affected.Count);
+
+        return new FileOperationResult(true, null, result.Permanent);
+    }
+
+    /// <summary>Open documents whose file is the path or sits below it.</summary>
+    private List<Guid> OpenAtOrUnder(string path) =>
+    [
+        .. _documents
+            .Where(d => d.Path is { } p && FolderPaths.IsSameOrUnder(p, path))
+            .Select(d => d.Id),
+    ];
+
+    /// <summary>
+    /// Marks the documents as moving, so a save arriving now is turned away, and then waits for
+    /// any save already writing them to finish.
+    /// </summary>
+    private async Task<OperationHold> HoldAsync(List<Guid> ids, CancellationToken cancellationToken)
+    {
+        var gates = new List<SemaphoreSlim>(ids.Count);
+
+        lock (_gate)
+        {
+            foreach (Guid id in ids)
+            {
+                _moving.Add(id);
+                gates.Add(GateFor(id));
+            }
+        }
+
+        var taken = new List<SemaphoreSlim>(gates.Count);
+
+        try
+        {
+            foreach (SemaphoreSlim gate in gates)
+            {
+                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                taken.Add(gate);
+            }
+        }
+        catch
+        {
+            new OperationHold(this, ids, taken).Dispose();
+            throw;
+        }
+
+        return new OperationHold(this, ids, taken);
+    }
+
+    private void RestartWatching(IEnumerable<Guid> ids)
+    {
+        foreach (Guid id in ids)
+        {
+            if (Find(id) is { } document)
+            {
+                StartWatching(document);
+            }
+        }
+    }
+
+    private static string ReasonFor(Exception ex, string path)
+    {
+        string name = Path.GetFileName(path);
+
+        // ERROR_SHARING_VIOLATION and ERROR_LOCK_VIOLATION: another program has it open.
+        if (ex is IOException && (ex.HResult & 0xFFFF) is 32 or 33)
+        {
+            return $"\"{name}\" is open in another program.";
+        }
+
+        if (ex is UnauthorizedAccessException)
+        {
+            return $"Windows did not allow \"{name}\" to be renamed.";
+        }
+
+        return ex.Message;
+    }
+
+    /// <summary>The gates a rename or delete took, given back in one place whatever happens.</summary>
+    private sealed class OperationHold(DocumentWorkspace owner, IReadOnlyList<Guid> ids, List<SemaphoreSlim> taken)
+        : IDisposable
+    {
+        private bool _released;
+
+        public void Dispose()
+        {
+            if (_released)
+            {
+                return;
+            }
+
+            _released = true;
+
+            lock (owner._gate)
+            {
+                foreach (Guid id in ids)
+                {
+                    owner._moving.Remove(id);
+
+                    // A document the operation closed has no further use for its gate.
+                    if (owner.Find(id) is null)
+                    {
+                        owner._operationGates.Remove(id);
+                    }
+                }
+            }
+
+            foreach (SemaphoreSlim gate in taken)
+            {
+                gate.Release();
+            }
         }
     }
 
@@ -732,14 +1174,26 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         IFileWatcher watcher = _watcherFactory.Create();
         Guid id = document.Id;
 
-        watcher.FileChanged += (_, changedPath) => OnFileChanged(id, changedPath);
-        watcher.FileRemoved += (_, removedPath) => OnFileRemoved(id, removedPath);
+        watcher.FileChanged += (_, changedPath) => OnFileChanged(id, watcher, changedPath);
+        watcher.FileRemoved += (_, removedPath) => OnFileRemoved(id, watcher, removedPath);
         watcher.Watch(path);
 
-        _watchers[id] = watcher;
+        lock (_gate)
+        {
+            _watchers[id] = watcher;
+        }
     }
 
     private void StopWatching(Guid id)
+    {
+        lock (_gate)
+        {
+            StopWatchingCore(id);
+        }
+    }
+
+    /// <summary>Retires a document's watcher. The caller holds <see cref="_gate"/>.</summary>
+    private void StopWatchingCore(Guid id)
     {
         if (_watchers.Remove(id, out IFileWatcher? watcher))
         {
@@ -747,48 +1201,75 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         }
     }
 
-    private void OnFileChanged(Guid id, string path)
+    /// <summary>
+    /// Whether a callback comes from the watcher the document has now, rather than one retired
+    /// by a rename, a delete or a Save As. The caller holds <see cref="_gate"/>.
+    /// </summary>
+    private bool IsCurrent(Guid id, IFileWatcher source) =>
+        _watchers.TryGetValue(id, out IFileWatcher? current) && ReferenceEquals(current, source);
+
+    private void OnFileChanged(Guid id, IFileWatcher source, string path)
     {
-        if (_suppressWatchUntil.TryGetValue(id, out DateTimeOffset until) && DateTimeOffset.UtcNow < until)
-        {
-            return;
-        }
+        MarkdownDocument? announce = null;
+        bool reload = false;
 
-        if (Find(id) is not { } document)
+        lock (_gate)
         {
-            return;
-        }
-
-        // A watcher fires on last-write time, name and size, so a touch, an antivirus scan or
-        // a tool restamping the file all arrive here looking like edits. Asking about those is
-        // what makes this whole feature something people switch off.
-        if (!HasRealChange(document, path))
-        {
-            RecordStamp(id, StampOf(path));
-
-            // A file that was missing and has come back holding exactly what we last read
-            // from it needs its marker taken down. Nothing to ask about, but the tab is
-            // still wearing a warning that has stopped being true.
-            if (document.External == ExternalState.Missing)
+            if (!IsCurrent(id, source))
             {
-                MarkExternal(id, ExternalState.InSync);
+                return;
             }
 
-            return;
+            if (_suppressWatchUntil.TryGetValue(id, out DateTimeOffset until) && DateTimeOffset.UtcNow < until)
+            {
+                return;
+            }
+
+            if (Find(id) is not { } document)
+            {
+                return;
+            }
+
+            // A watcher fires on last-write time, name and size, so a touch, an antivirus scan or
+            // a tool restamping the file all arrive here looking like edits. Asking about those is
+            // what makes this whole feature something people switch off.
+            if (!HasRealChange(document, path))
+            {
+                RecordStampCore(id, StampOf(path));
+
+                // A file that was missing and has come back holding exactly what we last read
+                // from it needs its marker taken down. Nothing to ask about, but the tab is
+                // still wearing a warning that has stopped being true.
+                if (document.External == ExternalState.Missing)
+                {
+                    announce = SetExternalCore(id, ExternalState.InSync);
+                }
+            }
+
+            // Silently reloading over unsaved edits would destroy the user's work, so a dirty
+            // buffer turns an external change into a prompt instead.
+            // A document under review is held to the text its comments are anchored in; the change
+            // is recorded and settled when the review ends.
+            else if (document.IsDirty || document.IsUnderReview || !_settings.Current.ReloadOnExternalChange)
+            {
+                _logger.LogInformation("External change to {Path} needs the user to decide.", path);
+                announce = SetExternalCore(id, ExternalState.Changed);
+            }
+            else
+            {
+                reload = true;
+            }
         }
 
-        // Silently reloading over unsaved edits would destroy the user's work, so a dirty
-        // buffer turns an external change into a prompt instead.
-        // A document under review is held to the text its comments are anchored in; the change
-        // is recorded and settled when the review ends.
-        if (document.IsDirty || document.IsUnderReview || !_settings.Current.ReloadOnExternalChange)
+        if (announce is not null)
         {
-            _logger.LogInformation("External change to {Path} needs the user to decide.", path);
-            MarkExternal(id, ExternalState.Changed);
-            return;
+            Raise(WorkspaceChange.ExternalStateChanged, announce);
         }
 
-        _ = ReloadSafelyAsync(id, path);
+        if (reload)
+        {
+            _ = ReloadSafelyAsync(id, path);
+        }
     }
 
     /// <summary>
@@ -847,33 +1328,75 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
         }
     }
 
-    private void OnFileRemoved(Guid id, string path)
+    private void OnFileRemoved(Guid id, IFileWatcher source, string path)
     {
-        // The buffer is kept so the user can save it back. Marking it missing is what makes
-        // the document count as unsaved, which is what puts Ctrl+S back within reach.
-        _logger.LogWarning("{Path} was deleted or moved while open.", path);
-        MarkExternal(id, ExternalState.Missing);
+        MarkdownDocument? announce;
+
+        lock (_gate)
+        {
+            if (!IsCurrent(id, source))
+            {
+                return;
+            }
+
+            // Asked again under the lock. A report that the file is gone, arriving while it is
+            // there, is stale: the watcher's own check ran before something put it back, or
+            // before a rename made here re-pointed this document at the same name.
+            if (File.Exists(path))
+            {
+                return;
+            }
+
+            // The buffer is kept so the user can save it back. Marking it missing is what makes
+            // the document count as unsaved, which is what puts Ctrl+S back within reach.
+            _logger.LogWarning("{Path} was deleted or moved while open.", path);
+            announce = SetExternalCore(id, ExternalState.Missing);
+        }
+
+        if (announce is not null)
+        {
+            Raise(WorkspaceChange.ExternalStateChanged, announce);
+        }
     }
 
     /// <summary>Moves a document to a new external state, announcing it only if it moved.</summary>
     private void MarkExternal(Guid id, ExternalState state)
     {
+        MarkdownDocument? announce;
+
+        lock (_gate)
+        {
+            announce = SetExternalCore(id, state);
+        }
+
+        if (announce is not null)
+        {
+            Raise(WorkspaceChange.ExternalStateChanged, announce);
+        }
+    }
+
+    /// <summary>
+    /// Sets the state and answers the document to announce, or null when nothing moved. The
+    /// caller holds <see cref="_gate"/> and raises the change after letting go of it.
+    /// </summary>
+    private MarkdownDocument? SetExternalCore(Guid id, ExternalState state)
+    {
         int index = _documents.FindIndex(d => d.Id == id);
 
         if (index < 0 || _documents[index].External == state)
         {
-            return;
+            return null;
         }
 
         _documents[index] = _documents[index] with { External = state };
-        Raise(WorkspaceChange.ExternalStateChanged, _documents[index]);
+        return _documents[index];
     }
 
     /// <summary>
     /// Notes what the file looks like now without disturbing anything else, so a run of events
-    /// that change nothing is only paid for once.
+    /// that change nothing is only paid for once. The caller holds <see cref="_gate"/>.
     /// </summary>
-    private void RecordStamp(Guid id, FileStamp? stamp)
+    private void RecordStampCore(Guid id, FileStamp? stamp)
     {
         int index = _documents.FindIndex(d => d.Id == id);
 
@@ -888,11 +1411,21 @@ public sealed class DocumentWorkspace : IWorkspaceService, IDisposable
 
     public void Dispose()
     {
-        foreach (IFileWatcher watcher in _watchers.Values)
+        lock (_gate)
         {
-            watcher.Dispose();
-        }
+            foreach (IFileWatcher watcher in _watchers.Values)
+            {
+                watcher.Dispose();
+            }
 
-        _watchers.Clear();
+            _watchers.Clear();
+
+            foreach (SemaphoreSlim gate in _operationGates.Values)
+            {
+                gate.Dispose();
+            }
+
+            _operationGates.Clear();
+        }
     }
 }

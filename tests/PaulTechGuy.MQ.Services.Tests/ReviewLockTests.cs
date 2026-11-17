@@ -30,6 +30,7 @@ public sealed class ReviewLockTests : IDisposable
             _settings,
             _locks,
             new FakeDocumentPins(),
+            new FakeRecycleBin(),
             NullLogger<DocumentWorkspace>.Instance);
         _workspace.Changed += (_, e) => _changes.Add(e);
     }
@@ -259,9 +260,12 @@ public sealed class ReviewLockTests : IDisposable
     [Fact]
     public async Task A_review_holds_over_a_missing_file()
     {
-        (MarkdownDocument document, _, FakeFileWatcher watcher) = await OpenAsync();
+        (MarkdownDocument document, string path, FakeFileWatcher watcher) = await OpenAsync();
         _workspace.SetUnderReview(document.Id, true);
 
+        // Gone for real: the workspace asks again, and a report of a file that is still there
+        // is stale (C4).
+        File.Delete(path);
         watcher.RaiseRemoved();
 
         Current(document.Id).External.ShouldBe(ExternalState.Missing);

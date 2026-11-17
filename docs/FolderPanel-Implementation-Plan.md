@@ -84,17 +84,17 @@ check), `Withdrawn`.
 - [x] Exploration settled (2026-11-16)
 - [x] This plan, and its review (section 12)
 - [x] Paul's answer on the three points in 1.1 (all agreed, 2026-11-17)
-- [ ] **WP-0** Observations
-- [ ] **WP-1** The folder library
-- [ ] **WP-2** Path-keyed stores learn to move
-- [ ] **WP-3** The workspace renames and deletes
-- [ ] **WP-4** Settings
-- [ ] **WP-5** The docked panel: listing, opening, revealing, keys, panel menu
-- [ ] **WP-6** Every other way to choose the root
-- [ ] **WP-7** File operations
-- [ ] **WP-8** Images: insert, drag, launch
-- [ ] **WP-9** Pop out and dock
-- [ ] **WP-10** Documents, release note, checklist
+- [ ] **WP-0** Observations *(case-only move done; two Debug runs moved to WP-5 and WP-7)*
+- [x] **WP-1** The folder library *(Built 2026-11-17)*
+- [x] **WP-2** Path-keyed stores learn to move *(Built 2026-11-17)*
+- [x] **WP-3** The workspace renames and deletes *(Built 2026-11-17)*
+- [x] **WP-4** Settings *(Built 2026-11-17)*
+- [ ] **WP-5** The docked panel: listing, opening, revealing, keys, panel menu *(Built 2026-11-17, reworked the same day for P29; waiting on Paul's look)*
+- [ ] **WP-6** Every other way to choose the root *(Built 2026-11-17; the terminal and drop checks are Paul's)*
+- [ ] **WP-7** File operations *(Built 2026-11-17; waiting on Paul's look; the Recycle Bin run from WP-0 is his call)*
+- [ ] **WP-8** Images: insert, drag, launch *(Built 2026-11-17; the drag into the source pane is Paul's to see)*
+- [x] **WP-9** ~~Pop out and dock~~ *(Dropped 2026-11-17: P29's docked / edge / closed replaces the floating window)*
+- [x] **WP-10** Documents, release note, checklist *(Built 2026-11-17)*
 - [ ] **WP-11** Paul's hand check *(Paul)*
 
 ---
@@ -253,9 +253,11 @@ which Paul agreed on 2026-11-17.
 | P3 | **Rename and delete are workspace operations** in `DocumentWorkspace` | The workspace holds the watchers, marks and pins and does all file I/O |
 | P4 | **A rename raises a new `WorkspaceChange.Renamed`**, not `Saved`. The "folder moved" tail of the `Saved` case (re-point the preview, republish links, re-check) runs **only for the active document**, because it calls `ActivateTabAsync`; a background document gets its new path when next activated | `Saved` means clean. Running the tail for background tabs would switch the shell to each in turn |
 | P5 | **"The same panel" is the view model, not a moved control.** One `FolderPanelViewModel`; each host builds its own `FolderPanelView`. No two-way `SelectedItem`: a host writes selection only from a user's `SelectionChanged`. A host that is not on screen detaches its `ItemsSource` | Moving a control between windows' `XamlRoot`s is not reliable in WinUI 3; two live lists bound two-way would clear each other's selection |
-| P6 | **The panel starts hidden until a root is first chosen.** `ShowFolderPanel` defaults to false; setting a root turns it on | Nobody who never opens a folder sees a change beyond the rail icon |
+| P6 | ~~**The panel starts hidden until a root is first chosen.** `ShowFolderPanel` defaults to false; setting a root turns it on~~ *Superseded by P6a* | Nobody who never opens a folder sees a change beyond the rail icon |
+| P6a | **A new install shows both panels docked** *(Paul, 2026-11-17)*. `ShowOutline` and `ShowFolderPanel` default to true, and both pins to true. With a document open and no folder chosen, the folder panel offers Open Folder; with no document and no folder it has nothing to show, and the landing page keeps the window. A settings file from before the folder panel gets it docked too; an existing file's `showOutline` is kept | Both panels are found rather than hunted for |
 | P7 | **Delete uses `SHFileOperationW` with `FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING`, on an STA thread, behind `IRecycleBin`.** The decision whether a delete will really be recycled lives in the library (`RecyclePolicy`): true only for a fixed local drive whose Recycle Bin is not set to delete immediately (`NukeOnDelete`) and whose maximum size is larger than what is going (`MaxCapacity`, from the per-volume `BitBucket` settings, defaulting to "recycles" when they cannot be read). Otherwise the confirmation says "permanently" | `FOF_ALLOWUNDO` silently deletes outright when the bin will not take the item. The exploration says a delete is never outright without saying so first |
 | P8 | **A folder holding a marked document cannot be deleted.** Grayed, with the reason as its tooltip; the `Delete` key checks the same predicate and says so on the status line | The mark protects against a stray keystroke; deleting its folder is the same keystroke |
+| P8a | **The read-only box in a file's Windows properties is named in the delete confirmation, not enforced.** The title says it (*Delete read-only file*, *Delete folder with read-only files*), and a warning bar above the question says *"x.md" is marked read-only in its Windows properties*, or how many of a folder's files are; a line inside the message was read past. `ConfirmAsync` gained an optional `warning` for it. The forecast counts them in the walk it already makes. Folders are not counted | Explorer deletes such a file without a word; blocking would be stricter than Windows and awkward across a large folder, while saying nothing surprised Paul in the first hand check (2026-11-17) |
 | P9 | **The launching process qualifies arguments, and the receiver refuses anything not fully qualified.** In `Program.Main`, before the handoff, every non-switch argument goes through `Path.GetFullPath`. If none was relative, today's redirect runs unchanged. If any was, the launcher starts a third copy of itself with the absolute arguments, hands it foreground rights with `AllowSetForegroundWindow`, and exits; that copy redirects normally. The receiver's `IsOpenable` gains `Path.IsPathFullyQualified`, which on its own makes C2's wrong-folder case impossible | No new interprocess channel, no window procedure, no startup gap (C26). The cost is one extra process start for a relative argument only |
 | P10 | **Session:** `FolderRoot`, `RecentFolders` (newest first, ten), `FolderPanelFloating`, `FolderPanelWindow`, `FolderSplit` (the outline's share, 0 to 1). **Preferences:** `ShowFolderPanel`, `FolderRevealActive` (on), `FolderShowAllFiles`, `FolderSortByModified`. Recent folders are pruned with a folder-aware twin of `HasBeenDeleted` made public in Services (C24) | Mirrors the outline: whether a panel shows is a preference, layout and history are session |
 | P11 | **Insert Link in Source has its own predicate and its own edit runner.** Enabled when a saved document is active, not read-only, and not in Preview view; raised from `ActiveTabIsReadOnly`, `HasDocument` and `ViewMode`. It runs through `RunEditAsync` with a parameter naming the gate (`EditGate.Caret` today's `CanFormat`, `EditGate.Writable` for this), keeping `RefuseActiveIfReadOnly` | C9: through today's runner the click would do nothing |
@@ -276,6 +278,7 @@ which Paul agreed on 2026-11-17.
 | P26 | **The panel menu (`…`)** holds *Reveal Active Document* (toggle), *Show All Files*, *Sort by Modified Date*, *Refresh*, *Collapse All* and *Pop Out Folder Panel*. The root header's right-click keeps the exploration's table | The exploration names these as "panel menu" items without listing the menu |
 | P27 | **Marqora stops holding its start folder open.** After qualifying arguments, `Program.Main` sets the working directory to `AppContext.BaseDirectory` | A process's working directory cannot be renamed. Started by double-clicking `docs/guide/intro.md`, Marqora would otherwise block renaming `guide` from its own panel |
 | P28 | **Workspace operations on one document are serialized.** A per-document gate is taken by `SaveAsync`, `SaveAsAsync`, `RenameAsync` and `DeleteAsync`. A rename or delete waits for a save in flight; a save that arrives during one returns false, which autosave already treats as "not written" | An autosave landing between a recycle and the tab closing would write the deleted file back |
+| P29 | **Each panel is docked or on the edge** *(Paul, 2026-11-17; replaces the rail and the per-section hide buttons of the first WP-5 build. A third, closed, place was built and then dropped the same day: with both panels closed the window showed no way back)*. Docked: in the left column, stacked when both are, header with fold, menu and unpin. On the edge: a vertical tab on the edge strip, always at the window's far left; a click slides the panel out over the text, past the docked column, so it never covers a docked panel; the tab's word reads bottom to top with its glyph below it; header with pin. There is no X. View > Folder Panel / Outline and Alt+6 / Alt+4 do what the pin button does, the menu item checked while docked. Alt+Shift+6 / Alt+Shift+4 go to it. The Show preferences still switch a panel off altogether. Whether each panel is pinned, and the split, are session state. A slid-out panel slides away on a click outside it, on Escape, after opening a file from the folder panel, and after picking a heading in the outline: four preferences, all on by default. The edge strip shows only while some panel lives there. The folder panel stays off until a folder is first chosen, and Open Folder then shows it, docked the first time | The first build's rail, hide buttons and "show the other one" buttons each patched a gap the others left. One place per panel, set by the panel's own pin and X, is one model. Tried in a clickable mock before building |
 
 ---
 
@@ -323,6 +326,12 @@ src/PaulTechGuy.MQ.App/
 
 **Status:** Open. Half a day.
 
+**Progress, 2026-11-17.** The case-only move is answered: .NET 10 renames a file and a folder by
+case alone (`CaseOnlyMoveTests`, kept), so no temporary name is needed. The Recycle Bin run and
+the watcher-on-the-profile run need the app code that WP-7 and WP-5 write, and are done as the
+first step of each instead. The Recycle Bin run needs the volume's bin set to delete immediately,
+which is a machine setting, so it is Paul's to make or skip.
+
 Each answer could reshape a later package, so they come first. Every one is a test kept in the
 suite or a Debug run of the real app; none is a scratch program.
 
@@ -336,7 +345,14 @@ suite or a Debug run of the real app; none is a scratch program.
 
 ### WP-1: The folder library
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. 126 tests in `PaulTechGuy.MQ.Folders.Tests`.
+
+**As built.** Two pieces the section 5 list did not name: `FolderPaths` (prefix-at-a-separator
+and rebase, shared with Services) and `GitIgnoreReader` (finds the repository above the root and
+reads its files top down; `GitIgnoreRules` stays pure). `FolderChangeCoalescer` is split from
+`FolderTreeWatcher` and handed the time, so batching is tested without waiting. One consequence
+of P18's "names only unless date sort": a `.gitignore` edited in place is picked up by *Refresh*,
+not live, unless date sort is on; one written by rename (as most editors save) is live.
 
 **Files:** `src/PaulTechGuy.MQ.Folders/*`, `tests/PaulTechGuy.MQ.Folders.Tests/*`,
 `PaulTechGuy.MQ.slnx`.
@@ -368,7 +384,12 @@ queued changes under an open rename, the recycle policy's table, argument qualif
 
 ### WP-2: Path-keyed stores learn to move
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. `PathKeyMoveTests`, including a real junction made
+with `mklink /J`.
+
+**As built.** `PreparedMove` lives in Abstractions; the shared logic is `PathKeyMoves` in
+Services. The second parameter is `destination`, not `to` (CA1716: `To` is a Visual Basic
+keyword). `DocumentPathKeys` is now public for `FolderHasBeenDeleted`.
 
 **Files:** `IDocumentLocks.cs`, `IDocumentPins.cs`, `IRecentFilesService.cs`, their services,
 `DocumentPathKeys.cs`, `tests/PaulTechGuy.MQ.Services.Tests/Fakes.cs` and tests.
@@ -392,7 +413,21 @@ move; a present folder kept and a missing one dropped by the folder twin.
 
 ### WP-3: The workspace renames and deletes
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. `FolderOperationTests`, 19 tests covering the matrix
+below, plus the save folder, folder delete, and the read-only and review refusals.
+
+**As built.**
+
+- Step 2's order is reversed: the watchers are stopped *before* `External` is recorded, so the
+  recorded state is the last word.
+- `OnFileRemoved` now asks `File.Exists` again under the lock and drops a "gone" report for a
+  file that is there. This closes the "before the move" case of test 5. One existing test,
+  `A_review_holds_over_a_missing_file`, raised "removed" without deleting the file; it now
+  deletes it first, as the real watcher would require.
+- `MarkdownDocument.SaveFolder` (P13, listed under WP-4) is added here, because the rename
+  re-points it. `CreateUntitled` takes it.
+- `RecycleBin` (the app's `IRecycleBin`) is written and registered here, because the workspace
+  cannot be built without one. Its forecast reads the volume's `BitBucket` settings.
 
 **Files:** `IWorkspaceService.cs`, `DocumentWorkspace.cs`, `IRecycleBin.cs`,
 `ServiceCollectionExtensions.cs`, `Program.cs` (registration), `Fakes.cs`,
@@ -445,7 +480,8 @@ move; a present folder kept and a missing one dropped by the folder twin.
 
 ### WP-4: Settings
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. `MarkdownDocument.SaveFolder` went in with WP-3.
+`AppSettingsTests` has the "settings file from before" check.
 
 **Files:** `AppSettings.cs`, `MarkdownDocument.cs`, `PreferencesTransferTests.cs`.
 
@@ -459,8 +495,42 @@ settings file from before this feature loads with the panel hidden, no root, spl
 
 ### WP-5: The docked panel
 
-**Status:** Open. Listing, opening, revealing, keys, the panel menu, and the File menu's Open Folder
-setting the root, so it can be used from the first build. Every file operation is WP-7.
+**Status:** Built 2026-11-17, uncommitted. The solution builds with no warnings and every test
+passes; nothing on screen has been seen yet. Open until Paul has looked at it and the two runs
+below are done. Listing, opening, revealing, keys, the panel menu, and the File menu's Open
+Folder setting the root, so it can be used from the first build. Every file operation is WP-7.
+
+**Reworked for P29, 2026-11-17.** The first build's rail, the per-section hide buttons and the
+"show the other one" buttons are gone. Each panel's header now carries fold (only while both are
+docked), its menu (the folder panel's), and pin or unpin; the X built first was removed the same day. Unpinned panels live as vertical tabs
+on an edge strip in front of the column, and `SlideOutHost` draws a slid-out panel over the text.
+The panel's own content element moves between the column and the host, and
+`MainWindow.FolderPanel.cs` plays the slide. Settings: `FolderPanelPinned` and `OutlinePinned`
+(session, default true) replace WP-4's `FolderPanelFloating` and `FolderPanelWindow`.
+`ShowFolderPanel` and `ShowOutline` keep meaning "not closed". The four `SlideAwayOn…` preferences
+are on a new Preferences group, *Panels on the window edge*. A click into the text reaches the
+window only as a pane taking the keyboard, because the WebView keeps its pointer events, so that
+is how a click outside is heard there. Other clicks in the window are heard directly.
+
+**As built.**
+
+- The panel is `FolderPanelView` (built in code, so the column and the slide-out can both host it) over
+  `FolderPanelViewModel`, with the list in `FolderTreeList`. The main window's half is
+  `MainViewModel.FolderPanel.cs` and `MainWindow.FolderPanel.cs`.
+- The teal bar is a visual state, `Active`, of a new row style, `MqTreeRowStyle`, so it stays a
+  theme resource (C25). Selection keeps the plate and gives up the bar.
+- The outline has a header ("Outline", with a fold chevron) only while the folder section is
+  above it. Alone in the column it looks as before. Which section is folded is not remembered
+  between sessions; P10 lists no setting for it.
+- Alt+Shift+6 with no document open and no root has nothing to land on, because the landing page
+  is the whole window. It says *Choose a folder with File > Open Folder* on the status line.
+- `PickFolderAsync` now takes a title. The two Folio callers say what they are for.
+- The filter's search below closed folders leaves the folders it read loaded but closed. They are
+  not listed or opened, and no index is kept.
+- Two things need the app running, so they are Paul's or a later Debug session's. **Narrator**
+  (WP-0): the row peer depends on `GetContainerForItemOverride` being honored, which Find All
+  found is not true of `PrepareContainerForItemOverride`. The level and position are set on the
+  container either way. **The watcher on the user profile during a build** (WP-0): not run.
 
 **Files:** `FolderPanelViewModel.cs`, `FolderRowViewModel.cs`, `FolderPanelView.cs`,
 `MainWindow.FolderPanel.cs`, `MainWindow.xaml`, `MainWindow.xaml.cs`, `MainViewModel.cs`,
@@ -511,7 +581,29 @@ during a build, and the checklist.
 
 ### WP-6: Every other way to choose the root
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. Builds with no warnings; every test passes. The checks
+below need the app and a terminal, so they are Paul's.
+
+**As built.**
+
+- The tab menu's **Use This Document's Folder** sits under *Open in File Explorer*, grayed for an
+  untitled tab, and acts on the clicked tab's path rather than through the active-folder command,
+  which follows the workspace a moment behind the click.
+- A drop: OpenSeveralAsync collects folders instead of expanding them; the first becomes the
+  root, a second one is named on the status line, and the files in the same drop still open. A
+  folder dropped on the text or preview arrives at OnExternalLinkActivated as a directory URI
+  and sets the root.
+- The command line: Program.Main qualifies the arguments, moves the working folder to
+  AppContext.BaseDirectory (P27), and passes the qualified list to TryHandOff only when one was
+  relative. A second launch with a relative path starts a copy of itself with the absolute
+  arguments, and that copy redirects. FilesFrom is now ArgumentPaths; it accepts a folder and
+  refuses anything not fully qualified. OpenActivatedAsync makes the first folder the root and
+  opens the files, at startup and on a forwarded launch alike.
+- The panel's `…` menu gains Recent Folders (newest first, leaving out the folder shown; one that
+  has gone is dropped when picked) and Close Folder. The root header has **no right-click menu**
+  (Paul, 2026-11-17): it would have repeated half the `…` menu, so the exploration's root-header
+  items live in `…`, and New Document Here and Open All in Tabs for the root join it in WP-7.
+- The root restored on start, and a missing root named in the empty state, were done in WP-5.
 
 **Files:** `MainViewModel.cs`, `MainWindow.TabContextMenu.cs`, `SingleInstance.cs`, `Program.cs`,
 `App.xaml.cs`.
@@ -534,7 +626,29 @@ dropped on the source pane, which nobody has yet seen navigate.
 
 ### WP-7: File operations
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted. Builds with no warnings; every test passes. Nothing has
+been seen on screen. WP-0's Recycle Bin run (the bin set to delete immediately) is still Paul's to
+make or skip.
+
+**As built.**
+
+- Row menus come from FolderPanelMenus, built per row as it is right-clicked (or the Menu key),
+  with its own Writes(...) list grayed on a read-only active tab. Nothing in it writes yet; WP-8's
+  Insert Link in Source will be the first. The root folder's New Document Here and Open All in Tabs
+  are at the top of the panel's … menu, since the header has no right-click (WP-6).
+- Rename is a TextBox in the row itself, the stem selected; the reason a name cannot be used shows
+  under it as it is typed. Enter commits, Escape cancels, and losing focus commits a usable name or
+  abandons an unusable one. F2 opens it. The tree is held while it is open.
+- RenameFromPanelAsync and DeleteFromPanelAsync (MainViewModel.FileOperations.cs) wrap the
+  workspace's operations: recent files and closed-tab records follow (P23), the change lands on the
+  tree at once, and the notice says what happened. WorkspaceChange.Renamed updates the tab and the
+  session, and runs the folder-moved tail for the active document only (P4).
+- The notice is an InfoBar under the header, with Undo after a rename; Undo says what it put
+  back, or why it could not, and offers no Undo of its own.
+- Delete asks through the main window's ConfirmAsync with Cancel the default. No
+  DialogAnchor.FolderPanel: with the floating window dropped (WP-9) there is no second window to
+  anchor to. The Delete key on a marked or reviewed document says why on the status line.
+- PickSaveFileAsync takes a folder, and Save As passes SaveFolder (P13).
 
 **Files:** `FolderPanelMenus.cs`, `FolderPanelViewModel.cs`, `FolderPanelView.cs`, `RecycleBin.cs`,
 `MainViewModel.cs`, `IFileDialogService.cs`, `FileDialogService.cs`.
@@ -566,7 +680,7 @@ dropped on the source pane, which nobody has yet seen navigate.
 
 ### WP-8: Images: insert, drag, launch
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted; the drag is not yet seen on screen.
 
 **Files:** `FolderPanelView.cs`, `FolderPanelMenus.cs`, `MainViewModel.cs`.
 
@@ -584,9 +698,44 @@ dropped on the source pane, which nobody has yet seen navigate.
 
 **Verified by:** the checklist, including an `Undo` after a drop and a drop on the preview.
 
+**As built:**
+
+- `ImageLinks` in the Folders library makes the markdown, tested there: the stem as alt text with
+  its brackets escaped, a relative target with forward slashes, angle brackets around a target
+  with a space or parenthesis, and null for an image outside the document's folder. Its `Target`
+  is now the one copy of the bracket rule; `MainViewModel.LinkTarget` calls it.
+- `WhyCannotLinkImage` gives the one reason for the menu's tooltip, the drag's status line and the
+  insert: no document, an untitled one, read-only or under review, Preview view, or an image
+  outside the folder.
+- `RunEditAsync` takes an `EditGate`. `Writable` uses `CanWriteFromChrome`, which is `CanFormat`
+  without the focus terms. The insert replaces the selection and leaves the caret after the link.
+  A slid-out panel then slides away under the open-file preference rather than a fifth one.
+- The image row's menu starts with *Insert Link in Source* (registered with `Writes`) and *Open*.
+  `Writes` graying now only ever grays, so an item grayed for its own reason stays grayed.
+- The list sets `CanDragItems`; `DragItemsStarting` cancels for anything but one image, or for a
+  refused one with the reason on the status line, and otherwise carries the image's path in a
+  `Marqora.FolderImage` format, with the link as text beside it.
+- **The web view does not take a drag that starts inside the app** (Paul, on screen: the no-drop
+  cursor, even after the window's own drag handler stopped refusing non-file drags). So the window
+  takes it: handlers on `RootGrid` (handled events too) accept the format over the web view with
+  an *Insert link* caption, and on the drop send the point to the web shell's `insertTextAtPoint`.
+  It asks Monaco for the line and column under the point and inserts there as one undoable edit,
+  caret after it. Over the splitter and the preview the drag is refused, so the cursor shows the no-drop sign
+  with *Drop on the source pane*: `MainViewModel.IsSourcePaneAt` works the source pane out from
+  the view mode and the splitter position, repeating the `.mq-root` grid rule in `app.css` (both
+  places say so), because Windows asks on every move and wants the answer at once. Asking the page
+  each time was rejected as laggy, and having it report its edges as more machinery than the
+  layout needs. Browser zoom is off in the preview, so DIPs are CSS pixels.
+- Double-click and `Enter` on an image open it with `LaunchPath`; a single click still only
+  selects it.
+- WP-0's drag observation was answered on screen by Paul: the web view refuses the drag, so the
+  window-side drop above replaced it. Still Paul's to see: the drop landing at the point, `Ctrl+Z`
+  after it, and a drop on the preview doing nothing.
+
 ### WP-9: Pop out and dock
 
-**Status:** Open.
+**Status:** Dropped 2026-11-17 (P29). A floating window would be a fourth place for a panel, and
+Paul chose docked, edge and closed instead. Kept below as a record, in case it comes back.
 
 **Files:** `FolderPanelWindow.cs`, `FolderPanelWindowService.cs`, `MainWindow.FolderPanel.cs`,
 `MainWindow.xaml.cs`, `IDialogService.cs`, `WindowContext.cs`, `AppSettings.cs`.
@@ -610,7 +759,7 @@ hardware items.
 
 ### WP-10: Documents, release note, checklist
 
-**Status:** Open.
+**Status:** Built 2026-11-17, uncommitted.
 
 **Files:** `docs/releases/vNext.md`, `README.md`, `Assets/Welcome to Marqora.md`,
 `docs/Architecture.md`, `docs/DiskWatch.md`, `CLAUDE.md`, `docs/FolderPanel-Checklist.md`.
@@ -631,6 +780,29 @@ hardware items.
   left out of it.
 
 **Verified by:** the four scripts in 2.3.
+
+**As built:**
+
+- `vNext.md`: `## The folder panel`, ending with the drafted Open Folder note, with drops and the
+  command line added to it.
+- `README.md`: a *Folder panel* row in the feature table and its own section after *Outline*;
+  *Opening documents* says what Open Folder does now; the *Outline* section rewritten for docked
+  and edge (it still described the hide button and the strip of the first build).
+- `docs/index.html` (Paul, during WP-10: it was missing from this list): a *Folder panel* tile
+  second in the feature grid, after *Split view*; the *Outline panel* tile mentions the edge.
+- The Welcome document: a try-it line for `Ctrl+Shift+O`, the outline paragraph rewritten for
+  docked and edge, a folder panel paragraph, and an `Alt+6` row in the shortcut table.
+- `Architecture.md`: a *The folder panel* section; *Drag and drop, twice* gains the panel's drag
+  and why the window takes it; *One instance* gains relative arguments and the working folder;
+  *What path keying costs* says the panel's renames carry marks and pins.
+- `DiskWatch.md`: *Following a rename made elsewhere*, and why the panel's own renames are
+  followed.
+- Not done, because WP-9 was dropped: *Secondary windows* still says five, and `CLAUDE.md`'s
+  window list is unchanged.
+- The outline's double-click comment in `MainWindow.Outline.cs` described the first build's hide;
+  it now says it does what `Alt+4` does.
+- `docs/FolderPanel-Checklist.md`: a core sitting of 31 steps with a PowerShell block that makes
+  the test folder, and five optional hardware checks.
 
 ### WP-11: Paul's hand check
 

@@ -97,4 +97,64 @@ public sealed class DocumentLocksService(
 
         await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
     }
+
+    public PreparedMove PrepareMove(string from)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+
+        List<string> keys;
+
+        lock (_sync)
+        {
+            keys = [.. _locked];
+        }
+
+        return PathKeyMoves.Prepare(from, keys);
+    }
+
+    public async Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+
+        List<string> snapshot;
+
+        lock (_sync)
+        {
+            if (!PathKeyMoves.Apply(_locked, prepared, destination))
+            {
+                return;
+            }
+
+            snapshot = [.. _locked];
+        }
+
+        try
+        {
+            await repository.SaveAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file has already moved, so the mark has to move with it in memory whatever
+            // happens to the write; the next write of the set carries it.
+            logger.LogWarning(ex, "Could not write the read-only marks after a rename to {Path}.", destination);
+        }
+    }
+
+    public bool AnyUnder(string folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return false;
+        }
+
+        List<string> keys;
+
+        lock (_sync)
+        {
+            keys = [.. _locked];
+        }
+
+        return PathKeyMoves.AnyUnder(keys, folder);
+    }
 }

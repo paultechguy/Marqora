@@ -67,6 +67,7 @@ public sealed partial class MainWindow
     private MenuFlyoutItem? _tabCloseAllItem;
     private MenuFlyoutItem? _tabReopenItem;
     private MenuFlyoutItem? _tabRevealItem;
+    private MenuFlyoutItem? _tabUseFolderItem;
     private MenuFlyoutItem? _tabPrintItem;
 
     /// <summary>
@@ -305,6 +306,20 @@ public sealed partial class MainWindow
         _tabRevealItem.Click += (_, _) => ViewModel.RevealInFolderCommand.Execute(null);
 
         menu.Items.Add(_tabRevealItem);
+
+        // The folder panel's root, from the document in hand (WP-6). Beside Open in File Explorer
+        // because both are about the folder the document is in; this one shows it in Marqora.
+        _tabUseFolderItem = new MenuFlyoutItem { Text = "Use This Document's Folder" };
+        ToolTipService.SetToolTip(_tabUseFolderItem, "Show this document's folder in the folder panel");
+        _tabUseFolderItem.Click += async (_, _) =>
+        {
+            if (_clickedTab?.Document.Path is { } path)
+            {
+                await ViewModel.UseDocumentFolderAsync(path);
+            }
+        };
+
+        menu.Items.Add(_tabUseFolderItem);
         menu.Items.Add(BuildTabCopyMenu());
         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -517,6 +532,7 @@ public sealed partial class MainWindow
             || _tabCloseAllItem is null
             || _tabReopenItem is null
             || _tabRevealItem is null
+            || _tabUseFolderItem is null
             || _tabCopyMenu is null
             || _tabCopyNameItem is null
             || _tabCopyRelativeItem is null
@@ -594,6 +610,7 @@ public sealed partial class MainWindow
         // rather than dropped, so the menu keeps one shape whichever tab it is opened on and
         // its items do not move under the pointer.
         _tabRevealItem.IsEnabled = !tab.IsUntitled;
+        _tabUseFolderItem.IsEnabled = !tab.IsUntitled;
         _tabCopyMenu.IsEnabled = !tab.IsUntitled;
         _tabCopyNameItem.IsEnabled = !tab.IsUntitled;
         _tabCopyPathItem.IsEnabled = !tab.IsUntitled;

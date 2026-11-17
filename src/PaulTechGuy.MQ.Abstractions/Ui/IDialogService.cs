@@ -51,6 +51,11 @@ public interface IDialogService
     /// everything the editor asks; a prompt raised by a click inside a palette window has to
     /// name it, or it opens behind the palette. See <see cref="DialogAnchor"/>.
     /// </param>
+    /// <param name="warning">
+    /// A fact the person must not miss before answering, such as a file being marked read-only.
+    /// Shown as a warning bar above the message rather than a line inside it, where it reads as
+    /// one more sentence. Null for none.
+    /// </param>
     Task<ConfirmResult> ConfirmAsync(
         string title,
         string message,
@@ -58,5 +63,6 @@ public interface IDialogService
         string? secondaryText = null,
         bool destructivePrimary = false,
         DialogAnchor anchor = DialogAnchor.MainWindow,
+        string? warning = null,
         CancellationToken cancellationToken = default);
 }

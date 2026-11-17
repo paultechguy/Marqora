@@ -38,6 +38,7 @@
     <Project Path="src/PaulTechGuy.MQ.Exporting/PaulTechGuy.MQ.Exporting.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Finding/PaulTechGuy.MQ.Finding.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Folio/PaulTechGuy.MQ.Folio.csproj" />
+    <Project Path="src/PaulTechGuy.MQ.Folders/PaulTechGuy.MQ.Folders.csproj" />
     <Project Path="src/PaulTechGuy.MQ.Services/PaulTechGuy.MQ.Services.csproj" />
     <Project Path="src/PaulTechGuy.MQ.App/PaulTechGuy.MQ.App.csproj" />
     <Project Path="src/PaulTechGuy.MQ.WebRender/PaulTechGuy.MQ.WebRender.csproj" />
@@ -56,6 +57,7 @@
     <Project Path="tests/PaulTechGuy.MQ.Exporting.Tests/PaulTechGuy.MQ.Exporting.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Finding.Tests/PaulTechGuy.MQ.Finding.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Folio.Tests/PaulTechGuy.MQ.Folio.Tests.csproj" />
+    <Project Path="tests/PaulTechGuy.MQ.Folders.Tests/PaulTechGuy.MQ.Folders.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Repositories.Tests/PaulTechGuy.MQ.Repositories.Tests.csproj" />
     <Project Path="tests/PaulTechGuy.MQ.Services.Tests/PaulTechGuy.MQ.Services.Tests.csproj" />
   </Folder>

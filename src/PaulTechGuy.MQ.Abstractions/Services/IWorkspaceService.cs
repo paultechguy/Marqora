@@ -54,6 +54,15 @@ public enum WorkspaceChange
     /// <see cref="Reordered"/>.
     /// </summary>
     PinChanged,
+
+    /// <summary>
+    /// The document's file, or a folder it is in, was renamed from the folder panel (P4). Its
+    /// <c>Path</c> is new; its text, dirty state, read-only mark and pin are as they were.
+    ///
+    /// Not <see cref="Saved"/>, which means the buffer was written and is clean. A dirty document
+    /// renamed is still dirty.
+    /// </summary>
+    Renamed,
 }
 
 /// <summary>Describes one change to the workspace. <see cref="Document"/> is null for a close.</summary>
@@ -92,15 +101,18 @@ public interface IWorkspaceService
     /// </summary>
     Task<MarkdownDocument> OpenAsync(string path, CancellationToken cancellationToken = default);
 
-    /// <summary>Adds an empty in-memory document and makes it active.</summary>
     /// <summary>
-    /// Adds an in-memory document, optionally already holding <paramref name="text"/>.
+    /// Adds an in-memory document, optionally already holding <paramref name="text"/>, and makes
+    /// it active.
     ///
     /// Content belongs here rather than in an edit applied afterwards: opening the tab is
     /// what hands the text to the editor, and an edit raised after that only updates the
     /// model - the editor would keep the empty buffer it was opened with.
+    ///
+    /// <paramref name="saveFolder"/> is where its first Save As starts, for the folder panel's
+    /// <em>New Document Here</em>.
     /// </summary>
-    MarkdownDocument CreateUntitled(string? text = null);
+    MarkdownDocument CreateUntitled(string? text = null, string? saveFolder = null);
 
     /// <summary>
     /// Adds an in-memory document holding a copy of text that is kept somewhere else - a review
@@ -191,6 +203,26 @@ public interface IWorkspaceService
     void ResolveExternalChange(Guid id);
 
     void Close(Guid id);
+
+    /// <summary>
+    /// Renames a file or folder on disk, from the folder panel, and carries every open document
+    /// at or below it across: its path, its read-only mark, its pin, and its disk watch, with its
+    /// text and dirty state untouched. Raises <see cref="WorkspaceChange.Renamed"/> for each.
+    ///
+    /// Refused when <paramref name="destination"/> is taken or the source is gone. Waits for a
+    /// save in flight on any of those documents first; a save that arrives during the rename
+    /// returns false. Recent files are the caller's to move.
+    /// </summary>
+    Task<FileOperationResult> RenameAsync(string from, string destination, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends a file or folder to the Recycle Bin and closes every open document at or below it,
+    /// unsaved changes included: the caller asked first. Their pins are removed.
+    ///
+    /// Refused for anything marked read-only or under review, or a folder holding either (P8,
+    /// P25). On failure every tab stays as it was.
+    /// </summary>
+    Task<FileOperationResult> DeleteAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>Moves a document to a new index, for drag-reordered tabs.</summary>
     void Move(Guid id, int newIndex);

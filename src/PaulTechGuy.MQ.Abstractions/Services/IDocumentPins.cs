@@ -43,4 +43,20 @@ public interface IDocumentPins
 
     /// <summary>Pins or unpins a path, and writes the change out.</summary>
     Task SetAsync(string path, bool pinned, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The first half of carrying pins through a rename made in Marqora: the pins at
+    /// <paramref name="from"/> or below it. Call while <paramref name="from"/> still exists.
+    /// </summary>
+    PreparedMove PrepareMove(string from);
+
+    /// <summary>
+    /// The second half, once the file or folder is at <paramref name="destination"/>: the prepared pins
+    /// move there and the set is written once. If the write fails, the moved pins still hold for
+    /// this session and the next write carries them.
+    /// </summary>
+    Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default);
+
+    /// <summary>Unpins everything at this path or below it, after a delete.</summary>
+    Task RemoveUnderAsync(string path, CancellationToken cancellationToken = default);
 }

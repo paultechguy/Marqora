@@ -164,7 +164,10 @@ body {
 .mq-root {
   display: grid;
   height: 100%;
-  /* Overridden per view mode below. */
+  /*
+    Overridden per view mode below. MainViewModel.IsSourcePaneAt repeats this rule to decide a
+    folder panel drag's cursor without asking the page; change it there too.
+  */
   grid-template-columns: calc(var(--mq-split) * 100%) 6px 1fr;
 }
 
@@ -1314,6 +1317,9 @@ a.mq-blocked-media {
 
   Headings are the one block that is never a mermaid pre, so moving them to ::after cannot
   collide with the diagram badge, which owns ::after and is more specific than this.
+
+  A table row never carries the class: a ::before on a <tr> becomes an extra cell. The shell
+  puts it on the row's first cell instead (highlightActiveBlock in app.js).
 */
 .mq-preview .mq-active-block:not(:is(h1, h2, h3, h4, h5, h6))::before,
 .mq-preview :is(h1, h2, h3, h4, h5, h6).mq-active-block::after {

@@ -12,7 +12,12 @@ public interface IFileDialogService
     /// </summary>
     Task<IReadOnlyList<string>> PickOpenFilesAsync(CancellationToken cancellationToken = default);
 
-    Task<string?> PickSaveFileAsync(string? suggestedFileName = null, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Save dialog for a markdown document. <paramref name="folder"/>, when given, is where it
+    /// opens: an untitled document made by the folder panel's New Document Here starts in that
+    /// folder (P13). Null keeps the folder Windows remembers.
+    /// </summary>
+    Task<string?> PickSaveFileAsync(string? suggestedFileName = null, string? folder = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Save dialog for an export, with its own file type rather than markdown.
@@ -50,6 +55,9 @@ public interface IFileDialogService
         IReadOnlyList<string> extensions,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Picks a folder, for opening every markdown file inside it.</summary>
-    Task<string?> PickFolderAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Picks a folder. The title says what it is for, because the one dialog serves Open Folder
+    /// and the Folio's destination and unpacking, and a title written for one misleads the others.
+    /// </summary>
+    Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default);
 }

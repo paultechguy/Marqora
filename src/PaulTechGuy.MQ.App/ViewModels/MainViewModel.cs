@@ -79,6 +79,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IPastedImageTracker _pastedImages;
     private readonly IDocumentLocks _locks;
     private readonly IDocumentPins _pins;
+    private readonly IRecycleBin _recycleBin;
     private readonly IAppPaths _paths;
     private readonly ILogger<MainViewModel> _logger;
 
@@ -206,7 +207,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(CanUndo))]
     [NotifyPropertyChangedFor(nameof(CanRedo))]
     [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
-    [NotifyPropertyChangedFor(nameof(IsOutlineRailVisible))]
     [NotifyPropertyChangedFor(nameof(ShowsLandingPage))]
     [NotifyPropertyChangedFor(nameof(ShowsStartupMessage))]
     public partial bool HasDocument { get; set; }
@@ -805,6 +805,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IPastedImageTracker pastedImages,
         IDocumentLocks locks,
         IDocumentPins pins,
+        FolderPanelViewModel folderPanel,
+        IRecycleBin recycleBin,
         IAppPaths paths,
         ILogger<MainViewModel> logger)
     {
@@ -847,6 +849,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _pastedImages = pastedImages;
         _locks = locks;
         _pins = pins;
+        FolderPanel = folderPanel;
+        _recycleBin = recycleBin;
         _paths = paths;
         _logger = logger;
 
@@ -892,6 +896,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _diagramWindows.OpenCountChanged += (_, count) => OpenDiagramWindowCount = count;
         _findAll.MatchActivated += OnFindMatchActivated;
         _findAll.ReplaceAllRequested += OnReplaceAllRequested;
+        FolderPanel.PropertyChanged += OnFolderPanelChanged;
 
         Tabs.CollectionChanged += OnTabsCollectionChanged;
     }
@@ -929,6 +934,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool CanFormat => HasDocument
         && ViewMode is not ViewMode.Preview
         && !OutlineHasFocus
+        && !FolderPanelHasFocus
+        && !ActiveTabIsReadOnly;
+
+    /// <summary>
+    /// <see cref="CanFormat"/> without the focus terms, for an edit started from a side panel
+    /// (P11): Insert Link in Source is picked with the keyboard in the folder panel, and writes at
+    /// the caret the editor kept.
+    /// </summary>
+    public bool CanWriteFromChrome => HasDocument
+        && ViewMode is not ViewMode.Preview
         && !ActiveTabIsReadOnly;
 
     /// <summary>
@@ -940,7 +955,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// either - they are document-scoped, or they deliberately take the user back to the
     /// text, which is not a surprise when they asked to search.
     /// </summary>
-    public bool CanEditText => HasContent && !OutlineHasFocus;
+    public bool CanEditText => HasContent && !OutlineHasFocus && !FolderPanelHasFocus;
 
     /// <summary>
     /// Whether a command that <em>removes</em> text at the caret is worth offering.
@@ -1064,6 +1079,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OutlineMaxDepth = current.OutlineMaxDepth;
         OutlineWidth = Math.Max(AppSettings.MinimumOutlineWidth, current.OutlineWidth);
         ShowOutline = current.ShowOutline;
+
+        RestoreFolderPanel(current);
 
         _themeService.Apply(current.Theme);
 
@@ -1444,27 +1461,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private const int ManyFilesThreshold = 25;
 
-    /// <summary>Opens every markdown file directly inside a chosen folder, each in its own tab.</summary>
-    [RelayCommand]
-    private async Task OpenFolderAsync()
+    /// <summary>
+    /// Open All in Tabs: every markdown file directly inside a folder, each in its own tab.
+    ///
+    /// What File, Open Folder did before the folder panel; the panel's folder right-click
+    /// offers it (WP-7), because Find All, Replace All and Format All work on open tabs.
+    /// </summary>
+    public async Task OpenFolderInTabsAsync(string folder)
     {
-        await OpenChosenFolderAsync().ConfigureAwait(true);
+        await OpenFolderFilesAsync(folder).ConfigureAwait(true);
 
-        // Every way out of the folder route ends here, including the several that open
-        // nothing at all - a cancelled picker, an unreadable folder, a folder with no
-        // markdown in it, a declined "open all of them".
+        // Every way out ends here, including the several that open nothing at all - an
+        // unreadable folder, a folder with no markdown in it, a declined "open all of them".
         RestoreDocumentFocusAfterChrome();
     }
 
-    private async Task OpenChosenFolderAsync()
+    private async Task OpenFolderFilesAsync(string folder)
     {
-        string? folder = await _fileDialogs.PickFolderAsync().ConfigureAwait(true);
-
-        if (string.IsNullOrWhiteSpace(folder))
-        {
-            return;
-        }
-
         IReadOnlyList<string> files;
 
         try
@@ -1740,16 +1753,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// still says so; a batch - which is what selecting several files in Explorer produces -
     /// is opened the way a drop is, skipping quietly over anything unreadable.
     /// </summary>
-    public Task OpenActivatedAsync(IReadOnlyList<string> paths) => paths.Count switch
+    public async Task OpenActivatedAsync(IReadOnlyList<string> paths)
     {
-        0 => Task.CompletedTask,
-        1 => OpenPathAsync(paths[0]),
-        _ => OpenManyAsync(paths, $"Opened {paths.Count} files"),
-    };
+        // A folder named on the command line becomes the folder panel's root - so
+        // "Marqora.exe ." in a terminal shows that folder - and the first folder is the one that
+        // counts (P9, P22). Files beside it open as they always have.
+        string? folder = paths.FirstOrDefault(Directory.Exists);
+        List<string> files = [.. paths.Where(p => !Directory.Exists(p))];
+
+        if (folder is not null)
+        {
+            await UseFolderAsRootAsync(folder).ConfigureAwait(true);
+        }
+
+        await (files.Count switch
+        {
+            0 => Task.CompletedTask,
+            1 => OpenPathAsync(files[0]),
+            _ => OpenManyAsync(files, $"Opened {files.Count} files"),
+        }).ConfigureAwait(true);
+    }
 
     /// <summary>
-    /// Opens everything supported in a drop, each in its own tab. A dropped folder is
-    /// expanded the same way File, Open Folder expands one, so both gestures agree.
+    /// Opens everything supported in a drop, each in its own tab. A dropped folder becomes the
+    /// folder panel's root, as File, Open Folder makes one, so both gestures agree (P22).
     /// </summary>
     public Task OpenDroppedAsync(IReadOnlyList<string> paths)
     {
@@ -1770,20 +1797,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task OpenSeveralAsync(IReadOnlyList<string> paths, bool picked)
     {
         List<string> supported = [];
+        List<string> folders = [];
         string? legacyReview = null;
 
         foreach (string path in paths)
         {
+            // A folder becomes the folder panel's root rather than a tab per file in it (P22).
+            // One root at a time, so only the first counts; the files in the same drop still
+            // open beside it.
             if (Directory.Exists(path))
             {
-                try
-                {
-                    supported.AddRange(MarkdownFileTypes.EnumerateInFolder(path));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    _logger.LogWarning(ex, "Could not read the dropped folder {Folder}.", path);
-                }
+                folders.Add(path);
             }
             else if (LooksLikeFolio(path))
             {
@@ -1811,6 +1835,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
+        if (folders.Count > 0)
+        {
+            await UseFolderAsRootAsync(folders[0]).ConfigureAwait(true);
+
+            if (folders.Count > 1)
+            {
+                StatusText = $"Opened the folder {FolderPanel.RootName}; only the first folder dropped is used";
+            }
+
+            if (supported.Count == 0 && legacyReview is null)
+            {
+                return;
+            }
+        }
+
         // Said after whatever else the drop opens, rather than instead of it.
         if (legacyReview is not null && supported.Count == 0)
         {
@@ -1826,8 +1865,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 "Marqora opens markdown files: " + string.Join(", ", MarkdownFileTypes.Extensions)
                 + (picked
                     ? string.Empty
-                    : "\n\nA dropped folder is searched for "
-                      + string.Join(", ", MarkdownFileTypes.FolderExtensions) + " files."))
+                    : "\n\nA dropped folder opens in the folder panel."))
                 .ConfigureAwait(true);
             return;
         }
@@ -2437,7 +2475,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _snapshots.TryGetValue(id, out ReviewSnapshot? snapshot);
 
         string suggested = snapshot is { IsResumed: true } ? snapshot.FileName : document.DisplayName;
-        string? path = await _fileDialogs.PickSaveFileAsync(suggested).ConfigureAwait(true);
+        // An untitled document made by New Document Here starts its first Save As in that folder (P13).
+        string? path = await _fileDialogs.PickSaveFileAsync(suggested, document.SaveFolder).ConfigureAwait(true);
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -3652,6 +3691,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     break;
                 }
 
+                case WorkspaceChange.Renamed when e.Document is { } renamed:
+                {
+                    // Renamed in the folder panel, or beneath a folder that was (WP-7). The tab
+                    // takes the new name and path, and the session is written with it.
+                    DocumentTabViewModel? tab = FindTab(renamed.Id);
+
+                    tab?.Update(renamed);
+                    UpdateActiveDocumentState();
+                    RefreshExternalNotice();
+                    PersistSession();
+
+                    // The "folder moved" tail of Saved, for the active document only (P4):
+                    // re-activating re-points the preview's relative images and the link checks,
+                    // but it also switches the shell to that tab, so a background document gets
+                    // its new path when it is next activated instead.
+                    if (_host is not null && _workspace.Active?.Id == renamed.Id)
+                    {
+                        await _host.ActivateTabAsync(renamed.Id, renamed.Path).ConfigureAwait(true);
+                        await PublishLinkTargetsAsync(renamed.Id, renamed.Path).ConfigureAwait(true);
+
+                        RenderedMarkdown rendered = await RenderAsync(renamed.Id, renamed.Text).ConfigureAwait(true);
+                        await PublishChecksAsync(renamed.Id, renamed.Text, renamed.Path, rendered).ConfigureAwait(true);
+                    }
+
+                    break;
+                }
+
                 case WorkspaceChange.LockChanged when e.Document is { } marked:
 
                     // The tab for its tooltip, the active state for the menus and commands, and
@@ -3996,6 +4062,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (OutlineHasFocus)
         {
             OutlineFocusRequested?.Invoke(this, EventArgs.Empty);
+
+            return;
+        }
+
+        // The folder panel is somewhere to work in the same way. A file opened from it clears
+        // the latch first, so that one case leaves the keyboard in the editor (C8).
+        if (FolderPanelHasFocus)
+        {
+            FolderPanelFocusRequested?.Invoke(this, EventArgs.Empty);
 
             return;
         }
@@ -6450,6 +6525,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 CopySelectedOutlineHeading();
                 return;
 
+            // The same in the folder panel: the selected row's full path.
+            case "copy" when FolderPanelHasFocus:
+                CopySelectedFolderPath();
+                return;
+
             case "copy":
                 await _host.RequestSelectionForClipboardAsync(cut: false).ConfigureAwait(true);
                 return;
@@ -7318,7 +7398,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// otherwise the folder on its own. A recent entry outlives the file it points at, and
     /// /select on something missing leaves Explorer to pick a landing spot of its own.
     /// </summary>
-    private void RevealInExplorer(string path)
+    public void RevealInExplorer(string path)
     {
         try
         {
@@ -7445,16 +7525,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             : tab.Title;
     }
 
-    /// <summary>
-    /// Wraps a link target in angle brackets when it needs them.
-    ///
-    /// A space inside <c>(...)</c> ends the target as far as every markdown parser is concerned,
-    /// so "my notes.md" would link to "my" and leave "notes.md)" as text. CommonMark's answer is
-    /// the pointy-bracket form, which is more readable than percent-encoding and is what a
-    /// person editing the link afterwards would have written themselves.
-    /// </summary>
-    public static string LinkTarget(string relative) =>
-        relative is not null && relative.AsSpan().ContainsAny(' ', '(', ')') ? $"<{relative}>" : relative ?? string.Empty;
+    /// <summary>Wraps a link target in angle brackets when it needs them; <see cref="PaulTechGuy.MQ.Folders.ImageLinks.Target"/> says why.</summary>
+    public static string LinkTarget(string relative) => PaulTechGuy.MQ.Folders.ImageLinks.Target(relative);
 
     /// <summary>
     /// Puts something about one tab's file on the clipboard, and says so in the status bar.
@@ -7912,7 +7984,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 .PickExportFileAsync(
                     FolioManifest.PageName(suggested) + ".html", "Folio", [".html", ".htm"])
                 .ConfigureAwait(true),
-            _ => await _fileDialogs.PickFolderAsync().ConfigureAwait(true),
+            _ => await _fileDialogs.PickFolderAsync("Choose a folder for the Folio").ConfigureAwait(true),
         };
 
         if (string.IsNullOrWhiteSpace(destination))
@@ -8271,7 +8343,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        string? parent = await _fileDialogs.PickFolderAsync().ConfigureAwait(true);
+        string? parent = await _fileDialogs.PickFolderAsync("Choose where to unpack the Folio").ConfigureAwait(true);
 
         if (string.IsNullOrWhiteSpace(parent))
         {
@@ -8942,7 +9014,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task RunEditAsync(
         Func<EditContext, EditResult> compute,
         string what,
-        EditContextScope scope = EditContextScope.Selection)
+        EditContextScope scope = EditContextScope.Selection,
+        EditGate gate = EditGate.Caret)
     {
         // Said before the CanFormat check below, which already covers read-only but covers it
         // silently - it is one predicate standing for half a dozen reasons a command might be
@@ -8956,7 +9029,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Checked here rather than trusting CanExecute: the accelerators call Execute
         // directly, and ICommand.Execute does not consult it. One predicate, four entry
         // points — menu, toolbar, window accelerator and the shell's own keybindings.
-        if (_host is null || !CanFormat)
+        if (_host is null || !(gate == EditGate.Caret ? CanFormat : CanWriteFromChrome))
         {
             return;
         }
@@ -9701,26 +9774,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsOutlineVisible))]
-    [NotifyPropertyChangedFor(nameof(IsOutlineRailVisible))]
     public partial bool ShowOutline { get; set; }
 
     /// <summary>
-    /// Whether the panel is actually on screen.
+    /// Whether the outline is docked in the left column (P29).
     ///
     /// Wanting the outline and having a document to outline are two different things. With
     /// no tabs open the empty state fills the content row, and a panel headed "Outline"
-    /// beside a drop target would be listing nothing on purpose.
+    /// beside a drop target would be listing nothing on purpose. An unpinned outline lives on
+    /// the window's edge instead; see <see cref="IsOutlineOnEdge"/>.
     /// </summary>
-    public bool IsOutlineVisible => ShowOutline && HasDocument;
-
-    /// <summary>
-    /// Whether the collapsed rail stands in for the panel - the strip that carries the button
-    /// to bring it back.
-    ///
-    /// The same document condition as the panel, for the same reason: with no tabs open there
-    /// is nothing to outline, and a button offering to show nothing would be a puzzle.
-    /// </summary>
-    public bool IsOutlineRailVisible => !ShowOutline && HasDocument;
+    public bool IsOutlineVisible => ShowOutline && OutlinePinned && HasDocument;
 
     /// <summary>
     /// How wide the panel is, in device-independent pixels.
@@ -9807,32 +9871,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnOutlineMaxDepthChanged(int value) => RebuildOutlineRows();
 
     /// <summary>
-    /// Shows or hides the panel: View, Outline, Alt+4, the hide button in the panel's filter
-    /// row and the show button on the collapsed rail.
+    /// View, Outline and Alt+4: docks the outline in the column, or sends a docked one to its
+    /// tab on the window's edge (P29). The same as the pin button in its header, which is what
+    /// lets the menu item advertise the key honestly.
     ///
-    /// One command behind all four, which is what lets the menu item advertise the key honestly.
-    /// Showing takes the keyboard into the panel as well, on the grounds that asking for the
+    /// Nothing here makes the outline disappear; a panel always has a place, docked or on the
+    /// edge. Turning it off altogether is the Preferences switch, and an outline that was off
+    /// is turned back on, docked, by this.
+    ///
+    /// Docking takes the keyboard into the panel as well, on the grounds that asking for the
     /// outline is asking to use it; Escape is the way back to the document.
     /// </summary>
     [RelayCommand]
     private async Task ToggleOutlineAsync()
     {
-        if (ShowOutline)
+        if (IsOutlineDocked)
         {
-            await SetShowOutlineAsync(false).ConfigureAwait(true);
-
-            // SetShowOutlineAsync has already handed the keyboard back if the panel held
-            // it. This is for the ordinary case, where the menu holds it instead.
-            RestoreDocumentFocusAfterChrome();
+            await SetPinnedAsync(SidePanel.Outline, pinned: false).ConfigureAwait(true);
 
             return;
         }
 
         await SetShowOutlineAsync(true).ConfigureAwait(true);
+        await SetPinnedAsync(SidePanel.Outline, pinned: true).ConfigureAwait(true);
 
-        // Opening it means wanting to use it, so the keyboard goes with it - the one place
-        // this differs from its neighbours on the View menu, where the keyboard goes back to
-        // the document. Escape brings it back, and Alt+Shift+4 returns once it is open.
         RequestOutlineFocus();
     }
 
@@ -9845,6 +9907,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         ShowOutline = show;
         _settings.Update(s => s with { ShowOutline = show });
+
+        if (!show && SlidOutPanel == SidePanel.Outline)
+        {
+            SlidOutPanel = SidePanel.None;
+        }
 
         if (show)
         {
@@ -9894,6 +9961,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         await SetShowOutlineAsync(true).ConfigureAwait(true);
+
+        if (!OutlinePinned)
+        {
+            SlideOut(SidePanel.Outline);
+        }
 
         RequestOutlineFocus();
     }
@@ -9950,6 +10022,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        FolderPanelHasFocus = false;
         OutlineHasFocus = true;
     }
 
@@ -10124,6 +10197,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         */
         _leavingOutline = true;
 
+        // A heading picked in an outline slid out from the edge: it slides back, or stays out
+        // for the next pick, as the preference says (P29).
+        if (SlidOutPanel == SidePanel.Outline)
+        {
+            SlideAwayIf(_settings.Current.SlideAwayOnPickHeading);
+        }
+
         await _host.ScrollToLineAsync(row.SourceLine).ConfigureAwait(true);
 
         OutlineHasFocus = false;
@@ -10152,6 +10232,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public async Task LeaveOutlineAsync()
     {
         OutlineHasFocus = false;
+
+        // Slid out from the edge: Escape slides it back, or leaves it out, as the preference says.
+        if (SlidOutPanel == SidePanel.Outline)
+        {
+            SlideAwayIf(_settings.Current.SlideAwayOnEscape);
+        }
 
         if (_host is not null)
         {
@@ -10660,6 +10746,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     await FocusOutlineCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
 
+                // Alt+6 and Alt+Shift+6, by the same route and for the same reason.
+                case "toggleFolderPanel":
+                    await ToggleFolderPanelCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
+                case "focusFolderPanel":
+                    await FocusFolderPanelCommand.ExecuteAsync(null).ConfigureAwait(true);
+                    break;
+
                 case "toggleSpellCheck":
                     await ToggleSpellCheckCommand.ExecuteAsync(null).ConfigureAwait(true);
                     break;
@@ -10785,6 +10880,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                         .ConfigureAwait(true);
                 }
 
+                return;
+            }
+
+            // A folder dropped onto the text or the preview: the browser turns it into one
+            // navigation to the folder, which becomes the folder panel's root, as a folder
+            // dropped on the window's chrome does (P22, C12). A folder link clicked in the
+            // preview does not come this way; it arrives as a local link and opens Explorer.
+            if (uri.IsFile && Directory.Exists(uri.LocalPath))
+            {
+                await UseFolderAsRootAsync(uri.LocalPath).ConfigureAwait(true);
                 return;
             }
 
@@ -10958,7 +11063,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Opens a file or a folder the way double-clicking it in Explorer would.</summary>
-    private void LaunchPath(string path)
+    public void LaunchPath(string path)
     {
         try
         {
@@ -11013,9 +11118,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ActivePane = pane;
         OutlineHasFocus = false;
+        FolderPanelHasFocus = false;
+
+        // A click into the text is a click outside a slid-out panel. The WebView keeps its
+        // pointer events to itself, so a pane taking the keyboard is how the window hears of it.
+        NotifyClickedOutsideSlidOutPanel();
 
         // A pane holding the keyboard is the hand-off complete, whichever way it got there.
         _leavingOutline = false;
+        _leftFolderPanelUtc = DateTime.MinValue;
 
         AppSettings current = _settings.Current;
         ActiveZoomPercent = pane == EditorPane.Source

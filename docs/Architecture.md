@@ -923,6 +923,21 @@ The same `NavigationStarting` handler is what keeps the WebView pinned to the sh
 anything that is not the shell is either a document link or unexpected, and neither should
 replace the app's own UI.
 
+A third drag starts inside the app: an image row from the folder panel, carrying its path in a
+`Marqora.FolderImage` format. **The WebView does not take a drag that starts in the same
+process**, so the window takes it, with `DragOver` and `Drop` handlers on `RootGrid` that see
+handled events too. The cursor is decided on every mouse move and wants its answer at once, so
+`MainViewModel.IsSourcePaneAt` works out the source pane from the view mode and the splitter
+position rather than asking the page. That repeats the `.mq-root` grid rule in `app.css`, and
+both places say so. Over the source pane the drop is accepted; over the splitter and the preview
+it is refused, because the preview never changes the source. On the drop the point goes to the
+shell's `insertTextAtPoint`, which asks Monaco for the line and column under it and inserts the
+link there as one undoable edit. Browser zoom is off in the preview, so a DIP is a CSS pixel.
+
+The window's own `DragOver` handler leaves anything that is not files alone rather than setting
+`None`: the event bubbles up from the WebView, and refusing there would overrule a pane that
+had accepted.
+
 ---
 
 ## One instance, and how a second launch reaches it
@@ -978,6 +993,17 @@ is not substituted at all and arrives as the literal string `%~`. Both were meas
 
 Single-instancing makes the registry setting an optimisation rather than a requirement: ten
 processes that each hand over and exit produce the same ten tabs, just more slowly.
+
+**Relative arguments.** `Marqora.exe .` or `Marqora.exe notes.md` means the folder it was
+typed in, which the running instance cannot know. `Program.Main` qualifies every argument
+against the launching process's working folder before anything else. If none was relative, the
+redirect runs as above. If any was, the launch starts one more copy of itself with the absolute
+arguments, passes it foreground rights, and exits, and that copy redirects normally. No new
+channel between processes, and no gap at startup; the cost is one extra process start, and only
+for a relative argument. The receiver refuses an argument that is not fully qualified, which on
+its own makes the wrong-folder case impossible. Having qualified them, `Main` moves its own
+working folder to the install folder: a process's working folder cannot be renamed, and Marqora
+started from `docs\guide\intro.md` would otherwise stop its own folder panel renaming `guide`.
 
 ---
 
@@ -1190,6 +1216,66 @@ against the full model range, bracketed by undo stops. `setValue` would be simpl
 the undo stack away, and undo is the first thing anyone reaches for when a formatter surprises
 them. The cursor is restored to the same line with its column clamped, since that line may
 have grown or shrunk.
+
+---
+
+## The folder panel
+
+One folder, the root, shown as a tree in the left-hand column above the outline. The logic that
+does not need a window is its own library, `PaulTechGuy.MQ.Folders`, with its own tests: the
+listing, the tree and the rows it flattens to, the watcher and its coalescer, `.gitignore`
+reading, file-name rules, the Recycle Bin policy, launch arguments and image links.
+
+**A flat list, not a `TreeView`.** The tree is a `ListView` of the visible rows, each with a
+depth. `FolderTree` flattens the expanded folders, and the view model applies the difference
+as inserted and removed ranges, never a replaced list, so focus, scroll and Narrator's place
+survive an expand. `TreeView` keeps expansion in its containers, which a virtualized list
+recycles. Rows are drawn in code in `ContainerContentChanging`, as Find All's are; that is also
+where the automation `Level`, `PositionInSet` and `SizeOfSet` are set, and small peers report
+the Tree and TreeItem control types with Expand and Collapse.
+
+**Docked or on the edge.** Each panel, the folder panel and the outline, is in one of two places.
+Docked, it is in the left-hand column, stacked when both are, split by a remembered proportion.
+On the edge, it is a vertical tab on a strip at the window's far left; a click slides the panel
+out over the text, starting past the docked column so it never covers a docked panel. Sliding
+out moves the panel's own element into a host with a high `Canvas.ZIndex` and a
+`TranslateTransform`, and back again when it slides away; there is one element per panel, never
+a copy. There is no closed state, which is what keeps a way back on screen: with both panels
+closed the first build showed none. Whether each is pinned is session state. A slid-out panel
+slides away on a click outside it, `Escape`, opening a file and picking a heading, each a
+preference. A click into the preview or the editor never reaches the window as a pointer event,
+because the WebView keeps it, so that one is heard through `SetActivePane`.
+
+**The watcher and its limits.** One recursive `FileSystemWatcher` on the root, its buffer at
+64 KB, `LastWrite` subscribed only while the date sort is on. Changes are coalesced before they
+reach the tree, and a watcher error refreshes at most once every five seconds, so a busy root
+cannot fall into a rescan loop. A look stops at 20,000 entries and says so; at most two probes run
+at once, and every probe and walk is canceled when the root changes. A watch that cannot start,
+which is common on a share, leaves the panel on Refresh.
+
+**Rename and delete belong to the workspace.** `DocumentWorkspace.RenameAsync` and `DeleteAsync`
+do the work on disk, because the workspace already holds the watchers, the read-only marks and
+the pins that have to move or go with the file. A rename raises `WorkspaceChange.Renamed`, not
+`Saved`: `Saved` means clean, and only the active document runs the tail that re-points the
+preview and republishes its links, since that tail activates the tab. Operations on one document
+are serialized with a per-document hold that `SaveAsync`, `SaveAsAsync`, `RenameAsync` and
+`DeleteAsync` all take, so an autosave cannot land between the recycle and the tab closing and
+write the deleted file back. What the workspace does not know about, the view model follows:
+recent files, the closed-tab records Reopen Closed Tab uses, and recent folders. The panel lands
+its own change on the tree at once rather than waiting for the watcher, whose report then changes
+nothing; while a rename box is open the tree holds still, and changes wait until it closes.
+
+**Delete is `SHFileOperationW`**, with `FOF_ALLOWUNDO`, on an STA thread, behind `IRecycleBin`
+so the workspace can be tested without a shell. Whether a delete will really be recycled is
+decided before asking, by `RecyclePolicy` from the drive's type and its Recycle Bin settings, so
+the confirmation can say *permanently* when it will not. The same walk counts the files carrying
+the Windows read-only attribute, which the confirmation names but does not enforce.
+
+**Menus.** The panel's right-click menus come from `FolderPanelMenus`, built per row as they open.
+It keeps its own `Writes(...)` list rather than the main window's, and *Insert Link in Source* is
+the one item on it. That item runs through `RunEditAsync` with `EditGate.Writable`, which drops
+`CanFormat`'s focus terms: it is picked with the keyboard in the panel, and `CanFormat` is false
+there by design.
 
 ---
 
@@ -1642,6 +1728,11 @@ is reported.
 Pruning asks whether the *volume* answers before it asks whether the file exists. The obvious
 version — drop anything missing at startup — would unlock a whole shareful of reference
 documents the first time Marqora opened away from the network.
+
+A rename or delete made from the folder panel is different: the workspace knows both paths, so
+the marks and pins under a renamed file or folder move with it. A delete is refused while a
+mark is under it, and takes the pins under it with it. A rename made anywhere else still leaves
+its mark behind.
 
 ---
 

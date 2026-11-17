@@ -3704,6 +3704,17 @@
     if (state.viewMode !== 'SideBySide') { return; }
 
     var element = blockForLine(zeroBasedLine);
+
+    /*
+      A table row carries its own line, but the bar cannot go on it: a ::before on a <tr> is
+      laid out as one more cell, so the row grew a blank first cell and pushed the rest one
+      column right, wherever the caret was. Its first cell carries the bar instead, which still
+      draws it just left of the table beside that row.
+    */
+    if (element && element.tagName === 'TR' && element.cells.length > 0) {
+      element = element.cells[0];
+    }
+
     if (!element || element === activeBlock) { return; }
 
     if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
@@ -4407,6 +4418,14 @@
     */
     { alt: true, code: 'Digit4', run: 'toggleOutline' },
     { alt: true, shift: true, code: 'Digit4', run: 'focusOutline' },
+
+    /*
+      Alt+6 and Alt+Shift+6 are the folder panel's pair, split the same way: one docks it or
+      moves it to the window edge, the other goes to it and back. Alt+5 below was already taken, so the folder
+      panel has the next digit.
+    */
+    { alt: true, code: 'Digit6', run: 'toggleFolderPanel' },
+    { alt: true, shift: true, code: 'Digit6', run: 'focusFolderPanel' },
 
     /*
       Alt+5 turns this document's heading numbers on and off - the reading convenience for
@@ -7386,6 +7405,41 @@
       if (state.viewMode === 'Preview') { post('command', { name: 'showSource' }); }
 
       insertAtCursor(p.text || '');
+    },
+
+    /*
+      A folder panel image dropped on the window (WP-8). The web view does not take a drag that
+      starts inside the app, so the host takes the drop and sends the point here, in CSS pixels.
+      Only a point over the source pane inserts anything: the preview never changes the source.
+      The link goes in at the line and column under the point as one undoable edit, and the
+      caret lands after it, as a drop into any editor leaves it.
+    */
+    insertTextAtPoint: function (p) {
+      var editor = state.editor;
+      var model = editor && editor.getModel();
+      if (!model || state.viewMode === 'Preview') { return; }
+
+      var hit = document.elementFromPoint(p.x, p.y);
+      if (!hit || !editor.getDomNode().contains(hit)) { return; }
+
+      var target = editor.getTargetAtClientPoint(p.x, p.y);
+      var position = target && target.position;
+
+      if (!position) {
+        var last = model.getLineCount();
+        position = { lineNumber: last, column: model.getLineMaxColumn(last) };
+      }
+
+      var text = String(p.text || '');
+      var range = new state.monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+
+      editor.pushUndoStop();
+      editor.executeEdits('marqora-drop', [{ range: range, text: text, forceMoveMarkers: true }]);
+      editor.pushUndoStop();
+
+      var end = position.column + text.length;
+      editor.setSelection(new state.monaco.Range(position.lineNumber, end, position.lineNumber, end));
+      editor.focus();
     },
 
     /*

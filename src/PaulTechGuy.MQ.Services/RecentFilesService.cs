@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using PaulTechGuy.MQ.Abstractions.Repositories;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Folders;
 
 namespace PaulTechGuy.MQ.Services;
 
@@ -129,6 +130,59 @@ public sealed class RecentFilesService(
         }
 
         return removed;
+    }
+
+    public Task RenameAsync(string from, string destination, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+
+        string fromFull = Path.GetFullPath(from);
+        string toFull = Path.GetFullPath(destination);
+
+        // Recent entries are keyed by full path alone, with no link resolution, so unlike the
+        // marks and pins one spelling is enough and nothing has to be collected before the move.
+        return MutateIfAnyAsync(
+            items => items.Any(item => FolderPaths.IsSameOrUnder(item.Path, fromFull)),
+            items =>
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (FolderPaths.IsSameOrUnder(items[i].Path, fromFull))
+                    {
+                        items[i] = items[i] with { Path = FolderPaths.Rebase(items[i].Path, fromFull, toFull) };
+                    }
+                }
+            },
+            cancellationToken);
+    }
+
+    public Task RemoveUnderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        string fullPath = Path.GetFullPath(path);
+
+        return MutateIfAnyAsync(
+            items => items.Any(item => FolderPaths.IsSameOrUnder(item.Path, fullPath)),
+            items => items.RemoveAll(item => FolderPaths.IsSameOrUnder(item.Path, fullPath)),
+            cancellationToken);
+    }
+
+    /// <summary>As <see cref="MutateAsync"/>, but skips the event and the write when nothing would change.</summary>
+    private Task MutateIfAnyAsync(
+        Func<List<RecentFile>, bool> affects,
+        Action<List<RecentFile>> mutate,
+        CancellationToken cancellationToken)
+    {
+        bool any;
+
+        lock (_sync)
+        {
+            any = affects(_items);
+        }
+
+        return any ? MutateAsync(mutate, cancellationToken) : Task.CompletedTask;
     }
 
     /// <summary>Applies a change under the lock, re-orders, trims, then persists.</summary>

@@ -358,6 +358,38 @@
             </Style>
 
             <!--
+                A side panel's header: the folder panel's and the outline's fold, menu, pin and X.
+                Smaller than an Icon button because it sits in a one-line header over a list,
+                where a 34-pixel square made the four buttons louder than the panel's name.
+                Its glyph is MqPanelIconStyle's.
+            -->
+            <x:Double x:Key="MqPanelButtonSize">24</x:Double>
+
+            <Style x:Key="MqPanelButtonStyle" TargetType="Button" BasedOn="{StaticResource MqIconButtonStyle}">
+                <Setter Property="Width" Value="{StaticResource MqPanelButtonSize}" />
+                <Setter Property="MinWidth" Value="{StaticResource MqPanelButtonSize}" />
+                <Setter Property="Height" Value="{StaticResource MqPanelButtonSize}" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+
+            <Style x:Key="MqPanelIconStyle" TargetType="FontIcon">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}" />
+            </Style>
+
+            <!--
+                A side panel's tab on the window's edge: a glyph above the panel's name turned on
+                its side. As tall as its content, which is the whole difference from a Chrome
+                button, whose fixed height cut the tab down to its glyph.
+            -->
+            <Style x:Key="MqEdgeTabStyle" TargetType="Button" BasedOn="{StaticResource MqToolButtonStyle}">
+                <Setter Property="Height" Value="NaN" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Padding" Value="4,8" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+
+            <!--
                 A palette window's toolbar. Same shape, one step denser, because these windows
                 go down to 320x240 and the strip is competing with the content for the height.
                 webshell/diagram.css carries the same numbers for the diagram window's HTML
@@ -712,6 +744,120 @@
                                     the bar sits inside it rather than squaring off its
                                     corner; the two numbers are a pair and move together.
                                 -->
+                                <Border x:Name="Bar"
+                                        Width="4"
+                                        HorizontalAlignment="Left"
+                                        CornerRadius="4,0,0,4"
+                                        Background="{ThemeResource MqAccentBrush}"
+                                        Opacity="0" />
+
+                                <ContentPresenter x:Name="Presenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  ContentTransitions="{TemplateBinding ContentTransitions}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                The folder panel's row: MqListRowStyle's plate and hover, with the teal bar
+                moved off selection and onto a state of its own.
+
+                In the outline the selected row and the current heading are the same row, so
+                selection can wear the bar. In the folder tree they are two different things:
+                the keyboard moves the selection while browsing, and the bar marks the active
+                document, which stays where it is (FolderPanel P1). So selection keeps the plate
+                and gives up the bar, and the view sets ActiveStates from the row's IsActive.
+
+                The bar stays in the template rather than moving into the row's content, because
+                the teal is a theme resource, and a brush looked up from code would answer for
+                the application's theme rather than the window's.
+            -->
+            <Style x:Key="MqTreeRowStyle" TargetType="ListViewItem">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Padding" Value="6,3,8,3" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <Grid x:Name="Root"
+                                  Background="{TemplateBinding Background}"
+                                  CornerRadius="{TemplateBinding CornerRadius}">
+
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="PointerOverSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="PressedSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background"
+                                                        Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Opacity" Value="0.5" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+
+                                    <VisualStateGroup x:Name="ActiveStates">
+                                        <VisualState x:Name="Inactive" />
+
+                                        <VisualState x:Name="Active">
+                                            <VisualState.Setters>
+                                                <Setter Target="Bar.Opacity" Value="1" />
+                                                <Setter Target="Plate.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+
+                                <Border x:Name="Plate"
+                                        CornerRadius="{TemplateBinding CornerRadius}"
+                                        Background="{ThemeResource MqListRowSelectedBrush}"
+                                        Opacity="0" />
+
                                 <Border x:Name="Bar"
                                         Width="4"
                                         HorizontalAlignment="Left"

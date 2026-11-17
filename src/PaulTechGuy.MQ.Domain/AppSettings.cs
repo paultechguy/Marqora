@@ -105,12 +105,14 @@ public sealed record AppSettings
     public bool ReloadOnExternalChange { get; set; } = true;
 
     /// <summary>
-    /// Show the outline panel beside the document.
+    /// Show the outline panel beside the document, docked or on the window's edge
+    /// (<see cref="OutlinePinned"/>).
     ///
-    /// Off by default. The panel takes width from the two panes that are the point of the
-    /// app, and a reader who has never asked for it should not have to close it first.
+    /// On by default, and docked, beside the folder panel (Paul, 2026-11-17): a new install shows
+    /// both panels pinned in the left column, so the two are found rather than hunted for. An
+    /// existing settings file keeps whatever it says.
     /// </summary>
-    public bool ShowOutline { get; set; }
+    public bool ShowOutline { get; set; } = true;
 
     /// <summary>
     /// Deepest heading level the outline lists, or 0 for every level.
@@ -149,6 +151,83 @@ public sealed record AppSettings
     /// spent most of the width on their own indent before the first character is drawn.
     /// </summary>
     public const double MinimumOutlineWidth = 160;
+
+    // ------------------------------------------------------------ folder panel (P10)
+
+    /// <summary>
+    /// Show the folder panel above the outline, docked or on the window's edge
+    /// (<see cref="FolderPanelPinned"/>).
+    ///
+    /// On by default, and docked (Paul, 2026-11-17, replacing P6's "off until a folder is chosen"):
+    /// with a document open and no folder chosen it offers Open Folder and Use this document's
+    /// folder. With no document and no folder it has nothing to show and stays out of the way, so
+    /// the landing page still has the window.
+    /// </summary>
+    public bool ShowFolderPanel { get; set; } = true;
+
+    /// <summary>Open the tree to the active document as tabs change. On by default; the panel menu's switch.</summary>
+    public bool FolderRevealActive { get; set; } = true;
+
+    /// <summary>List every file, not only markdown and images. The always-hidden folders stay hidden.</summary>
+    public bool FolderShowAllFiles { get; set; }
+
+    /// <summary>Order files newest first rather than by name. Folders stay first, by name (P19).</summary>
+    public bool FolderSortByModified { get; set; }
+
+    /// <summary>
+    /// The folder the panel shows, or null when none has been chosen. State, in
+    /// <see cref="SessionKeys"/>: a folder on one machine is not a place on another. Restored on
+    /// start whatever the startup preference says (P21), because it opens no tabs.
+    /// </summary>
+    public string? FolderRoot { get; set; }
+
+    /// <summary>
+    /// Folders recently chosen as the root, newest first, at most <see cref="MaximumRecentFolders"/>.
+    /// State. Nullable for the same reason as <see cref="OpenDocuments"/>; read it through
+    /// <see cref="RecentFolderList"/>.
+    /// </summary>
+    public List<string>? RecentFolders { get; set; }
+
+    /// <summary>The recent-folder list, safe to enumerate whatever the settings file held.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<string> RecentFolderList => RecentFolders ?? [];
+
+    public const int MaximumRecentFolders = 10;
+
+    // ------------------------------------------------- docked, on the edge, closed (P29)
+
+    /// <summary>
+    /// Whether the folder panel is pinned in the left column (true) or lives on the window's
+    /// edge as a tab that slides it out over the text (false). State: the panel's own pin and
+    /// unpin set it. Closing the panel is <see cref="ShowFolderPanel"/>, and leaves this alone,
+    /// which is how a closed panel comes back where it was.
+    /// </summary>
+    public bool FolderPanelPinned { get; set; } = true;
+
+    /// <summary>The same for the outline, whose closed state is <see cref="ShowOutline"/>.</summary>
+    public bool OutlinePinned { get; set; } = true;
+
+    /// <summary>A panel slid out from the edge slides back when the text or anything else outside it is clicked.</summary>
+    public bool SlideAwayOnClickOutside { get; set; } = true;
+
+    /// <summary>A panel slid out from the edge slides back on Escape, and the keyboard returns to the text.</summary>
+    public bool SlideAwayOnEscape { get; set; } = true;
+
+    /// <summary>A folder panel slid out from the edge slides back once a file has been opened from it.</summary>
+    public bool SlideAwayOnOpenFile { get; set; } = true;
+
+    /// <summary>An outline slid out from the edge slides back once a heading has been picked in it.</summary>
+    public bool SlideAwayOnPickHeading { get; set; } = true;
+
+    /// <summary>
+    /// The outline's share of the left column's height when the two are stacked, from 0 to 1.
+    /// A proportion rather than pixels, so both halves grow with the window. Even halves until
+    /// the splitter is dragged; double-clicking it comes back here. State, like
+    /// <see cref="SplitterPosition"/>.
+    /// </summary>
+    public double FolderSplit { get; set; } = DefaultFolderSplit;
+
+    public const double DefaultFolderSplit = 0.5;
 
     public WindowPlacement Window { get; set; } = WindowPlacement.Default;
 
@@ -768,6 +847,11 @@ public sealed record AppSettings
             "activeDocumentIndex",
             "splitterPosition",
             "outlineWidth",
+            "folderRoot",
+            "recentFolders",
+            "folderPanelPinned",
+            "outlinePinned",
+            "folderSplit",
             "lastWelcomeVersion",
             "lastUpdateReminderUtc",
             "lastUpdateReminderVersion",
@@ -811,6 +895,11 @@ public sealed record AppSettings
             ActiveDocumentIndex = current.ActiveDocumentIndex,
             SplitterPosition = current.SplitterPosition,
             OutlineWidth = current.OutlineWidth,
+            FolderRoot = current.FolderRoot,
+            RecentFolders = current.RecentFolders,
+            FolderPanelPinned = current.FolderPanelPinned,
+            OutlinePinned = current.OutlinePinned,
+            FolderSplit = current.FolderSplit,
             LastWelcomeVersion = current.LastWelcomeVersion,
             LastUpdateReminderUtc = current.LastUpdateReminderUtc,
             LastUpdateReminderVersion = current.LastUpdateReminderVersion,

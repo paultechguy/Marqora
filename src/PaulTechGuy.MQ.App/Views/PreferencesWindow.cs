@@ -206,6 +206,10 @@ internal sealed class PreferencesWindow : PaletteWindow
     private readonly CheckBox _deferToDocumentNumbering;
 
     private readonly CheckBox _showOutline;
+    private readonly CheckBox _slideAwayOnClick;
+    private readonly CheckBox _slideAwayOnEscape;
+    private readonly CheckBox _slideAwayOnOpenFile;
+    private readonly CheckBox _slideAwayOnPickHeading;
 
     private readonly ComboBox _outlineDepth;
 
@@ -448,6 +452,17 @@ internal sealed class PreferencesWindow : PaletteWindow
 
         _showOutline = BuildCheck("Show the outline panel");
         Bind(_showOutline, v => _vm.SetShowOutlineAsync(v));
+
+        // A panel unpinned to the window's edge slides out over the text when its tab is
+        // clicked (FolderPanel P29). These say when it slides back on its own.
+        _slideAwayOnClick = BuildCheck("When you click outside it");
+        Bind(_slideAwayOnClick, v => _vm.UpdateAsync(s => s with { SlideAwayOnClickOutside = v }));
+        _slideAwayOnEscape = BuildCheck("When you press Escape");
+        Bind(_slideAwayOnEscape, v => _vm.UpdateAsync(s => s with { SlideAwayOnEscape = v }));
+        _slideAwayOnOpenFile = BuildCheck("After opening a file from the folder panel");
+        Bind(_slideAwayOnOpenFile, v => _vm.UpdateAsync(s => s with { SlideAwayOnOpenFile = v }));
+        _slideAwayOnPickHeading = BuildCheck("After picking a heading in the outline");
+        Bind(_slideAwayOnPickHeading, v => _vm.UpdateAsync(s => s with { SlideAwayOnPickHeading = v }));
 
         // Index is the depth, which is what makes zero mean "all levels" without a lookup:
         // the entries below it read as "down to heading N".
@@ -1211,6 +1226,14 @@ internal sealed class PreferencesWindow : PaletteWindow
         panel.Children.Add(Field("List headings", _outlineDepth));
 
         panel.Children.Add(Divider());
+        panel.Children.Add(Heading("PANELS ON THE WINDOW EDGE"));
+        panel.Children.Add(Note("A panel you unpin lives as a tab on the window's left edge and slides out over the text when you click it. It slides back:"));
+        panel.Children.Add(_slideAwayOnClick);
+        panel.Children.Add(_slideAwayOnEscape);
+        panel.Children.Add(_slideAwayOnOpenFile);
+        panel.Children.Add(_slideAwayOnPickHeading);
+
+        panel.Children.Add(Divider());
         panel.Children.Add(Heading("HEADING NUMBERS"));
         panel.Children.Add(Field("Number headings", _headingNumbers));
         panel.Children.Add(_deferToDocumentNumbering);
@@ -1861,6 +1884,10 @@ internal sealed class PreferencesWindow : PaletteWindow
                     : "Windows has no spelling dictionary installed for your language. "
                         + "Add one in Windows Settings, under Time & language.");
             _showOutline.IsChecked = s.ShowOutline;
+            _slideAwayOnClick.IsChecked = s.SlideAwayOnClickOutside;
+            _slideAwayOnEscape.IsChecked = s.SlideAwayOnEscape;
+            _slideAwayOnOpenFile.IsChecked = s.SlideAwayOnOpenFile;
+            _slideAwayOnPickHeading.IsChecked = s.SlideAwayOnPickHeading;
 
             // Clamped on the way in: the depth is an index here, and a settings file edited
             // by hand can name a level the list does not have.
