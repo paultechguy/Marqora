@@ -149,6 +149,19 @@ public sealed partial class FolderPanelViewModel : ObservableObject, IDisposable
     /// <summary>Asks a host to bring a row into view, after a reveal.</summary>
     public event EventHandler<FolderRowViewModel>? ScrollIntoViewRequested;
 
+    /// <summary>
+    /// Asks a host to select a row and bring it into view, whoever has the keyboard: after a
+    /// reveal someone asked for, and when a collapse has hidden the selected row.
+    /// </summary>
+    public event EventHandler<FolderRowViewModel>? SelectRequested;
+
+    /// <summary>
+    /// Whether Reveal Active Document has something to reveal: a saved active document inside the
+    /// root. Computed, so it follows <see cref="ActiveFolder"/>, <see cref="IsActiveOutsideRoot"/>
+    /// and the root as each reports a change.
+    /// </summary>
+    public bool CanRevealActive => HasRoot && ActiveFolder is not null && !IsActiveOutsideRoot;
+
     /// <summary>The root changed; a host shows the panel, or settings follow.</summary>
     public event EventHandler? RootChanged;
 
@@ -433,8 +446,10 @@ public sealed partial class FolderPanelViewModel : ObservableObject, IDisposable
             return;
         }
 
+        string? selected = SelectedPath;
         tree.Collapse(row.FullPath);
         Rebuild();
+        KeepSelectionShown(selected);
     }
 
     /// <summary>The row of the folder holding a row, for Left on a child.</summary>
@@ -447,9 +462,38 @@ public sealed partial class FolderPanelViewModel : ObservableObject, IDisposable
 
     public void CollapseAll()
     {
+        string? selected = SelectedPath;
         _tree?.CollapseAll();
         Rebuild();
+        KeepSelectionShown(selected);
     }
+
+    /// <summary>
+    /// After a collapse has folded the selected row away, moves the selection to the folder that
+    /// now hides it, as File Explorer does. Without this the selection simply vanished, and after
+    /// Collapse All nothing in the tree said which branch the document had been in.
+    /// </summary>
+    private void KeepSelectionShown(string? selected)
+    {
+        if (selected is null || Root is not { } root || RowOf(selected) is not null)
+        {
+            return;
+        }
+
+        for (string? folder = Path.GetDirectoryName(selected);
+             folder is not null && FolderPaths.IsUnder(folder, root);
+             folder = Path.GetDirectoryName(folder))
+        {
+            if (RowOf(folder) is { } row)
+            {
+                SelectRequested?.Invoke(this, row);
+                return;
+            }
+        }
+    }
+
+    private FolderRowViewModel? RowOf(string path) =>
+        Rows.FirstOrDefault(r => FolderPaths.Equal(r.FullPath, path));
 
     /// <summary>Reads every open folder again. For a share, where the watcher may be silent.</summary>
     public async Task RefreshAsync()
@@ -917,10 +961,36 @@ public sealed partial class FolderPanelViewModel : ObservableObject, IDisposable
         }
 
         _revealedPath = path;
-        _ = RevealAsync(path, _rootLife.Token);
+        _ = RevealAsync(path, asked: false, _rootLife.Token);
     }
 
-    private async Task RevealAsync(string path, CancellationToken token)
+    /// <summary>
+    /// Opens the tree to the active document, selects it and scrolls to it, once, whether or not
+    /// Always Reveal is on. The way back to the document after the folders have been collapsed
+    /// or browsed away from. A filter that hides the document is cleared first, since the
+    /// tree cannot be opened while one is typed.
+    /// </summary>
+    public async Task RevealActiveNowAsync()
+    {
+        if (!CanRevealActive || _workspace.Active?.Path is not { } path)
+        {
+            return;
+        }
+
+        if (IsFiltering && RowOf(path) is null)
+        {
+            Filter = string.Empty;
+        }
+
+        await RevealAsync(path, asked: true, _rootLife.Token).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Opens the folders down to <paramref name="path"/>. When the user <paramref name="asked"/>,
+    /// the row is selected and scrolled to; when it is Always Reveal following a tab switch, it
+    /// is only scrolled to, and not while someone is browsing the tree.
+    /// </summary>
+    private async Task RevealAsync(string path, bool asked, CancellationToken token)
     {
         if (_tree is not { } tree)
         {
@@ -952,9 +1022,9 @@ public sealed partial class FolderPanelViewModel : ObservableObject, IDisposable
 
         Rebuild();
 
-        if (Rows.FirstOrDefault(r => FolderPaths.Equal(r.FullPath, path)) is { } row)
+        if (RowOf(path) is { } row)
         {
-            ScrollIntoViewRequested?.Invoke(this, row);
+            (asked ? SelectRequested : ScrollIntoViewRequested)?.Invoke(this, row);
         }
     }
 

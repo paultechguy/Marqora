@@ -43,6 +43,8 @@ internal sealed partial class FolderPanelView : Grid
     private readonly FontIcon _collapseGlyph;
     private readonly TextBlock _title;
     private readonly Button _pin;
+    private readonly Button _reveal;
+    private readonly MenuFlyoutItem _revealNowItem;
     private readonly FontIcon _pinGlyph = new() { Style = MqStyles.PanelIcon, Opacity = 0.7 };
     private readonly ToggleMenuFlyoutItem _revealItem;
     private readonly ToggleMenuFlyoutItem _showAllItem;
@@ -87,6 +89,7 @@ internal sealed partial class FolderPanelView : Grid
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         _collapseGlyph = new FontIcon { Glyph = "\uE70D", FontSize = 10, Opacity = 0.7 };
         _collapse = new Button
@@ -109,7 +112,11 @@ internal sealed partial class FolderPanelView : Grid
         };
         Microsoft.UI.Xaml.Documents.Typography.SetCapitals(_title, FontCapitals.SmallCaps);
 
-        _revealItem = new ToggleMenuFlyoutItem { Text = "Reveal Active Document" };
+        // The command and the setting are two items: Reveal Active Document goes to it once,
+        // now; Always Reveal goes to each document as its tab comes forward.
+        _revealNowItem = new MenuFlyoutItem { Text = "Reveal Active Document" };
+        _revealNowItem.Click += async (_, _) => await RevealActiveAsync();
+        _revealItem = new ToggleMenuFlyoutItem { Text = "Always Reveal Active Document" };
         _revealItem.Click += (_, _) => _panel.SetRevealActive(_revealItem.IsChecked);
         _showAllItem = new ToggleMenuFlyoutItem { Text = "Show All Files" };
         _showAllItem.Click += (_, _) => _panel.SetShowAllFiles(_showAllItem.IsChecked);
@@ -152,6 +159,7 @@ internal sealed partial class FolderPanelView : Grid
         menu.Items.Add(newHere);
         menu.Items.Add(openAll);
         menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(_revealNowItem);
         menu.Items.Add(_revealItem);
         menu.Items.Add(_showAllItem);
         menu.Items.Add(_sortItem);
@@ -164,6 +172,7 @@ internal sealed partial class FolderPanelView : Grid
         menu.Opening += (_, _) =>
         {
             _revealItem.IsChecked = _panel.RevealActive;
+            _revealNowItem.IsEnabled = _panel.CanRevealActive;
             _showAllItem.IsChecked = _panel.ShowAllFiles;
             _sortItem.IsChecked = _panel.SortByModified;
             refresh.IsEnabled = _panel.HasRoot;
@@ -172,6 +181,17 @@ internal sealed partial class FolderPanelView : Grid
             openAll.IsEnabled = _panel.HasRoot;
             FillRecentFolders(recent);
         };
+
+        // Reveal Active Document, beside the menu that also holds it: the way back to the
+        // document after the folders have been collapsed or browsed away from.
+        _reveal = new Button
+        {
+            Style = MqStyles.PanelButton,
+            Content = new FontIcon { Glyph = "", Style = MqStyles.PanelIcon, Opacity = 0.7 },
+        };
+        _reveal.Click += async (_, _) => await RevealActiveAsync();
+        AutomationProperties.SetName(_reveal, "Reveal the active document");
+        ToolTipService.SetToolTip(_reveal, "Reveal Active Document");
 
         var more = new Button
         {
@@ -194,10 +214,12 @@ internal sealed partial class FolderPanelView : Grid
 
         SetColumn(_collapse, 0);
         SetColumn(_title, 1);
-        SetColumn(more, 2);
-        SetColumn(_pin, 3);
+        SetColumn(_reveal, 2);
+        SetColumn(more, 3);
+        SetColumn(_pin, 4);
         header.Children.Add(_collapse);
         header.Children.Add(_title);
+        header.Children.Add(_reveal);
         header.Children.Add(more);
         header.Children.Add(_pin);
 
@@ -352,6 +374,7 @@ internal sealed partial class FolderPanelView : Grid
 
         _panel.PropertyChanged += OnPanelChanged;
         _panel.ScrollIntoViewRequested += OnScrollIntoViewRequested;
+        _panel.SelectRequested += OnSelectRequested;
         _main.PropertyChanged += OnMainChanged;
 
         Refresh();
@@ -431,6 +454,7 @@ internal sealed partial class FolderPanelView : Grid
     {
         _panel.PropertyChanged -= OnPanelChanged;
         _panel.ScrollIntoViewRequested -= OnScrollIntoViewRequested;
+        _panel.SelectRequested -= OnSelectRequested;
         _main.PropertyChanged -= OnMainChanged;
         _list.ItemsSource = null;
     }
@@ -496,6 +520,8 @@ internal sealed partial class FolderPanelView : Grid
 
         _title.Text = hasRoot ? _panel.RootName : "Folder";
         _collapse.Visibility = Show(CanFold);
+        _reveal.Visibility = Show(hasRoot);
+        _reveal.IsEnabled = _panel.CanRevealActive;
         bool pinned = _main.FolderPanelPinned;
         _pinGlyph.Glyph = pinned ? "\uE77A" : "\uE718";
         ToolTipService.SetToolTip(_pin, pinned ? "Unpin: move the folder panel to the window edge" : "Pin: dock the folder panel in the column");
@@ -562,6 +588,30 @@ internal sealed partial class FolderPanelView : Grid
         {
             _list.ScrollIntoView(row);
         }
+    }
+
+    /// <summary>
+    /// Selects a row the panel asked for and brings it into view. With the keyboard in the panel,
+    /// focus goes to the row as well, so the arrows carry on from there rather than from a row
+    /// that has been folded away or from the button that was clicked.
+    /// </summary>
+    private void OnSelectRequested(object? sender, FolderRowViewModel row)
+    {
+        if (_main.FolderPanelHasFocus)
+        {
+            MoveTo(row);
+            return;
+        }
+
+        Select(row);
+        _list.ScrollIntoView(row);
+    }
+
+    /// <summary>Reveal Active Document, from the header button or the menu. Unfolds the section first.</summary>
+    private async Task RevealActiveAsync()
+    {
+        IsSectionCollapsed = false;
+        await _panel.RevealActiveNowAsync();
     }
 
     private async void OnTapped(object sender, TappedRoutedEventArgs e)
