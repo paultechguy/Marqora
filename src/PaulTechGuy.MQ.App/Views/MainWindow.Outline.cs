@@ -346,12 +346,14 @@ public sealed partial class MainWindow
     ///
     /// A width remembered at 1900 pixels is most of an 800-pixel window, and a saved layout
     /// from a docked monitor is exactly how that happens.
+    ///
+    /// Only the width on screen moves; the remembered one is left for a drag to change.
     /// </summary>
     private void ClampOutlineWidth()
     {
         if (RootGrid.ActualWidth > 0)
         {
-            ViewModel.SetOutlineWidth(ViewModel.OutlineWidth, RootGrid.ActualWidth);
+            ViewModel.FitOutlineWidth(RootGrid.ActualWidth);
         }
     }
 

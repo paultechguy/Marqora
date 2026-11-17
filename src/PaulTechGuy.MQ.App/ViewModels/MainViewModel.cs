@@ -1077,7 +1077,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Assigned before ShowOutline so the first rebuild already knows the limit and the
         // panel does not list levels it is about to drop.
         OutlineMaxDepth = current.OutlineMaxDepth;
-        OutlineWidth = Math.Max(AppSettings.MinimumOutlineWidth, current.OutlineWidth);
+        _chosenOutlineWidth = Math.Max(AppSettings.MinimumOutlineWidth, current.OutlineWidth);
+        OutlineWidth = _chosenOutlineWidth;
         ShowOutline = current.ShowOutline;
 
         RestoreFolderPanel(current);
@@ -9791,9 +9792,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     ///
     /// Clamped on the way in by <see cref="SetOutlineWidth"/> rather than trusted, because
     /// it arrives both from a drag and from a settings file that a person can edit.
+    ///
+    /// This is the width on screen, which a narrow window can hold below the one the user
+    /// chose; <see cref="_chosenOutlineWidth"/> is the one that is remembered.
     /// </summary>
     [ObservableProperty]
     public partial double OutlineWidth { get; set; }
+
+    /// <summary>
+    /// The width the user last dragged the panel to, and the only one written to settings.
+    ///
+    /// Kept apart from <see cref="OutlineWidth"/> because a window that shrinks pulls the
+    /// panel in with it, and that is not the user choosing a narrower panel. Minimizing
+    /// reports a width of almost nothing, and when the fitted width was saved, the panel
+    /// came back at its minimum every session.
+    /// </summary>
+    private double _chosenOutlineWidth = AppSettings.DefaultOutlineWidth;
 
     [ObservableProperty]
     public partial int OutlineMaxDepth { get; set; }
@@ -10027,7 +10041,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Sets the panel's width, clamped, and remembers it.
+    /// Sets the panel's width from a drag, clamped, and remembers it.
     ///
     /// The ceiling is a fraction of the window rather than a constant: the point of the
     /// panel is to sit beside the document, and a drag that pushes the panes off the right
@@ -10036,19 +10050,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public void SetOutlineWidth(double width, double availableWidth = 0)
     {
-        double ceiling = availableWidth > 0
-            ? Math.Max(AppSettings.MinimumOutlineWidth, availableWidth * MaximumOutlineFraction)
-            : double.MaxValue;
+        double clamped = ClampOutlineWidth(width, availableWidth);
 
-        double clamped = Math.Clamp(width, AppSettings.MinimumOutlineWidth, ceiling);
-
-        if (Math.Abs(clamped - OutlineWidth) < 0.5)
+        if (Math.Abs(clamped - _chosenOutlineWidth) < 0.5 && Math.Abs(clamped - OutlineWidth) < 0.5)
         {
             return;
         }
 
+        _chosenOutlineWidth = clamped;
         OutlineWidth = clamped;
         _settings.Update(s => s with { OutlineWidth = clamped });
+    }
+
+    /// <summary>
+    /// Fits the panel to a window that has changed size, without remembering the result.
+    ///
+    /// Works from the width the user chose rather than the one on screen, so a window made
+    /// narrower and then wide again gives the panel back its full width.
+    /// </summary>
+    public void FitOutlineWidth(double availableWidth)
+    {
+        double fitted = ClampOutlineWidth(_chosenOutlineWidth, availableWidth);
+
+        if (Math.Abs(fitted - OutlineWidth) >= 0.5)
+        {
+            OutlineWidth = fitted;
+        }
+    }
+
+    private static double ClampOutlineWidth(double width, double availableWidth)
+    {
+        double ceiling = availableWidth > 0
+            ? Math.Max(AppSettings.MinimumOutlineWidth, availableWidth * MaximumOutlineFraction)
+            : double.MaxValue;
+
+        return Math.Clamp(width, AppSettings.MinimumOutlineWidth, ceiling);
     }
 
     /// <summary>Most of the window the outline may take. The document is the point of it.</summary>
