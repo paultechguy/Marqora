@@ -256,9 +256,11 @@ The rest of this section covers each of these in detail.
   adds a tab to the window you have, and brings it forward, rather than starting a second
   copy. `Marqora.exe --new-instance` opts out when you do want two
 
-Opening a folder is deliberately **not recursive** — subfolders are ignored, so pointing it
-at a repository does not produce hundreds of tabs. It also skips `.txt`, which is fine to
-open by name but would sweep up unrelated files from a folder. Past 25 files it asks first.
+**Open All in Tabs** is deliberately **not recursive** — it opens only the documents directly
+inside the folder you right-clicked, so using it on a repository's root does not produce
+hundreds of tabs. It also skips `.txt`, which is fine to open by name but would sweep up
+unrelated files from a folder. Past 25 files it asks first. The folder panel itself shows
+every subfolder; this limit is only on opening them all as tabs.
 
 **Links in the preview**
 
