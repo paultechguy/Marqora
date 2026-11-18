@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The folder panel's tree has to be right without anyone looking at it: a folder hidden by
+    mistake, a row diff that loses the keyboard's place, or a rename name that Windows refuses
+    after the box has closed. These tests are where that is caught. The few that touch the disk
+    use TempFolder and clean up after themselves.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Folders.Tests</RootNamespace>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PaulTechGuy.MQ.Folders\PaulTechGuy.MQ.Folders.csproj" />
+  </ItemGroup>
+
+</Project>

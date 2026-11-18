@@ -1,9 +1,11 @@
 // Copyright (c) 2026 Paul Carver
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Windows.AppLifecycle;
 using PaulTechGuy.MQ.Abstractions.Services;
+using PaulTechGuy.MQ.Folders;
 using Serilog;
 using Windows.ApplicationModel.Activation;
 
@@ -56,7 +58,13 @@ internal static class SingleInstance
     /// when this process is the one instance, in which case later launches arrive on
     /// <paramref name="router"/>.
     /// </summary>
-    public static bool TryHandOff(ActivationRouter router)
+    /// <param name="qualifiedArgs">
+    /// This launch's arguments made absolute, when any of them was relative; null when none was.
+    /// The activation that would be redirected carries the command line as it was typed, and a
+    /// relative path means nothing in the running instance's folder (C2, P9), so a launch with
+    /// one starts a copy of itself with the absolute arguments instead, and that copy redirects.
+    /// </param>
+    public static bool TryHandOff(ActivationRouter router, IReadOnlyList<string>? qualifiedArgs = null)
     {
         // Read the activation before registering: registering is what allows a later launch
         // to redirect here, and there is nothing left to hand over once that has happened.
@@ -68,6 +76,11 @@ internal static class SingleInstance
         {
             AppInstance.GetCurrent().Activated += (_, args) => Deliver(router, args);
             return false;
+        }
+
+        if (qualifiedArgs is not null && Relaunch(qualifiedArgs))
+        {
+            return true;
         }
 
         if (activation is null)
@@ -84,16 +97,21 @@ internal static class SingleInstance
     }
 
     /// <summary>
-    /// Arguments that name a file this process can open.
+    /// Arguments that name a file this process can open, or a folder to show in the folder panel.
     ///
     /// Switches are skipped, and so is the executable: an activation carries the whole
     /// command line, argv[0] included, and that is a file that exists.
     ///
-    /// Only markdown extensions pass, matching the window's drop handler: dropping a
-    /// selection of desktop icons onto a Marqora shortcut launches the app with every
+    /// Only markdown extensions pass among files, matching the window's drop handler: dropping
+    /// a selection of desktop icons onto a Marqora shortcut launches the app with every
     /// selected file as an argument, and without the filter each one became a tab.
+    ///
+    /// Only fully qualified paths pass (P9). The first instance's arguments were made absolute
+    /// in Program.Main, and so were a forwarding launch's; a relative path arriving here was
+    /// typed in some other folder, and checking it against this process's folder is how
+    /// "Marqora.exe ." once meant whatever folder Marqora had started in.
     /// </summary>
-    public static IReadOnlyList<string> FilesFrom(IEnumerable<string> args) =>
+    public static IReadOnlyList<string> ArgumentPaths(IEnumerable<string> args) =>
         [.. args.Where(IsOpenable)];
 
     // ----------------------------------------------------------------- receiving
@@ -124,7 +142,7 @@ internal static class SingleInstance
             // its payload is the raw command line.
             case ILaunchActivatedEventArgs launch:
                 Log.Debug("Redirected command line: {CommandLine}", launch.Arguments);
-                return FilesFrom(SplitCommandLine(launch.Arguments));
+                return ArgumentPaths(SplitCommandLine(launch.Arguments));
 
             default:
                 Log.Warning("Redirected activation carried no arguments this app understands.");
@@ -195,12 +213,55 @@ internal static class SingleInstance
     // ----------------------------------------------------------------- arguments
 
     private static bool IsOpenable(string arg) =>
-        !string.IsNullOrWhiteSpace(arg)
-        && !arg.StartsWith('-')
-        && !arg.StartsWith('/')
-        && MarkdownFileTypes.IsSupported(arg)
-        && File.Exists(arg)
-        && !IsThisExecutable(arg);
+        LaunchArguments.IsAcceptable(arg)
+        && !IsThisExecutable(arg)
+        && ((MarkdownFileTypes.IsSupported(arg) && File.Exists(arg)) || Directory.Exists(arg));
+
+    /// <summary>
+    /// Starts a copy of this program with <paramref name="args"/>, absolute now, and lets it
+    /// bring the running window forward. That copy finds the running instance and redirects in
+    /// the ordinary way. One extra process start, and only when something was typed relative.
+    /// </summary>
+    private static bool Relaunch(IReadOnlyList<string> args)
+    {
+        if (Environment.ProcessPath is not { } exe)
+        {
+            return false;
+        }
+
+        try
+        {
+            var start = new ProcessStartInfo(exe)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = AppContext.BaseDirectory,
+            };
+
+            foreach (string arg in args)
+            {
+                start.ArgumentList.Add(arg);
+            }
+
+            using Process? copy = Process.Start(start);
+
+            if (copy is null)
+            {
+                return false;
+            }
+
+            // Foreground rights are this process's, because the user just launched it. The copy
+            // needs them to pass on to the running instance, or its window only flashes.
+            _ = AllowSetForegroundWindow((uint)copy.Id);
+
+            Log.Information("Relaunched with absolute arguments as process {ProcessId} to hand over.", copy.Id);
+            return true;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            Log.Warning(ex, "Could not relaunch with absolute arguments; handing over as typed.");
+            return false;
+        }
+    }
 
     private static bool IsThisExecutable(string arg) =>
         Environment.ProcessPath is { } exe

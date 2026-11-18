@@ -84,6 +84,28 @@ public sealed class AppSettingsTests : IDisposable
         settings.ActiveDocumentIndex.ShouldBe(1);
     }
 
+    /// <summary>
+    /// Someone upgrading gets the folder panel docked, as a new install does, and the stacked
+    /// column starts at even halves.
+    /// </summary>
+    [Fact]
+    public async Task A_settings_file_from_before_the_folder_panel_loads_with_it_docked()
+    {
+        AppSettings settings = await LoadAsync(LegacySettings);
+
+        settings.ShowFolderPanel.ShouldBeTrue();
+        settings.FolderRoot.ShouldBeNull();
+        settings.RecentFolderList.ShouldBeEmpty();
+        settings.FolderPanelPinned.ShouldBeTrue();
+        settings.OutlinePinned.ShouldBeTrue();
+        settings.FolderSplit.ShouldBe(0.5);
+        settings.FolderRevealActive.ShouldBeTrue();
+        settings.SlideAwayOnClickOutside.ShouldBeTrue();
+        settings.SlideAwayOnEscape.ShouldBeTrue();
+        settings.SlideAwayOnOpenFile.ShouldBeTrue();
+        settings.SlideAwayOnPickHeading.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task Preferences_added_since_default_to_the_previous_behavior()
     {

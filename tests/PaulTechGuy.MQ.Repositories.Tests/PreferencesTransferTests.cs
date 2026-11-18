@@ -65,10 +65,18 @@ public sealed class PreferencesTransferTests : IDisposable
         WriteUtf8Bom = true,
         LogRetentionDays = 90,
         UpdateReminderDays = 60,
-        ShowOutline = true,
+        ShowOutline = false,
         OutlineMaxDepth = 3,
         SpellCheckEnabled = false,
         ShowBlockedImages = false,
+        ShowFolderPanel = false,
+        FolderRevealActive = false,
+        FolderShowAllFiles = true,
+        FolderSortByModified = true,
+        SlideAwayOnClickOutside = false,
+        SlideAwayOnEscape = false,
+        SlideAwayOnOpenFile = false,
+        SlideAwayOnPickHeading = false,
     };
 
     /// <summary>Settings carrying a session: open documents, a window, a search history.</summary>
@@ -83,6 +91,14 @@ public sealed class PreferencesTransferTests : IDisposable
         LastWelcomeVersion = "0.1.0",
         LastUpdateReminderUtc = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero),
         LastUpdateReminderVersion = "0.1.0",
+
+        // The folder panel's session (C18): each given a value off its default, or the test
+        // that holds SessionKeys against WithSessionOf could not see one missing from either.
+        FolderRoot = @"C:\work\docs",
+        RecentFolders = [@"C:\work\docs", @"C:\notes"],
+        FolderPanelPinned = false,
+        OutlinePinned = false,
+        FolderSplit = 0.37,
     };
 
     // ------------------------------------------------------------------ round trip
@@ -271,6 +287,11 @@ public sealed class PreferencesTransferTests : IDisposable
         imported.SplitterPosition.ShouldBe(here.SplitterPosition);
         imported.OutlineWidth.ShouldBe(here.OutlineWidth);
         imported.LastWelcomeVersion.ShouldBe(here.LastWelcomeVersion);
+        imported.FolderRoot.ShouldBe(here.FolderRoot);
+        imported.RecentFolders.ShouldBe(here.RecentFolders);
+        imported.FolderPanelPinned.ShouldBe(here.FolderPanelPinned);
+        imported.OutlinePinned.ShouldBe(here.OutlinePinned);
+        imported.FolderSplit.ShouldBe(here.FolderSplit);
 
         // The preferences did come across, so the session survived an import that did something.
         imported.Theme.ShouldBe(AppTheme.Dark);

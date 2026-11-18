@@ -33,4 +33,21 @@ public interface IDocumentLocks
 
     /// <summary>Marks or unmarks a path, and writes the change out.</summary>
     Task SetAsync(string path, bool locked, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The first half of carrying marks through a rename made in Marqora: the marks at
+    /// <paramref name="from"/> or below it. Call while <paramref name="from"/> still exists.
+    /// A rename made outside Marqora still leaves its mark behind; there is nothing to match.
+    /// </summary>
+    PreparedMove PrepareMove(string from);
+
+    /// <summary>
+    /// The second half, once the file or folder is at <paramref name="destination"/>: the prepared marks
+    /// move there and the set is written once. If the write fails, the moved marks still hold for
+    /// this session and the next write carries them.
+    /// </summary>
+    Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether any marked file sits in this folder or below it (P8: such a folder cannot be deleted).</summary>
+    bool AnyUnder(string folder);
 }

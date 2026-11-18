@@ -1226,6 +1226,9 @@ public sealed class WebViewPreviewHost : IPreviewHost, IDocumentRenderer, IDispo
 
     public Task InsertTextAsync(string text) => SendAsync("insertText", new { text });
 
+    public Task InsertTextAtPointAsync(string text, double x, double y) =>
+        SendAsync("insertTextAtPoint", new { text, x, y });
+
     public Task InsertReferenceAsync(string link, string slug) =>
         SendAsync("insertReference", new { link, slug });
 

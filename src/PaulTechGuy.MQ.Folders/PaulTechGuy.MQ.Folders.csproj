@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The folder panel's logic, kept out of the app so it can be tested: what the tree lists and in
+    what order, which files .gitignore grays, whether a new name is legal, how the visible rows
+    change when a folder opens or the disk changes, whether a delete will really reach the Recycle
+    Bin, and how a command-line argument is made absolute. Nothing here knows about WinUI. It reads
+    the disk, and it never writes to it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PaulTechGuy.MQ.Folders</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PaulTechGuy.MQ.Abstractions\PaulTechGuy.MQ.Abstractions.csproj" />
+    <ProjectReference Include="..\PaulTechGuy.MQ.Domain\PaulTechGuy.MQ.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

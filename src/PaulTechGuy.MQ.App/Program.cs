@@ -17,6 +17,7 @@ using PaulTechGuy.MQ.Docx;
 using PaulTechGuy.MQ.Domain;
 using PaulTechGuy.MQ.Editing;
 using PaulTechGuy.MQ.Exporting;
+using PaulTechGuy.MQ.Folders;
 using PaulTechGuy.MQ.Folio;
 using PaulTechGuy.MQ.Formatting;
 using PaulTechGuy.MQ.Imaging;
@@ -67,6 +68,25 @@ public static class Program
             // touched, and single-instance registration below is the first one.
             WinRT.ComWrappersSupport.InitializeComWrappers();
 
+            // Paths on the command line are made absolute here, in the folder they were typed in
+            // (P9). The running instance has a folder of its own, and "Marqora.exe ." or
+            // "Marqora.exe notes.md" means nothing there. A launch that had a relative path and
+            // finds Marqora already running starts a copy of itself with the absolute ones.
+            bool anyRelative = LaunchArguments.AnyRelative(args);
+            args = [.. LaunchArguments.Qualify(args, Environment.CurrentDirectory)];
+
+            // Then the start folder is let go (P27). A process's working folder cannot be renamed
+            // or deleted, so Marqora started by double-clicking docs\guide\intro.md would
+            // otherwise block renaming "guide" from its own folder panel.
+            try
+            {
+                Environment.CurrentDirectory = AppContext.BaseDirectory;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warning(ex, "Could not move the working folder to {Folder}.", AppContext.BaseDirectory);
+            }
+
             var router = new ActivationRouter();
 
             // Asked before anything else can steal the keyboard: this is the state of the
@@ -77,7 +97,7 @@ public static class Program
             // Marqora is single-instance: a second launch hands its files to the window that
             // is already open and stops here. --new-instance opts out for debugging two
             // windows side by side.
-            if (!SingleInstance.WantsNewInstance(args) && SingleInstance.TryHandOff(router))
+            if (!SingleInstance.WantsNewInstance(args) && SingleInstance.TryHandOff(router, anyRelative ? args : null))
             {
                 if (welcomeRequested)
                 {
@@ -108,7 +128,7 @@ public static class Program
                 var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
                 SynchronizationContext.SetSynchronizationContext(context);
 
-                _ = new App(host, router, SingleInstance.FilesFrom(args));
+                _ = new App(host, router, SingleInstance.ArgumentPaths(args));
             });
         }
         catch (Exception ex)
@@ -170,6 +190,7 @@ public static class Program
 
         // UI-layer implementations of the shared abstractions.
         builder.Services.AddSingleton<IFileDialogService, FileDialogService>();
+        builder.Services.AddSingleton<IRecycleBin, RecycleBin>();
         builder.Services.AddSingleton<IDialogService, DialogService>();
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<IUiDispatcher, UiDispatcher>();
@@ -205,6 +226,7 @@ public static class Program
         builder.Services.AddSingleton<WindowsSpellingEngine>();
         builder.Services.AddSingleton<ISpellingEngine>(p => p.GetRequiredService<WindowsSpellingEngine>());
 
+        builder.Services.AddSingleton<FolderPanelViewModel>();
         builder.Services.AddSingleton<MainViewModel>();
         builder.Services.AddSingleton<MainWindow>();
 

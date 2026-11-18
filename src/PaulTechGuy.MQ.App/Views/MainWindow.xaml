@@ -373,13 +373,21 @@
                         <MenuFlyoutItem Text="Open Folder..."
                                         Command="{x:Bind ViewModel.OpenFolderCommand}"
                                         KeyboardAcceleratorTextOverride="Ctrl+Shift+O"
-                                        ToolTipService.ToolTip="Open every markdown file in a folder, each in its own tab">
+                                        ToolTipService.ToolTip="Show a folder's documents in the folder panel">
                             <MenuFlyoutItem.Icon>
                                 <FontIcon Glyph="&#xE8B7;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
 
                         <MenuFlyoutSubItem x:Name="RecentMenu" Text="Open Recent" />
+
+                        <!--
+                            Beside Open Folder rather than with Close and Close All, which are
+                            about tabs: this closes the folder panel's root and no document.
+                        -->
+                        <MenuFlyoutItem Text="Close Folder"
+                                        Command="{x:Bind ViewModel.CloseFolderCommand}"
+                                        ToolTipService.ToolTip="Clear the folder panel's folder; open documents stay open" />
 
                         <MenuFlyoutSeparator />
 
@@ -612,7 +620,7 @@
                         <MenuFlyoutItem Text="Paste"
                                         Command="{x:Bind ViewModel.EditActionCommand}"
                                         CommandParameter="paste"
-                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus, ViewModel.ActiveTabIsReadOnly), Mode=OneWay}"
+                                        IsEnabled="{x:Bind CanPaste(ViewModel.OutlineHasFocus, ViewModel.FolderPanelHasFocus, ViewModel.ActiveTabIsReadOnly), Mode=OneWay}"
                                         KeyboardAcceleratorTextOverride="Ctrl+V" />
 
                         <!--
@@ -739,10 +747,20 @@
                             differs from the toggles above - and Escape brings it back.
                         -->
                         <ToggleMenuFlyoutItem Text="Outline"
-                                              IsChecked="{x:Bind ViewModel.ShowOutline, Mode=OneWay}"
+                                              IsChecked="{x:Bind ViewModel.IsOutlineDocked, Mode=OneWay}"
                                               Command="{x:Bind ViewModel.ToggleOutlineCommand}"
                                               KeyboardAcceleratorTextOverride="Alt+4"
                                               ToolTipService.ToolTip="List the document's headings beside it" />
+
+                        <!--
+                            Beside the outline: the two share the left column. Alt+6 because
+                            Alt+5 is the heading numbers below.
+                        -->
+                        <ToggleMenuFlyoutItem Text="Folder Panel"
+                                              IsChecked="{x:Bind ViewModel.IsFolderPanelDocked, Mode=OneWay}"
+                                              Command="{x:Bind ViewModel.ToggleFolderPanelCommand}"
+                                              KeyboardAcceleratorTextOverride="Alt+6"
+                                              ToolTipService.ToolTip="Browse the chosen folder's documents beside the text" />
 
                         <!--
                             Next to the outline because it is the other item here about
@@ -1698,7 +1716,7 @@
 
                     <Button Style="{StaticResource MqToolButtonStyle}"
                             Command="{x:Bind ViewModel.OpenFolderCommand}"
-                            ToolTipService.ToolTip="Open every markdown file in a folder (Ctrl+Shift+O)"
+                            ToolTipService.ToolTip="Open a folder in the folder panel (Ctrl+Shift+O)"
                             AutomationProperties.Name="Open folder">
                         <FontIcon Glyph="&#xE8B7;" Style="{StaticResource MqIconStyle}" />
                     </Button>
@@ -2308,18 +2326,169 @@
                 target beside it and the filter's own placeholder already say what it is,
                 and a label repeating that added nothing.
             -->
-            <Border x:Name="OutlinePanel"
-                    Grid.Column="0"
-                    Width="{x:Bind ViewModel.OutlineWidth, Mode=OneWay}"
+            <!--
+                The left column: the folder section above, the outline below, a splitter
+                between (FolderPanel decision 1). One width and one drag handle for the column,
+                which is the outline's width setting, unchanged.
+
+                The rows' heights are set in code (MainWindow.FolderPanel.cs, LayOutLeftColumn):
+                they depend on which sections are present, which are folded to their headers,
+                and the remembered split, which is a proportion rather than pixels.
+            -->
+            <!--
+                The window's left edge: the edge strip, then the left column (FolderPanel P29). A panel
+                unpinned from the column lives on the strip as a vertical tab, always at the window's
+                far left. A click slides it out over the text, past the docked column, so a docked
+                panel is never covered (SlideOutHost, below). The strip shows only while some panel
+                lives there.
+            -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+            <Border x:Name="EdgeStrip"
+                    Background="Transparent"
                     BorderThickness="0,0,1,0"
                     BorderBrush="{ThemeResource MqChromeRuleBrush}"
-                    Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineVisible), Mode=OneWay}">
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsEdgeStripVisible), Mode=OneWay}">
+                <StackPanel Margin="2,8,2,0" Spacing="6">
+                    <!--
+                        The text is turned on its side on a Canvas, because WinUI has no layout
+                        transform: a rotated TextBlock in an ordinary panel is measured unrotated
+                        and clipped to a box as wide as the word. The Canvas does not clip, and its
+                        size is the tab's. Reads bottom to top, so the glyph goes below the word,
+                        where reading starts.
+                    -->
+                    <Button x:Name="FolderEdgeTab"
+                            Style="{StaticResource MqEdgeTabStyle}"
+                            Command="{x:Bind ViewModel.ToggleFolderSlideOutCommand}"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.IsFolderOnEdge), Mode=OneWay}"
+                            ToolTipService.ToolTip="Folder panel (Alt+Shift+6)"
+                            AutomationProperties.Name="Folder panel">
+                        <StackPanel Spacing="2">
+                            <Canvas x:Name="FolderEdgeTabCanvas" Width="16" Height="44">
+                                <TextBlock x:Name="FolderEdgeTabText" Canvas.Top="44" Text="Folder" FontSize="12">
+                                    <TextBlock.RenderTransform>
+                                        <RotateTransform Angle="-90" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                            </Canvas>
+                            <FontIcon Glyph="&#xE8B7;" Style="{StaticResource MqIconStyle}" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="OutlineEdgeTab"
+                            Style="{StaticResource MqEdgeTabStyle}"
+                            Command="{x:Bind ViewModel.ToggleOutlineSlideOutCommand}"
+                            Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineOnEdge), Mode=OneWay}"
+                            ToolTipService.ToolTip="Outline (Alt+Shift+4)"
+                            AutomationProperties.Name="Outline">
+                        <StackPanel Spacing="2">
+                            <Canvas x:Name="OutlineEdgeTabCanvas" Width="16" Height="48">
+                                <TextBlock x:Name="OutlineEdgeTabText" Canvas.Top="48" Text="Outline" FontSize="12">
+                                    <TextBlock.RenderTransform>
+                                        <RotateTransform Angle="-90" />
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                            </Canvas>
+                            <FontIcon Glyph="&#xE8FD;" Style="{StaticResource MqIconStyle}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <Grid x:Name="LeftColumn"
+                  Width="{x:Bind ViewModel.OutlineWidth, Mode=OneWay}"
+                  BorderThickness="0,0,1,0"
+                  BorderBrush="{ThemeResource MqChromeRuleBrush}"
+                  Visibility="{x:Bind VisibleWhen(ViewModel.IsLeftColumnVisible), Mode=OneWay}">
+                <Grid.RowDefinitions>
+                    <RowDefinition x:Name="FolderSectionRow" Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="OutlineSectionRow" Height="*" />
+                </Grid.RowDefinitions>
+
+                <!--
+                    The folder section. Its view is built in code, and moves between this host and
+                    SlideOutHost as the panel is pinned and slid out.
+                -->
+                <Border x:Name="FolderSectionHost"
+                        Grid.Row="0"
+                        Visibility="{x:Bind VisibleWhen(ViewModel.IsFolderSectionVisible), Mode=OneWay}" />
+
+                <!--
+                    Between the two sections, and only while both are there. A one-pixel rule
+                    under a five-pixel grab, as the column's own handle has it. Double-click
+                    evens the split up again.
+                -->
+                <controls:RowSplitter x:Name="SectionSplitter"
+                                      Grid.Row="1"
+                                      Height="5"
+                                      Background="Transparent"
+                                      Visibility="{x:Bind VisibleWhen(ViewModel.AreSectionsStacked), Mode=OneWay}">
+                    <Border Height="1"
+                            VerticalAlignment="Center"
+                            Background="{ThemeResource MqChromeRuleBrush}" />
+                </controls:RowSplitter>
+
+            <!--
+                The outline. Docked it sits in the column's third row; slid out from its edge tab
+                it is moved into SlideOutHost, which is why it is shown on IsOutlineOnScreen.
+            -->
+            <Border x:Name="OutlinePanel"
+                    Grid.Row="2"
+                    Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineOnScreen), Mode=OneWay}">
 
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
+
+                    <!--
+                        The outline's header (P29): fold (only while stacked under the folder panel,
+                        where folding gives the other the height), the name, and pin or unpin. A
+                        panel is always docked or on the edge; nothing here makes it disappear. The
+                        View menu and Alt+4 do what the pin button does.
+                    -->
+                    <Grid x:Name="OutlineSectionHeader"
+                          Grid.Row="0"
+                          Margin="4,6,6,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button x:Name="OutlineSectionCollapse"
+                                Grid.Column="0"
+                                Style="{StaticResource MqPanelButtonStyle}"
+                                Visibility="{x:Bind VisibleWhen(ViewModel.AreSectionsStacked), Mode=OneWay}"
+                                ToolTipService.ToolTip="Collapse"
+                                AutomationProperties.Name="Collapse the outline section">
+                            <FontIcon x:Name="OutlineSectionGlyph"
+                                      Glyph="&#xE70D;"
+                                      FontSize="10"
+                                      Opacity="0.7" />
+                        </Button>
+
+                        <TextBlock Grid.Column="1"
+                                   Margin="6,0,4,0"
+                                   VerticalAlignment="Center"
+                                   Text="Outline"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   CharacterSpacing="40"
+                                   Typography.Capitals="SmallCaps" />
+
+                        <Button x:Name="OutlinePinButton"
+                                Grid.Column="2"
+                                Style="{StaticResource MqPanelButtonStyle}"
+                                Command="{x:Bind ViewModel.ToggleOutlinePinnedCommand}">
+                            <FontIcon x:Name="OutlinePinGlyph"
+                                      Glyph="&#xE77A;"
+                                      Style="{StaticResource MqPanelIconStyle}"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Button>
+                    </Grid>
 
                     <!--
                         The first editable field ever to live in this window, which is why
@@ -2331,16 +2500,15 @@
                         not HasOutlineRows, because a real outline merely filtered down to
                         nothing must keep the box on screen so the filter can be cleared.
                     -->
-                    <Grid Grid.Row="0">
+                    <Grid x:Name="OutlineFilterRow" Grid.Row="1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <TextBox x:Name="OutlineFilterBox"
                                  Grid.Column="0"
-                                 Margin="8,8,0,8"
+                                 Margin="8,4,0,8"
                                  PlaceholderText="Filter outline"
                                  Text="{x:Bind ViewModel.OutlineFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="Filter the outline"
@@ -2353,43 +2521,17 @@
                             how to take it off. This one stands in for it exactly then: shown
                             while the filter has text and the box does not have focus, so the
                             two are never on screen together. See UpdateOutlineClearButton.
+
+                            Hiding and closing the outline moved to its header (P29).
                         -->
                         <Button x:Name="OutlineFilterClear"
                                 Grid.Column="1"
-                                Margin="2,7,0,7"
+                                Margin="2,3,6,7"
                                 Style="{StaticResource MqIconButtonStyle}"
                                 Visibility="Collapsed"
                                 ToolTipService.ToolTip="Clear the filter"
                                 AutomationProperties.Name="Clear the outline filter">
                             <FontIcon Glyph="&#xE711;"
-                                      Style="{StaticResource MqIconStyle}"
-                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </Button>
-
-                        <!--
-                            Hides the panel: the same command as View, Outline and Alt+4.
-
-                            A column of its own rather than something laid over the box, because
-                            the box goes when the document has no headings and this must not go
-                            with it - a panel reading "No headings" still needs a way to close.
-
-                            The glyph is dimmed to secondary text so it recedes until it is
-                            wanted; the Icon tier's own hover fill says it is a button. Its twin
-                            on the collapsed rail below sits at the same height, so the glyph
-                            does not jump as the panel closes and opens.
-
-                            E8A0 is Segoe Fluent's "OpenPane", used here to close. The names
-                            assume a pane on the right, so the arrows point the wrong way for
-                            one on the left: this glyph's arrow points left, toward where the
-                            panel goes, and the rail's E89F ("ClosePane") points back out.
-                        -->
-                        <Button Grid.Column="2"
-                                Margin="4,7,6,7"
-                                Style="{StaticResource MqIconButtonStyle}"
-                                Command="{x:Bind ViewModel.ToggleOutlineCommand}"
-                                ToolTipService.ToolTip="Hide outline (Alt+4)"
-                                AutomationProperties.Name="Hide outline">
-                            <FontIcon Glyph="&#xE8A0;"
                                       Style="{StaticResource MqIconStyle}"
                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </Button>
@@ -2399,7 +2541,7 @@
                         The hint sits behind the list and shows through when it is empty,
                         exactly as the Find All results do.
                     -->
-                    <Grid Grid.Row="1">
+                    <Grid x:Name="OutlineBody" Grid.Row="2">
                         <TextBlock Text="{x:Bind ViewModel.OutlineEmptyMessage, Mode=OneWay}"
                                    Margin="16,4"
                                    Opacity="0.55"
@@ -2444,51 +2586,21 @@
                     </Grid>
                 </Grid>
             </Border>
-
-            <!--
-                The collapsed rail: what stands in the outline's column while it is hidden.
-
-                A strip rather than a button parked somewhere else, so the way back is where the
-                panel was - the pattern Word's Navigation pane and Outlook use. It costs one
-                icon's width, which is the price of never having to hunt for it.
-
-                The same column as the panel and the opposite condition, so exactly one of the
-                two is ever there. Wearing the panel's right-hand rule keeps the edge of the
-                document where the eye left it.
-
-                A double-click anywhere on it shows the panel too - see OnOutlineRailDoubleTapped.
-                The Transparent background is what makes that work: a Border with no brush is
-                not hit-tested, and a click on its empty length would fall straight through.
-            -->
-            <Border x:Name="OutlineRail"
-                    Grid.Column="0"
-                    Background="Transparent"
-                    BorderThickness="0,0,1,0"
-                    BorderBrush="{ThemeResource MqChromeRuleBrush}"
-                    Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineRailVisible), Mode=OneWay}">
-
-                <Button Margin="2,7,2,0"
-                        VerticalAlignment="Top"
-                        Style="{StaticResource MqIconButtonStyle}"
-                        Command="{x:Bind ViewModel.ToggleOutlineCommand}"
-                        ToolTipService.ToolTip="Show outline (Alt+4)"
-                        AutomationProperties.Name="Show outline">
-                    <FontIcon Glyph="&#xE89F;"
-                              Style="{StaticResource MqIconStyle}"
-                              Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </Button>
-            </Border>
+            </Grid>
+            </StackPanel>
 
             <!--
                 The drag handle. Four pixels of hit area over a one-pixel rule, which is the
                 same trade the in-page splitter makes: a grabbable target that does not look
                 like a gap between the panels.
             -->
-            <controls:ColumnSplitter x:Name="OutlineSplitter"
-                                     Grid.Column="1"
-                                     Width="4"
-                                     Background="Transparent"
-                                     Visibility="{x:Bind VisibleWhen(ViewModel.IsOutlineVisible), Mode=OneWay}" />
+            <StackPanel x:Name="ColumnHandle" Grid.Column="1" Orientation="Horizontal">
+                <controls:ColumnSplitter x:Name="OutlineSplitter"
+                                         Width="4"
+                                         Background="Transparent"
+                                         Visibility="{x:Bind VisibleWhen(ViewModel.IsLeftColumnVisible), Mode=OneWay}" />
+
+            </StackPanel>
 
             <!--
                 Holds the WebView2, which is created in code rather than declared here.
@@ -2826,6 +2938,35 @@
             </Border>
 
             <!--
+                Where a panel slid out from its edge tab is drawn: over the column and the text,
+                just right of the edge strip, as wide as the column (P29). The panel's own content
+                is moved in here while it is out and back when it slides away - see
+                MainWindow.FolderPanel.cs, which also runs the slide and sets the left margin to
+                the strip's width.
+
+                Opaque, because the text under it is a WebView, and raised above everything else
+                in the row by its ZIndex rather than by where it is declared: the landing page and
+                the startup message come after it, and with no document open the landing page lay
+                on top of it - drawn through it, but taking its clicks, so a file clicked in the
+                slid-out tree was a click outside it. Collapsed by default and shown in code, so the
+                slide back can play before it goes.
+            -->
+            <Border x:Name="SlideOutHost"
+                    Canvas.ZIndex="100"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="4"
+                    HorizontalAlignment="Left"
+                    Width="{x:Bind ViewModel.OutlineWidth, Mode=OneWay}"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderThickness="0,0,1,0"
+                    BorderBrush="{ThemeResource MqChromeRuleBrush}"
+                    Visibility="Collapsed">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="SlideOutShift" />
+                </Border.RenderTransform>
+            </Border>
+
+            <!--
                 Startup's word for the blank window: muted, centered, and only once startup has
                 taken long enough to notice (ShowsStartupMessage). The preview shell takes about
                 a second and a half to bring the first document up, and the window said nothing
@@ -2842,14 +2983,15 @@
             <!--
                 Empty state: the drop target and the way back into recent work.
 
-                Spans all three columns. With no document open the outline and its handle are
-                both collapsed, so the drop target has the row to itself and stays centered in
-                the window rather than in whatever is left beside a panel. Held back while
-                startup is still opening documents (ShowsLandingPage), so it does not show for
-                a moment and vanish under a restored session.
+                Spans every column while the left column is empty, so the drop target has the
+                row to itself and stays centered in the window rather than in whatever is left
+                beside a panel. A chosen root keeps the folder section showing with no document
+                open, and then the page centers in the space beside it. Held back while startup
+                is still opening documents (ShowsLandingPage), so it does not show for a moment
+                and vanish under a restored session.
             -->
-            <ScrollViewer Grid.Column="0"
-                          Grid.ColumnSpan="4"
+            <ScrollViewer Grid.Column="{x:Bind LandingColumn(ViewModel.HasLeftChrome), Mode=OneWay}"
+                          Grid.ColumnSpan="{x:Bind LandingSpan(ViewModel.HasLeftChrome), Mode=OneWay}"
                           Visibility="{x:Bind VisibleWhen(ViewModel.ShowsLandingPage), Mode=OneWay}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
@@ -2940,7 +3082,7 @@
                                         Style="{StaticResource MqPageActionButtonStyle}"
                                         Command="{x:Bind ViewModel.OpenFolderCommand}"
                                         Content="Open folder"
-                                        ToolTipService.ToolTip="Open every markdown file in a folder" />
+                                        ToolTipService.ToolTip="Browse a folder's documents in the folder panel" />
                                 <Button x:Name="NewDocumentButton"
                                         Grid.Row="0" Grid.Column="2"
                                         Style="{StaticResource MqPageActionButtonStyle}"
@@ -3065,8 +3207,18 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Drag feedback, drawn over whatever is showing. -->
+            <!--
+                Drag feedback, drawn over whatever is showing: every column, and above the slide-out.
+
+                The span is not decoration. Without it the overlay sat in the first column, which is
+                sized to its content, so showing it widened that column and pushed the landing page
+                (beside the edge strip, with no document open) out from under the pointer. The drag
+                then left and re-entered on every frame, and the window shook.
+            -->
             <Border x:Name="DropOverlay"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="4"
+                    Canvas.ZIndex="200"
                     Margin="14"
                     CornerRadius="14"
                     Background="{ThemeResource AccentAcrylicBackgroundFillColorDefaultBrush}"

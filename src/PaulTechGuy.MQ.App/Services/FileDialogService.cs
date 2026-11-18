@@ -68,6 +68,7 @@ public sealed class FileDialogService(
 
     public Task<string?> PickSaveFileAsync(
         string? suggestedFileName = null,
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -78,7 +79,7 @@ public sealed class FileDialogService(
                 string.IsNullOrWhiteSpace(suggestedFileName) ? "Untitled.md" : suggestedFileName,
                 MarkdownFileTypes.FolderExtensions,
                 purpose: PurposeOf(SavePurpose),
-                forceFolder: FolderFor(SavePurpose));
+                forceFolder: folder is not null && Directory.Exists(folder) ? folder : FolderFor(SavePurpose));
 
             RememberFileFolder(SavePurpose, path);
 
@@ -188,13 +189,13 @@ public sealed class FileDialogService(
         }
     }
 
-    public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default)
+    public Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default)
     {
         try
         {
             string? path = Win32Dialogs.PickFolder(
                 RequireOwner(),
-                "Open every markdown file in a folder",
+                title,
                 PurposeOf(FolderPurpose),
                 FolderFor(FolderPurpose));
 

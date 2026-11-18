@@ -116,9 +116,12 @@ internal static class KeyboardShortcuts
             new("Split", "Alt+2"),
             new("Preview only", "Alt+3"),
 
-            new("Show or hide the outline", "Alt+4"),
+            new("Dock the outline, or move it to the window edge", "Alt+4"),
             new("Go to the outline, and back", "Alt+Shift+4"),
             new("Leave the outline", "Escape"),
+
+            new("Dock the folder panel, or move it to the window edge", "Alt+6"),
+            new("Go to the folder panel, and back", "Alt+Shift+6"),
 
             new("Heading numbers off and on, for this document only", "Alt+5"),
             new("Number this document from heading 1, 2 or 3", "Alt+Shift+1 / 2 / 3"),

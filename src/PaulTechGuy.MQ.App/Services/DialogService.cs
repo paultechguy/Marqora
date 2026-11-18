@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PaulTechGuy.MQ.Abstractions.Ui;
 
@@ -27,6 +28,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             showCancel: false,
             destructivePrimary: false,
             DialogAnchor.MainWindow,
+            warning: null,
             cancellationToken).ConfigureAwait(true);
     }
 
@@ -37,6 +39,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         string? secondaryText = null,
         bool destructivePrimary = false,
         DialogAnchor anchor = DialogAnchor.MainWindow,
+        string? warning = null,
         CancellationToken cancellationToken = default)
     {
         ContentDialogResult result = await ShowAsync(
@@ -47,6 +50,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             showCancel: true,
             destructivePrimary,
             anchor,
+            warning,
             cancellationToken).ConfigureAwait(true);
 
         return result switch
@@ -65,6 +69,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         bool showCancel,
         bool destructivePrimary,
         DialogAnchor anchor,
+        string? warning,
         CancellationToken cancellationToken)
     {
         if (window.XamlRootFor(anchor) is null)
@@ -92,7 +97,7 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
             var dialog = new ContentDialog
             {
                 Title = title,
-                Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap },
+                Content = ContentFor(message, warning),
                 PrimaryButtonText = primaryText,
                 DefaultButton = destructivePrimary && showCancel
                     ? ContentDialogButton.Close
@@ -120,6 +125,35 @@ public sealed class DialogService(WindowContext window, ILogger<DialogService> l
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// The message, under a warning bar when there is something the person must not miss. The
+    /// bar is the stock InfoBar at Warning severity, so it wears the system's warning color and
+    /// icon in both modes and Narrator reads it as a warning.
+    /// </summary>
+    private static UIElement ContentFor(string message, string? warning)
+    {
+        var text = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap };
+
+        if (string.IsNullOrEmpty(warning))
+        {
+            return text;
+        }
+
+        var panel = new StackPanel { Spacing = 12 };
+
+        panel.Children.Add(new InfoBar
+        {
+            Severity = InfoBarSeverity.Warning,
+            Message = warning,
+            IsOpen = true,
+            IsClosable = false,
+        });
+
+        panel.Children.Add(text);
+
+        return panel;
     }
 
     /// <summary>Releases the single-dialog gate. Called by the DI container at shutdown.</summary>

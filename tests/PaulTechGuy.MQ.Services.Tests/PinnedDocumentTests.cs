@@ -33,6 +33,7 @@ public sealed class PinnedDocumentTests : IDisposable
             new FakeSettingsService(),
             new FakeDocumentLocks(),
             _pins,
+            new FakeRecycleBin(),
             NullLogger<DocumentWorkspace>.Instance);
 
     public void Dispose()

@@ -17,7 +17,8 @@ on its own.
 - [x] Open this document — done
 - [ ] Press `Alt+2` for the split view, then `Alt+3` to come back to the preview
 - [ ] Click the palette button at the right-hand end of the menu bar, next to the zoom buttons, and point at a color theme — this page recolors as you look, and nothing in the file changes
-- [ ] Press `Alt+4` to list this page's headings beside it, and arrow down them
+- [ ] Press `Alt+Shift+4` to go to this page's headings beside it, and arrow down them
+- [ ] Press `Ctrl+Shift+O` and choose a folder of your own documents; click one in the panel to open it
 - [ ] Press `Ctrl+F1` for the Markdown cheatsheet, and leave it beside the editor
 - [ ] Double-click the diagram further down this page
 - [ ] Press `Ctrl+Shift+F` and search every open document at once
@@ -142,15 +143,21 @@ All**; it finds the matches and asks before changing anything, naming how many a
 regular-expression mode the replacement can refer back to what matched with `$1`, `${name}` or
 `$&`, and the icon beside the box lists them. Every document it touches is one `Ctrl+Z`.
 
-**The outline.** `Alt+4` lists this document's headings down the side, indented by level, and
+**The outline.** The panel on the left lists this document's headings, indented by level, and
 highlights whichever section you are reading — the caret's in the source pane, the top of the
 page in preview. Click one, or walk them with the arrow keys, and both panes move together.
 Type in the box at the top to narrow a long document down to the headings you meant.
 
-`Alt+4` shows and hides it, and so does the button at the end of its filter row; hidden, it
-leaves a narrow strip at the edge of the window that brings it back. Once it is open,
-`Alt+Shift+4` is the way to it and back again, and `Escape` returns you to the text without
-closing it. This page is long enough to be worth trying it on.
+Its pin, or `Alt+4`, moves it to a tab on the window's edge, out of the way until you click
+the tab and it slides out over the text; pin it again to dock it. Either way, `Alt+Shift+4` is
+the way to it and back again, and `Escape` returns you to the text. This page is long enough to
+be worth trying it on.
+
+**The folder panel.** `Ctrl+Shift+O` shows a folder above the outline: its documents and
+images as a tree, with the one you are reading picked out. Click a document to open it, `F2` to
+rename it, and `Delete` to send it to the Recycle Bin. Drag a picture from the panel into the
+source pane and its link lands where you let go. `Alt+6` docks it or moves it to the edge, just
+as `Alt+4` does for the outline, and the folder is still there next time you start Marqora.
 
 The same headings are a keystroke away while you write. Press `Ctrl+R` in the source pane — or
 use **Insert > Reference to Heading...**, or right-click and choose **Insert Reference...** — pick
@@ -370,7 +377,8 @@ page whenever you want it.
 | Save / Save all           | `Ctrl+S` / `Ctrl+Shift+S`        | Format document                | `Shift+Alt+F`                   |
 | New / close / reopen tab  | `Ctrl+N` `Ctrl+W` `Ctrl+Shift+T` | Find All / Replace All         | `Ctrl+Shift+F` / `Ctrl+Shift+H` |
 | Source / split / preview  | `Alt+1` `Alt+2` `Alt+3`          | Cheatsheet                     | `Ctrl+F1`                       |
-| Show / hide the outline   | `Alt+4`                          | Go to the outline, and back    | `Alt+Shift+4`                   |
+| Outline: dock or edge     | `Alt+4`                          | Go to the outline, and back    | `Alt+Shift+4`                   |
+| Folders: dock or edge     | `Alt+6`                          | Go to the folders, and back    | `Alt+Shift+6`                   |
 | Spell check on / off      | `F7`                             | Correct the word at the cursor | `Ctrl+.`                        |
 | Zoom the active pane      | `Ctrl` `+` `-` `0`               | Word wrap                      | `Alt+Z`                         |
 | Heading numbers, this tab | `Alt+5`                          | Number from heading 1 / 2 / 3  | `Alt+Shift+1` to `3`            |

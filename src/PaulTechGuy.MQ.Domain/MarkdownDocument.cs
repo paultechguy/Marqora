@@ -88,6 +88,13 @@ public sealed record MarkdownDocument
     /// </summary>
     public bool IsUnderReview { get; init; }
 
+    /// <summary>
+    /// Where the first Save As of an untitled document starts (P13), set by the folder panel's
+    /// <em>New Document Here</em>. Null for a document with a path, and for an untitled one that
+    /// was not started from a folder. A rename of that folder made in Marqora re-points it.
+    /// </summary>
+    public string? SaveFolder { get; init; }
+
     public bool IsUntitled => Path is null;
 
     /// <summary>Tab label: the file name, or the placeholder name when never saved.</summary>
@@ -158,6 +165,7 @@ public sealed record MarkdownDocument
         External = ExternalState.InSync,
         Stamp = stamp ?? Stamp,
         AutoReloadedUtc = null,
+        SaveFolder = null,
     };
 
     /// <summary>A new, empty document that exists only in memory.</summary>

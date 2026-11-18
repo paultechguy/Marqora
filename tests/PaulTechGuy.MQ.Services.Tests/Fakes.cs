@@ -4,6 +4,7 @@
 using PaulTechGuy.MQ.Abstractions;
 using PaulTechGuy.MQ.Abstractions.Services;
 using PaulTechGuy.MQ.Domain;
+using PaulTechGuy.MQ.Folders;
 
 namespace PaulTechGuy.MQ.Services.Tests;
 
@@ -34,6 +35,15 @@ internal sealed class FakeFileWatcher : IFileWatcher
 
     /// <summary>Reports the watched file as gone.</summary>
     public void RaiseRemoved() => FileRemoved?.Invoke(this, WatchedPath!);
+
+    /// <summary>
+    /// Reports a path as gone, whether or not this watcher still watches it: a callback that read
+    /// its path before a rename and lands after it.
+    /// </summary>
+    public void RaiseRemoved(string path) => FileRemoved?.Invoke(this, path);
+
+    /// <summary>Reports a path as rewritten, as a late callback would.</summary>
+    public void RaiseChanged(string path) => FileChanged?.Invoke(this, path);
 
     public void Dispose() => IsDisposed = true;
 }
@@ -155,6 +165,93 @@ internal sealed class FakeDocumentLocks : IDocumentLocks
 
         return Task.CompletedTask;
     }
+
+    /// <summary>The paths marked, as stored, for a test to check that a move left nothing behind.</summary>
+    public IReadOnlyCollection<string> Stored => _locked;
+
+    public PreparedMove PrepareMove(string from) => FakeMoves.Prepare(_locked, from);
+
+    public Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default)
+    {
+        FakeMoves.Complete(_locked, prepared, destination);
+        return Task.CompletedTask;
+    }
+
+    public bool AnyUnder(string folder) =>
+        _locked.Any(k => FolderPaths.IsSameOrUnder(k, System.IO.Path.GetFullPath(folder)));
+}
+
+/// <summary>
+/// A Recycle Bin that deletes for real, so a test can see the file go, or refuses when told to.
+/// <see cref="Entered"/> and <see cref="Release"/> let a test hold a delete half-way, to see what
+/// a save arriving meanwhile does.
+/// </summary>
+internal sealed class FakeRecycleBin : IRecycleBin
+{
+    private TaskCompletionSource? _pause;
+
+    public string? FailWith { get; set; }
+
+    public List<string> Recycled { get; } = [];
+
+    /// <summary>Completes when a delete has started and is waiting to be released.</summary>
+    public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Makes the next delete wait until <see cref="Release"/>.</summary>
+    public void PauseNext() => _pause = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public void Release() => _pause?.TrySetResult();
+
+    public RecycleForecast Forecast(string path) => new(true, 1, 0);
+
+    public async Task<RecycleResult> RecycleAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (_pause is { } pause)
+        {
+            Entered.TrySetResult();
+            await pause.Task.ConfigureAwait(false);
+        }
+
+        if (FailWith is { } error)
+        {
+            return RecycleResult.Failed(error);
+        }
+
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        else
+        {
+            File.Delete(path);
+        }
+
+        Recycled.Add(path);
+        return RecycleResult.Recycled;
+    }
+}
+
+/// <summary>The fakes' version of a move: full paths only, no link resolution.</summary>
+internal static class FakeMoves
+{
+    public static PreparedMove Prepare(HashSet<string> set, string from)
+    {
+        string full = System.IO.Path.GetFullPath(from);
+        return new PreparedMove(full, full, [.. set.Where(k => FolderPaths.IsSameOrUnder(k, full))]);
+    }
+
+    public static void Complete(HashSet<string> set, PreparedMove prepared, string to)
+    {
+        string toFull = System.IO.Path.GetFullPath(to);
+
+        foreach (string key in prepared.Keys)
+        {
+            if (set.Remove(key))
+            {
+                set.Add(FolderPaths.Rebase(key, prepared.From, toFull));
+            }
+        }
+    }
 }
 
 /// <summary>
@@ -188,6 +285,24 @@ internal sealed class FakeDocumentPins : IDocumentPins
             _pinned.Remove(key);
         }
 
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The paths pinned, as stored, for a test to check that a move left nothing behind.</summary>
+    public IReadOnlyCollection<string> Stored => _pinned;
+
+    public PreparedMove PrepareMove(string from) => FakeMoves.Prepare(_pinned, from);
+
+    public Task CompleteMoveAsync(PreparedMove prepared, string destination, CancellationToken cancellationToken = default)
+    {
+        FakeMoves.Complete(_pinned, prepared, destination);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveUnderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        string full = System.IO.Path.GetFullPath(path);
+        _pinned.RemoveWhere(k => FolderPaths.IsSameOrUnder(k, full));
         return Task.CompletedTask;
     }
 }

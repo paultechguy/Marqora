@@ -59,6 +59,18 @@ internal static class MqStyles
     /// </summary>
     public static Style ListRow => Style("MqListRowStyle");
 
+    /// <summary>
+    /// The folder panel's row: the list row's plate, with the teal bar on the active document
+    /// (the "Active" state) rather than on selection.
+    /// </summary>
+    public static Style TreeRow => Style("MqTreeRowStyle");
+
+    /// <summary>A side panel's header button: fold, menu, pin, X. Its glyph takes <see cref="PanelIcon"/>.</summary>
+    public static Style PanelButton => Style("MqPanelButtonStyle");
+
+    /// <summary>The glyph inside a <see cref="PanelButton"/>.</summary>
+    public static Style PanelIcon => Style("MqPanelIconStyle");
+
     /// <summary>The gap between buttons in a row.</summary>
     public static double ButtonGroupSpacing => Number("MqButtonGroupSpacing");
 
@@ -82,6 +94,9 @@ internal static class MqStyles
         _ = PrimaryCommandButton;
         _ = CommandDropDown;
         _ = ListRow;
+        _ = TreeRow;
+        _ = PanelButton;
+        _ = PanelIcon;
         _ = ButtonGroupSpacing;
         _ = FormRowHeight;
     }

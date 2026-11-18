@@ -36,10 +36,22 @@ public sealed partial class RowSplitter : Grid
 
         this.ManipulationStarted += OnManipulationStarted;
         this.ManipulationDelta += OnManipulationDelta;
+
+        // A double-click evens the split up again, as double-clicking the Side by Side button
+        // does for the panes. Reported rather than done, like the drag: the window knows what
+        // "even" means for the rows it lays out.
+        this.DoubleTapped += (_, e) =>
+        {
+            e.Handled = true;
+            ResetRequested?.Invoke(this, EventArgs.Empty);
+        };
     }
 
     /// <summary>The height the dragged row should take, in device-independent pixels.</summary>
     public event EventHandler<double>? HeightChanged;
+
+    /// <summary>A double-click on the handle: put the split back where it started.</summary>
+    public event EventHandler? ResetRequested;
 
     /// <summary>
     /// Where the row started, read when the drag begins. The caller supplies it because this

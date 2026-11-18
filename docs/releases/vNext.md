@@ -9,4 +9,63 @@
     any heading with nothing under it, and puts this stub back.
 -->
 
+## The folder panel
+
+A folder of documents now sits beside the one you are writing. **File > Open Folder** chooses
+it, and the panel lists its markdown files and images as a tree, with the document you are
+reading picked out in it. Click a file to open it in a tab. The folder is remembered, so it is
+there again next time you start Marqora, and the panel's menu keeps the last ten for switching
+between projects.
+
+- **Rename and delete where you are.** `F2` renames a file or folder in place, and open tabs,
+  recent files and Reopen Closed Tab follow it; a line at the top of the panel says what
+  changed, with **Undo**. `Delete` sends it to the Recycle Bin after asking, and says so plainly
+  when the bin will not take it and the delete is permanent. A document you have marked
+  read-only, or one under review, cannot be deleted from the panel, and a file whose Windows
+  properties say read-only is named in the question before you answer it.
+- **Start a document in the right place.** Right-click a folder and choose **New Document
+  Here**: the first Save As starts in that folder.
+- **Link an image in one move.** Drag an image from the panel into the source pane and its link
+  lands where you let go, or right-click it and choose **Insert Link in Source** to put it at
+  the caret. Either way `Ctrl+Z` takes it back. Double-click an image to open it in whatever
+  Windows opens pictures with.
+- **See what is open.** Each open document's row shows whether it is unsaved, read-only, changed
+  on disk or missing, with the same marks its tab carries. Files your `.gitignore` leaves out
+  are grayed rather than hidden.
+- **Find a file by typing.** The box at the top narrows the tree as you type, and searches the
+  folders you have not opened too.
+
+**Docked or on the edge.** The folder panel and the outline share the left-hand side, stacked,
+with a splitter between them. Unpin either one and it moves to a tab at the window's edge,
+which slides it out over the text when you click it and away again when you are done. `Alt+6`
+and `Alt+4`, and **View > Folder Panel** and **View > Outline**, move each between the two
+places; `Alt+Shift+6` and `Alt+Shift+4` put the keyboard in it. **Preferences > Preview** says
+what slides an edge panel away: a click outside it, `Escape`, opening a file, or picking a
+heading. Both panels start docked on a new install.
+
+**Open Folder now shows the folder instead of opening every file.** The old *File > Open
+Folder* command, which opened each markdown file in a folder as its own tab, has been removed.
+*File > Open Folder* and `Ctrl+Shift+O` now open the folder in the new folder panel, where each
+document is one click away. To open a folder's documents as tabs, for example to search or
+format all of them, right-click the folder in the panel and choose **Open All in Tabs**.
+Dropping a folder on the window, or passing one on the command line, shows it in the panel too.
+
 ## Fixes
+
+**The preview's paragraph bar stays put while you edit.** In Side by Side view, the bar beside
+the preview paragraph the caret is in disappeared on any edit inside that paragraph — typing,
+deleting a selection, or undoing — and stayed gone until the caret moved to another paragraph.
+It now holds through edits, and it appears straight away when you switch into Side by Side
+rather than waiting for the caret to move. It no longer lingers in Preview view, where there is
+no caret for it to follow.
+
+**Table rows no longer jump sideways under the caret.** In Side by Side view, putting the caret
+on a line of a table made that row in the preview grow an empty first cell, pushing the rest of
+it one column to the right, past the edge of the table; it snapped back when the caret moved on.
+The paragraph bar now sits beside the row without becoming part of it.
+
+**A colon before closing bold no longer turns into a face.** Typed faces such as `:)` and `:*`
+were converted to emoji, and they are made of markdown's own punctuation: a line like
+`` **`settings.json`:** `` read `:*` as a kiss, which took one of the closing asterisks and left
+the bold unfinished. Marqora now does what GitHub does: `:rocket:`-style shortcodes still become
+emoji, and typed faces stay as the text you wrote, in the preview and in every export.

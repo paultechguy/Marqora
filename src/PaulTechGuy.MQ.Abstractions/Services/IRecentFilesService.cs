@@ -39,4 +39,14 @@ public interface IRecentFilesService
 
     /// <summary>Drops entries whose file no longer exists. Returns the number removed.</summary>
     Task<int> PruneMissingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Follows a rename made in Marqora: every entry at <paramref name="from"/> or below it is
+    /// re-pointed at <paramref name="destination"/>, keeping its pin and its time, so it does not lead to
+    /// "File not found".
+    /// </summary>
+    Task RenameAsync(string from, string destination, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes every entry at this path or below it, after a delete.</summary>
+    Task RemoveUnderAsync(string path, CancellationToken cancellationToken = default);
 }

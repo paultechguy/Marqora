@@ -34,7 +34,7 @@ on every horizontal button group.
 
 ---
 
-## 1. Six tiers
+## 1. Eight tiers
 
 Every button in Marqora is exactly one of these. Naming the tier is how you decide what a new
 button looks like; if a button does not fit a tier, that is a design question, not a licence to
@@ -46,6 +46,8 @@ invent metrics.
 | **Chrome** | The main window's toolbar and format bar. Quiet until the pointer arrives | `MqToolButtonStyle`, `MqToolToggleStyle`, `MqDropDownStyle` | MinWidth 36, Height 34, padding `10,6`, radius 6 (`MqPillRadius`), font 13 |
 | **Compact chrome** | The same idea inside a palette window's toolbar | `MqCompactToolButtonStyle`, and its CSS twins in `webshell/diagram.css` and `webshell/app.css` | MinWidth 32, Height 28, padding `10,0`, radius 6, font 13 |
 | **Icon** | Square, glyph only — tab list, search history, pin, remove | `MqIconButtonStyle` | 34 × 34, padding 0, radius 6, glyph 15 (`MqIconStyle`) |
+| **Panel header** | The fold, menu, pin and X in a side panel's one-line header (folder panel, outline) | `MqPanelButtonStyle` | 24 × 24, padding 0, radius 4, glyph 12 (`MqPanelIconStyle`) |
+| **Edge tab** | A side panel unpinned to the window's edge: glyph above its name on its side | `MqEdgeTabStyle` | As tall as its content, padding `4,8`, radius 4, font 13 |
 | **Link** | Reads as text and only grows a hit target on hover | `MqPathLinkStyle` | padding `5,1`, radius 4, negative left margin |
 | **Segment** | The source / split / preview switcher | `MqSegmentStyle` | 30 tall, font 12.5 — carries its own `ControlTemplate` on purpose. See §7 |
 

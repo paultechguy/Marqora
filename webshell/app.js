@@ -2870,11 +2870,15 @@
     rewriteRelativeUrls();
     markBlockedMedia();
 
+    // Now rather than when the render settles, so the bar does not blink off with every
+    // keystroke while diagrams and math are still being drawn.
+    restoreActiveBlock();
+
     if (resetScroll) {
       els.previewPane.scrollTop = 0;
     }
 
-    lastRender = Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
+    lastRender =Promise.all([renderDiagrams(), renderMath(), highlightCode()]).then(function () {
       buildLineMap();
 
       if (generation === state.renderGeneration) {
@@ -3670,25 +3674,78 @@
 
   var activeBlock = null;
 
+  /*
+    The block a source line belongs to: the last one, in document order, starting at or before
+    it. A block nested inside one that starts on the same line is skipped, as buildLineMap skips
+    it, so a list carries the bar rather than its first item.
+
+    Read from the attributes alone rather than through lineMap, which measures every block.
+    This runs the moment a new render lands, before its diagrams have a size, and it has no use
+    for a position - only for which element it is.
+  */
+  function blockForLine(zeroBasedLine) {
+    var nodes = els.preview.querySelectorAll('[data-src-line]');
+    var chosen = null;
+    var lastLine = -1;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var line = parseInt(nodes[i].getAttribute('data-src-line'), 10);
+      if (!isFinite(line) || line <= lastLine) { continue; }
+      if (line > zeroBasedLine) { break; }
+
+      chosen = nodes[i];
+      lastLine = line;
+    }
+
+    return chosen;
+  }
+
   function highlightActiveBlock(zeroBasedLine) {
     if (state.viewMode !== 'SideBySide') { return; }
 
-    var map = lineMap();
-    if (map.length === 0) { return; }
+    var element = blockForLine(zeroBasedLine);
 
-    var chosen = null;
-    for (var i = 0; i < map.length; i++) {
-      if (map[i].line <= zeroBasedLine) { chosen = map[i]; } else { break; }
+    /*
+      A table row carries its own line, but the bar cannot go on it: a ::before on a <tr> is
+      laid out as one more cell, so the row grew a blank first cell and pushed the rest one
+      column right, wherever the caret was. Its first cell carries the bar instead, which still
+      draws it just left of the table beside that row.
+    */
+    if (element && element.tagName === 'TR' && element.cells.length > 0) {
+      element = element.cells[0];
     }
 
-    if (!chosen) { return; }
-
-    var element = els.preview.querySelector('[data-src-line="' + chosen.line + '"]');
-    if (element === activeBlock) { return; }
+    if (!element || element === activeBlock) { return; }
 
     if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
-    if (element) { element.classList.add('mq-active-block'); }
+    element.classList.add('mq-active-block');
     activeBlock = element;
+  }
+
+  /*
+    The bar put back on the caret's block when something other than the caret has moved it.
+
+    A render replaces the whole preview, and the element that carried the bar goes with it. The
+    caret has not moved, so nothing else would mark the new one: an edit made inside a paragraph
+    - typing, a delete, an undo - lost the bar until the caret crossed into another block.
+    Switching into Side by Side is the other case, because the caret was not followed while the
+    preview was out of view.
+  */
+  function restoreActiveBlock() {
+    clearActiveBlock();
+    highlightActiveBlock(caretLine());
+  }
+
+  /*
+    The bar taken off. Called on leaving Side by Side: the bar points the eye from the caret to
+    the preview, and in Preview view there is no caret on screen to point from, so a bar left
+    standing marks a paragraph for no reason the reader can see. Done here rather than by
+    scoping the CSS to the view, which would raise that rule over the other ::before and ::after
+    decorations it is meant to lose to.
+  */
+  function clearActiveBlock() {
+    if (activeBlock) { activeBlock.classList.remove('mq-active-block'); }
+    activeBlock = null;
   }
 
   /// Set by wireSplitter below, and called when the host asks for an even split.
@@ -4361,6 +4418,14 @@
     */
     { alt: true, code: 'Digit4', run: 'toggleOutline' },
     { alt: true, shift: true, code: 'Digit4', run: 'focusOutline' },
+
+    /*
+      Alt+6 and Alt+Shift+6 are the folder panel's pair, split the same way: one docks it or
+      moves it to the window edge, the other goes to it and back. Alt+5 below was already taken, so the folder
+      panel has the next digit.
+    */
+    { alt: true, code: 'Digit6', run: 'toggleFolderPanel' },
+    { alt: true, shift: true, code: 'Digit6', run: 'focusFolderPanel' },
 
     /*
       Alt+5 turns this document's heading numbers on and off - the reading convenience for
@@ -6458,6 +6523,8 @@
       els.root.setAttribute('data-view', p.mode);
       state.lineMapDirty = true;
 
+      if (p.mode === 'SideBySide') { restoreActiveBlock(); } else { clearActiveBlock(); }
+
       // Guarded, because Monaco answers this call with its scroll event before it returns, and
       // the editor's scroll handler would read that as the user moving and throw the placement
       // above away. See layingOutForModeSwitch.
@@ -7338,6 +7405,41 @@
       if (state.viewMode === 'Preview') { post('command', { name: 'showSource' }); }
 
       insertAtCursor(p.text || '');
+    },
+
+    /*
+      A folder panel image dropped on the window (WP-8). The web view does not take a drag that
+      starts inside the app, so the host takes the drop and sends the point here, in CSS pixels.
+      Only a point over the source pane inserts anything: the preview never changes the source.
+      The link goes in at the line and column under the point as one undoable edit, and the
+      caret lands after it, as a drop into any editor leaves it.
+    */
+    insertTextAtPoint: function (p) {
+      var editor = state.editor;
+      var model = editor && editor.getModel();
+      if (!model || state.viewMode === 'Preview') { return; }
+
+      var hit = document.elementFromPoint(p.x, p.y);
+      if (!hit || !editor.getDomNode().contains(hit)) { return; }
+
+      var target = editor.getTargetAtClientPoint(p.x, p.y);
+      var position = target && target.position;
+
+      if (!position) {
+        var last = model.getLineCount();
+        position = { lineNumber: last, column: model.getLineMaxColumn(last) };
+      }
+
+      var text = String(p.text || '');
+      var range = new state.monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+
+      editor.pushUndoStop();
+      editor.executeEdits('marqora-drop', [{ range: range, text: text, forceMoveMarkers: true }]);
+      editor.pushUndoStop();
+
+      var end = position.column + text.length;
+      editor.setSelection(new state.monaco.Range(position.lineNumber, end, position.lineNumber, end));
+      editor.focus();
     },
 
     /*

@@ -246,10 +246,15 @@ As…* stands in for it: it writes the buffer to a sibling `name.local.md` and o
 tab, so both versions are on screen and can be compared in whatever tool the user already has.
 One method, no new UI.
 
-**Following a rename.** `FileSystemWatcher.Renamed` does hand over the new name, but only for
-a rename inside the watched folder, and a "rename" is very often another editor's
-save-by-replace. Guessing wrong re-points a tab at a file the user never asked for, and they
-find out when they save over it.
+**Following a rename made elsewhere.** `FileSystemWatcher.Renamed` does hand over the new
+name, but only for a rename inside the watched folder, and a "rename" is very often another
+editor's save-by-replace. Guessing wrong re-points a tab at a file the user never asked for, and
+they find out when they save over it.
+
+A rename Marqora makes itself, from the folder panel, is followed: the workspace did the move, so
+it knows both names and has no guessing to do. It stops the document's watcher before the move
+and starts it on the new path after, which is why the move never shows up here as the old file
+going missing. See *The folder panel* in `Architecture.md`.
 
 ---
 

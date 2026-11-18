@@ -37,7 +37,10 @@ public static class MarqoraMarkdownPipeline
             .UseAdvancedExtensions()
             // Front matter is metadata, not content: parse it so it is not rendered as a table.
             .UseYamlFrontMatter()
-            .UseEmojiAndSmiley();
+            // :rocket: shortcodes only, as GitHub does. Typed faces are left as text: they are
+            // made of markdown's own punctuation, so "**`name`:**" read ":*" as a kiss and the
+            // bold lost its closing asterisk, and "see note:)" turned into a smile.
+            .UseEmojiAndSmiley(enableSmileys: false);
 
         // UseAdvancedExtensions' own auto-identifier collapses a run of separators into one
         // hyphen for a heading's id, which is not what github.com actually does - a heading's

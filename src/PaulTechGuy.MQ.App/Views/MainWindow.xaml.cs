@@ -159,6 +159,7 @@ public sealed partial class MainWindow : Window
         ViewModel.MenuRequested += (_, name) => OpenMenuByName(name);
 
         InitializeOutline();
+        InitializeFolderPanel();
         InitializeReview();
 
         RootGrid.Loaded += OnLoaded;
@@ -246,14 +247,23 @@ public sealed partial class MainWindow : Window
     /// Alone among the clipboard commands it has never been gated on the document having
     /// content - pasting into an empty file is the ordinary case - so it cannot share
     /// CanEditText. What it does share is the reason for the new condition: with the
-    /// keyboard in the outline there is no caret on screen to paste at.
+    /// keyboard in the outline or the folder panel there is no caret on screen to paste at.
     ///
     /// The read-only condition arrives as a parameter rather than being read off the view
     /// model inside, because x:Bind only re-evaluates a function when one of its arguments
     /// raises a change - a value fetched in the body would leave the item stuck as it was.
     /// </summary>
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
-    public bool CanPaste(bool outlineHasFocus, bool readOnly) => !outlineHasFocus && !readOnly;
+    public bool CanPaste(bool outlineHasFocus, bool folderPanelHasFocus, bool readOnly) =>
+        !outlineHasFocus && !folderPanelHasFocus && !readOnly;
+
+    /// <summary>The landing page's column: beside the left column when it shows, otherwise the whole row.</summary>
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
+    public int LandingColumn(bool leftColumnVisible) => leftColumnVisible ? 2 : 0;
+
+    /// <summary>The landing page's span, the partner of <see cref="LandingColumn"/>.</summary>
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Required by x:Bind.")]
+    public int LandingSpan(bool leftColumnVisible) => leftColumnVisible ? 2 : 4;
 
     /// <summary>
     /// A tooltip, or none at all.
@@ -547,6 +557,12 @@ public sealed partial class MainWindow : Window
         // govern. The webshell carries this one too - a reader toggling it is usually reading,
         // but the caret is in Monaco either way and this accelerator never sees the key then.
         Add(VirtualKey.Number5, alt, () => ViewModel.ToggleHeadingNumbersCommand.Execute(null));
+
+        // Alt+6 and Alt+Shift+6 are the folder panel's pair, split for the outline's reason:
+        // visibility on one key and the keyboard on the other. Alt+5 was already the heading
+        // numbers, so the folder panel takes the next digit.
+        Add(VirtualKey.Number6, alt, () => ViewModel.ToggleFolderPanelCommand.Execute(null));
+        Add(VirtualKey.Number6, alt | VirtualKeyModifiers.Shift, () => ViewModel.FocusFolderPanelCommand.Execute(null));
 
         // Alt+Shift+1 to Alt+Shift+3 say where this document's count starts, which is the
         // question Alt+5 on its own could not answer. Someone else's document that numbers its
@@ -2259,8 +2275,23 @@ public sealed partial class MainWindow : Window
     private static bool IsPlausibleWindowSize(int width, int height) =>
         width >= MinimumRestoreWidth && height >= MinimumRestoreHeight;
 
-    private void RestoreWindowPlacement()
+    private bool _placementRestored;
+
+    /// <summary>
+    /// Puts the window where it was left. Called by <c>App.OnLaunched</c> before the window is
+    /// first shown, so it opens on the right display rather than appearing at Windows' default
+    /// spot and then moving. <see cref="OnLoaded"/> calls it as well, for the launch whose early
+    /// settings read failed; it does its work once.
+    /// </summary>
+    public void RestoreWindowPlacement()
     {
+        if (_placementRestored)
+        {
+            return;
+        }
+
+        _placementRestored = true;
+
         WindowPlacement placement = _settings.Current.Window;
 
         // A settings file written by an older build, or by hand, can carry nonsense here.
@@ -2350,9 +2381,12 @@ public sealed partial class MainWindow : Window
 
     private void OnDragOver(object sender, DragEventArgs e)
     {
+        // Anything but files is left alone rather than refused. The event bubbles up here from the
+        // web view, and setting None would overrule the source pane accepting a text drag, such
+        // as an image's link from the folder panel (WP-8). Nothing else accepts one, so the
+        // default of None still holds everywhere else.
         if (!e.DataView.Contains(StandardDataFormats.StorageItems))
         {
-            e.AcceptedOperation = DataPackageOperation.None;
             return;
         }
 

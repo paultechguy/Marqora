@@ -702,6 +702,15 @@ public interface IPreviewHost
     Task InsertTextAsync(string text);
 
     /// <summary>
+    /// Inserts text where a drag was dropped, at a point in the web view in device-independent
+    /// pixels: the folder panel's image link (WP-8). The web view does not take a drag that
+    /// starts inside the app, so the window takes the drop and the source pane is asked what
+    /// line and column lie under the point. A point outside the source pane inserts nothing,
+    /// so a drop on the preview does nothing, as the preview never changes the source.
+    /// </summary>
+    Task InsertTextAtPointAsync(string text, double x, double y);
+
+    /// <summary>
     /// Inserts a reference to a heading in the source pane.
     ///
     /// With nothing selected, <paramref name="link"/> goes in at the caret. With a selection,

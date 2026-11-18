@@ -15,8 +15,10 @@ namespace PaulTechGuy.MQ.Services;
 ///
 /// What differs between the two callers is what a wrong answer costs, and that belongs with each
 /// of them rather than here.
+///
+/// Public for the folder panel's recent folders, which need <see cref="FolderHasBeenDeleted"/>.
 /// </summary>
-internal static class DocumentPathKeys
+public static class DocumentPathKeys
 {
     /// <summary>
     /// The one spelling of a path that every caller has to agree on.
@@ -83,6 +85,29 @@ internal static class DocumentPathKeys
             }
 
             return !File.Exists(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="HasBeenDeleted"/> for a folder (C24). The file test is true for every folder, so
+    /// recent folders need their own: gone only when its volume answers and the folder is not there.
+    /// </summary>
+    public static bool FolderHasBeenDeleted(string path)
+    {
+        try
+        {
+            string? root = Path.GetPathRoot(path);
+
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+            {
+                return false;
+            }
+
+            return !Directory.Exists(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
